@@ -9,15 +9,27 @@ responses, graders, an LLM judge, a runner and a report. This file is all of it.
 
 Run:
     pip install anthropic
-    export ANTHROPIC_API_KEY=sk-ant-...      # only needed to record or run live
-    python triage_lab.py run
+    python triage_lab.py run                       # replay saved responses: free, no API key
+    python triage_lab.py compare --prompt v1_basic --vs v2_rules
+    python triage_lab.py judge --prompt v2_rules   # judge the saved replies
+    python triage_lab.py agreement                 # judge vs. the human labels
+    python triage_lab.py gate --prompt v3_examples --baseline v2_rules
+
+    export ANTHROPIC_API_KEY=sk-ant-...            # only needed to record or run live
+    python triage_lab.py record --plan all --max-cost 8   # prints the estimate, asks first
+    python triage_lab.py run --mode live --model claude-sonnet-5-5 --effort high
+Add --data llms/data/fixtures to use the tiny test data instead.
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import math
+import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import anthropic
@@ -127,6 +139,9 @@ def response_path(kind, model, prompt_version, effort, root=DATA_DIR) -> Path:
     return Path(root) / "responses" / f"{kind}__{model}__{prompt_version}__{effort or 'default'}.jsonl"
 
 
+_WRITE_LOCK = threading.Lock()   # runner threads append to the same file; one write at a time
+
+
 def call_model(params: dict, *, key, config, case_id, mode=MODE, client=None, root=DATA_DIR) -> dict:
     """Return one saved-response line (`root` is a data root).
     replay: read it from disk (the latest recording of the key wins). record: call the API and append it. live: call, do not save."""
@@ -167,7 +182,7 @@ def call_model(params: dict, *, key, config, case_id, mode=MODE, client=None, ro
 
     if mode == "record":
         path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as f:
+        with _WRITE_LOCK, path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(line, ensure_ascii=False) + "\n")
     return line
 
@@ -293,6 +308,95 @@ def position_flips(before_v: list, after_v: list) -> int:
 
 
 # ── 8. Runner ───────────────────────────────────────────────────────────────
+# Cost first: every paid run prints an estimate before the first call, and stops
+# at a cap you set. Cost = tokens x price, so it can be worked out in advance.
+# Rough tokens per call, (input, output): the output includes any thinking.
+EST_TOKENS = {"triage": (900, 700), "judge": (1400, 900)}
+
+
+def call_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    """Dollars for one call, from the token counts and PRICES (dollars per million tokens)."""
+    price_in, price_out = PRICES[model]
+    return (input_tokens * price_in + output_tokens * price_out) / 1_000_000
+
+
+def estimate_cost(kind: str, model: str, n_calls: int) -> float:
+    """Dollars for n_calls of one kind, assuming the typical token counts in EST_TOKENS."""
+    tokens_in, tokens_out = EST_TOKENS[kind]
+    return n_calls * call_cost(model, tokens_in, tokens_out)
+
+
+class CostLimit(Exception):
+    """The actual spend passed --max-cost. `lines` holds what finished; `spent` is the dollars."""
+    def __init__(self, lines: list[dict], spent: float):
+        super().__init__(f"spent ${spent:.4f}, over the limit")
+        self.lines, self.spent = lines, spent
+
+
+def run(cases: list, fn, *, reps: int = 1, workers: int = 8, max_cost: float | None = None) -> list[dict]:
+    """Call fn(case, rep) for every case and rep on a thread pool; results keep input order
+    (case by case, reps in order). Cost is summed from each line's real token usage. Once it
+    passes max_cost no new call starts, calls already in flight finish, and CostLimit carries
+    every line that finished, so a capped run still saves its work."""
+    jobs = [(case, rep) for case in cases for rep in range(reps)]
+    stop, lock = threading.Event(), threading.Lock()
+    spent = 0.0
+
+    def work(job):
+        nonlocal spent
+        if stop.is_set():
+            return None                          # the cap was hit: skip calls that have not started
+        line = fn(*job)
+        with lock:
+            spent += call_cost(line["config"]["model"], line["input_tokens"], line["output_tokens"])
+            if max_cost is not None and spent > max_cost:
+                stop.set()
+        return line
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        results = list(pool.map(work, jobs))
+    lines = [line for line in results if line is not None]
+    if stop.is_set():
+        raise CostLimit(lines, spent)
+    return lines
+
+
+# The recording plan: what a full paid run records, in phases. Phase 2 (pick the best
+# prompt by dev accuracy) costs nothing, so it is not a step. "best" is that winner, which
+# is unknown up front, but the cost is the same whichever prompt wins.
+RECORDING_PLAN = [
+    # 1. Haiku, every prompt on all 60 tickets; v2_rules three times to measure run-to-run noise.
+    {"name": "prompts", "kind": "triage", "model": TASK_MODEL, "effort": None, "prompt": "v1_basic", "split": "all", "reps": 1},
+    {"name": "prompts", "kind": "triage", "model": TASK_MODEL, "effort": None, "prompt": "v2_rules", "split": "all", "reps": 3},
+    {"name": "prompts", "kind": "triage", "model": TASK_MODEL, "effort": None, "prompt": "v3_examples", "split": "all", "reps": 1},
+    # 3. Bigger models and more effort, on the dev split with the best prompt.
+    {"name": "models", "kind": "triage", "model": "claude-sonnet-5-5", "effort": "low", "prompt": "best", "split": "dev", "reps": 1},
+    {"name": "models", "kind": "triage", "model": "claude-sonnet-5-5", "effort": "high", "prompt": "best", "split": "dev", "reps": 1},
+    {"name": "models", "kind": "triage", "model": "claude-opus-5-5", "effort": "low", "prompt": "best", "split": "dev", "reps": 1},
+    {"name": "models", "kind": "triage", "model": "claude-opus-5-5", "effort": "high", "prompt": "best", "split": "dev", "reps": 1},
+    # 4. The judge: the 30 labelled replies in both rubric orders, then the best prompt's test replies.
+    {"name": "judge", "kind": "judge", "model": JUDGE_MODEL, "effort": None, "prompt": "labels", "orders": ["before", "after"]},
+    {"name": "judge", "kind": "judge", "model": JUDGE_MODEL, "effort": None, "prompt": "best", "orders": ["after"]},
+]
+
+
+def plan_calls(step: dict, root=DATA_DIR) -> int:
+    """How many API calls one plan step makes against a data root."""
+    root = Path(root)
+    if step["kind"] == "judge" and step["prompt"] == "labels":
+        return len(load_jsonl(root / "reply_labels.jsonl")) * len(step["orders"])
+    tickets = load_tickets(root / "tickets.jsonl")
+    if step["kind"] == "judge":                                  # replies to the test split
+        return len(split(tickets, "test")) * len(step["orders"])
+    cases = tickets if step["split"] == "all" else split(tickets, step["split"])
+    return len(cases) * step["reps"]
+
+
+def estimate_plan(root=DATA_DIR, only: str | None = None) -> list[dict]:
+    """One row per plan step (or only the steps of one phase): calls and estimated dollars."""
+    return [{**step, "calls": plan_calls(step, root),
+             "cost": estimate_cost(step["kind"], step["model"], plan_calls(step, root))}
+            for step in RECORDING_PLAN if only in (None, "all", step["name"])]
 
 
 # ── 9. Report and compare ───────────────────────────────────────────────────
@@ -351,3 +455,287 @@ def gate(grades: list[dict], baseline_grades: list[dict], *, minimum: float = 0.
     if r["both"] < base["both"] - r["band"]:
         reasons.append(f"both {r['both']:.3f} is more than the band {r['band']:.3f} below the baseline {base['both']:.3f}")
     return {"passed": not reasons, "reasons": reasons}
+
+
+# ── 10. Command line ────────────────────────────────────────────────────────
+# Replay is the default and needs no key. Paid modes (record, live) print the
+# estimate first and call the API only after a yes.
+def _prompt_name(prompts: dict, name: str) -> str:
+    if name not in prompts["triage"]:
+        raise SystemExit(f"unknown prompt {name!r}; choose from {', '.join(prompts['triage'])}")
+    return name
+
+
+def _select(tickets: list[dict], name: str) -> list[dict]:
+    return tickets if name == "all" else split(tickets, name)
+
+
+def _confirm(rows: list[dict], yes: bool) -> bool:
+    """Print the estimate. True only after --yes or an interactive y; otherwise nothing is called."""
+    for r in rows:
+        print(f"  {r['kind']:<7} {r['model']:<18} {r['prompt']:<12} {r['effort'] or 'default':<8} "
+              f"{r['calls']:>4} calls  ${r['cost']:.4f}")
+    print(f"Estimated cost: ${sum(r['cost'] for r in rows):.2f}  (a guess from typical token counts; "
+          f"the real cost is printed at the end)")
+    if yes:
+        return True
+    answer = ""
+    if sys.stdin.isatty():
+        try:
+            answer = input("Make these paid calls? [y/N] ")
+        except EOFError:
+            pass
+    if answer.strip().lower() not in ("y", "yes"):
+        print("Not confirmed. Nothing was called. Add --yes to approve.")
+        return False
+    return True
+
+
+def _spent(lines: list[dict]) -> float:
+    return sum(call_cost(l["config"]["model"], l["input_tokens"], l["output_tokens"]) for l in lines)
+
+
+def _grades(args, tickets, prompts, variant, mode="replay", client=None, reps=1) -> list[dict]:
+    """Triage (or replay) every ticket in the split and grade the lines; all reps together."""
+    by_id = {t["id"]: t for t in tickets}
+    cases = _select(tickets, args.split)
+    lines = run(cases, lambda t, rep: triage(t, variant, model=args.model, effort=args.effort, rep=rep,
+                                             mode=mode, client=client, root=args.data, prompts=prompts),
+                reps=reps, workers=args.workers, max_cost=getattr(args, "max_cost", None))
+    return [grade(by_id[l["case_id"]], l) for l in lines]
+
+
+def _print_report(title: str, r: dict) -> None:
+    print(title)
+    print(f"  cases {r['n']}  scored lines {r['scored']}  errors {r['errors']}")
+    print(f"  category accuracy  {r['category']:.1%}")
+    print(f"  priority accuracy  {r['priority']:.1%}")
+    print(f"  both accuracy      {r['both']:.1%}   noise band +/-{r['band']:.1%}")
+
+
+def cmd_run(args, client) -> int:
+    prompts = load_prompts(Path(args.data) / "prompts.json")
+    variant = _prompt_name(prompts, args.prompt)
+    tickets = load_tickets(Path(args.data) / "tickets.jsonl")
+    if args.mode != "replay":
+        n = len(_select(tickets, args.split)) * args.reps
+        row = {"kind": "triage", "model": args.model, "prompt": variant, "effort": args.effort,
+               "calls": n, "cost": estimate_cost("triage", args.model, n)}
+        if not _confirm([row], args.yes):
+            return 1
+    try:
+        grades = _grades(args, tickets, prompts, variant, args.mode, client, args.reps)
+    except CostLimit as e:
+        print(f"Stopped: spent ${e.spent:.4f}, over --max-cost {args.max_cost}. Finished calls are saved.")
+        return 2
+    title = (f"{variant} / {args.model} / effort {args.effort or 'default'} / {args.split} split / "
+             f"{args.reps} rep{'s' if args.reps != 1 else ''} / {args.mode}")
+    _print_report(title, report(grades))
+    return 0
+
+
+def cmd_compare(args, client) -> int:
+    prompts = load_prompts(Path(args.data) / "prompts.json")
+    tickets = load_tickets(Path(args.data) / "tickets.jsonl")
+    a = _grades(args, tickets, prompts, _prompt_name(prompts, args.prompt))     # one rep each (rep 0)
+    b = _grades(args, tickets, prompts, _prompt_name(prompts, args.vs))
+    c = compare(a, b)
+    print(f"{args.prompt} -> {args.vs} on the {args.split} split")
+    print(f"  {args.prompt} {c['a']:.1%}   {args.vs} {c['b']:.1%}   diff {c['diff']:+.1%}   band +/-{c['band']:.1%}")
+    print(f"  {'a real difference' if c['significant'] else 'within the noise: not evidence of a difference'}")
+    print(f"  fixed {', '.join(c['fixed']) or '-'}   broken {', '.join(c['broken']) or '-'}")
+    return 0
+
+
+def _label_cases(root, tickets) -> list[dict]:
+    by_id = {t["id"]: t for t in tickets}
+    return [{"id": l["id"], "ticket": by_id[l["ticket_id"]]["text"], "reply": l["reply"], "labels": l["labels"]}
+            for l in load_jsonl(Path(root) / "reply_labels.jsonl")]
+
+
+def cmd_judge(args, client) -> int:
+    prompts = load_prompts(Path(args.data) / "prompts.json")
+    variant = _prompt_name(prompts, args.prompt)
+    tickets = load_tickets(Path(args.data) / "tickets.jsonl")
+    cases = _select(tickets, args.split)
+    if args.mode != "replay":
+        row = {"kind": "judge", "model": JUDGE_MODEL, "prompt": variant, "effort": None,
+               "calls": len(cases), "cost": estimate_cost("judge", JUDGE_MODEL, len(cases))}
+        if not _confirm([row], args.yes):
+            return 1
+    replies = {}
+    for t in cases:        # the reply to judge is the saved triage reply
+        out = triage(t, variant, model=args.model, effort=args.effort, root=args.data, prompts=prompts)["output"]
+        if out:
+            replies[t["id"]] = (t["text"], out["reply"])
+    ids = list(replies)
+    try:
+        lines = run(ids, lambda i, rep: judge(*replies[i], order=args.order, mode=args.mode, client=client,
+                                              root=args.data, prompts=prompts, case_id=i),
+                    workers=args.workers, max_cost=args.max_cost)
+    except CostLimit as e:
+        print(f"Stopped: spent ${e.spent:.4f}, over --max-cost {args.max_cost}. Finished calls are saved.")
+        return 2
+    print(f"judge ({JUDGE_MODEL}, rubric {args.order}) on {len(ids)} {variant} replies, {args.split} split")
+    for rid in RUBRIC_IDS:
+        v = [verdicts(l)[rid] for l in lines]
+        graded = [x for x in v if x is not None]
+        print(f"  {rid:<18} pass {sum(graded)}/{len(graded)}" + (f"  ({len(v) - len(graded)} not graded)" if len(v) != len(graded) else ""))
+    return 0
+
+
+def cmd_agreement(args, client) -> int:
+    prompts = load_prompts(Path(args.data) / "prompts.json")
+    cases = _label_cases(args.data, load_tickets(Path(args.data) / "tickets.jsonl"))
+    by_order = {}
+    for order in ("before", "after"):
+        lines = [judge(c["ticket"], c["reply"], order=order, root=args.data, prompts=prompts, case_id=c["id"])
+                 for c in cases]
+        by_order[order] = [verdicts(l) for l in lines]
+        print(f"judge vs human, rubric {order} the reply ({len(cases)} replies)")
+        for rid in RUBRIC_IDS:
+            judge_v, human_v = [v[rid] for v in by_order[order]], [c["labels"][rid] for c in cases]
+            print(f"  {rid:<18} agreement {agreement(judge_v, human_v, rid):.1%}   "
+                  f"kappa {cohen_kappa([bool(x) for x in judge_v], human_v):.2f}")
+    print("position flips: verdicts that change when only the rubric position changes")
+    for rid in RUBRIC_IDS:
+        n = position_flips([v[rid] for v in by_order["before"]], [v[rid] for v in by_order["after"]])
+        print(f"  {rid:<18} {n} of {len(cases)}")
+    return 0
+
+
+def cmd_gate(args, client) -> int:
+    prompts = load_prompts(Path(args.data) / "prompts.json")
+    tickets = load_tickets(Path(args.data) / "tickets.jsonl")
+    result = gate(_grades(args, tickets, prompts, _prompt_name(prompts, args.prompt)),
+                  _grades(args, tickets, prompts, _prompt_name(prompts, args.baseline)), minimum=args.minimum)
+    print(f"gate {args.prompt} vs baseline {args.baseline} (minimum {args.minimum}): "
+          f"{'PASS' if result['passed'] else 'FAIL'}")
+    for reason in result["reasons"]:
+        print(f"  {reason}")
+    return 0 if result["passed"] else 1
+
+
+def best_prompt(root, prompts: dict, tickets: list[dict]) -> str:
+    """Phase 2: the recorded Haiku prompt with the highest dev `both` accuracy (first wins a tie)."""
+    names = list(dict.fromkeys(s["prompt"] for s in RECORDING_PLAN if s["name"] == "prompts"))
+    scores = {}
+    for name in names:
+        grades = [grade(t, triage(t, name, root=root, prompts=prompts)) for t in split(tickets, "dev")]
+        scores[name] = report(grades)["both"]
+    best = max(names, key=lambda n: scores[n])
+    print("phase 2: best prompt on dev " + ", ".join(f"{n} {scores[n]:.1%}" for n in names) + f" -> {best}")
+    return best
+
+
+def cmd_record(args, client) -> int:
+    root = Path(args.data)
+    prompts = load_prompts(root / "prompts.json")
+    tickets = load_tickets(root / "tickets.jsonl")
+    steps = estimate_plan(root, only=args.plan)
+    print(f"Recording plan '{args.plan}' into {root / 'responses'}")
+    if not _confirm(steps, args.yes):
+        return 1
+    mode, spent, best = "record", 0.0, None
+    phase_of = {"prompts": 1, "models": 3, "judge": 4}
+
+    def go(cases, fn, reps=1):
+        nonlocal spent
+        limit = None if args.max_cost is None else args.max_cost - spent
+        try:
+            lines = run(cases, fn, reps=reps, workers=args.workers, max_cost=limit)
+        except CostLimit as e:
+            spent += e.spent
+            print(f"Stopped: spent ${spent:.4f}, over --max-cost {args.max_cost}. Finished calls are saved.")
+            raise
+        spent += _spent(lines)
+        return lines
+
+    try:
+        for step in steps:
+            if step["prompt"] == "best" and best is None:
+                try:
+                    best = best_prompt(root, prompts, tickets)
+                except ReplayMiss:
+                    print("Phase 2 needs the prompts phase recorded first: record --plan prompts", file=sys.stderr)
+                    return 1
+            variant = best if step["prompt"] == "best" else step["prompt"]
+            print(f"phase {phase_of[step['name']]} ({step['name']}): {step['kind']} {step['model']} "
+                  f"{variant} {step['effort'] or 'default'}, {step['calls']} calls")
+            if step["kind"] == "triage":
+                cases = _select(tickets, step["split"])
+                go(cases, lambda t, rep: triage(t, variant, model=step["model"], effort=step["effort"], rep=rep,
+                                                mode=mode, client=client, root=root, prompts=prompts), step["reps"])
+            elif step["prompt"] == "labels":
+                for order in step["orders"]:
+                    go(_label_cases(root, tickets), lambda c, rep: judge(
+                        c["ticket"], c["reply"], order=order, model=step["model"], mode=mode, client=client,
+                        root=root, prompts=prompts, case_id=c["id"]))
+            else:                          # the best prompt's test-split replies, saved in phase 1
+                replies = {}
+                for t in split(tickets, "test"):
+                    out = triage(t, variant, root=root, prompts=prompts)["output"]
+                    if out:
+                        replies[t["id"]] = (t["text"], out["reply"])
+                for order in step["orders"]:
+                    go(list(replies), lambda i, rep: judge(*replies[i], order=order, model=step["model"], mode=mode,
+                                                           client=client, root=root, prompts=prompts, case_id=i))
+    except CostLimit:
+        return 2
+    print(f"Done. Actual cost ${spent:.4f}.")
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="triage_lab.py", description="Evaluate LLM support-ticket triage.")
+    parser.add_argument("--data", default=DATA_DIR, help="data root (default: llms/data)")
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--data", default=argparse.SUPPRESS, help="data root (default: llms/data)")
+    common.add_argument("--split", choices=["dev", "test", "all"], default="dev")
+    common.add_argument("--model", default=TASK_MODEL)
+    common.add_argument("--effort", default=None, help="low | medium | high ...; omit to send none")
+    common.add_argument("--workers", type=int, default=8)
+    paid = argparse.ArgumentParser(add_help=False)
+    paid.add_argument("--max-cost", type=float, default=None, help="stop when the real spend passes this many dollars")
+    paid.add_argument("--yes", action="store_true", help="approve the printed estimate without asking")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    modes = argparse.ArgumentParser(add_help=False)
+    modes.add_argument("--mode", choices=["replay", "record", "live"], default=MODE)
+
+    p = sub.add_parser("run", parents=[common, paid, modes], help="triage a split and print the report")
+    p.add_argument("--prompt", default="v2_rules")
+    p.add_argument("--reps", type=int, default=1)
+    p.set_defaults(func=cmd_run)
+    p = sub.add_parser("compare", parents=[common], help="does one prompt beat another?")
+    p.add_argument("--prompt", default="v1_basic")
+    p.add_argument("--vs", default="v2_rules")
+    p.set_defaults(func=cmd_compare)
+    p = sub.add_parser("judge", parents=[common, paid, modes], help="judge the replies of a prompt")
+    p.add_argument("--prompt", default="v2_rules")
+    p.add_argument("--order", choices=["before", "after"], default="after")
+    p.set_defaults(func=cmd_judge)
+    p = sub.add_parser("agreement", parents=[common], help="judge vs the human reply labels")
+    p.set_defaults(func=cmd_agreement)
+    p = sub.add_parser("gate", parents=[common], help="pass/fail check against a baseline prompt")
+    p.add_argument("--prompt", default="v3_examples")
+    p.add_argument("--baseline", default="v2_rules")
+    p.add_argument("--minimum", type=float, default=0.7)
+    p.set_defaults(func=cmd_gate)
+    p = sub.add_parser("record", parents=[common, paid], help="record responses from the API (paid)")
+    p.add_argument("--plan", choices=["all", "prompts", "models", "judge"], default="all")
+    p.set_defaults(func=cmd_record)
+    return parser
+
+
+def main(argv: list[str] | None = None, client=None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        return args.func(args, client)
+    except ReplayMiss as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
