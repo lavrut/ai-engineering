@@ -10,5 +10,10 @@ export default defineConfig({
   vite: {
     // Lessons import the reference harness (../harness) as raw text.
     server: { fs: { allow: ['..'] } },
+    // The page host serves chunks from a nested path, so URLs built inside
+    // JS chunks (e.g. Vite's preload helper) resolve relative to the chunk.
+    experimental: {
+      renderBuiltUrl: (_filename, { hostType }) => (hostType === 'js' ? { relative: true } : undefined),
+    },
   },
 });
