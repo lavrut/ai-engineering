@@ -64,7 +64,7 @@ def test_key_changes_with_prompt_text_and_rep():
 
 def test_response_path_names_the_file(tmp_path):
     p = lab.response_path("triage", "m", "v1", None, root=tmp_path)
-    assert p == tmp_path / "triage__m__v1__default.jsonl"
+    assert p == tmp_path / "responses" / "triage__m__v1__default.jsonl"
     assert lab.response_path("judge", "m", "before", "low", root=tmp_path).name == "judge__m__before__low.jsonl"
 
 
@@ -92,7 +92,7 @@ def test_record_appends_and_replay_then_hits(tmp_path):
 
 def test_live_does_not_save(tmp_path):
     assert call(ok_client(), mode="live", root=tmp_path)["output"] == GOOD
-    assert not list(tmp_path.glob("*"))
+    assert not list(tmp_path.rglob("*.jsonl"))
 
 
 @pytest.mark.parametrize("stop", ["refusal", "max_tokens"])
@@ -126,5 +126,25 @@ def test_fixture_triage_replay_hits_for_every_ticket():
     for t in lab.load_tickets(FIXTURES / "tickets.jsonl"):
         for variant, reps in (("v1_basic", [0]), ("v2_rules", [0, 1])):
             for rep in reps:
-                line = lab.triage(t, variant, rep=rep, mode="replay", root=FIXTURES / "responses", prompts=prompts)
+                line = lab.triage(t, variant, rep=rep, mode="replay", root=FIXTURES, prompts=prompts)
                 assert line["case_id"] == t["id"]
+
+
+def test_triage_reads_prompts_from_the_data_root():
+    line = lab.triage(lab.load_tickets(FIXTURES / "tickets.jsonl")[0], "v1_basic", mode="replay", root=FIXTURES)
+    assert line["case_id"] == "f001"
+
+
+@pytest.mark.parametrize("blocks,reason", [([], "no text block"), ([text("not json")], "invalid JSON")])
+def test_unparseable_response_is_recorded_with_error(tmp_path, blocks, reason):
+    line = call(FakeClient(response(blocks)), root=tmp_path)
+    assert line["output"] is None and reason in line["error"] and line["input_tokens"] == 12
+    assert call(FakeClient(), mode="replay", root=tmp_path) == line
+
+
+def test_replay_returns_the_latest_line_for_a_key(tmp_path):
+    err = anthropic.APIConnectionError(request=httpx.Request("POST", "https://x"))
+    call(FakeClient(error=err), root=tmp_path)
+    call(ok_client(), root=tmp_path)
+    line = call(FakeClient(), mode="replay", root=tmp_path)
+    assert line["output"] == GOOD and line["error"] is None

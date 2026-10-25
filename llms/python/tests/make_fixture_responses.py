@@ -49,7 +49,7 @@ RUNS = {
 prompts = lab.load_prompts(ROOT / "prompts.json")
 tickets = {t["id"]: t for t in lab.load_tickets(ROOT / "tickets.jsonl")}
 for (variant, rep), cases in RUNS.items():
-    path = lab.response_path("triage", lab.TASK_MODEL, variant, None, ROOT / "responses")
+    path = lab.response_path("triage", lab.TASK_MODEL, variant, None, ROOT)
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = []
     for tid, out in cases.items():

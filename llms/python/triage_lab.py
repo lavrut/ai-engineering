@@ -35,8 +35,7 @@ PRICES: dict[str, tuple[float, float]] = {
 
 # Resolved from this file, not the working directory, so it works from anywhere.
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-# Saved responses live inside a data root; the fixtures root has its own.
-RESPONSES_DIR = DATA_DIR / "responses"
+# A data root holds tickets.jsonl, prompts.json and responses/; llms/data/fixtures is another root.
 
 CATEGORIES = ["billing", "bug", "account", "how_to", "feature_request", "outage"]
 PRIORITIES = ["low", "normal", "high", "urgent"]
@@ -122,18 +121,18 @@ def cache_key(kind, model, effort, prompt_version, prompt_text, input, rep) -> s
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def response_path(kind, model, prompt_version, effort, root=RESPONSES_DIR) -> Path:
-    """One file per configuration; all reps of it share the file."""
-    return Path(root) / f"{kind}__{model}__{prompt_version}__{effort or 'default'}.jsonl"
+def response_path(kind, model, prompt_version, effort, root=DATA_DIR) -> Path:
+    """One file per configuration inside <root>/responses; all reps share the file."""
+    return Path(root) / "responses" / f"{kind}__{model}__{prompt_version}__{effort or 'default'}.jsonl"
 
 
-def call_model(params: dict, *, key, config, case_id, mode=MODE, client=None, root=RESPONSES_DIR) -> dict:
-    """Return one saved-response line.
-    replay: read it from disk. record: call the API and append it. live: call, do not save."""
+def call_model(params: dict, *, key, config, case_id, mode=MODE, client=None, root=DATA_DIR) -> dict:
+    """Return one saved-response line (`root` is a data root).
+    replay: read it from disk (the latest recording of the key wins). record: call the API and append it. live: call, do not save."""
     path = response_path(config["kind"], config["model"], config["prompt_version"], config["effort"], root)
     if mode == "replay":
         if path.exists():
-            for line in load_jsonl(path):
+            for line in reversed(load_jsonl(path)):   # latest recording wins, so re-recording fixes errors
                 if line["key"] == key:
                     return line
         raise ReplayMiss(
@@ -153,8 +152,14 @@ def call_model(params: dict, *, key, config, case_id, mode=MODE, client=None, ro
         line["output_tokens"] = response.usage.output_tokens
         # A refusal or a cut-off reply has no usable JSON; leave output null.
         if response.stop_reason not in ("refusal", "max_tokens"):
-            block = next(b for b in response.content if b.type == "text")
-            line["output"] = json.loads(block.text)
+            block = next((b for b in response.content if b.type == "text"), None)
+            if block is None:
+                line["error"] = "no text block in response"
+            else:
+                try:
+                    line["output"] = json.loads(block.text)
+                except json.JSONDecodeError as e:
+                    line["error"] = f"invalid JSON: {e.msg}"
     except anthropic.APIError as e:
         line["error"] = str(e) or type(e).__name__
     line["latency_ms"] = round((time.monotonic() - start) * 1000)
@@ -167,10 +172,10 @@ def call_model(params: dict, *, key, config, case_id, mode=MODE, client=None, ro
 
 
 def triage(ticket, variant, *, model=TASK_MODEL, effort=None, rep=0, mode=MODE, client=None,
-           root=RESPONSES_DIR, prompts=None) -> dict:
-    """Triage one ticket with one prompt version. `root` is a responses folder;
-    its prompts.json sits next to it unless `prompts` is passed."""
-    prompts = prompts or load_prompts(Path(root).parent / "prompts.json")
+           root=DATA_DIR, prompts=None) -> dict:
+    """Triage one ticket with one prompt version. `root` is a data root: prompts come from
+    <root>/prompts.json (unless `prompts` is passed) and responses from <root>/responses."""
+    prompts = prompts or load_prompts(Path(root) / "prompts.json")
     prompt_text = prompts["triage"][variant]
     output_config = {"format": {"type": "json_schema", "schema": TRIAGE_SCHEMA}}
     if effort is not None:                      # null effort means: send nothing
