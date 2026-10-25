@@ -59,7 +59,7 @@ Observability runs alongside every step: `emit`, section 2, writing `trace.jsonl
 
 ## See it
 
-This is the diagram from lesson 1 in replay mode: the code panel starts open. Press **Next** to step through the flow, and the panel shows the section that does each step. Steps 1 and 3 have no section of their own, so their **Show code** button is disabled. The panel follows the **Python** or **Go** tab you last chose on a code block, so pick **Go** on the code below and step again to see the other file.
+This is the diagram from lesson 1 in replay mode: the code panel starts open. Press **Next** to step through the flow, and the panel shows the section that does each step. The diagram links no code to steps 1 and 3, so their **Show code** button is disabled. The panel follows the **Python** or **Go** tab you last chose on a code block, so pick **Go** on the code below and step again to see the other file.
 
 <FlowDiagram diagram="harness-flow" mode="replay" />
 
@@ -69,20 +69,24 @@ Here is each file in full. Read it top to bottom once: you know every line now.
 
 <CodeTabs whole goNote="The Go file has the same nine sections with the same titles. The main differences, all covered in earlier lessons: tools are Tool structs registered in init(), and toolParams sends them in a fixed order (lesson 3). Each tool call runs on its own goroutine with a 30-second context deadline, and a panicking tool becomes an error result (lesson 6). Errors are returned as values and sorted out with errors.As in main (lesson 8). The trace's ts is in milliseconds, and its keys are sorted (lesson 8)." />
 
-The Python file is about 230 lines and has one dependency, the `anthropic` SDK. The Go file is about 440 lines, mostly because Go spells out types, JSON decoding and error checks that Python leaves implicit. Two seams make both files testable: the agent loop takes the model call and the approver as arguments (`call=` and `approver=` in Python, `modelCaller` and `approver` in Go), so a test can pass fakes and run the real loop with no API key.
+The Python file is about 230 lines and has one runtime dependency, the `anthropic` SDK. The Go file is about 440 lines, mostly because Go spells out types, JSON decoding and error checks that Python leaves implicit. Two seams make both files testable: the agent loop takes the model call and the approver as arguments (`call=` and `approver=` in Python, `modelCaller` and `approver` in Go), so a test can pass fakes and run the real loop with no API key.
 
 ## Try it
 
 ### Run both harnesses
 
-You need `ANTHROPIC_API_KEY` set (lesson 2). Each harness uses its own `workspace` folder and writes its own `trace.jsonl` in the folder you run it from.
+You need `ANTHROPIC_API_KEY` set (lesson 2). Each harness uses its own `workspace` folder and writes its own `trace.jsonl` in the folder you run it from. For Python, use the virtual environment you made in lesson 1, which already has the requirements installed (on a fresh checkout, run `python3 -m venv .venv`, activate it, and `pip install -r requirements.txt` first):
 
 ```bash
-cd harness/python && pip install -r requirements.txt && python harness.py
+cd harness/python && source .venv/bin/activate && python harness.py
 ```
 
+The Go harness has its own workspace, which starts empty. Give it the same `notes.txt` before you run it:
+
 ```bash
-cd harness/go && go run .
+cd harness/go
+mkdir -p workspace && echo "Buy milk. Call Sam." > workspace/notes.txt
+go run .
 ```
 
 Give each the same task, one that uses every step: `Read notes.txt and write todo.md with each item as a line starting "- [ ]".` You will usually see `-> read_file(...)`, then the `! The agent wants to run write_file(...)` prompt; type `y`, and `-> write_file(...)` follows, then the `agent >` answer. Then open `trace.jsonl` in each folder and match the lines to the steps in the table above. The two traces should show the same pattern of events. The model may take a slightly different path each time, and the timestamps and key order differ as lesson 8 described.
@@ -134,7 +138,7 @@ def search_files(query: str, path: str) -> str:
     return "\n".join(hits)[:20_000] or "(no matches)"
 ```
 
-`safe_path(path)` only checks the folder you search. A symlink inside it could still point outside the workspace, so the loop resolves each file and skips any that land outside. In Go, walk the folder with `filepath.WalkDir` and pass each file's path through `safePath`, skipping files where it returns an error.
+`safe_path(path)` only checks the folder you search. A symlink inside it could still point outside the workspace, so the loop resolves each file and skips any that land outside. In Go, walk the folder `safePath` returned with `filepath.WalkDir`. The walk hands you absolute paths, and `safePath` rejects absolute paths, so turn each one back into a workspace-relative path first: `rel, _ := filepath.Rel(dir, p)`, then `safePath(filepath.Join(in.Path, rel))`. Skip any file where that returns an error; that is a link pointing out of the workspace.
 
 </details>
 

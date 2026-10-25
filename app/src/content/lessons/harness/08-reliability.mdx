@@ -72,7 +72,7 @@ Read it from the top:
 - **Turn 2.** The request now holds 3 messages. The model asks for `write_file`, so a `permission` row shows you allowed it. The write takes 6 ms and the second test run passes.
 - **Turn 3.** 5 messages go out, and `stop_reason="end_turn"` ends the loop. `session_end` records 3 turns.
 
-Two patterns are worth looking for in any trace. `messages` grows by two per turn, and `input_tokens` grows with it (1942, 3410, 4102), which is the growth lesson 7 manages. And most of the 12.5 seconds is spent waiting for the model: the three `model_request` to `model_response` gaps add up to about 10 seconds.
+Look for two patterns in any trace. `messages` grows by two per turn, and `input_tokens` grows with it (1942, 3410, 4102), which is the growth lesson 7 manages. And most of the 12.5 seconds is spent waiting for the model: the three `model_request` to `model_response` gaps add up to about 10 seconds.
 
 ## The code
 
