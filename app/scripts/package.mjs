@@ -1,5 +1,5 @@
 // dist/ -> publish/: the page-host layout (index.html without a document
-// skeleton, chunks beside it under _astro/ with relative references).
+// skeleton, chunks beside it under assets/ with relative references).
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,26 +25,39 @@ if (!existsSync(join(dist, 'index.html'))) {
 rmSync(publish, { recursive: true, force: true });
 mkdirSync(publish, { recursive: true });
 
+// Astro names script chunks like "X.astro_astro_type_script_...js"; the
+// "_astro" inside would trip naive reserved-name checks, so rename it.
+const clean = (t) => t.replaceAll('_astro', '-astro');
+
 const blocked = [];
 for (const src of walk(dist)) {
   const rel = relative(dist, src);
-  const dest = join(publish, rel);
+  const dest = join(publish, clean(rel));
   mkdirSync(dirname(dest), { recursive: true });
 
   if (rel === 'index.html') {
-    let html = transformHtml(readFileSync(src, 'utf8'));
+    let html = clean(transformHtml(readFileSync(src, 'utf8')));
     if (!html.includes('name="claude:viewport-fit-sides"')) {
       html = html.replace(/(<title\b[^>]*>[\s\S]*?<\/title>)/i, `$1\n${FIT_SIDES}`);
     }
     blocked.push(...findBlockedUrls(html).map((u) => `${rel}: ${u}`));
     writeFileSync(dest, html);
   } else if (rel.endsWith('.js')) {
-    const js = rewriteChunk(readFileSync(src, 'utf8'));
+    const js = clean(rewriteChunk(readFileSync(src, 'utf8')));
     blocked.push(...findBlockedUrls(js).map((u) => `${rel}: ${u}`));
     writeFileSync(dest, js);
   } else {
     cpSync(src, dest);
   }
+}
+
+const reserved = walk(publish)
+  .map((p) => relative(publish, p))
+  .filter((rel) => rel.split(/[\\/]/)[0].startsWith('_'));
+if (reserved.length > 0) {
+  console.error('Published paths whose first segment starts with "_" are reserved by the page host:');
+  for (const r of reserved) console.error(`  ${r}`);
+  process.exit(1);
 }
 
 if (blocked.length > 0) {

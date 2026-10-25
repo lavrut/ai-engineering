@@ -6,7 +6,7 @@ import preact from '@astrojs/preact';
 export default defineConfig({
   output: 'static',
   integrations: [mdx(), preact()],
-  build: { inlineStylesheets: 'always' },
+  build: { inlineStylesheets: 'always', assets: 'assets' },
   vite: {
     // Lessons import the reference harness (../harness) as raw text.
     server: { fs: { allow: ['..'] } },

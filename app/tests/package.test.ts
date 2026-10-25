@@ -7,11 +7,11 @@ const fixture = `<!DOCTYPE html>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AI Engineering</title>
-    <style>body{background:url(/_astro/bg.svg)}</style>
-    <script type="module" src="/_astro/a.js"></script>
+    <style>body{background:url(/assets/bg.svg)}</style>
+    <script type="module" src="/assets/a.js"></script>
   </head>
   <body>
-    <astro-island component-url="/_astro/C.js" renderer-url="/_astro/client.js"></astro-island>
+    <astro-island component-url="/assets/C.js" renderer-url="/assets/client.js"></astro-island>
   </body>
 </html>`;
 
@@ -44,23 +44,28 @@ describe('transformHtml', () => {
   });
 
   // "./" matters: Astro hydrates with import(componentUrl), and import()
-  // rejects a bare "_astro/C.js" as an unresolvable module specifier.
-  it('rewrites absolute /_astro/ references to ./_astro/', () => {
-    expect(out).toContain('component-url="./_astro/C.js"');
-    expect(out).toContain('renderer-url="./_astro/client.js"');
-    expect(out).toContain('src="./_astro/a.js"');
-    expect(out).toContain('url(./_astro/bg.svg)');
-    expect(out).not.toMatch(/(?<!\.)\/_astro\//);
+  // rejects a bare "assets/C.js" as an unresolvable module specifier.
+  it('rewrites absolute /assets/ references to ./assets/', () => {
+    expect(out).toContain('component-url="./assets/C.js"');
+    expect(out).toContain('renderer-url="./assets/client.js"');
+    expect(out).toContain('src="./assets/a.js"');
+    expect(out).toContain('url(./assets/bg.svg)');
+    expect(out).not.toMatch(/(?<!\.)\/assets\//);
+  });
+
+  it('contains no path segment starting with _astro', () => {
+    expect(out).not.toMatch(/(?:^|[\s"'(=/])_astro/);
+    expect(out).not.toContain('_astro');
   });
 });
 
 describe('rewriteChunk', () => {
   it('rewrites double-quoted dynamic imports', () => {
-    expect(rewriteChunk('import("/_astro/x.js")')).toBe('import("./x.js")');
+    expect(rewriteChunk('import("/assets/x.js")')).toBe('import("./x.js")');
   });
 
   it('rewrites single-quoted references', () => {
-    expect(rewriteChunk("import('/_astro/y.js')")).toBe("import('./y.js')");
+    expect(rewriteChunk("import('/assets/y.js')")).toBe("import('./y.js')");
   });
 });
 

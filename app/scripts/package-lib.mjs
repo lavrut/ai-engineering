@@ -12,18 +12,18 @@ export const ALLOWED_HOSTS = new Set([
 ]);
 
 /**
- * Rewrite root-absolute `/_astro/` references to page-relative `./_astro/`.
+ * Rewrite root-absolute `/assets/` references to page-relative `./assets/`.
  * The leading "./" is required: Astro hydrates islands with
- * `import(componentUrl)`, and import() rejects a bare `_astro/x.js`.
+ * `import(componentUrl)`, and import() rejects a bare `assets/x.js`.
  */
-function relativizeAstro(text) {
-  return text.replace(/(?<![\w./-])\/_astro\//g, './_astro/');
+function relativizeAssets(text) {
+  return text.replace(/(?<![\w./-])\/assets\//g, './assets/');
 }
 
 /**
  * Head contents (minus charset/viewport metas, `<title>` first) followed by
  * body contents (and anything after </body>), with no doctype/html/head/body
- * tags and `/_astro/` made `./_astro/`.
+ * tags and `/assets/` made `./assets/`.
  * @param {string} html
  * @returns {string}
  */
@@ -48,16 +48,16 @@ export function transformHtml(html) {
   });
 
   const out = [title, head.trim(), body.trim()].filter(Boolean).join('\n');
-  return relativizeAstro(out);
+  return relativizeAssets(out);
 }
 
 /**
- * Rewrite quoted `/_astro/` references inside a chunk that lives in `_astro/`.
+ * Rewrite quoted `/assets/` references inside a chunk that lives in `assets/`.
  * @param {string} js
  * @returns {string}
  */
 export function rewriteChunk(js) {
-  return js.replace(/(["'`])\/_astro\//g, '$1./');
+  return js.replace(/(["'`])\/assets\//g, '$1./');
 }
 
 /**
