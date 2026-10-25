@@ -91,7 +91,7 @@ def safe_path(rel: str) -> Path:
 
 - `WORKSPACE / rel` joins the path onto the workspace. If `rel` is absolute, such as `/etc/passwd`, the join keeps only `rel`.
 - `.resolve()` turns the result into an absolute path, collapsing `..` and following symlinks. `notes/../../x` becomes a path one level above the workspace.
-- `is_relative_to(WORKSPACE)` checks that the resolved path is still inside. If not, `PermissionError` is raised. The executor catches it and the model gets `PermissionError: ../x is outside the workspace` as an error result.
+- `is_relative_to(WORKSPACE)` checks that the resolved path is still inside. If not, `PermissionError` is raised. The executor catches it and the model gets `PermissionError: notes/../../x is outside the workspace` as an error result.
 - `list_files`, `read_file` and `write_file` all call `safe_path` first, so no tool opens a path without the check.
 
 <Callout kind="warning" title="A path rule, not a jail">
@@ -102,9 +102,9 @@ def safe_path(rel: str) -> Path:
 
 The gate works the same way. `executeTools` keeps its decisions in a `[]bool` indexed by position instead of a dict keyed by id, and calls `ok(c.name, string(c.input))` only for known tools with `NeedsApproval`.
 
-`safePath` takes more lines because Go's path functions behave differently. `filepath.Join(workspace, "/etc/passwd")` would quietly produce a path inside the workspace, so the function first rejects absolute paths with `filepath.IsAbs`. It then builds the absolute path with `filepath.Abs` and checks that it equals `workspace` or starts with `workspace` plus a path separator. The separator matters: without it, a sibling folder named `workspace2` would pass.
+`safePath` takes more lines because Go's path functions behave differently. `filepath.Join(workspace, "/etc/passwd")` would quietly produce a path inside the workspace, so the function first rejects absolute paths with `filepath.IsAbs`. `filepath.Join` then cleans `..` out of the joined path. The final check is that the path equals the workspace root or starts with the root plus a path separator. The separator matters: without it, a sibling folder named `workspace2` would pass.
 
-One difference to know: `filepath.Abs` cleans `..` out of the path but does not follow symlinks, while Python's `resolve()` does. A symlink inside the Go workspace that points outside it passes `safePath`. Calling `filepath.EvalSymlinks` before the prefix check would close that gap.
+Go has no single call that matches Python's `resolve()`, so the helper `resolve` does that job. `filepath.EvalSymlinks` follows symlinks, but it fails on a path that does not exist yet, such as a file `write_file` is about to create. So `resolve` walks up to the deepest part of the path that exists, follows the links there, and puts the rest back on the end. It runs on the workspace root as well as the target, so both sides of the prefix check are real paths. Without this step, a symlink inside the workspace that pointed outside it would pass the check. A link whose target is missing is refused outright.
 
 ## Try it
 

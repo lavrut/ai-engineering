@@ -43,7 +43,7 @@ The executor is step 7 of the flow. Lesson 5 covered its first half, the approva
 
 **Parallel calls.** The calls in one reply do not depend on each other; the model asked for all of them before seeing any result. So the harness runs them at the same time. The turn takes as long as the slowest call instead of the sum of all of them. The results still go back in the order of the calls, each with its `tool_use_id`.
 
-**Deadlines.** A tool can hang: a network request that never answers, a command that never exits. The Go harness gives every tool 30 seconds. The Python harness has no per-tool timeout, so a hung tool holds up the whole turn. This lesson shows how you would add one.
+**Deadlines.** A tool can hang: a network request that never answers, a command that never exits. The Go harness gives every tool a 30-second context deadline, which stops tools that watch their context. The Python harness has no per-tool timeout, so a hung tool holds up the whole turn. This lesson shows how you would add one.
 
 **Errors as information.** A missing file or a bad argument should not crash the harness. The executor catches the failure and sends it back as a `tool_result` with `is_error` true. The model reads the error and tries something else, often with success.
 
@@ -99,9 +99,9 @@ There is no cap like `max_workers=8`: every call gets its own goroutine. Gorouti
 
 Several goroutines can log at once, so `emit` takes the mutex `traceMu` before it writes to `trace.jsonl`. Python's `emit` has no lock; each call opens the file in append mode and writes one line.
 
-**A deadline on every tool.** In `runOne`, `context.WithTimeout(ctx, toolTimeout)` makes a context that expires after 30 seconds, and `defer cancel()` releases it when `runOne` returns. The context is passed to `t.Run`. A deadline only helps if the tool watches it: by passing `ctx` to `exec.CommandContext` or `http.NewRequestWithContext`, or by checking `ctx.Done()`. The three built-in tools accept `ctx` but do not use it, since a local file read is quick. `runOne` waits for `Run` to return either way, so a tool that ignores its context can still hang.
+**A deadline on every tool.** In `runOne`, `context.WithTimeout(ctx, toolTimeout)` makes a context that expires after 30 seconds, and `defer cancel()` releases it when `runOne` returns. The context goes through `runTool` to `t.Run`. A deadline only helps if the tool watches it: by passing `ctx` to `exec.CommandContext` or `http.NewRequestWithContext`, or by checking `ctx.Done()`. The three built-in tools accept `ctx` but do not use it, since a local file read is quick. `runOne` waits for `Run` to return either way, so a tool that ignores its context can still hang.
 
-**Errors as values.** `Run` returns `(string, error)`. `runOne` puts `err.Error()` into the content, such as `open /.../workspace/config.yaml: no such file or directory`, without Python's exception-name prefix. A bad argument type fails in `json.Unmarshal` and comes back the same way. One gap: `runOne` has no `recover`, so a tool that panics crashes the harness, where Python's `except Exception` would have caught it.
+**Errors as values.** `Run` returns `(string, error)`. `runOne` puts `err.Error()` into the content, such as `open /.../workspace/config.yaml: no such file or directory`, without Python's exception-name prefix. A bad argument type fails in `json.Unmarshal` and comes back the same way. A panic is different: it is not an error value, and a panic on a goroutine that nobody recovers ends the whole program. So `runOne` calls the tool through `runTool`, whose deferred `recover()` turns a panic into an error such as `panic: runtime error: index out of range [3] with length 3`. One bad tool becomes an error result, the same as Python's `except Exception`.
 
 **The cap counts bytes.** Go's `read_file` keeps `b[:20000]`, the first 20,000 bytes. Python counts characters. A byte cut can land in the middle of a multi-byte UTF-8 character.
 

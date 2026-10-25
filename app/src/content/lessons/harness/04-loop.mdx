@@ -59,7 +59,7 @@ A model can get stuck, asking for tool after tool without finishing. Every pass 
 
 ## See it
 
-This simulator plays a recorded session that asks for two files. Press **Step** once: the model's reply arrives as `messages[1]` with two `read_file` calls and `stop_reason` `tool_use`. Press **Step** again: one "User · tool results" message appears holding both results, labelled `toolu_01` and `toolu_02`. A third **Step** brings the `end_turn` reply and the status reads `done`. Watch the right-hand panel: it is the exact `messages` list the next request would carry, with the newest entry marked. **Reset** starts over and **Run to end** plays it straight through.
+This simulator plays a recorded session that asks for two files. Press **Step** once: the model's reply arrives as `messages[1]` with two `read_file` calls and `stop_reason` `tool_use`. Press **Step** again: one "User · tool results" message appears holding both results, labelled `toolu_01` and `toolu_02`. A third **Step** brings the `end_turn` reply and the status reads `done`. Watch the panel titled `messages` as sent to the API: it is the exact list the next request would carry, with the newest entry marked. **Reset** starts over and **Run to end** plays it straight through.
 
 <LoopSimulator client:visible scenario="parallel-read" />
 
