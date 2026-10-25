@@ -3,6 +3,7 @@ import { getCollection, render } from 'astro:content';
 import AppShell from '../layouts/AppShell.astro';
 import Home from '../components/Home.astro';
 import LessonFrame from '../components/LessonFrame.astro';
+import Quiz, { MarkDone } from '../components/Quiz';
 import Sidebar, { type SidebarTrack } from '../components/Sidebar';
 import { viewId } from '../lib/router';
 
@@ -56,6 +57,10 @@ for (const l of lessons) viewTitles[l.id] = `${l.data.title} · AI Engineering`;
           minutes={data.minutes}
         >
           <Content />
+          <Fragment slot="after">
+            <Quiz client:visible lessonId={id} quiz={data.quiz} />
+            <MarkDone client:visible lessonId={id} />
+          </Fragment>
         </LessonFrame>
       </section>
     ))
