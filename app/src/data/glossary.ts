@@ -46,6 +46,10 @@ export const glossary = {
     'A fixed set of worker threads that take jobs from a queue. Python’s ThreadPoolExecutor is one; it reuses threads instead of starting one per job.',
   WaitGroup:
     'A Go counter from the sync package: Add before starting a goroutine, Done when it finishes, Wait blocks until the count is back to zero.',
+  'rate limit':
+    'A cap on how many requests or tokens an account may use per minute. A request over it gets HTTP 429 and should be retried after a short wait.',
+  'JSON Lines':
+    'A text format with one complete JSON object per line. Each line can be appended and read on its own, which suits logs.',
 } as const satisfies Record<string, string>;
 
 export type GlossaryKey = keyof typeof glossary;

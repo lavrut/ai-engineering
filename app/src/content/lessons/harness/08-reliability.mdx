@@ -1,0 +1,134 @@
+---
+track: harness
+order: 8
+slug: reliability
+title: Reliability & observability
+goal: Explain which failures the SDK retries for you, how the REPL reports the rest without crashing, and how to read trace.jsonl to see what a session did.
+minutes: 15
+quiz:
+  - question: In main, why does except anthropic.RateLimitError come before except anthropic.APIStatusError?
+    options:
+      - Python checks except clauses from the bottom up
+      - RateLimitError is a subclass of APIStatusError, so the broader clause listed first would catch every 429 and the rate-limit message would never print
+      - The SDK raises RateLimitError before it raises APIStatusError
+      - The order does not matter; it is only for readability
+    answer: 1
+    explanation: Python tries except clauses top to bottom and takes the first that matches. A 429 is both a RateLimitError and an APIStatusError, so the specific class has to be listed first. Go's switch in main has the same rule for the same reason, with the 429 case above the general errors.As case.
+  - question: The API answers 529 (overloaded) twice, then succeeds. How many model_request events does trace.jsonl show for that call?
+    options:
+      - Three, one per attempt
+      - Two, one for each failure
+      - One; the retries happen inside the SDK call, so the trace only shows a longer wait before model_response
+      - None, because failed attempts are not logged
+    answer: 2
+    explanation: emit runs before and after client.messages.create. The SDK's retries all happen inside that one call, so the trace shows one model_request and one model_response with a bigger gap between their timestamps.
+  - question: A trace ends with session_start and model_request, and no session_end. What most likely happened?
+    options:
+      - The model is still writing its answer to the trace
+      - The model returned end_turn, which is not logged
+      - The session hit MAX_TURNS
+      - The model call failed after the SDK's retries, the error left run_agent, and main printed it
+    answer: 3
+    explanation: session_end is written by run_agent on its way out of a normal return, including end_turn and MAX_TURNS. An exception from the model call skips it. main catches the error, prints a one-line message and shows the you > prompt again.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import TraceView from '../../../components/TraceView.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+A harness talks to a remote API, so some calls will fail. Lesson 6 dealt with failing tools: they become error results the model can read. This lesson deals with the model call itself, and with seeing what happened afterwards.
+
+Some API failures are temporary. You can hit a <Term t="rate limit" /> (HTTP 429), the API can be overloaded or have a server error (5xx), or the network can drop. Trying again a moment later usually works. The SDK does this for you: the harness builds its client with `max_retries=4`, so a failing request is tried once and retried up to four more times, with a growing wait between tries.
+
+Other failures are permanent, and a retry would get the same answer. A bad API key (401) or a malformed request (400) fails at once. The SDK raises an error, and the harness's entry point, step 1 and step 10 of the flow, catches it, prints one line, and waits for your next task. The session is lost; the program keeps running.
+
+To see what a session did, the harness writes a trace. Every event goes through one function, `emit`, which appends one line to `trace.jsonl`. The format is <Term t="JSON Lines" />: one JSON object per line, each with a timestamp `ts` and an `event` name. The trace is the observability rail on the side of the flow diagram.
+
+The harness writes seven events:
+
+| Event | Fields | Written by |
+|---|---|---|
+| `session_start` | `task` | `run_agent`, before the first call |
+| `model_request` | `messages`, the number of messages sent | `call_model`, before the request |
+| `model_response` | `stop_reason`, `input_tokens`, `output_tokens` | `call_model`, after the reply |
+| `permission` | `tool`, `allowed` | `approve`, after you answer |
+| `tool_result` | `tool`, `is_error`, `ms` | `run_one`, after each tool call |
+| `compact` | `messages`, the length of the old history | `compact`, before the summary call |
+| `session_end` | `turns`, `stop_reason` | `run_agent`, on its way out |
+
+The trace records your task text and the shape of the session. It does not record the model's text, tool inputs or tool output.
+
+## See it
+
+Here is a trace from one session, shown as a table. The **Time** column counts from the first event; the **What it tells you** column is a note on each row. This session comes from a harness with one extra tool, `run_tests`, added the way lesson 3 showed.
+
+<TraceView />
+
+Read it from the top:
+
+- **Turn 1.** `model_request` sends 1 message, your task. The `model_response` comes back after about 3.3 seconds with `stop_reason="tool_use"` and `input_tokens=1942`. Two `tool_result` rows follow: `read_file` in 4 ms and `run_tests` in 1318 ms. They ran in parallel (lesson 6), so the turn took as long as the test run. `run_tests` has `is_error=true` because the test failed, and that failure is what the model needs to see.
+- **Turn 2.** The request now holds 3 messages. The model asks for `write_file`, so a `permission` row shows you allowed it. The write takes 6 ms and the second test run passes.
+- **Turn 3.** 5 messages go out, and `stop_reason="end_turn"` ends the loop. `session_end` records 3 turns.
+
+Two patterns are worth looking for in any trace. `messages` grows by two per turn, and `input_tokens` grows with it (1942, 3410, 4102), which is the growth lesson 7 manages. And most of the 12.5 seconds is spent waiting for the model: the three `model_request` to `model_response` gaps add up to about 10 seconds.
+
+## The code
+
+Section 2 is all of observability.
+
+<CodeTabs section={2} goNote="emit takes a map[string]any instead of keyword arguments and adds ts and event to it. ts is time.Now().UnixMilli(), an integer in milliseconds, where Python writes seconds with a decimal point. json.Encoder writes the map's keys in sorted order and ends each record with a newline. A mutex, traceMu, keeps lines from goroutines running tools at the same moment from mixing. If the file cannot be opened, Go's emit returns without writing." />
+
+- `record` puts `ts` (seconds since 1970, rounded to milliseconds) and `event` first, then the keyword arguments.
+- `TRACE_FILE.open("a")` opens `trace.jsonl` in append mode on every call. Earlier lines are never rewritten. The path is relative, so the file lands in the folder you ran the harness from.
+- `json.dumps(record, default=str)` writes one line. `default=str` turns any value JSON cannot hold into a string instead of raising.
+
+Section 9 is the entry point and the error handling.
+
+<CodeTabs section={9} goNote="main reads lines with stdin.ReadString and returns on an error such as end of input. runAgent returns (string, error) instead of raising, and a switch picks the message. errors.As(err, &apiErr) checks whether the error is an *anthropic.Error; the first case also needs StatusCode == 429. Any other error, such as a network failure, falls to the err != nil case and prints Error: with the message." />
+
+- The outer `while True` reads tasks. `EOFError` and `KeyboardInterrupt` at the prompt end the program; `exit` and `quit` do too; an empty line is skipped.
+- Each task gets a fresh `run_agent`, so tasks do not share history.
+- The inner `try` catches three API errors, most specific first:
+  - `anthropic.RateLimitError`: a 429 that was still failing after the retries.
+  - `anthropic.APIStatusError`: any other HTTP error, printed with `e.status_code` and `e.message`. `RateLimitError` is a subclass of this one, which is why it must come first.
+  - `anthropic.APIConnectionError`: no answer at all, after the retries. Timeouts are a subclass of it.
+- After any of them, the loop shows `you >` again.
+
+The retries live in section 1: `client = anthropic.Anthropic(max_retries=4)`. Besides 429, 5xx and connection errors, the SDK also retries 408 and 409 and follows the API's `x-should-retry` header when it is set. The trace does not show retries, because they all happen inside one `client.messages.create` call.
+
+<Callout kind="note" title="What reaches main and what does not">
+  Tool failures never reach `main`: `run_one` turns them into results (lesson 6). Only model-call errors do, including one from the summary call in `compact`. An error that is none of the three types, such as a bug in code you add to `run_agent`, is not caught and stops the program with a traceback.
+</Callout>
+
+## How Go does it
+
+The Go client is built with `anthropic.NewClient(option.WithMaxRetries(4))` and retries the same status codes. When retries run out, `client.Messages.New` returns an error value. `callModel` returns it, `runAgent` returns it, and `main` decides what to print.
+
+The `switch` in `main` reads top to bottom like Python's `except` clauses, so its order matters for the same reason. `errors.As(err, &apiErr)` looks through the error, and any error it wraps, for an `*anthropic.Error`, and sets `apiErr` if it finds one. The first case adds `apiErr.StatusCode == 429`. The second prints the code and `apiErr.Error()`, which also includes the request URL and the API's error body. A network failure is not an `*anthropic.Error`, so it lands in `case err != nil` and prints `Error:` and the message. The last case prints the answer.
+
+The traces differ in two ways that matter if you read them with a script. Go's `ts` is milliseconds as an integer, Python's is seconds with a fraction. And the keys come out sorted, so a Go line starts with `"event"`.
+
+## Try it
+
+Make the model call fail on purpose. Neither of these costs anything.
+
+First, a network failure. Point the SDK at a port where nothing is listening:
+
+```bash
+cd harness/python
+ANTHROPIC_BASE_URL=http://127.0.0.1:9 python harness.py
+```
+
+Type `hi`. Nothing happens for about seven seconds while the SDK retries four times, then you see `Network error: could not reach the API.` and a new `you >` prompt. Type `exit`, then run `tail -2 trace.jsonl`: the session has a `session_start` and a `model_request` and nothing after them.
+
+Second, a permanent error. Run `ANTHROPIC_API_KEY=bad python harness.py` and type `hi`. This time the answer is immediate, because a 401 is not retried: a line that starts `API error 401:` and names an `authentication_error`. In Go, the same experiments are `ANTHROPIC_BASE_URL=http://127.0.0.1:9 go run .`, which ends with `Error: Post "http://127.0.0.1:9/v1/messages": ... connection refused`, and `ANTHROPIC_API_KEY=bad go run .`.
+
+Then read a real trace with a script. After a normal session, total the tokens:
+
+```bash
+python -c "import json; e = [json.loads(l) for l in open('trace.jsonl')]; print(sum(x.get('input_tokens', 0) for x in e), 'in,', sum(x.get('output_tokens', 0) for x in e), 'out')"
+```
+
+This counts every session in the file. Delete `trace.jsonl` first if you want just one. Lesson 9 turns these numbers into a cost.
