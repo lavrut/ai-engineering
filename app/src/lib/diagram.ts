@@ -5,10 +5,21 @@
 // - w/h default to DEFAULT_NODE_W x DEFAULT_NODE_H when omitted.
 // - Flow reads left-to-right, then top-to-bottom; a diagram may "snake" back
 //   right-to-left on a lower row. The Trace log sits as a tall side rail.
+// - Edges are drawn as orthogonal (elbow) paths chosen by the renderer. An
+//   edge that must go around the drawing lists `via` waypoints; the path runs
+//   from the source's side facing the first waypoint, through each waypoint,
+//   into the target's side facing the last one. Keep waypoints axis-aligned.
 
 export type Role = 'user' | 'harness' | 'model' | 'tool' | 'memory' | 'logs';
 export type DNode = { id: string; label: string; role: Role; x: number; y: number; w?: number; h?: number };
-export type DEdge = { id: string; from: string; to: string; label?: string; loop?: boolean };
+export type DEdge = {
+  id: string;
+  from: string;
+  to: string;
+  label?: string;
+  loop?: boolean;
+  via?: [number, number][];
+};
 export type DStep = {
   n: number;
   highlight: string[];

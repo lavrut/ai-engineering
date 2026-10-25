@@ -2,25 +2,27 @@ import type { Diagram } from '../../lib/diagram';
 
 // Layout (default node 150x56). Row 1 runs left to right: You, Entry, Context
 // builder, Model. Row 2: Router under Model, then Permission gate. Row 3 snakes
-// back right to left: Tool executor, Tools, Context manager. The loop edge
-// climbs from Context manager straight up to Context builder. The Trace log is
-// a tall rail on the right edge.
+// back right to left: Tool executor, Tools, Context manager. The Trace log is
+// a tall rail on the right edge. The loop edge leaves Context manager to the
+// left and runs round the outside of the drawing (left edge, then a lane
+// above row 1) into the top of Context builder, so the end_turn path from
+// Router back to Entry never has to cross it.
 export const harnessFlow: Diagram = {
   id: 'harness-flow',
   title: 'The harness, step by step',
   width: 1200,
-  height: 460,
+  height: 480,
   nodes: [
-    { id: 'you', label: 'You', role: 'user', x: 30, y: 40 },
-    { id: 'entry', label: 'Entry / REPL', role: 'harness', x: 220, y: 40 },
-    { id: 'context-builder', label: 'Context builder', role: 'harness', x: 410, y: 40 },
-    { id: 'model', label: 'Model (Claude API)', role: 'model', x: 620, y: 40, w: 190 },
-    { id: 'router', label: 'Router (stop_reason)', role: 'harness', x: 620, y: 200, w: 190 },
-    { id: 'permission-gate', label: 'Permission gate', role: 'harness', x: 850, y: 200 },
-    { id: 'tool-executor', label: 'Tool executor', role: 'harness', x: 850, y: 360 },
-    { id: 'tools', label: 'Tools (workspace)', role: 'tool', x: 620, y: 360, w: 190 },
-    { id: 'context-manager', label: 'Context manager', role: 'memory', x: 410, y: 360 },
-    { id: 'trace-log', label: 'Trace log', role: 'logs', x: 1040, y: 40, w: 130, h: 376 },
+    { id: 'you', label: 'You', role: 'user', x: 30, y: 72, w: 110 },
+    { id: 'entry', label: 'Entry / REPL', role: 'harness', x: 220, y: 72 },
+    { id: 'context-builder', label: 'Context builder', role: 'harness', x: 410, y: 72 },
+    { id: 'model', label: 'Model (Claude API)', role: 'model', x: 620, y: 72, w: 190 },
+    { id: 'router', label: 'Router (stop_reason)', role: 'harness', x: 620, y: 232, w: 190 },
+    { id: 'permission-gate', label: 'Permission gate', role: 'harness', x: 880, y: 232 },
+    { id: 'tool-executor', label: 'Tool executor', role: 'harness', x: 880, y: 392 },
+    { id: 'tools', label: 'Tools (workspace)', role: 'tool', x: 620, y: 392, w: 190 },
+    { id: 'context-manager', label: 'Context manager', role: 'memory', x: 370, y: 392 },
+    { id: 'trace-log', label: 'Trace log', role: 'logs', x: 1060, y: 72, w: 120, h: 376 },
   ],
   edges: [
     { id: 'e-you-entry', from: 'you', to: 'entry', label: 'task' },
@@ -31,8 +33,20 @@ export const harnessFlow: Diagram = {
     { id: 'e-gate-executor', from: 'permission-gate', to: 'tool-executor', label: 'approved' },
     { id: 'e-executor-tools', from: 'tool-executor', to: 'tools' },
     { id: 'e-tools-manager', from: 'tools', to: 'context-manager', label: 'tool_result' },
-    { id: 'e-loop', from: 'context-manager', to: 'context-builder', label: 'next turn', loop: true },
+    {
+      id: 'e-loop',
+      from: 'context-manager',
+      to: 'context-builder',
+      label: 'next turn',
+      loop: true,
+      via: [
+        [14, 420],
+        [14, 32],
+        [485, 32],
+      ],
+    },
     { id: 'e-router-entry', from: 'router', to: 'entry', label: 'end_turn' },
+    { id: 'e-entry-you', from: 'entry', to: 'you', label: 'answer' },
     { id: 'e-model-log', from: 'model', to: 'trace-log' },
     { id: 'e-gate-log', from: 'permission-gate', to: 'trace-log' },
     { id: 'e-executor-log', from: 'tool-executor', to: 'trace-log' },
@@ -88,7 +102,7 @@ export const harnessFlow: Diagram = {
     },
     {
       n: 10,
-      highlight: ['router', 'e-router-entry', 'entry', 'you'],
+      highlight: ['router', 'e-router-entry', 'entry', 'e-entry-you', 'you'],
       caption: 'On end_turn the loop stops. The final answer is shown to you.',
       code: { file: 'python', section: 9 },
     },

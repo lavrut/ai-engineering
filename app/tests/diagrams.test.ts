@@ -26,6 +26,21 @@ describe('diagram data', () => {
     expect(sec).toMatchObject({ 2: 6, 4: 6, 5: 8, 6: 4, 7: 5, 8: 8, 9: 7, 10: 9 });
   });
 
+  it.each([
+    ['harness-flow', harnessFlow],
+    ['request-response', requestResponse],
+    ['tool-roundtrip', toolRoundtrip],
+  ])('%s: every highlighted node is reached by a highlighted edge', (_name, d) => {
+    const problems: string[] = [];
+    for (const s of d.steps) {
+      const edges = d.edges.filter((e) => s.highlight.includes(e.id));
+      for (const n of d.nodes.filter((n) => s.highlight.includes(n.id))) {
+        if (!edges.some((e) => e.from === n.id || e.to === n.id)) problems.push(`step ${s.n}: ${n.id}`);
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
   it('lesson diagrams have 4 to 6 steps', () => {
     for (const d of [requestResponse, toolRoundtrip]) {
       expect(d.steps.length).toBeGreaterThanOrEqual(4);

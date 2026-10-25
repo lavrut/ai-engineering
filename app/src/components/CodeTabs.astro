@@ -121,18 +121,7 @@ const themes = { light: 'github-light', dark: 'github-dark' } as const;
 </style>
 
 <script>
-  import { pickLang, type Lang } from '../lib/lang';
-
-  const KEY = 'aie:lang';
-  const EVENT = 'aie:lang';
-
-  function readStored(): string | null {
-    try {
-      return localStorage.getItem(KEY);
-    } catch {
-      return null;
-    }
-  }
+  import { LANG_EVENT as EVENT, LANG_KEY as KEY, pickLang, readLang, type Lang } from '../lib/lang';
 
   function apply(lang: Lang) {
     document.querySelectorAll<HTMLElement>('[data-codetabs]').forEach((root) => {
@@ -166,7 +155,7 @@ const themes = { light: 'github-light', dark: 'github-dark' } as const;
   }
 
   window.addEventListener(EVENT, (e) => apply(pickLang((e as CustomEvent<string>).detail ?? null)));
-  apply(pickLang(readStored()));
+  apply(readLang());
 
   document.querySelectorAll<HTMLElement>('[data-codetabs]').forEach((root) => {
     const tabs = Array.from(root.querySelectorAll<HTMLElement>('[role="tab"]'));

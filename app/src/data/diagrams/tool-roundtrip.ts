@@ -1,6 +1,6 @@
 import type { Diagram } from '../../lib/diagram';
 
-// Layout (default node 150x56). Row 1 left to right: model, harness, registry,
+// Layout (nodes 140x56; gaps sized to fit the edge labels). Row 1 left to right: model, harness, registry,
 // function. Row 2 runs back right to left: the tool_result node, then the model.
 export const toolRoundtrip: Diagram = {
   id: 'tool-roundtrip',
@@ -8,11 +8,11 @@ export const toolRoundtrip: Diagram = {
   width: 900,
   height: 280,
   nodes: [
-    { id: 'model', label: 'Model', role: 'model', x: 30, y: 40 },
-    { id: 'harness', label: 'Harness', role: 'harness', x: 250, y: 40 },
-    { id: 'registry', label: 'Tool registry', role: 'harness', x: 470, y: 40 },
-    { id: 'function', label: 'Your function', role: 'tool', x: 690, y: 40 },
-    { id: 'tool-result', label: 'tool_result', role: 'memory', x: 250, y: 190 },
+    { id: 'model', label: 'Model', role: 'model', x: 30, y: 40, w: 140 },
+    { id: 'harness', label: 'Harness', role: 'harness', x: 260, y: 40, w: 140 },
+    { id: 'registry', label: 'Tool registry', role: 'harness', x: 510, y: 40, w: 140 },
+    { id: 'function', label: 'Your function', role: 'tool', x: 740, y: 40, w: 140 },
+    { id: 'tool-result', label: 'tool_result', role: 'memory', x: 260, y: 190, w: 140 },
   ],
   edges: [
     { id: 'e-model-harness', from: 'model', to: 'harness', label: 'tool_use' },

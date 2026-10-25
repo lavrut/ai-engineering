@@ -1,0 +1,32 @@
+---
+// Build-time wrapper for the FlowDiagram island: picks the diagram by key and
+// passes along only the harness sections that its steps link to.
+import FlowDiagramIsland from './FlowDiagram.tsx';
+import { extractSection } from '../lib/regions';
+import { harnessFlow } from '../data/diagrams/harness-flow';
+import { requestResponse } from '../data/diagrams/request-response';
+import { toolRoundtrip } from '../data/diagrams/tool-roundtrip';
+import pythonSource from '../../../harness/python/harness.py?raw';
+import goSource from '../../../harness/go/main.go?raw';
+
+const diagrams = {
+  'harness-flow': harnessFlow,
+  'request-response': requestResponse,
+  'tool-roundtrip': toolRoundtrip,
+} as const;
+
+interface Props {
+  diagram: keyof typeof diagrams;
+  mode?: 'replay';
+}
+
+const { diagram: key, mode } = Astro.props;
+const diagram = diagrams[key];
+if (!diagram) throw new Error(`FlowDiagram: unknown diagram "${key}"`);
+
+const sections = [...new Set(diagram.steps.flatMap((s) => (s.code ? [s.code.section] : [])))];
+const codePython = Object.fromEntries(sections.map((n) => [n, extractSection(pythonSource, n)]));
+const codeGo = Object.fromEntries(sections.map((n) => [n, extractSection(goSource, n)]));
+---
+
+<FlowDiagramIsland client:visible diagram={diagram} codePython={codePython} codeGo={codeGo} mode={mode} />
