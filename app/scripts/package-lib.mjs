@@ -11,14 +11,19 @@ export const ALLOWED_HOSTS = new Set([
   'unpkg.com',
 ]);
 
-/** Rewrite root-absolute `/_astro/` references to page-relative `_astro/`. */
+/**
+ * Rewrite root-absolute `/_astro/` references to page-relative `./_astro/`.
+ * The leading "./" is required: Astro hydrates islands with
+ * `import(componentUrl)`, and import() rejects a bare `_astro/x.js`.
+ */
 function relativizeAstro(text) {
-  return text.replace(/(?<![\w./-])\/_astro\//g, '_astro/');
+  return text.replace(/(?<![\w./-])\/_astro\//g, './_astro/');
 }
 
 /**
  * Head contents (minus charset/viewport metas, `<title>` first) followed by
- * body contents (and anything after </body>), with no doctype/html/head/body tags.
+ * body contents (and anything after </body>), with no doctype/html/head/body
+ * tags and `/_astro/` made `./_astro/`.
  * @param {string} html
  * @returns {string}
  */

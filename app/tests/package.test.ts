@@ -43,12 +43,14 @@ describe('transformHtml', () => {
     expect(late).not.toMatch(/<\/html>|<\/body>/i);
   });
 
-  it('rewrites absolute /_astro/ references to relative ones', () => {
-    expect(out).toContain('component-url="_astro/C.js"');
-    expect(out).toContain('renderer-url="_astro/client.js"');
-    expect(out).toContain('src="_astro/a.js"');
-    expect(out).toContain('url(_astro/bg.svg)');
-    expect(out).not.toContain('/_astro/');
+  // "./" matters: Astro hydrates with import(componentUrl), and import()
+  // rejects a bare "_astro/C.js" as an unresolvable module specifier.
+  it('rewrites absolute /_astro/ references to ./_astro/', () => {
+    expect(out).toContain('component-url="./_astro/C.js"');
+    expect(out).toContain('renderer-url="./_astro/client.js"');
+    expect(out).toContain('src="./_astro/a.js"');
+    expect(out).toContain('url(./_astro/bg.svg)');
+    expect(out).not.toMatch(/(?<!\.)\/_astro\//);
   });
 });
 
