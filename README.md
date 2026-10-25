@@ -49,3 +49,15 @@ npm run package    # dist/ -> publish/ in the page-host format
 ```
 
 `npm run package` writes `publish/index.html` without a document skeleton (the host supplies one), makes every `_astro/` reference relative, and exits 1 listing any external URL outside the allowed hosts (`fonts.googleapis.com`, `fonts.gstatic.com`, `cdnjs.cloudflare.com`, `cdn.jsdelivr.net`, `unpkg.com`).
+
+## Adding content
+
+Every track and lesson follows [docs/STYLE.md](docs/STYLE.md): the lesson anatomy, writing rules, components, design tokens and code conventions. Start new work from a template:
+
+```sh
+cd app
+npm run new:lesson -- <track> <slug> "<Title>"   # from templates/lesson.mdx
+cp templates/track.yaml src/content/tracks/<id>.yaml
+```
+
+`npm test` enforces the checkable rules: section order, no leftover `TODO`, glossary terms, and colors only from `src/styles/tokens.css`.

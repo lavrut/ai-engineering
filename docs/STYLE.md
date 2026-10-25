@@ -1,0 +1,90 @@
+# AI Engineering style guide
+
+The standard every track and lesson follows, so the course reads and looks the same as it grows. Rules marked **(tested)** are checked by `npm test` in `app/`; a lesson that breaks one fails the build.
+
+## Start from a template
+
+| Making | Do this |
+|---|---|
+| A new track | Copy `app/templates/track.yaml` to `app/src/content/tracks/<id>.yaml` and fill it in. |
+| A new lesson | `cd app && npm run new:lesson -- <track> <slug> "<Title>"` creates `src/content/lessons/<track>/NN-<slug>.mdx` from `app/templates/lesson.mdx` with the next number. |
+
+Then replace every `TODO`. **(tested)** No `TODO` may remain in a lesson.
+
+## Tracks
+
+- One YAML file per track in `app/src/content/tracks/`. Its `id` matches the file name and the lesson folder.
+- `status: planned` until the first lesson ships, then `live`. Planned tracks list their `subsections`.
+- `summary` is one sentence ending with a period.
+- Build one track at a time. A track ships when all its lessons pass the tests.
+
+## Lesson anatomy
+
+Every lesson has these H2 sections, in this order: **(tested)**
+
+1. **Concept** explains the idea in plain words before any code.
+2. **See it** holds an interactive aid or diagram. Say what to watch for before it and what it showed after it.
+3. **The code** shows the real code, then walks through it as a bulleted list, one bullet per line or call that matters. Each bullet starts with the code in backticks.
+4. **How Go does it** is optional. Include it only where the second language differs in a way worth teaching. For a track that pairs other languages, use `How <Language> does it`. **(tested)** It sits between The code and Try it.
+5. **Try it** is something the reader runs on their own machine: the file to save, the command, and what they should see.
+
+Use H3s inside a section when it runs long. No other H2s.
+
+**Frontmatter (tested against `lessonSchema`):**
+
+- `track`, `order` and `slug` match the path `lessons/<track>/NN-<slug>.mdx`, with `order` counting up from 1. **(tested)**
+- `title` is sentence case and short: "Context management", not "Managing The Context Window".
+- `goal` is one sentence starting with a verb, naming what the reader can do afterwards.
+- `minutes` is an honest reading-and-trying estimate.
+- `quiz` has 2 or 3 questions with 4 options each. Each question tests understanding, not recall of a number. Each `explanation` says why the answer is right.
+
+## Writing
+
+- Write for someone who knows Python and has never called an LLM API.
+- Short sentences. One idea per paragraph. Active voice.
+- Introduce a term once with `<Term t="..." />`; the key must exist in `app/src/data/glossary.ts`. **(tested)**
+- Code identifiers, file names, commands and field names go in backticks.
+- Name exact values (`MAX_TURNS = 25`, `20,000 characters`) rather than "a limit".
+- Say what costs money. Any step that calls the API says so before the command.
+- No marketing words ("powerful", "seamless", "simply").
+
+## Components
+
+Use these instead of hand-built HTML, so every lesson looks the same:
+
+| Need | Component |
+|---|---|
+| Real harness code with Python/Go tabs | `<CodeTabs section={N} goNote="..." />` (N is a numbered section, 1–9 **(tested)**) or `<CodeTabs whole />` |
+| A caveat or gotcha | `<Callout kind="note" \| "warning" \| "go" title="...">` |
+| A glossary term | `<Term t="..." />` |
+| A numbered flow | `<FlowDiagram diagram="..." />` (the name must exist in `src/data/diagrams/` **(tested)**) |
+| A stepping loop | `<LoopSimulator client:visible scenario="..." />` |
+| Other aids | `<ContextMeter client:visible />`, `<Timeline />`, `<TraceView />` |
+
+A new aid goes in `app/src/components/`, with its logic in `app/src/lib/` and a test in `app/tests/`.
+
+## Visual design
+
+- **Colors:** every color is a token in `app/src/styles/tokens.css`, with a light and a dark value. **(tested)** No hex colors anywhere else; use `var(--token)`.
+  - Surfaces and text: `--bg`, `--surface`, `--surface-2`, `--ink`, `--muted`, `--line`.
+  - Action and status: `--accent`, `--accent-ink`, `--good`, `--warn`, `--bad`.
+  - Diagram roles, used the same way in every diagram: `--role-user`, `--role-harness`, `--role-model`, `--role-tool`, `--role-memory`, `--role-logs`.
+- **Type:** Bricolage Grotesque for headings (`--font-display`), IBM Plex Sans for body (`--font-body`), IBM Plex Mono for code and labels (`--font-mono`). Sizes come from the `--text-*` tokens.
+- **Shape:** corners use `--radius`. Prose stays within `--prose-w`.
+- **Themes:** readers pick Light, Dark or Auto in the sidebar. Check every new component in both themes and at phone width (375px).
+
+## Code
+
+- **Reference harnesses:** `harness/python/harness.py` and `harness/go/main.go` keep the same numbered sections, marked `# ── N. Title` and `// ── N. Title`. Lessons quote code by section number, so renumbering a section means updating the lessons.
+- **Python:** standard library plus the official SDK, type hints, 4-space indent.
+- **Go:** `gofmt` formatting, standard library plus the official SDK.
+- **App:** TypeScript, 2-space indent, single quotes. Pure logic lives in `src/lib/` with tests; components stay thin.
+- **Tests never call the API.** They use a fake model.
+
+## Before you commit
+
+```sh
+cd app && npm test && npm run build
+cd harness/python && pytest
+cd harness/go && go test ./...
+```

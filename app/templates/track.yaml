@@ -1,0 +1,7 @@
+# Track template. Copy to src/content/tracks/<id>.yaml. See docs/STYLE.md.
+id: TODO-id                # lowercase, matches the file name and the lessons/<id>/ folder
+title: TODO Title          # Title Case, short: "Agent Harness", "MCP"
+order: 0                   # position in the sidebar; next free number
+status: planned            # planned until its first lesson ships, then live
+summary: "TODO One sentence on what the track teaches, ending with a period."
+subsections: []            # e.g. ["Clients", "Servers"]; shown under planned tracks

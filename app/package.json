@@ -12,6 +12,7 @@
     "preview": "astro preview",
     "test": "vitest run",
     "package": "node scripts/package.mjs",
+    "new:lesson": "node scripts/new-lesson.mjs",
     "astro": "astro"
   },
   "dependencies": {
