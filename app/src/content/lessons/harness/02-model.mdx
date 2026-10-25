@@ -84,7 +84,7 @@ Section 6 makes the call itself. This is steps 2 to 4 of the flow: build the req
 - The `USE_FALLBACKS` lines add a beta header and a `fallbacks` field. If a safety classifier declines the request, the API retries it on a fallback model. You can leave this as it is.
 - `params.update(overrides)` lets a caller change one field for a single call. Compaction in lesson 7 uses it.
 - `client.messages.create(**params)` sends the request and waits for the reply.
-- The two `emit` calls write the request and the response's `stop_reason` and token counts to the trace.
+- The two `emit` calls write the number of messages in the request, then the response's `stop_reason` and token counts to the trace.
 - `call_model` returns the whole response. The loop in lesson 4 reads `response.content` and `response.stop_reason` from it.
 
 <Callout kind="note" title="Where the history lives">

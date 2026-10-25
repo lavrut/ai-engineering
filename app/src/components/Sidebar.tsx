@@ -69,7 +69,7 @@ export default function Sidebar({ tracks }: Props) {
                   <div class="nav-track-head">
                     <span class="nav-track-title">{t.title}</span>
                     {ids.length > 0 && (
-                      <span class="nav-pct" aria-label={`${pct}% complete`}>
+                      <span class="nav-pct">
                         {pct}%
                       </span>
                     )}

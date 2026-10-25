@@ -2,8 +2,9 @@ module mini-harness
 
 go 1.27.2
 
+require github.com/anthropics/anthropic-sdk-go v1.84.0
+
 require (
-	github.com/anthropics/anthropic-sdk-go v1.84.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.2 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect

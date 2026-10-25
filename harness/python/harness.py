@@ -4,7 +4,7 @@ mini_harness — a complete, teaching-sized AI agent harness.
 
 The model only ever returns text or a request to call a tool. Everything
 else — the loop, the tools, permissions, context limits, logging — is the
-harness. This file is all of it, in about 200 lines.
+harness. This file is all of it, in about 230 lines.
 
 Run:
     pip install anthropic

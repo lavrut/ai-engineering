@@ -40,7 +40,7 @@ import Callout from '../../../components/Callout.astro';
 
 A tool is a function the harness offers to the model. The request carries a description of each tool: a name, a sentence about what it does, and the shape of its input written as <Term t="JSON Schema" />. The model reads these descriptions and decides whether a tool would help.
 
-When it wants one, the model stops and replies with a <Term t="tool_use" /> block and a `stop_reason` of `tool_use`. The block has three fields: `name`, `input` (JSON written to match the schema), and `id`.
+When it wants one, the model stops and replies with a <Term t="tool_use" /> block and a `stop_reason` of `tool_use`. The block has three fields besides `type`: `name`, `input` (JSON written to match the schema), and `id`.
 
 The model never runs code. The harness reads the block, finds the function by name, calls it with the input, and sends the output back as a <Term t="tool_result" /> block. The result's `tool_use_id` copies the request's `id`. All the results for one assistant turn go back together in one `user` message.
 

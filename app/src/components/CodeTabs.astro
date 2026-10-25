@@ -174,13 +174,16 @@ const themes = { light: 'github-light', dark: 'github-dark' } as const;
       const panel = root.querySelector<HTMLElement>('[data-panel]:not([hidden])');
       const pre = panel?.querySelector('pre');
       if (!pre) return;
-      navigator.clipboard.writeText(pre.textContent ?? '').then(
-        () => {
-          copy.textContent = 'Copied';
-          setTimeout(() => (copy.textContent = 'Copy'), 1500);
-        },
-        () => selectText(pre),
-      );
+      const text = pre.textContent ?? '';
+      const done = () => {
+        copy.textContent = 'Copied';
+        setTimeout(() => (copy.textContent = 'Copy'), 1500);
+      };
+      try {
+        navigator.clipboard.writeText(text).then(done, () => selectText(pre));
+      } catch {
+        selectText(pre);
+      }
     });
   });
 </script>

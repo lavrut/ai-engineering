@@ -94,7 +94,7 @@ def safe_path(rel: str) -> Path:
 - `is_relative_to(WORKSPACE)` checks that the resolved path is still inside. If not, `PermissionError` is raised. The executor catches it and the model gets `PermissionError: notes/../../x is outside the workspace` as an error result.
 - `list_files`, `read_file` and `write_file` all call `safe_path` first, so no tool opens a path without the check.
 
-<Callout kind="warning" title="A path rule, not a jail">
+<Callout kind="warning" title="A path rule only">
   `safe_path` only protects tools that call it. The tools still run as your user, with your permissions. A tool that ran shell commands could reach anything you can. For that kind of tool, run the harness inside a container or a separate user account as well.
 </Callout>
 
