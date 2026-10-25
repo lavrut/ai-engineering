@@ -119,3 +119,34 @@ describe('design tokens', () => {
     expect(hits).toEqual([]);
   });
 });
+
+describe('text integrity', () => {
+  // UTF-8 bytes read as Latin-1 turn a middle dot or curly apostrophe into two or
+  // three junk characters (A-circumflex, a-circumflex + euro sign, ...); U+FFFD marks
+  // bytes that failed to decode.
+  const MOJIBAKE = /Â[ -¿]|â€|â†|Ã[\u0080-¿]|�/;
+  const repo = join(app, '..');
+  const roots = ['app/src', 'app/templates', 'app/scripts', 'app/tests', 'docs', 'harness/python', 'harness/go'];
+  const sources = roots.flatMap((r) => files(join(repo, r), /\.(astro|tsx?|mjs|css|mdx?|ya?ml|jsonl?|py|go)$/));
+
+  it('finds source files to check', () => {
+    expect(sources.length).toBeGreaterThan(50);
+  });
+
+  it('has no mis-decoded characters in any source file', () => {
+    const decoder = new TextDecoder('utf-8', { fatal: true });
+    const problems = sources.flatMap((f) => {
+      const name = relative(repo, f);
+      let text: string;
+      try {
+        text = decoder.decode(readFileSync(f));
+      } catch {
+        return [`${name}: not valid UTF-8`];
+      }
+      return text
+        .split('\n')
+        .flatMap((line, i) => (MOJIBAKE.test(line) && !line.includes('MOJIBAKE') ? [`${name}:${i + 1}`] : []));
+    });
+    expect(problems).toEqual([]);
+  });
+});
