@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import time
 from pathlib import Path
 
@@ -189,6 +190,39 @@ def triage(ticket, variant, *, model=TASK_MODEL, effort=None, rep=0, mode=MODE, 
 
 
 # ── 5. Code graders ─────────────────────────────────────────────────────────
+# Category and priority have one right answer, so plain code grades them: exact,
+# free and the same every time. Reach for a judge only where code cannot decide.
+def grade(ticket: dict, line: dict) -> dict:
+    """Grade one saved line against its ticket. A line with no usable output is never correct."""
+    if line.get("error"):
+        outcome = "error"                      # the call failed: the model was never graded
+    elif line.get("stop_reason") in ("refusal", "max_tokens"):
+        outcome = line["stop_reason"]          # the model answered, but not with a usable result
+    else:
+        outcome = "ok"
+    output = line.get("output") or {}
+    category_ok = outcome == "ok" and output.get("category") == ticket["category"]
+    priority_ok = outcome == "ok" and output.get("priority") == ticket["priority"]
+    return {"case_id": ticket["id"], "category_ok": category_ok, "priority_ok": priority_ok,
+            "both_ok": category_ok and priority_ok, "outcome": outcome}
+
+
+def accuracy(grades: list[dict], field: str) -> float:
+    """Share of graded cases that are correct. A refusal or cut-off counts as wrong;
+    an error says nothing about the model, so it is left out."""
+    counted = [g for g in grades if g["outcome"] != "error"]
+    return sum(g[field] for g in counted) / len(counted) if counted else 0.0
+
+
+def confusion_matrix(pairs: list[tuple]) -> dict[str, dict[str, int]]:
+    """Count (expected, predicted) pairs: matrix[expected][predicted]. No answer is "(none)"."""
+    matrix: dict[str, dict[str, int]] = {}
+    for expected, predicted in pairs:
+        row = matrix.setdefault(expected, {})
+        predicted = predicted or "(none)"
+        row[predicted] = row.get(predicted, 0) + 1
+    return matrix
+
 
 
 # ── 6. LLM judge ────────────────────────────────────────────────────────────
@@ -201,3 +235,44 @@ def triage(ticket, variant, *, model=TASK_MODEL, effort=None, rep=0, mode=MODE, 
 
 
 # ── 9. Report and compare ───────────────────────────────────────────────────
+# A score on a small set is noisy. The band is how far a score can move by luck alone,
+# so a difference smaller than the band is not evidence of anything.
+def noise_band(n: int, reps: int = 1) -> float:
+    """Rough one-sigma noise on an accuracy, about 1/sqrt(samples). More cases or reps shrink it."""
+    return 1 / math.sqrt(n * reps)
+
+
+def report(grades: list[dict], reps: int = 1) -> dict:
+    """Scores for one configuration. `grades` holds every graded line, all reps together."""
+    n = len({g["case_id"] for g in grades})
+    return {"n": n,
+            "errors": sum(g["outcome"] == "error" for g in grades),
+            "category": accuracy(grades, "category_ok"),
+            "priority": accuracy(grades, "priority_ok"),
+            "both": accuracy(grades, "both_ok"),
+            "band": noise_band(n, reps)}
+
+
+def compare(grades_a: list[dict], grades_b: list[dict]) -> dict:
+    """Does B beat A? Pass one grade per case (use rep 0). diff = b - a on `both_ok`;
+    `fixed` are cases A got wrong and B got right, `broken` the reverse."""
+    a, b = accuracy(grades_a, "both_ok"), accuracy(grades_b, "both_ok")
+    right_a = {g["case_id"]: g["both_ok"] for g in grades_a}
+    right_b = {g["case_id"]: g["both_ok"] for g in grades_b}
+    shared = sorted(right_a.keys() & right_b.keys())
+    band = noise_band(len(right_a))
+    return {"a": a, "b": b, "diff": b - a, "band": band,
+            "fixed": [c for c in shared if right_b[c] and not right_a[c]],
+            "broken": [c for c in shared if right_a[c] and not right_b[c]],
+            "significant": abs(b - a) > band}
+
+
+def gate(grades: list[dict], baseline_grades: list[dict], *, minimum: float = 0.7) -> dict:
+    """A pass/fail check for CI: fail below the minimum, or below the baseline by more than the noise band."""
+    r, base = report(grades), report(baseline_grades)
+    reasons = []
+    if r["both"] < minimum:
+        reasons.append(f"both {r['both']:.3f} is below the minimum {minimum:.3f}")
+    if r["both"] < base["both"] - r["band"]:
+        reasons.append(f"both {r['both']:.3f} is more than the band {r['band']:.3f} below the baseline {base['both']:.3f}")
+    return {"passed": not reasons, "reasons": reasons}

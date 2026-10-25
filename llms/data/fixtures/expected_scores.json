@@ -9,5 +9,51 @@
     "rep": 0,
     "canonical": "{\"effort\":null,\"input\":\"[fixture] Hola, no puedo iniciar sesión en mi cuenta.\",\"kind\":\"triage\",\"model\":\"claude-haiku-5-5\",\"prompt_text\":\"Fixture prompt v2: triage the ticket using the category and priority rules.\",\"prompt_version\":\"v2_rules\",\"rep\":0}",
     "key": "87bf1509df729d9533aad30841ea9953106671b20b0b51c82835fdb29daa2dea"
-  }
+  },
+  "triage__claude-haiku-5-5__v1_basic__default": {
+    "category": 0.7142857142857143,
+    "priority": 0.42857142857142855,
+    "both": 0.42857142857142855,
+    "errors": 1,
+    "n": 8,
+    "reps": 1
+  },
+  "triage__claude-haiku-5-5__v2_rules__default": {
+    "category": 0.9375,
+    "priority": 0.8125,
+    "both": 0.8125,
+    "errors": 0,
+    "n": 8,
+    "reps": 2
+  },
+  "v1_basic_confusion_category": {
+    "billing": {
+      "billing": 2
+    },
+    "bug": {
+      "bug": 2
+    },
+    "account": {
+      "account": 1,
+      "(none)": 1
+    },
+    "outage": {
+      "bug": 1
+    }
+  },
+  "compare_v1_v2": {
+    "note": "rep-0 grades; diff = b - a; a=v1_basic, b=v2_rules",
+    "a": 0.42857142857142855,
+    "b": 0.75,
+    "diff": 0.32142857142857145,
+    "fixed": [
+      "f001",
+      "f004",
+      "f007"
+    ],
+    "broken": [],
+    "significant": false
+  },
+  "band_8_1": 0.35355339059327373,
+  "band_8_2": 0.25
 }
