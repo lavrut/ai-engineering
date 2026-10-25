@@ -1,0 +1,73 @@
+---
+// Static table view of the sample JSONL trace the harness writes through emit().
+import { parseTrace } from '../lib/trace';
+import raw from '../data/sample-trace.jsonl?raw';
+
+const events = parseTrace(raw);
+const t0 = events[0].ts;
+
+const STOP_NOTES: Record<string, string> = {
+  tool_use: 'The model wants tools run, so the loop continues.',
+  end_turn: 'The model is finished, so the loop ends.',
+};
+
+function fields(e: (typeof events)[number]): string {
+  const { ts: _ts, event: _event, ...rest } = e;
+  return Object.entries(rest)
+    .map(([k, v]) => `${k}=${typeof v === 'string' ? JSON.stringify(v) : String(v)}`)
+    .join('  ');
+}
+
+function note(e: (typeof events)[number]): string {
+  if (e.event === 'model_response') return STOP_NOTES[String(e.stop_reason)] ?? `stop_reason ${String(e.stop_reason)}.`;
+  if (e.event === 'permission') return e.allowed ? 'The harness allowed this call.' : 'The harness denied this call.';
+  if (e.event === 'tool_result' && e.is_error) return 'An error goes back to the model as a result so it can recover.';
+  if (e.event === 'compact') return 'History was summarised and a new conversation started.';
+  return '';
+}
+
+const rows = events.map((e) => ({
+  offset: `+${(e.ts - t0).toFixed(3)} s`,
+  event: e.event,
+  fields: fields(e),
+  note: note(e),
+  isError: e.event === 'tool_result' && e.is_error === true,
+}));
+---
+
+<div class="trace-wrap" role="region" aria-label="Sample trace" tabindex="0">
+  <table class="trace">
+    <caption>One sample session, as written by the harness (trace.jsonl)</caption>
+    <thead>
+      <tr><th scope="col">Time</th><th scope="col">Event</th><th scope="col">Fields</th><th scope="col">What it tells you</th></tr>
+    </thead>
+    <tbody>
+      {rows.map((r) => (
+        <tr class:list={{ 'is-error': r.isError }}>
+          <td class="t-time">{r.offset}</td>
+          <td class="t-event"><code>{r.event}</code></td>
+          <td class="t-fields"><code>{r.fields}</code></td>
+          <td class="t-note">{r.note}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+
+<style>
+  .trace-wrap { margin: 24px 0; overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+  .trace-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .trace { border-collapse: collapse; width: 100%; min-width: 46rem; font-size: var(--text-small); }
+  caption { padding: 8px 12px; text-align: left; font-family: var(--font-mono); font-size: var(--text-label); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: var(--surface-2); border-bottom: 1px solid var(--line); }
+  th { padding: 6px 12px; text-align: left; font-family: var(--font-mono); font-size: var(--text-label); font-weight: 500; color: var(--muted); border-bottom: 1px solid var(--line); }
+  td { padding: 6px 12px; vertical-align: top; border-bottom: 1px solid var(--line); color: var(--ink); }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:nth-child(even) { background: var(--surface-2); }
+  code { font-family: var(--font-mono); font-size: 0.8125rem; }
+  .t-time { white-space: nowrap; font-family: var(--font-mono); font-size: 0.8125rem; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .t-event code { font-weight: 600; }
+  .t-fields code { overflow-wrap: anywhere; }
+  .t-note { color: var(--muted); }
+  tr.is-error .t-note { color: var(--bad); }
+  tr.is-error .t-event { box-shadow: inset 3px 0 0 var(--bad); }
+</style>

@@ -1,0 +1,120 @@
+---
+track: harness
+order: 4
+slug: loop
+title: The agent loop
+goal: Read run_agent line by line, and explain how stop_reason decides whether the harness calls the model again or hands you the answer.
+minutes: 15
+quiz:
+  - question: The model's reply holds two tool_use blocks. What does the next message in the history look like?
+    options:
+      - Two user messages, each with one tool_result
+      - One user message with two tool_result blocks, each carrying the tool_use_id it answers
+      - One assistant message with both outputs as text
+      - Nothing yet; the harness runs one tool per turn and asks the model again
+    answer: 1
+    explanation: The harness runs every tool the model asked for and sends all the results back in ONE user message. Each tool_result copies the id of its tool_use block into tool_use_id, so the model can tell which output belongs to which request.
+  - question: Why does run_agent append the assistant reply to messages before it runs any tools?
+    options:
+      - Because each tool_result must answer a tool_use in the assistant message just before it, so that message has to be in the history
+      - So the trace log can record it
+      - To free memory before the tools run
+      - It doesn't matter; the order of appends is cosmetic
+    answer: 0
+    explanation: The next request must show the model its own tool_use blocks, then the user message with the matching results. If the assistant turn were missing, the results would answer nothing and the API would reject the request.
+  - question: A model keeps asking for list_files and never finishes. What stops the harness?
+    options:
+      - The API ends the session after a fixed number of calls
+      - The context manager deletes the extra turns
+      - MAX_TURNS, which ends the loop after 25 model calls with a stop message
+      - Nothing; it runs until you press Ctrl-C
+    answer: 2
+    explanation: The for loop runs at most MAX_TURNS times, one model call per pass. When it runs out, the harness logs session_end with stop_reason "max_turns" and returns a stop message, so a stuck model costs at most 25 calls.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import LoopSimulator from '../../../components/LoopSimulator.tsx';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+Lessons 2 and 3 showed one model call and one tool round trip. The <Term t="agent loop" /> joins them: call the model, run the tools it asked for, send the results, call again. It stops when the model replies without asking for a tool.
+
+The loop has one list, `messages`, that starts with your task and only ever grows. Each pass adds the model's reply as an `assistant` message. If the reply asked for tools, the pass also adds one `user` message with every result. The roles alternate: user, assistant, user, assistant.
+
+Each pass ends at step 5 of the flow, the router. It reads `stop_reason` and picks one of four exits:
+
+| `stop_reason` | What the loop does |
+|---|---|
+| `tool_use` | Runs the tools, appends the results, and calls the model again. |
+| `end_turn` | Returns the reply's text. This is step 10, the final answer. |
+| `max_tokens` | Returns the text so far plus `[stopped: the response hit max_tokens]`. |
+| `refusal` | Returns `[the model declined this request]`. |
+
+Only `tool_use` keeps the loop going. Any other value ends the session.
+
+One reply can ask for several tools. The model might want to read two files at once, so it writes two `tool_use` blocks in the same reply. The harness runs both and sends both results back in one `user` message. Each result's <Term t="tool_use_id" /> copies the `id` of the request it answers. If any `tool_use` in the reply has no matching result in the next message, the API rejects the request.
+
+A model can get stuck, asking for tool after tool without finishing. Every pass resends the whole history, so a stuck loop gets more expensive with each call. `MAX_TURNS = 25` caps the number of model calls in one session.
+
+## See it
+
+This simulator plays a recorded session that asks for two files. Press **Step** once: the model's reply arrives as `messages[1]` with two `read_file` calls and `stop_reason` `tool_use`. Press **Step** again: one "User · tool results" message appears holding both results, labelled `toolu_01` and `toolu_02`. A third **Step** brings the `end_turn` reply and the status reads `done`. Watch the panel titled `messages` as sent to the API: it is the exact list the next request would carry, with the newest entry marked. **Reset** starts over and **Run to end** plays it straight through.
+
+<LoopSimulator client:visible scenario="parallel-read" />
+
+## The code
+
+Section 8 is the whole loop.
+
+<CodeTabs section={8} goNote="runAgent has the same shape. resp.ToParam() turns the response into a MessageParam for the history. The tool calls are collected with a type switch, block.AsAny().(anthropic.ToolUseBlock), keeping each input as raw JSON for the tool to decode. A failed model call comes back as an error value, and runAgent returns it straight to main instead of raising. maxTurns is a var so the Go tests can lower it." />
+
+- `messages` starts as a one-item list: your task as a `user` message. `emit("session_start", task=task)` writes the task to the trace.
+- `for turn in range(1, MAX_TURNS + 1)` is the loop. Each pass makes exactly one model call, so `turn` counts calls.
+- `call(messages)` sends the full history. `call` defaults to `call_model` from lesson 2; the tests pass a fake here so the loop runs without the API.
+- `messages.append({"role": "assistant", "content": response.content})` stores the reply as it came, `tool_use` blocks included. This happens first, before any tool runs, because the results have to answer a request that is already in the history.
+- `text` joins the reply's text blocks. It is only used if this turn ends the session.
+- On `tool_use`, `tool_blocks` picks out every `tool_use` block in the reply. `execute_tools` runs them (lessons 5 and 6) and returns a list of `tool_result` dicts. The loop wraps that whole list in a single `user` message.
+- The `CONTEXT_BUDGET` check reads `response.usage.input_tokens` and may replace the history with a summary. Lesson 7 covers `compact`.
+- `continue` goes back to the top for the next model call.
+- Any other `stop_reason` logs `session_end` with the turn number and the reason, then returns. `max_tokens` and `refusal` get their own messages; everything else returns `text`.
+- If the `for` loop runs out, the harness logs `session_end` with `stop_reason="max_turns"` and returns `[stopped: reached MAX_TURNS without finishing]`.
+
+<Callout kind="note" title="The loop only appends">
+  Nothing in `run_agent` edits an earlier message. Current Claude models reject edited history, so the harness keeps the list append-only. When it gets too long, lesson 7 starts a fresh list from a summary instead.
+</Callout>
+
+## Try it
+
+Run the loop with a fake model, so you need no API key and pay nothing. Save this as `harness/python/loop_demo.py`:
+
+```python
+from types import SimpleNamespace
+import harness
+
+harness.MAX_TURNS = 3
+
+def fake_model(messages, **kw):
+    print("call with", [m["role"] for m in messages])
+    ask = SimpleNamespace(type="tool_use", id=f"toolu_{len(messages)}",
+                          name="list_files", input={"path": "."})
+    return SimpleNamespace(content=[ask], stop_reason="tool_use",
+                           usage=SimpleNamespace(input_tokens=100, output_tokens=10))
+
+print(harness.run_agent("Keep looking.", call=fake_model))
+```
+
+```bash
+cd harness/python
+python loop_demo.py
+```
+
+The fake always asks for `list_files`, so it never finishes. You should see three calls whose role lists grow by two each time (`['user']`, then `['user', 'assistant', 'user']`, then five items), a `-> list_files({"path": "."})` line after each, and finally `[stopped: reached MAX_TURNS without finishing]`. Change the fake to return `stop_reason="end_turn"` with a text block on its third call, and the loop returns that text instead.
+
+Then watch the real loop handle two calls in one turn:
+
+```bash
+python harness.py
+```
+
+Ask `Read notes.txt and list the workspace, both at once.` You will usually see two `->` lines before a single `agent >` answer. Afterwards, `grep session_end trace.jsonl` shows how many turns the session took and the `stop_reason` that ended it.

@@ -1,0 +1,51 @@
+---
+interface Props {
+  track: string;
+  order: number;
+  title: string;
+  goal: string;
+  minutes: number;
+}
+
+const { track, order, title, goal, minutes } = Astro.props;
+const eyebrow = `${track} · Lesson ${String(order).padStart(2, '0')} · ${minutes} min`;
+---
+
+<article class="lesson">
+  <header class="lesson-header">
+    <p class="eyebrow">{eyebrow}</p>
+    <h1>{title}</h1>
+    <p class="lesson-goal">{goal}</p>
+  </header>
+  <div class="prose">
+    <slot />
+  </div>
+  {
+    Astro.slots.has('after') && (
+      <footer class="lesson-footer">
+        <slot name="after" />
+      </footer>
+    )
+  }
+</article>
+
+<style>
+  .lesson-header {
+    margin-bottom: 32px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--line);
+  }
+  .lesson-header h1 {
+    margin: 8px 0 12px;
+  }
+  .lesson-goal {
+    margin: 0;
+    color: var(--muted);
+    font-size: 1.125rem;
+  }
+  .lesson-footer {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+  }
+</style>

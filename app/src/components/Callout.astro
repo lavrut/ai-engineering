@@ -1,0 +1,46 @@
+---
+interface Props {
+  kind: 'note' | 'warning' | 'go';
+  title?: string;
+}
+
+const DEFAULT_TITLES = { note: 'Note', warning: 'Watch out', go: 'In Go' } as const;
+const { kind, title = DEFAULT_TITLES[kind] } = Astro.props;
+---
+
+<aside class:list={['callout', `callout-${kind}`]}>
+  <p class="callout-title">{title}</p>
+  <div class="callout-body"><slot /></div>
+</aside>
+
+<style>
+  .callout {
+    --callout-c: var(--accent);
+    margin: 24px 0;
+    padding: 12px 16px;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--callout-c);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+  .callout-warning {
+    --callout-c: var(--warn);
+  }
+  .callout-go {
+    --callout-c: var(--role-model);
+  }
+  .callout-title {
+    margin: 0 0 4px;
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--callout-c);
+  }
+  .callout-body > :global(:first-child) {
+    margin-top: 0;
+  }
+  .callout-body > :global(:last-child) {
+    margin-bottom: 0;
+  }
+</style>

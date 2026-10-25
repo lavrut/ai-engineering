@@ -1,0 +1,90 @@
+/* Design tokens. Every colour on the page is one of these properties.
+   Light is the bare :root; dark is applied by the OS preference unless the
+   host forces light, or by data-theme="dark". Neutrals lean toward the
+   cobalt accent hue. */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --surface-2: #e9edf3;
+  --ink: #14213a;
+  --muted: #55627a;
+  --line: #cdd4df;
+  --accent: #2d56d6;
+  --accent-ink: #ffffff;
+  --good: #1f7a4d;
+  --warn: #a56300;
+  --bad: #b3261e;
+
+  --role-user: #14213a;
+  --role-harness: #2d56d6;
+  --role-model: #0f7c7a;
+  --role-tool: #b86a00;
+  --role-memory: #7a4fb3;
+  --role-logs: #6b7280;
+
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --text-label: 0.8125rem;
+  --text-small: 0.9375rem;
+  --text-body: 1.0625rem;
+  --text-h3: 1.375rem;
+  --text-h2: 1.875rem;
+  --text-h1: clamp(2rem, 1.4rem + 2.6vw, 2.75rem);
+
+  --radius: 6px;
+  --sidebar-w: 280px;
+  --prose-w: 760px;
+  --wide-w: 1100px;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1420;
+    --surface: #151d2c;
+    --surface-2: #1c2638;
+    --ink: #e6ebf3;
+    --muted: #9aa6ba;
+    --line: #2b3850;
+    --accent: #7c9bff;
+    --accent-ink: #0e1420;
+    --good: #5cc48e;
+    --warn: #e2a447;
+    --bad: #f2867e;
+
+    --role-user: #e6ebf3;
+    --role-harness: #7c9bff;
+    --role-model: #4fc7c3;
+    --role-tool: #e9a23b;
+    --role-memory: #b494e8;
+    --role-logs: #9aa3b2;
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0e1420;
+  --surface: #151d2c;
+  --surface-2: #1c2638;
+  --ink: #e6ebf3;
+  --muted: #9aa6ba;
+  --line: #2b3850;
+  --accent: #7c9bff;
+  --accent-ink: #0e1420;
+  --good: #5cc48e;
+  --warn: #e2a447;
+  --bad: #f2867e;
+
+  --role-user: #e6ebf3;
+  --role-harness: #7c9bff;
+  --role-model: #4fc7c3;
+  --role-tool: #e9a23b;
+  --role-memory: #b494e8;
+  --role-logs: #9aa3b2;
+
+  color-scheme: dark;
+}

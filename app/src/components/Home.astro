@@ -1,0 +1,158 @@
+---
+import type { Track } from '../content/schemas';
+
+interface Props {
+  tracks: Track[];
+  lessonCounts: Record<string, number>;
+  startHref: string | null;
+}
+
+const { tracks, lessonCounts, startHref } = Astro.props;
+const planned = tracks.filter((t) => t.status === 'planned');
+---
+
+<div class="home">
+  <header class="home-intro">
+    <p class="eyebrow">Field notes · {tracks.length} tracks</p>
+    <h1>Build the program around the model.</h1>
+    <p class="lede">
+      Short, hands-on lessons on the engineering that turns a language model into working software:
+      the loop, the tools, the context and the guardrails. Each lesson pairs a Python and a Go
+      implementation of the same harness.
+    </p>
+    {
+      startHref ? (
+        <a class="button-primary" href={startHref}>Start the Harness track</a>
+      ) : (
+        <p class="muted">The first Harness lessons are being written.</p>
+      )
+    }
+  </header>
+
+  <section class="home-section" aria-labelledby="catalog-h">
+    <h2 id="catalog-h">Tracks</h2>
+    <ol class="catalog">
+      {
+        tracks.map((t) => (
+          <li class:list={['catalog-item', { 'is-planned': t.status === 'planned' }]}>
+            <span class="catalog-num">{String(t.order).padStart(2, '0')}</span>
+            <div class="catalog-text">
+              <h3>
+                {t.title}
+                {t.status === 'planned' && <span class="chip">Planned</span>}
+              </h3>
+              <p>{t.summary}</p>
+              {t.status === 'live' && (
+                <p class="catalog-meta">
+                  {lessonCounts[t.id] ?? 0} {(lessonCounts[t.id] ?? 0) === 1 ? 'lesson' : 'lessons'}
+                </p>
+              )}
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+  </section>
+
+  <section class="home-section" aria-labelledby="roadmap-h">
+    <h2 id="roadmap-h">Roadmap</h2>
+    <p class="muted">Planned tracks, in the order they will be written.</p>
+    <ol class="roadmap">
+      {
+        planned.map((t) => (
+          <li>
+            <span class="roadmap-title">{t.title}</span>
+            {t.subsections.length > 0 && (
+              <ul class="roadmap-subs">
+                {t.subsections.map((s) => (
+                  <li>{s}</li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))
+      }
+    </ol>
+  </section>
+</div>
+
+<style>
+  .home-intro {
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--line);
+  }
+  .home-intro h1 {
+    margin: 8px 0 16px;
+  }
+  .lede {
+    margin: 0 0 24px;
+    font-size: 1.1875rem;
+    color: var(--muted);
+  }
+  .home-section {
+    margin-top: 40px;
+  }
+  .home-section h2 {
+    margin: 0 0 16px;
+  }
+  .catalog {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--line);
+  }
+  .catalog-item {
+    display: grid;
+    grid-template-columns: 3ch 1fr;
+    gap: 16px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .catalog-num {
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    color: var(--muted);
+    padding-top: 6px;
+  }
+  .catalog-text h3 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin: 0 0 4px;
+  }
+  .catalog-text p {
+    margin: 0;
+  }
+  .is-planned .catalog-text {
+    color: var(--muted);
+  }
+  .catalog-meta {
+    margin-top: 4px !important;
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+  }
+  .roadmap {
+    margin: 16px 0 0;
+    padding-left: 1.5em;
+    display: grid;
+    gap: 12px;
+  }
+  .roadmap-title {
+    font-weight: 600;
+  }
+  .roadmap-subs {
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    color: var(--muted);
+  }
+</style>

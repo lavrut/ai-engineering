@@ -1,0 +1,78 @@
+---
+// Three tool calls (300, 1200, 500 ms) run one after another vs all at once, on one ms scale.
+const calls = [
+  { name: 'read_file', ms: 300 },
+  { name: 'run_tests', ms: 1200 },
+  { name: 'search_code', ms: 500 },
+];
+const sequentialTotal = calls.reduce((a, c) => a + c.ms, 0); // 2000
+const parallelTotal = Math.max(...calls.map((c) => c.ms)); // 1200
+
+const left = 96;
+const plotW = 560;
+const scale = plotW / sequentialTotal; // px per ms, shared by every bar and tick
+const barH = 22;
+const rowGap = 8;
+const laneTop = (lane: number) => 28 + lane * (calls.length * (barH + rowGap) + 44);
+const axisY = laneTop(2) - 20;
+const width = left + plotW + 40; // room for the ms label after the longest bar
+const height = axisY + 36;
+const ticks = [0, 500, 1000, 1500, 2000];
+
+let cursor = 0;
+const seq = calls.map((c) => {
+  const x = left + cursor * scale;
+  cursor += c.ms;
+  return { ...c, x, w: c.ms * scale };
+});
+const par = calls.map((c) => ({ ...c, x: left, w: c.ms * scale }));
+---
+
+<figure class="timeline">
+  <div class="tl-scroll" role="region" aria-label="Sequential versus parallel tool calls" tabindex="0">
+    <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="img" aria-labelledby="tl-title tl-desc">
+      <title id="tl-title">Three tool calls run sequentially or in parallel</title>
+      <desc id="tl-desc">
+        Calls take 300, 1200 and 500 milliseconds. Run one after another they take 2000 ms. Run together they take 1200 ms, the length of the slowest call.
+      </desc>
+
+      <text x={left} y="14" fill="var(--ink)" font-family="var(--font-mono)" font-size="13" font-weight="600">Sequential: {sequentialTotal} ms</text>
+      {seq.map((c, i) => (
+        <g>
+          <text x={left - 8} y={laneTop(0) + i * (barH + rowGap) + 15} text-anchor="end" fill="var(--muted)" font-family="var(--font-mono)" font-size="12">{c.name}</text>
+          <rect x={c.x} y={laneTop(0) + i * (barH + rowGap)} width={c.w} height={barH} rx="3" fill="var(--role-tool)" stroke="var(--bg)" stroke-width="1" />
+          <text x={c.x + c.w + 6} y={laneTop(0) + i * (barH + rowGap) + 15} fill="var(--ink)" font-family="var(--font-mono)" font-size="12" font-weight="600">{c.ms}</text>
+        </g>
+      ))}
+
+      <text x={left} y={laneTop(1) - 14} fill="var(--ink)" font-family="var(--font-mono)" font-size="13" font-weight="600">Parallel: {parallelTotal} ms</text>
+      {par.map((c, i) => (
+        <g>
+          <text x={left - 8} y={laneTop(1) + i * (barH + rowGap) + 15} text-anchor="end" fill="var(--muted)" font-family="var(--font-mono)" font-size="12">{c.name}</text>
+          <rect x={c.x} y={laneTop(1) + i * (barH + rowGap)} width={c.w} height={barH} rx="3" fill="var(--role-tool)" stroke="var(--bg)" stroke-width="1" />
+          <text x={c.x + c.w + 6} y={laneTop(1) + i * (barH + rowGap) + 15} fill="var(--ink)" font-family="var(--font-mono)" font-size="12" font-weight="600">{c.ms}</text>
+        </g>
+      ))}
+
+      <line x1={left} y1={axisY} x2={left + plotW} y2={axisY} stroke="var(--muted)" stroke-width="1" />
+      {ticks.map((t) => (
+        <g>
+          <line x1={left + t * scale} y1={axisY} x2={left + t * scale} y2={axisY + 5} stroke="var(--muted)" stroke-width="1" />
+          <text x={left + t * scale} y={axisY + 20} text-anchor="middle" fill="var(--muted)" font-family="var(--font-mono)" font-size="12">{t}</text>
+        </g>
+      ))}
+      <text x={left + plotW} y={axisY + 34} text-anchor="end" fill="var(--muted)" font-family="var(--font-mono)" font-size="11">milliseconds</text>
+    </svg>
+  </div>
+  <figcaption>
+    Same three calls, same duration each. Waiting for the slowest one is all that parallel execution costs.
+  </figcaption>
+</figure>
+
+<style>
+  .timeline { margin: 24px 0; }
+  .tl-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; }
+  .tl-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  svg { display: block; max-width: none; }
+  figcaption { margin-top: 8px; font-size: var(--text-small); color: var(--muted); }
+</style>

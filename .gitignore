@@ -7,3 +7,8 @@ __pycache__/
 workspace/
 trace.jsonl
 .DS_Store
+.venv/
+harness/python/one_call.py
+harness/python/loop_demo.py
+harness/python/timing_demo.py
+harness/python/compact_demo.py

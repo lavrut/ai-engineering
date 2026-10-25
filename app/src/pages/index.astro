@@ -1,0 +1,106 @@
+---
+import { getCollection, render } from 'astro:content';
+import AppShell from '../layouts/AppShell.astro';
+import Home from '../components/Home.astro';
+import LessonFrame from '../components/LessonFrame.astro';
+import Quiz, { MarkDone } from '../components/Quiz';
+import Sidebar, { type SidebarTrack } from '../components/Sidebar';
+import { viewId } from '../lib/router';
+
+const tracks = (await getCollection('tracks')).map((e) => e.data).sort((a, b) => a.order - b.order);
+const lessonEntries = (await getCollection('lessons')).sort(
+  (a, b) => a.data.track.localeCompare(b.data.track) || a.data.order - b.data.order,
+);
+
+const lessons = await Promise.all(
+  lessonEntries.map(async (entry) => ({
+    id: viewId(entry.data.track, entry.data.slug),
+    data: entry.data,
+    Content: (await render(entry)).Content,
+  })),
+);
+
+const sidebarTracks: SidebarTrack[] = tracks.map((t) => ({
+  id: t.id,
+  title: t.title,
+  status: t.status,
+  subsections: t.subsections,
+  lessons: lessons
+    .filter((l) => l.data.track === t.id)
+    .map((l) => ({ id: l.id, title: l.data.title, order: l.data.order })),
+}));
+
+const lessonCounts = Object.fromEntries(sidebarTracks.map((t) => [t.id, t.lessons.length]));
+const firstHarness = sidebarTracks.find((t) => t.id === 'harness')?.lessons[0];
+const startHref = firstHarness ? `#${firstHarness.id}` : null;
+
+// view id -> document title, read by the router script below.
+const viewTitles: Record<string, string> = { home: 'AI Engineering' };
+for (const l of lessons) viewTitles[l.id] = `${l.data.title} · AI Engineering`;
+---
+
+<AppShell>
+  <Fragment slot="head">
+    <script is:inline define:vars={{ lessonViews: lessons.map((l) => l.id) }}>
+      // Paint a deep-linked lesson first: until the router below runs, show
+      // the lesson the hash names and hide home. Unknown hashes change
+      // nothing, so they land on home as resolveView decides.
+      const t = location.hash.slice(1);
+      if (lessonViews.includes(t)) {
+        const s = document.createElement('style');
+        s.id = 'early-view';
+        s.textContent =
+          'section[data-view="home"]{display:none!important}section[data-view="' + t + '"]{display:block!important}';
+        document.head.appendChild(s);
+      }
+    </script>
+  </Fragment>
+  <Sidebar slot="sidebar" tracks={sidebarTracks} client:load />
+
+  <section data-view="home">
+    <Home tracks={tracks} lessonCounts={lessonCounts} startHref={startHref} />
+  </section>
+
+  {
+    lessons.map(({ id, data, Content }) => (
+      <section data-view={id} hidden>
+        <LessonFrame
+          track={data.track}
+          order={data.order}
+          title={data.title}
+          goal={data.goal}
+          minutes={data.minutes}
+        >
+          <Content />
+          <Fragment slot="after">
+            <Quiz client:load lessonId={id} quiz={data.quiz} />
+            <MarkDone client:load lessonId={id} />
+          </Fragment>
+        </LessonFrame>
+      </section>
+    ))
+  }
+
+  <script type="application/json" id="view-titles" set:html={JSON.stringify(viewTitles).replace(/</g, "\\u003c")} />
+</AppShell>
+
+<script>
+  import { resolveView } from '../lib/router';
+
+  const titles: Record<string, string> = JSON.parse(
+    document.getElementById('view-titles')?.textContent ?? '{}',
+  );
+  const sections = Array.from(document.querySelectorAll<HTMLElement>('section[data-view]'));
+  const known = new Set(sections.map((s) => s.dataset.view ?? ''));
+
+  function show() {
+    const view = resolveView(location.hash, known);
+    for (const s of sections) s.hidden = s.dataset.view !== view;
+    document.title = titles[view] ?? 'AI Engineering';
+    window.scrollTo(0, 0);
+  }
+
+  show();
+  document.getElementById('early-view')?.remove();
+  window.addEventListener('hashchange', show);
+</script>

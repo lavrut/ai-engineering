@@ -1,0 +1,183 @@
+---
+track: harness
+order: 9
+slug: capstone
+title: "Capstone: run your harness"
+goal: Walk the whole harness from a typed task to a final answer, run both versions, and change it yourself with three exercises.
+minutes: 20
+quiz:
+  - question: You add search_files to the Go harness with register(Tool{...}) in init(), but the model never calls it. Why?
+    options:
+      - Go tools need NeedsApproval set before the model can see them
+      - toolParams in section 6 builds the tool list from a fixed list of names, so the new tool is never sent to the model
+      - The registry map only holds three entries
+      - The model needs a new system prompt for each tool
+    answer: 1
+    explanation: Python sends every tool in REGISTRY. Go's toolParams loops over the names list_files, read_file and write_file, so the schemas always go out in the same order. A tool missing from that list is in the registry but never in the request. Add its name there too.
+  - question: A session makes three model calls with input_tokens 2,000, 3,500 and 4,500, and output_tokens 200, 300 and 100. At $4 per million input tokens and $20 per million output tokens, what did it cost?
+    options:
+      - About $0.012
+      - About $0.20
+      - About $0.052
+      - About $0.040
+    answer: 2
+    explanation: Input is 10,000 tokens, which costs 10,000 × 4 / 1,000,000 = $0.04. Output is 600 tokens, which costs 600 × 20 / 1,000,000 = $0.012. The total is $0.052. Input is the bigger share because every call sends the whole history again.
+  - question: You changed run_agent and want to check you did not break the loop. What is the cheapest way?
+    options:
+      - Run python harness.py and try a few tasks
+      - Read the trace from your last real session
+      - Run the offline tests, python -m pytest -q or go test ./..., which drive the loop with fake models
+      - Lower MAX_TURNS to 1 and run a real task
+    answer: 2
+    explanation: The tests pass a fake model and a fake approver through the same seams the lessons used (call= and approver=), so they exercise the real loop, executor and compaction without calling the API. They cost nothing and finish in seconds. A real run is the last check, not the first.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+You have now seen every part of the <Term t="harness" />. The model only ever returns text or `tool_use` requests. The harness turns those requests into work: it builds each request, routes on `stop_reason`, asks before risky tools, runs tools in parallel inside the workspace, sends every result back in one user message matched by `tool_use_id`, keeps the history under budget, and logs every step.
+
+Here is the 10-step flow from lesson 1, with the code section that does each step and the lessons that covered it:
+
+| Step | What happens | Section | Lessons |
+|---|---|---|---|
+| 1 | You type a task at the REPL in `main` | 9 | 1, 8 |
+| 2 | `call_model` builds the request: system prompt, history, tool schemas | 6, 3 | 2, 3 |
+| 3 | The SDK client sends it, retrying if it has to | 1, 6 | 2, 8 |
+| 4 | The reply comes back: content blocks, `stop_reason`, `usage` | 6 | 2 |
+| 5 | `run_agent` routes on `stop_reason` | 8 | 4 |
+| 6 | `approve` asks about risky tools | 4 | 5 |
+| 7 | `run_one` runs each tool, in parallel, inside the sandbox | 5, 3 | 3, 5, 6 |
+| 8 | All results go back in one user message | 8 | 4 |
+| 9 | The budget check, then `compact` if needed | 8, 7 | 7 |
+| 10 | `run_agent` returns the answer and `main` prints it | 8, 9 | 4, 8 |
+
+Observability runs alongside every step: `emit`, section 2, writing `trace.jsonl` (lesson 8).
+
+## See it
+
+This is the diagram from lesson 1 in replay mode: the code panel starts open. Press **Next** to step through the flow, and the panel shows the section that does each step. The diagram links no code to steps 1 and 3, so their **Show code** button is disabled. The panel follows the **Python** or **Go** tab you last chose on a code block, so pick **Go** on the code below and step again to see the other file.
+
+<FlowDiagram diagram="harness-flow" mode="replay" />
+
+## The code
+
+Here is each file in full. Read it top to bottom once: you know every line now.
+
+<CodeTabs whole goNote="The Go file has the same nine sections with the same titles. The main differences, all covered in earlier lessons: tools are Tool structs registered in init(), and toolParams sends them in a fixed order (lesson 3). Each tool call runs on its own goroutine with a 30-second context deadline, and a panicking tool becomes an error result (lesson 6). Errors are returned as values and sorted out with errors.As in main (lesson 8). The trace's ts is in milliseconds, and its keys are sorted (lesson 8)." />
+
+The Python file is about 230 lines and has one runtime dependency, the `anthropic` SDK. The Go file is about 440 lines, mostly because Go spells out types, JSON decoding and error checks that Python leaves implicit. Two seams make both files testable: the agent loop takes the model call and the approver as arguments (`call=` and `approver=` in Python, `modelCaller` and `approver` in Go), so a test can pass fakes and run the real loop with no API key.
+
+## Try it
+
+### Run both harnesses
+
+You need `ANTHROPIC_API_KEY` set (lesson 2). Each harness uses its own `workspace` folder and writes its own `trace.jsonl` in the folder you run it from. For Python, use the virtual environment you made in lesson 1, which already has the requirements installed (on a fresh checkout, run `python3 -m venv .venv`, activate it, and `pip install -r requirements.txt` first):
+
+```bash
+cd harness/python && source .venv/bin/activate && python harness.py
+```
+
+The Go harness has its own workspace, which starts empty. Give it the same `notes.txt` before you run it:
+
+```bash
+cd harness/go
+mkdir -p workspace && echo "Buy milk. Call Sam." > workspace/notes.txt
+go run .
+```
+
+Give each the same task, one that uses every step: `Read notes.txt and write todo.md with each item as a line starting "- [ ]".` You will usually see `-> read_file(...)`, then the `! The agent wants to run write_file(...)` prompt; type `y`, and `-> write_file(...)` follows, then the `agent >` answer. Then open `trace.jsonl` in each folder and match the lines to the steps in the table above. The two traces should show the same pattern of events. The model may take a slightly different path each time, and the timestamps and key order differ as lesson 8 described.
+
+### Check changes without spending money
+
+Run the offline tests after every change. They drive the real loop, executor, sandbox and compaction with fake models, so they need no API key and cost nothing:
+
+```bash
+cd harness/python && python -m pytest -q
+```
+
+```bash
+cd harness/go && go test ./...
+```
+
+You should see `9 passed` for Python and `ok  mini-harness` for Go. Only run a real session once these pass.
+
+### Exercises
+
+Work through these in either language, or both. Run the tests after each one.
+
+- [ ] **Add a `search_files` tool.** It takes a `query` and a `path`, and returns every line in the workspace files under `path` that contains `query`, as `file:line: text`. Pass `path` through the sandbox, cap the output at 20,000 characters as `read_file` does, and return `(no matches)` when nothing matches. Then run the harness and ask `Which files mention Sam?` You should see `-> search_files(...)` before the answer. In Go, register it in `init()` and add its name to the list in `toolParams`.
+- [ ] **Switch `write_file` to allowed-without-asking, then back.** In Python, delete `needs_approval=True` from its `@tool(...)` line; in Go, delete `NeedsApproval: true`. Ask for a write: no `Allow? [y/N]` prompt appears, and `grep permission trace.jsonl` finds no new line. Now run the tests. `test_denied_unknown_and_bad_args_are_errors` (Go: `TestExecutorOrderAndErrors`) fails, because a denied write now goes through. The tests guard the gate. Put the line back and check that they pass again.
+- [ ] **Print a token-cost readout for each session.** Add up `usage.input_tokens` and `usage.output_tokens` over every model call in a session, the summary call in `compact` included, and print the total with its cost after each answer. `claude-opus-5-5` costs $4 per million input tokens and $20 per million output tokens. For the sample trace in lesson 8 (9,454 in, 525 out) the readout should say about $0.0483.
+
+<details>
+<summary>One way to write search_files (Python)</summary>
+
+Add it to section 3, below `write_file`:
+
+```python
+@tool("search_files", "Find the lines in workspace files that contain some text.",
+      {"query": {"type": "string", "description": "Text to look for; case-sensitive"},
+       "path": {"type": "string", "description": "Directory to search, relative to the workspace, e.g. '.'"}},
+      ["query", "path"])
+def search_files(query: str, path: str) -> str:
+    root = safe_path(path)
+    hits = []
+    for p in sorted(root.rglob("*")):
+        if not p.is_file() or not p.resolve().is_relative_to(WORKSPACE):
+            continue  # skip folders, and links that point out of the workspace
+        try:
+            lines = p.read_text().splitlines()
+        except (UnicodeDecodeError, OSError):
+            continue  # not a text file
+        hits += [f"{p.relative_to(WORKSPACE)}:{n}: {line}"
+                 for n, line in enumerate(lines, 1) if query in line]
+    return "\n".join(hits)[:20_000] or "(no matches)"
+```
+
+`safe_path(path)` only checks the folder you search. A symlink inside it could still point outside the workspace, so the loop resolves each file and skips any that land outside. In Go, walk the folder `safePath` returned with `filepath.WalkDir`. The walk hands you absolute paths, and `safePath` rejects absolute paths, so turn each one back into a workspace-relative path first: `rel, _ := filepath.Rel(dir, p)`, then `safePath(filepath.Join(in.Path, rel))`. Skip any file where that returns an error; that is a link pointing out of the workspace.
+
+</details>
+
+<details>
+<summary>One way to write the cost readout (Python)</summary>
+
+In section 1, next to the other constants:
+
+```python
+PRICE_PER_MTOK = {"input": 4.00, "output": 20.00}  # claude-opus-5-5, dollars
+session_usage = {"input": 0, "output": 0}
+```
+
+In `call_model`, after the `model_response` emit, so every call counts, compaction included:
+
+```python
+    session_usage["input"] += response.usage.input_tokens
+    session_usage["output"] += response.usage.output_tokens
+```
+
+At the top of `run_agent`, start each session from zero:
+
+```python
+    session_usage.update(input=0, output=0)
+```
+
+Above `main`, a helper that formats the line:
+
+```python
+def cost_line() -> str:
+    i, o = session_usage["input"], session_usage["output"]
+    dollars = (i * PRICE_PER_MTOK["input"] + o * PRICE_PER_MTOK["output"]) / 1_000_000
+    return f"  [{i:,} in, {o:,} out · ${dollars:.4f}]"
+```
+
+In `main`, add `print(cost_line())` after the `try`/`except` block, at the same indent as `try`, so a session that ends in an error still shows what it spent. The offline tests pass fakes in place of `call_model`, so they do not touch the counter and keep passing. In Go, keep two package-level `int64` counters, add `resp.Usage.InputTokens` and `resp.Usage.OutputTokens` to them in `callModel`, reset them in `runAgent`, and print them in `main`. Only the loop calls the model, so the counters need no lock.
+
+</details>
+
+<Callout kind="note" title="Where to go next">
+  Every larger agent harness is built from these same parts. When you read one, look for the loop, the router on `stop_reason`, the gate, the executor, the context manager and the trace. They will be bigger, but they will be there.
+</Callout>

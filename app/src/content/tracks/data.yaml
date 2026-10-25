@@ -1,0 +1,6 @@
+id: data
+title: "Data Fabric & Data Contracts"
+order: 6
+status: planned
+summary: "Connecting data across a company and making its guarantees explicit."
+subsections: ["Data Fabric", "Data Contracts"]

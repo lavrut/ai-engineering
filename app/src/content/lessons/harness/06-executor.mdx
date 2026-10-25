@@ -1,0 +1,137 @@
+---
+track: harness
+order: 6
+slug: executor
+title: Running tools well
+goal: Explain how the executor runs a turn's tool calls in parallel and keeps their results in order, and how it handles slow, failing and oversized tools.
+minutes: 18
+quiz:
+  - question: Three tool calls take 300, 1200 and 500 ms. Roughly how long does the executor take to run them?
+    options:
+      - 2000 ms, because each call waits for the one before
+      - 1200 ms, the length of the slowest call
+      - 300 ms, the length of the fastest call
+      - 667 ms, the average
+    answer: 1
+    explanation: execute_tools starts all three at once on separate threads (goroutines in Go) and returns when the last one finishes. The turn waits for the slowest call, so it takes about 1200 ms instead of the 2000 ms a one-at-a-time loop would need.
+  - question: read_file raises FileNotFoundError. What does the model see?
+    options:
+      - Nothing; the harness crashes and the session ends
+      - An empty tool_result
+      - A new system prompt explaining the error
+      - A tool_result with is_error true whose content starts "FileNotFoundError:"
+    answer: 3
+    explanation: run_one catches the exception and turns it into content that starts with FileNotFoundError, with is_error true. The error is information. The model reads it on the next turn and can recover, for example by listing the folder and picking the right file.
+  - question: In the Go executor, the goroutines can finish in any order. How do the results stay in the order of the calls?
+    options:
+      - Each goroutine writes into results[i], the slot for its own call, and wg.Wait() blocks until all are done
+      - A mutex makes the goroutines run one at a time
+      - The results are sorted by tool_use_id afterwards
+      - The API reorders them when the request arrives
+    answer: 0
+    explanation: results is a slice with one slot per call, made before any goroutine starts. Each goroutine fills only its own index, so no two write the same slot and the order matches the calls. Python gets the same effect from pool.map, which returns results in input order.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import LoopSimulator from '../../../components/LoopSimulator.tsx';
+import Timeline from '../../../components/Timeline.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+The executor is step 7 of the flow. Lesson 5 covered its first half, the approvals. This lesson covers the second half: running the calls. Four things make that work well.
+
+**Parallel calls.** The calls in one reply do not depend on each other; the model asked for all of them before seeing any result. So the harness runs them at the same time. The turn takes as long as the slowest call instead of the sum of all of them. The results still go back in the order of the calls, each with its `tool_use_id`.
+
+**Deadlines.** A tool can hang: a network request that never answers, a command that never exits. The Go harness gives every tool a 30-second context deadline, which stops tools that watch their context. The Python harness has no per-tool timeout, so a hung tool holds up the whole turn. This lesson shows how you would add one.
+
+**Errors as information.** A missing file or a bad argument should not crash the harness. The executor catches the failure and sends it back as a `tool_result` with `is_error` true. The model reads the error and tries something else, often with success.
+
+**Output caps.** Every result goes into `messages` and is sent again on every later call. One large file could fill the context window on its own. `read_file` keeps at most the first 20,000 characters.
+
+## See it
+
+Here are three calls that take 300, 1200 and 500 ms, run one after another and then all at once:
+
+<Timeline />
+
+The parallel lane ends at 1200 ms, when the slowest call does. Next, watch errors as information. Press **Step** twice in the simulator below. The model asks for `config.yaml`, and the result comes back red with an error tag: the file does not exist. Keep pressing **Step**: the model lists the workspace, finds `config.example.yaml`, reads it, and answers with the port. The error cost one turn and the session carried on. The simulated error text is shorter than the real harness's, which also names the full path.
+
+<LoopSimulator client:visible scenario="recover-error" />
+
+## The code
+
+Section 5 is the executor.
+
+<CodeTabs section={5} goNote="runOne and executeTools have the same parts. Each call runs on its own goroutine and writes its result into results[i]. runOne wraps the tool's context in context.WithTimeout(ctx, toolTimeout), 30 seconds. A tool reports failure by returning an error, and err.Error() becomes the content. The section below covers the details." />
+
+`run_one` handles one call:
+
+- `start = time.perf_counter()` starts a timer for the trace.
+- `REGISTRY.get(block.name)` looks the tool up. It returns `None` for a name the harness does not know.
+- The `print` shows `-> name(input)` with the input cut to 80 characters. Every call prints this line, including denied and unknown ones.
+- Three branches set `content` and `is_error`: unknown tool, denied call, or the real run, `t.fn(**block.input)`.
+- `except Exception as e` catches any ordinary failure inside the tool and makes it the content: `f"{type(e).__name__}: {e}"`, such as `FileNotFoundError: [Errno 2] No such file or directory: ...`. A wrong or missing argument raises `TypeError` and is caught the same way.
+- `emit("tool_result", ...)` logs the tool name, `is_error` and the time in milliseconds. It does not log the content.
+- The return value is the `tool_result` block, with `tool_use_id` set to `block.id`.
+
+`execute_tools` runs the batch. After the approval loop from lesson 5:
+
+- `ThreadPoolExecutor(max_workers=8)` is a <Term t="thread pool" /> of up to eight threads. With more than eight calls, the extra ones wait for a free thread.
+- `pool.map(lambda b: run_one(b, allowed[b.id]), blocks)` starts `run_one` for every block. `map` hands back results in the order of `blocks`, whatever order the threads finish in.
+- `list(...)` collects them, and leaving the `with` block waits for every thread to finish.
+
+Python threads take turns running Python code (the global interpreter lock), but a thread waiting on a disk read, a network reply or `time.sleep` lets the others run. Tools spend most of their time waiting, so threads give the speed-up you saw in the timeline. A tool that spends its time computing in pure Python would not get faster this way.
+
+The output cap is in the tools, not here. `read_file` returns `safe_path(path).read_text()[:20_000]`. `list_files` has no cap. If you add a tool that can return a lot, cap it too, or move the cap into `run_one` so it covers every tool.
+
+<Callout kind="warning" title="Python has no tool timeout">
+  Nothing in `run_one` or `execute_tools` limits how long `t.fn` may take, and the `with` block waits for every thread. To add a limit for a tool that starts a process, pass `timeout=30` to `subprocess.run`: it kills the process and raises `TimeoutExpired`, which `run_one` turns into an error result. At the executor level, `future.result(timeout=30)` from `pool.submit` stops waiting after 30 seconds, but Python cannot stop a running thread. The thread keeps going, and leaving the `with` block would wait for it anyway, so the executor would have to drop the `with` and call `pool.shutdown(wait=False)` itself.
+</Callout>
+
+## How Go does it
+
+This is where the two harnesses differ most.
+
+**Goroutines instead of a pool.** `executeTools` makes `results`, a slice with one slot per call, before starting anything. For each call it runs `wg.Add(1)` and starts a <Term t="goroutine" /> with `go func() { ... }()`. The goroutine calls `runOne`, stores the result in `results[i]`, and calls `wg.Done()` on the way out. `wg.Wait()` blocks until every goroutine is done. The <Term t="WaitGroup" /> does the job of Python's `with` block, and writing by index does the job of `map`'s ordering. Each goroutine writes only its own slot, so the slice needs no lock. Since Go 1.22 each loop pass has its own `i` and `c`, so every goroutine sees the right call.
+
+There is no cap like `max_workers=8`: every call gets its own goroutine. Goroutines are cheap to start, a few kilobytes each, and the Go runtime spreads them over all CPU cores. With no interpreter lock, a tool that computes runs on its own core too. For the three built-in tools, which mostly wait on the disk, both versions finish in about the same time.
+
+Several goroutines can log at once, so `emit` takes the mutex `traceMu` before it writes to `trace.jsonl`. Python's `emit` has no lock; each call opens the file in append mode and writes one line.
+
+**A deadline on every tool.** In `runOne`, `context.WithTimeout(ctx, toolTimeout)` makes a context that expires after 30 seconds, and `defer cancel()` releases it when `runOne` returns. The context goes through `runTool` to `t.Run`. A deadline only helps if the tool watches it: by passing `ctx` to `exec.CommandContext` or `http.NewRequestWithContext`, or by checking `ctx.Done()`. The three built-in tools accept `ctx` but do not use it, since a local file read is quick. `runOne` waits for `Run` to return either way, so a tool that ignores its context can still hang.
+
+**Errors as values.** `Run` returns `(string, error)`. `runOne` puts `err.Error()` into the content, such as `open /.../workspace/config.yaml: no such file or directory`, without Python's exception-name prefix. A bad argument type fails in `json.Unmarshal` and comes back the same way. A panic is different: it is not an error value, and a panic on a goroutine that nobody recovers ends the whole program. So `runOne` calls the tool through `runTool`, whose deferred `recover()` turns a panic into an error such as `panic: runtime error: index out of range [3] with length 3`. One bad tool becomes an error result, the same as Python's `except Exception`.
+
+**The cap counts bytes.** Go's `read_file` keeps `b[:20000]`, the first 20,000 bytes. Python counts characters. A byte cut can land in the middle of a multi-byte UTF-8 character.
+
+## Try it
+
+Time the executor with a slow tool, no API key needed. Save this as `harness/python/timing_demo.py`:
+
+```python
+import time
+from types import SimpleNamespace
+import harness
+
+@harness.tool("wait", "Sleep for some milliseconds.", {"ms": {"type": "integer"}}, ["ms"])
+def wait(ms: int) -> str:
+    time.sleep(ms / 1000)
+    return f"waited {ms} ms"
+
+blocks = [SimpleNamespace(type="tool_use", id=f"t{i}", name="wait", input={"ms": ms})
+          for i, ms in enumerate([300, 1200, 500])]
+start = time.perf_counter()
+results = harness.execute_tools(blocks)
+print(f"{(time.perf_counter() - start) * 1000:.0f} ms")
+print([r["tool_use_id"] for r in results])
+```
+
+```bash
+cd harness/python
+python timing_demo.py
+```
+
+You should see three `-> wait(...)` lines, a time a little over 1200 ms, and `['t0', 't1', 't2']`. Now change `max_workers=8` to `max_workers=1` in `harness.py` and run it again: about 2000 ms, the same ids in the same order. Change it back afterwards.
+
+Then watch a real recovery. Make sure `workspace/config.yaml` does not exist, run `python harness.py`, and ask `Read config.yaml and tell me the port.` The model should get an error result, then look around or tell you the file is missing. `grep tool_result trace.jsonl` shows the failed call with `"is_error": true`.

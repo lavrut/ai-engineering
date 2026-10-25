@@ -1,0 +1,130 @@
+---
+track: harness
+order: 2
+slug: model
+title: Talking to a model
+goal: Make one model call by hand, and read every field of the request you send and the response you get back.
+minutes: 15
+quiz:
+  - question: Your second request to the model leaves out the first user message. What happens?
+    options:
+      - The model still remembers it from the first call
+      - The model answers without it, because it only sees what this request contains
+      - The API rejects the request for missing history
+      - The SDK adds the missing message back automatically
+    answer: 1
+    explanation: The model keeps no memory between calls. Each request must carry the whole conversation in messages. That is why the harness appends every turn to one list and sends the full list each time.
+  - question: A response comes back with stop_reason "max_tokens". What does that tell you?
+    options:
+      - The conversation is too long for the context window
+      - The model finished its answer normally
+      - The reply was cut off because it reached the max_tokens limit you set
+      - The account ran out of credit
+    answer: 2
+    explanation: max_tokens caps the length of one reply. When the model hits that cap mid-answer, it stops and reports max_tokens, so the text you have is incomplete. A finished reply reports end_turn.
+  - question: Where does the harness put "You are a careful coding assistant..."?
+    options:
+      - In the system parameter, separate from messages
+      - As the first message, with role "assistant"
+      - As the first message, with role "user"
+      - Inside each tool's description
+    answer: 0
+    explanation: Standing instructions go in system. They apply to every turn and stay apart from the conversation, so messages only ever holds user and assistant turns.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+You talk to Claude through an HTTP API. Every request is authenticated with an <Term t="API key" />, which you create in the Anthropic Console and keep out of your code. The SDK reads it from the `ANTHROPIC_API_KEY` environment variable:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+A request is a JSON body. The conversation goes in <Term t="messages" />, a list of turns. Each turn has a <Term t="role" /> and some content. The `user` role is anything your side sends; the `assistant` role is anything the model wrote. In this harness the turns alternate, starting with `user`.
+
+The model remembers nothing between calls. To continue a conversation, you send the whole list again with the new turn on the end. Standing instructions go in a separate `system` field: the <Term t="system prompt" />.
+
+The model reads and writes in <Term t="token">tokens</Term>, pieces of text a little shorter than a word. Limits and prices are counted in them. You cap the reply with <Term t="max_tokens" />. Opus 5.5 costs $4 per million input tokens and $20 per million output tokens, and you pay for the whole history on every call.
+
+The response holds a list of <Term t="content block">content blocks</Term>. A block is text or a `tool_use` request. Next to the content sit two fields you will check on every reply: `stop_reason`, which says why the model stopped, and <Term t="usage" />, which counts `input_tokens` and `output_tokens`.
+
+| `stop_reason` | Meaning |
+|---|---|
+| `end_turn` | The model finished its reply. |
+| `tool_use` | The model wants the harness to run one or more tools. |
+| `max_tokens` | The reply hit your `max_tokens` cap and was cut off. |
+| `refusal` | The model declined the request. |
+
+## See it
+
+Step through one call. Watch what the request carries out and what the response brings back.
+
+<FlowDiagram diagram="request-response" />
+
+## The code
+
+Section 1 sets the constants every call uses.
+
+<CodeTabs section={1} goNote="Go keeps the same values as const and var. The client is built with anthropic.NewClient(option.WithMaxRetries(4)), which reads ANTHROPIC_API_KEY just like the Python SDK. maxTurns is a var instead of a const so the tests can lower it." />
+
+- `MODEL = "claude-opus-5-5"` names the model on every request.
+- `MAX_TOKENS = 16_000` is the default cap on one reply.
+- `SYSTEM_PROMPT` is the standing instruction. It tells the model where it is working and how to behave.
+- `client = anthropic.Anthropic(max_retries=4)` creates the API client. It reads the key from the environment and retries rate limits (HTTP 429), server errors and network failures up to four times.
+
+Section 6 makes the call itself. This is steps 2 to 4 of the flow: build the request, send it, get the reply.
+
+<CodeTabs section={6} goNote="callModel takes the params struct the caller built with Messages and fills in Model, System, Tools and MaxTokens, then calls client.Messages.New(ctx, params, opts...). System is a list of text blocks. MaxTokens is set only when the caller left it at zero, so compaction can ask for a shorter reply. Failures come back as an error value instead of an exception. textOf, also in this section, joins the text blocks of a reply; Python does the same with a one-line join in the loop." />
+
+- `params` holds the request: `model`, `max_tokens`, `system`, `tools` (lesson 3) and `messages`.
+- The `USE_FALLBACKS` lines add a beta header and a `fallbacks` field. If a safety classifier declines the request, the API retries it on a fallback model. You can leave this as it is.
+- `params.update(overrides)` lets a caller change one field for a single call. Compaction in lesson 7 uses it.
+- `client.messages.create(**params)` sends the request and waits for the reply.
+- The two `emit` calls write the number of messages in the request, then the response's `stop_reason` and token counts to the trace.
+- `call_model` returns the whole response. The loop in lesson 4 reads `response.content` and `response.stop_reason` from it.
+
+<Callout kind="note" title="Where the history lives">
+  `call_model` does not keep any state. The caller passes in `messages`, and the agent loop owns that list. This keeps the model call easy to test and easy to swap for a fake.
+</Callout>
+
+## Try it
+
+Make one call without the harness, so you can see the raw response. Save this as `harness/python/one_call.py`:
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+response = client.messages.create(
+    model="claude-opus-5-5",
+    max_tokens=200,
+    system="Answer in one sentence.",
+    messages=[{"role": "user", "content": "What is a token?"}],
+)
+for block in response.content:
+    print(block.type, "->", block.text)
+print("stop_reason:", response.stop_reason)
+print("usage:", response.usage.input_tokens, "in,", response.usage.output_tokens, "out")
+```
+
+Run it from the virtual environment you made in lesson 1:
+
+```bash
+cd harness/python
+python one_call.py
+```
+
+You should see one `text` block, `stop_reason: end_turn`, and two small token counts. Now set `max_tokens=5` and run it again: the sentence is cut short and `stop_reason` is `max_tokens`.
+
+Then run the harness once more and look at what it logged for each call:
+
+```bash
+python harness.py
+grep model_response trace.jsonl
+```
+
+Each line shows the `stop_reason` and token counts for one model call. Notice that `input_tokens` grows on each call in a session, because the full history is sent every time.
