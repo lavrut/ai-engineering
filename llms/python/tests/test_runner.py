@@ -153,6 +153,12 @@ def root(tmp_path):
 
 
 @pytest.fixture
+def empty_root(root):
+    shutil.rmtree(root / "responses")           # nothing recorded yet: every request is still to do
+    return root
+
+
+@pytest.fixture
 def no_api(monkeypatch):
     def boom(*a, **k):
         raise AssertionError("the API must not be called")
@@ -194,7 +200,8 @@ def test_paid_mode_accepts_interactive_y(root, monkeypatch, capsys):
     assert len(client.calls) == 4
 
 
-def test_record_all_runs_phases_in_order(root, capsys):
+def test_record_all_runs_phases_in_order(empty_root, capsys):
+    root = empty_root
     client = FakeClient()
     assert lab.main(["record", "--plan", "all", "--yes", "--data", str(root)], client=client) == 0
     out = capsys.readouterr().out
@@ -207,7 +214,8 @@ def test_record_all_runs_phases_in_order(root, capsys):
            "triage__claude-opus-5-5__v3_examples__high.jsonl" in response_files(root)
 
 
-def test_record_stops_at_max_cost_and_saves_what_finished(root, capsys):
+def test_record_stops_at_max_cost_and_saves_what_finished(empty_root, capsys):
+    root = empty_root
     client = FakeClient()
     code = lab.main(["record", "--plan", "prompts", "--yes", "--max-cost", "0.001", "--data", str(root)],
                     client=client)
@@ -215,3 +223,71 @@ def test_record_stops_at_max_cost_and_saves_what_finished(root, capsys):
     out = capsys.readouterr().out
     assert "max-cost" in out and "saved" in out
     assert 0 < len(client.calls) < 40
+
+
+# resume, cap default, worst case, pilot ---------------------------------------
+def test_record_resumes_and_skips_recorded_requests(empty_root, capsys):
+    root = empty_root
+    argv = ["record", "--plan", "prompts", "--yes", "--data", str(root)]
+    first = FakeClient()
+    assert lab.main(argv, client=first) == 0
+    assert len(first.calls) == 40
+    capsys.readouterr()
+    second = FakeClient()
+    assert lab.main(argv, client=second) == 0
+    assert second.calls == []                                   # nothing paid twice
+    out = capsys.readouterr().out
+    assert "40 requests are already recorded" in out and "$0.00 " in out
+
+
+def test_record_rerecords_errored_lines_only(empty_root):
+    root = empty_root
+    argv = ["record", "--plan", "pilot", "--yes", "--data", str(root)]
+    assert lab.main(argv, client=FakeClient()) == 0
+    path = root / "responses" / "triage__claude-opus-5-5__v2_rules__high.jsonl"
+    lines = [json.loads(l) for l in path.read_text().splitlines()]
+    lines[0]["error"] = "overloaded"
+    path.write_text("".join(json.dumps(l) + "\n" for l in lines))
+    again = FakeClient()
+    assert lab.main(argv, client=again) == 0
+    assert len(again.calls) == 1
+    assert lab.already_recorded(path, lines[0]["key"]) is not None   # latest line wins and succeeded
+
+
+def test_record_cap_ignores_skipped_lines(empty_root):
+    root = empty_root
+    assert lab.main(["record", "--plan", "prompts", "--yes", "--data", str(root)], client=FakeClient()) == 0
+    # the recorded lines are worth far more than the cap, yet a resumed run is free and finishes
+    assert lab.main(["record", "--plan", "prompts", "--yes", "--max-cost", "0.0001", "--data", str(root)],
+                    client=FakeClient()) == 0
+
+
+def test_worst_case_cost_and_confirmation_text(empty_root, capsys):
+    tin, _ = lab.EST_TOKENS["triage"]
+    assert lab.worst_case_cost("triage", "claude-sonnet-5-5", 2) == pytest.approx(
+        2 * (tin * 2.00 + lab.MAX_TOKENS * 10.00) / 1_000_000)
+    rows = lab.estimate_plan(empty_root, only="models")
+    assert sum(r["worst"] for r in rows) > sum(r["cost"] for r in rows) > 0
+    assert lab.main(["record", "--plan", "models", "--data", str(empty_root)]) == 1
+    out = capsys.readouterr().out
+    assert "worst case $" in out and "if every reply uses max_tokens" in out and "Cap: $10.00." in out
+
+
+def test_paid_modes_default_to_a_10_dollar_cap():
+    parser = lab.build_parser()
+    for argv in (["run"], ["judge"], ["record"]):
+        assert parser.parse_args(argv).max_cost == 10.0
+
+
+def test_pilot_plan_is_small_and_matches_full_plan_keys(empty_root):
+    rows = lab.estimate_plan(empty_root, only="pilot")
+    assert [(r["kind"], r["calls"]) for r in rows] == [("triage", 3), ("judge", 3)]
+    assert rows[0]["model"] == "claude-opus-5-5" and rows[0]["effort"] == "high"
+    assert all(r["name"] != "pilot" for r in lab.estimate_plan(empty_root, only="all"))
+    assert lab.main(["record", "--plan", "pilot", "--yes", "--data", str(empty_root)], client=FakeClient()) == 0
+    opus_high = next(x for x in lab.RECORDING_PLAN if x["name"] == "models" and x["model"] == "claude-opus-5-5"
+                     and x["effort"] == "high")
+    labels = next(x for x in lab.RECORDING_PLAN if x["name"] == "judge" and x["prompt"] == "labels")
+    # when v2_rules wins, the pilot's requests are exactly the full plan's: 3 of 4 dev tickets, 3 of 8 judge calls
+    assert lab.remaining_calls(opus_high, empty_root, best="v2_rules") == 1
+    assert lab.remaining_calls(labels, empty_root) == 5

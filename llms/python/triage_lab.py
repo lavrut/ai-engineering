@@ -139,7 +139,19 @@ def response_path(kind, model, prompt_version, effort, root=DATA_DIR) -> Path:
     return Path(root) / "responses" / f"{kind}__{model}__{prompt_version}__{effort or 'default'}.jsonl"
 
 
+MAX_TOKENS = 2000                # the most output one call may use; the worst-case cost assumes it all
 _WRITE_LOCK = threading.Lock()   # runner threads append to the same file; one write at a time
+
+
+def already_recorded(path, key) -> dict | None:
+    """The saved line for `key` if its latest recording succeeded (no error), else None.
+    Record mode uses it to resume: an interrupted run re-records only what is missing or errored."""
+    path = Path(path)
+    if path.exists():
+        for line in reversed(load_jsonl(path)):
+            if line["key"] == key:
+                return None if line.get("error") else line
+    return None
 
 
 def call_model(params: dict, *, key, config, case_id, mode=MODE, client=None, root=DATA_DIR) -> dict:
@@ -157,6 +169,10 @@ def call_model(params: dict, *, key, config, case_id, mode=MODE, client=None, ro
     if mode not in ("record", "live"):
         raise ValueError(f"unknown mode {mode!r}")
 
+    if mode == "record":
+        saved = already_recorded(path, key)
+        if saved:                                  # resume: never pay twice for the same request
+            return {**saved, "skipped": True}      # "skipped" is not saved; the runner counts it as free
     client = client or anthropic.Anthropic(max_retries=4)   # created only when a paid mode needs it
     line = {"key": key, "config": config, "case_id": case_id, "output": None, "stop_reason": None,
             "input_tokens": 0, "output_tokens": 0, "latency_ms": 0, "error": None}
@@ -187,6 +203,10 @@ def call_model(params: dict, *, key, config, case_id, mode=MODE, client=None, ro
     return line
 
 
+def triage_key(ticket_text, variant, model, effort, rep, prompts) -> str:
+    return cache_key("triage", model, effort, variant, prompts["triage"][variant], ticket_text, rep)
+
+
 def triage(ticket, variant, *, model=TASK_MODEL, effort=None, rep=0, mode=MODE, client=None,
            root=DATA_DIR, prompts=None) -> dict:
     """Triage one ticket with one prompt version. `root` is a data root: prompts come from
@@ -196,10 +216,10 @@ def triage(ticket, variant, *, model=TASK_MODEL, effort=None, rep=0, mode=MODE, 
     output_config = {"format": {"type": "json_schema", "schema": TRIAGE_SCHEMA}}
     if effort is not None:                      # null effort means: send nothing
         output_config["effort"] = effort
-    params = {"model": model, "max_tokens": 2000, "system": prompt_text,
+    params = {"model": model, "max_tokens": MAX_TOKENS, "system": prompt_text,
               "messages": [{"role": "user", "content": ticket["text"]}],
               "output_config": output_config}   # no temperature/top_p/top_k, no tool_choice
-    key = cache_key("triage", model, effort, variant, prompt_text, ticket["text"], rep)
+    key = triage_key(ticket["text"], variant, model, effort, rep, prompts)
     config = {"kind": "triage", "model": model, "effort": effort, "prompt_version": variant, "rep": rep}
     return call_model(params, key=key, config=config, case_id=ticket["id"], mode=mode, client=client, root=root)
 
@@ -248,6 +268,15 @@ def rubric_text(rubric: list[dict]) -> str:
     return "\n".join(f"{item['id']}: {item['text']}" for item in rubric)
 
 
+def _judge_system(prompts: dict) -> str:
+    return prompts["judge"].replace("{rubric}", rubric_text(prompts["rubric"]))
+
+
+def judge_key(ticket_text, reply, order, model, prompts) -> str:
+    """The order is the prompt version, so a saved verdict only matches the order that produced it."""
+    return cache_key("judge", model, None, order, _judge_system(prompts), {"ticket": ticket_text, "reply": reply}, 0)
+
+
 def judge(ticket_text, reply, *, order="after", model=JUDGE_MODEL, mode=MODE, client=None,
           root=DATA_DIR, prompts=None, case_id=None) -> dict:
     """Grade one reply against the rubric. `order` is where the rubric sits in the user
@@ -257,14 +286,14 @@ def judge(ticket_text, reply, *, order="after", model=JUDGE_MODEL, mode=MODE, cl
         raise ValueError(f"order must be 'before' or 'after', not {order!r}")
     prompts = prompts or load_prompts(Path(root) / "prompts.json")
     rubric = rubric_text(prompts["rubric"])
-    system = prompts["judge"].replace("{rubric}", rubric)
+    system = _judge_system(prompts)
     ticket_part, reply_part, rubric_part = f"Ticket:\n{ticket_text}", f"Reply:\n{reply}", f"Rubric:\n{rubric}"
     parts = [ticket_part, rubric_part, reply_part] if order == "before" else [ticket_part, reply_part, rubric_part]
-    params = {"model": model, "max_tokens": 2000, "system": system,
+    params = {"model": model, "max_tokens": MAX_TOKENS, "system": system,
               "messages": [{"role": "user", "content": "\n\n".join(parts)}],
               "output_config": {"format": {"type": "json_schema", "schema": JUDGE_SCHEMA}}}
     # The order is the prompt version, so a saved verdict only matches the order that produced it.
-    key = cache_key("judge", model, None, order, system, {"ticket": ticket_text, "reply": reply}, 0)
+    key = judge_key(ticket_text, reply, order, model, prompts)
     config = {"kind": "judge", "model": model, "effort": None, "prompt_version": order, "rep": 0}
     return call_model(params, key=key, config=config, case_id=case_id, mode=mode, client=client, root=root)
 
@@ -326,6 +355,11 @@ def estimate_cost(kind: str, model: str, n_calls: int) -> float:
     return n_calls * call_cost(model, tokens_in, tokens_out)
 
 
+def worst_case_cost(kind: str, model: str, n_calls: int) -> float:
+    """Dollars if every call used all of MAX_TOKENS for output (long thinking, long reply)."""
+    return n_calls * call_cost(model, EST_TOKENS[kind][0], MAX_TOKENS)
+
+
 class CostLimit(Exception):
     """The actual spend passed --max-cost. `lines` holds what finished; `spent` is the dollars."""
     def __init__(self, lines: list[dict], spent: float):
@@ -348,7 +382,8 @@ def run(cases: list, fn, *, reps: int = 1, workers: int = 8, max_cost: float | N
             return None                          # the cap was hit: skip calls that have not started
         line = fn(*job)
         with lock:
-            spent += call_cost(line["config"]["model"], line["input_tokens"], line["output_tokens"])
+            if not line.get("skipped"):              # a resumed (already recorded) line costs nothing now
+                spent += call_cost(line["config"]["model"], line["input_tokens"], line["output_tokens"])
             if max_cost is not None and spent > max_cost:
                 stop.set()
         return line
@@ -377,26 +412,91 @@ RECORDING_PLAN = [
     # 4. The judge: the 30 labelled replies in both rubric orders, then the best prompt's test replies.
     {"name": "judge", "kind": "judge", "model": JUDGE_MODEL, "effort": None, "prompt": "labels", "orders": ["before", "after"]},
     {"name": "judge", "kind": "judge", "model": JUDGE_MODEL, "effort": None, "prompt": "best", "orders": ["after"]},
+    # A pilot, not part of "all": 3 of the most expensive requests, to check output_tokens and
+    # stop_reason before the full run. These are the same requests the full plan makes (when v2_rules
+    # wins), so recording is resumable and the full run skips them.
+    {"name": "pilot", "kind": "triage", "model": "claude-opus-5-5", "effort": "high", "prompt": "v2_rules", "split": "dev", "reps": 1, "limit": 3},
+    {"name": "pilot", "kind": "judge", "model": JUDGE_MODEL, "effort": None, "prompt": "labels", "orders": ["after"], "limit": 3},
 ]
+
+
+def _label_cases(root, tickets) -> list[dict]:
+    by_id = {t["id"]: t for t in tickets}
+    return [{"id": l["id"], "ticket": by_id[l["ticket_id"]]["text"], "reply": l["reply"], "labels": l["labels"]}
+            for l in load_jsonl(Path(root) / "reply_labels.jsonl")]
+
+
+def _step_cases(step: dict, tickets: list[dict]) -> list[dict]:
+    cases = tickets if step["split"] == "all" else split(tickets, step["split"])
+    return cases[: step.get("limit")]
 
 
 def plan_calls(step: dict, root=DATA_DIR) -> int:
     """How many API calls one plan step makes against a data root."""
     root = Path(root)
     if step["kind"] == "judge" and step["prompt"] == "labels":
-        return len(load_jsonl(root / "reply_labels.jsonl")) * len(step["orders"])
+        n = len(load_jsonl(root / "reply_labels.jsonl"))
+        return min(n, step.get("limit") or n) * len(step["orders"])
     tickets = load_tickets(root / "tickets.jsonl")
     if step["kind"] == "judge":                                  # replies to the test split
         return len(split(tickets, "test")) * len(step["orders"])
-    cases = tickets if step["split"] == "all" else split(tickets, step["split"])
-    return len(cases) * step["reps"]
+    return len(_step_cases(step, tickets)) * step["reps"]
+
+
+def _recorded_keys(path) -> set:
+    """Keys whose latest saved line succeeded."""
+    state: dict[str, bool] = {}
+    if Path(path).exists():
+        for line in load_jsonl(path):
+            state[line["key"]] = not line.get("error")
+    return {k for k, ok in state.items() if ok}
+
+
+def remaining_calls(step: dict, root, best: str | None = None) -> int:
+    """Calls this step still has to make: the plan minus requests already recorded without error.
+    When the best prompt (or its replies) is not known yet, nothing can be counted as done."""
+    root = Path(root)
+    total = plan_calls(step, root)
+    prompts, tickets = load_prompts(root / "prompts.json"), load_tickets(root / "tickets.jsonl")
+    variant = best if step["prompt"] == "best" else step["prompt"]
+    if variant is None:
+        return total
+    if step["kind"] == "triage":
+        done = _recorded_keys(response_path("triage", step["model"], variant, step["effort"], root))
+        keys = [triage_key(t["text"], variant, step["model"], step["effort"], rep, prompts)
+                for rep in range(step["reps"]) for t in _step_cases(step, tickets)]
+        return sum(k not in done for k in keys)
+    done_by_order = {o: _recorded_keys(response_path("judge", step["model"], o, None, root)) for o in step["orders"]}
+    if step["prompt"] == "labels":
+        pairs = [(c["ticket"], c["reply"]) for c in _label_cases(root, tickets)[: step.get("limit")]]
+    else:
+        try:
+            pairs = [(t["text"], o["reply"]) for t in split(tickets, "test")
+                     if (o := triage(t, variant, root=root, prompts=prompts)["output"])]
+        except ReplayMiss:
+            return total
+    return sum(judge_key(t, r, o, step["model"], prompts) not in done_by_order[o]
+               for o in step["orders"] for t, r in pairs)
 
 
 def estimate_plan(root=DATA_DIR, only: str | None = None) -> list[dict]:
-    """One row per plan step (or only the steps of one phase): calls and estimated dollars."""
-    return [{**step, "calls": plan_calls(step, root),
-             "cost": estimate_cost(step["kind"], step["model"], plan_calls(step, root))}
-            for step in RECORDING_PLAN if only in (None, "all", step["name"])]
+    """One row per plan step (or only the steps of one phase; "all" leaves out the pilot).
+    calls = the plan; todo = still to make (already recorded requests are skipped);
+    cost / worst = dollars for the todo calls, typical and with every reply at MAX_TOKENS."""
+    root = Path(root)
+    try:
+        best = best_prompt(root, quiet=True)
+    except ReplayMiss:
+        best = None
+    rows = []
+    for step in RECORDING_PLAN:
+        if only in (None, "all") and step["name"] == "pilot" or only not in (None, "all", step["name"]):
+            continue
+        todo = remaining_calls(step, root, best)
+        rows.append({**step, "calls": plan_calls(step, root), "todo": todo,
+                     "cost": estimate_cost(step["kind"], step["model"], todo),
+                     "worst": worst_case_cost(step["kind"], step["model"], todo)})
+    return rows
 
 
 # ── 9. Report and compare ───────────────────────────────────────────────────
@@ -470,13 +570,27 @@ def _select(tickets: list[dict], name: str) -> list[dict]:
     return tickets if name == "all" else split(tickets, name)
 
 
-def _confirm(rows: list[dict], yes: bool) -> bool:
-    """Print the estimate. True only after --yes or an interactive y; otherwise nothing is called."""
+def _row(kind, model, prompt, effort, calls, todo=None) -> dict:
+    todo = calls if todo is None else todo
+    return {"kind": kind, "model": model, "prompt": prompt, "effort": effort, "calls": calls, "todo": todo,
+            "cost": estimate_cost(kind, model, todo), "worst": worst_case_cost(kind, model, todo)}
+
+
+def _confirm(rows: list[dict], yes: bool, cap: float | None) -> bool:
+    """Print the estimate, the worst case and the cap. True only after --yes or an interactive y;
+    otherwise nothing is called."""
     for r in rows:
+        done = f"  ({r['calls'] - r['todo']} already recorded)" if r["todo"] != r["calls"] else ""
         print(f"  {r['kind']:<7} {r['model']:<18} {r['prompt']:<12} {r['effort'] or 'default':<8} "
-              f"{r['calls']:>4} calls  ${r['cost']:.4f}")
-    print(f"Estimated cost: ${sum(r['cost'] for r in rows):.2f}  (a guess from typical token counts; "
-          f"the real cost is printed at the end)")
+              f"{r['todo']:>4} calls  ${r['cost']:.4f}{done}")
+    typical, worst = sum(r["cost"] for r in rows), sum(r["worst"] for r in rows)
+    skipped = sum(r["calls"] - r["todo"] for r in rows)
+    if skipped:
+        print(f"{skipped} requests are already recorded and will be skipped; only the rest is counted.")
+    cap_text = f"${cap:.2f}" if cap is not None else "none"
+    print(f"Estimated cost ${typical:.2f} (worst case ${worst:.2f} if every reply uses max_tokens). Cap: {cap_text}.")
+    if cap is not None and worst > cap:
+        print(f"The worst case is over the cap; the run stops at ${cap:.2f} and keeps what finished.")
     if yes:
         return True
     answer = ""
@@ -492,7 +606,8 @@ def _confirm(rows: list[dict], yes: bool) -> bool:
 
 
 def _spent(lines: list[dict]) -> float:
-    return sum(call_cost(l["config"]["model"], l["input_tokens"], l["output_tokens"]) for l in lines)
+    return sum(call_cost(l["config"]["model"], l["input_tokens"], l["output_tokens"])
+               for l in lines if not l.get("skipped"))
 
 
 def _grades(args, tickets, prompts, variant, mode="replay", client=None, reps=1) -> list[dict]:
@@ -501,7 +616,7 @@ def _grades(args, tickets, prompts, variant, mode="replay", client=None, reps=1)
     cases = _select(tickets, args.split)
     lines = run(cases, lambda t, rep: triage(t, variant, model=args.model, effort=args.effort, rep=rep,
                                              mode=mode, client=client, root=args.data, prompts=prompts),
-                reps=reps, workers=args.workers, max_cost=getattr(args, "max_cost", None))
+                reps=reps, workers=args.workers, max_cost=None if mode == "replay" else args.max_cost)
     return [grade(by_id[l["case_id"]], l) for l in lines]
 
 
@@ -519,9 +634,7 @@ def cmd_run(args, client) -> int:
     tickets = load_tickets(Path(args.data) / "tickets.jsonl")
     if args.mode != "replay":
         n = len(_select(tickets, args.split)) * args.reps
-        row = {"kind": "triage", "model": args.model, "prompt": variant, "effort": args.effort,
-               "calls": n, "cost": estimate_cost("triage", args.model, n)}
-        if not _confirm([row], args.yes):
+        if not _confirm([_row("triage", args.model, variant, args.effort, n)], args.yes, args.max_cost):
             return 1
     try:
         grades = _grades(args, tickets, prompts, variant, args.mode, client, args.reps)
@@ -547,21 +660,13 @@ def cmd_compare(args, client) -> int:
     return 0
 
 
-def _label_cases(root, tickets) -> list[dict]:
-    by_id = {t["id"]: t for t in tickets}
-    return [{"id": l["id"], "ticket": by_id[l["ticket_id"]]["text"], "reply": l["reply"], "labels": l["labels"]}
-            for l in load_jsonl(Path(root) / "reply_labels.jsonl")]
-
-
 def cmd_judge(args, client) -> int:
     prompts = load_prompts(Path(args.data) / "prompts.json")
     variant = _prompt_name(prompts, args.prompt)
     tickets = load_tickets(Path(args.data) / "tickets.jsonl")
     cases = _select(tickets, args.split)
     if args.mode != "replay":
-        row = {"kind": "judge", "model": JUDGE_MODEL, "prompt": variant, "effort": None,
-               "calls": len(cases), "cost": estimate_cost("judge", JUDGE_MODEL, len(cases))}
-        if not _confirm([row], args.yes):
+        if not _confirm([_row("judge", JUDGE_MODEL, variant, None, len(cases))], args.yes, args.max_cost):
             return 1
     replies = {}
     for t in cases:        # the reply to judge is the saved triage reply
@@ -572,7 +677,7 @@ def cmd_judge(args, client) -> int:
     try:
         lines = run(ids, lambda i, rep: judge(*replies[i], order=args.order, mode=args.mode, client=client,
                                               root=args.data, prompts=prompts, case_id=i),
-                    workers=args.workers, max_cost=args.max_cost)
+                    workers=args.workers, max_cost=None if args.mode == "replay" else args.max_cost)
     except CostLimit as e:
         print(f"Stopped: spent ${e.spent:.4f}, over --max-cost {args.max_cost}. Finished calls are saved.")
         return 2
@@ -616,15 +721,19 @@ def cmd_gate(args, client) -> int:
     return 0 if result["passed"] else 1
 
 
-def best_prompt(root, prompts: dict, tickets: list[dict]) -> str:
-    """Phase 2: the recorded Haiku prompt with the highest dev `both` accuracy (first wins a tie)."""
+def best_prompt(root, prompts: dict | None = None, tickets: list[dict] | None = None, quiet: bool = False) -> str:
+    """Phase 2: the recorded Haiku prompt with the highest dev `both` accuracy (first wins a tie).
+    Raises ReplayMiss when phase 1 is not recorded."""
+    prompts = prompts or load_prompts(Path(root) / "prompts.json")
+    tickets = tickets or load_tickets(Path(root) / "tickets.jsonl")
     names = list(dict.fromkeys(s["prompt"] for s in RECORDING_PLAN if s["name"] == "prompts"))
     scores = {}
     for name in names:
         grades = [grade(t, triage(t, name, root=root, prompts=prompts)) for t in split(tickets, "dev")]
         scores[name] = report(grades)["both"]
     best = max(names, key=lambda n: scores[n])
-    print("phase 2: best prompt on dev " + ", ".join(f"{n} {scores[n]:.1%}" for n in names) + f" -> {best}")
+    if not quiet:
+        print("phase 2: best prompt on dev " + ", ".join(f"{n} {scores[n]:.1%}" for n in names) + f" -> {best}")
     return best
 
 
@@ -634,10 +743,10 @@ def cmd_record(args, client) -> int:
     tickets = load_tickets(root / "tickets.jsonl")
     steps = estimate_plan(root, only=args.plan)
     print(f"Recording plan '{args.plan}' into {root / 'responses'}")
-    if not _confirm(steps, args.yes):
+    if not _confirm(steps, args.yes, args.max_cost):
         return 1
     mode, spent, best = "record", 0.0, None
-    phase_of = {"prompts": 1, "models": 3, "judge": 4}
+    phase_of = {"prompts": "phase 1", "models": "phase 3", "judge": "phase 4", "pilot": "pilot"}
 
     def go(cases, fn, reps=1):
         nonlocal spent
@@ -660,15 +769,15 @@ def cmd_record(args, client) -> int:
                     print("Phase 2 needs the prompts phase recorded first: record --plan prompts", file=sys.stderr)
                     return 1
             variant = best if step["prompt"] == "best" else step["prompt"]
-            print(f"phase {phase_of[step['name']]} ({step['name']}): {step['kind']} {step['model']} "
-                  f"{variant} {step['effort'] or 'default'}, {step['calls']} calls")
+            print(f"{phase_of[step['name']]} ({step['name']}): {step['kind']} {step['model']} "
+                  f"{variant} {step['effort'] or 'default'}, {step['todo']} calls to make")
             if step["kind"] == "triage":
-                cases = _select(tickets, step["split"])
+                cases = _step_cases(step, tickets)
                 go(cases, lambda t, rep: triage(t, variant, model=step["model"], effort=step["effort"], rep=rep,
                                                 mode=mode, client=client, root=root, prompts=prompts), step["reps"])
             elif step["prompt"] == "labels":
                 for order in step["orders"]:
-                    go(_label_cases(root, tickets), lambda c, rep: judge(
+                    go(_label_cases(root, tickets)[: step.get("limit")], lambda c, rep: judge(
                         c["ticket"], c["reply"], order=order, model=step["model"], mode=mode, client=client,
                         root=root, prompts=prompts, case_id=c["id"]))
             else:                          # the best prompt's test-split replies, saved in phase 1
@@ -696,7 +805,8 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--effort", default=None, help="low | medium | high ...; omit to send none")
     common.add_argument("--workers", type=int, default=8)
     paid = argparse.ArgumentParser(add_help=False)
-    paid.add_argument("--max-cost", type=float, default=None, help="stop when the real spend passes this many dollars")
+    paid.add_argument("--max-cost", type=float, default=10.0,
+                      help="stop when the real spend passes this many dollars (default 10, the spec's cap)")
     paid.add_argument("--yes", action="store_true", help="approve the printed estimate without asking")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -723,7 +833,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--minimum", type=float, default=0.7)
     p.set_defaults(func=cmd_gate)
     p = sub.add_parser("record", parents=[common, paid], help="record responses from the API (paid)")
-    p.add_argument("--plan", choices=["all", "prompts", "models", "judge"], default="all")
+    p.add_argument("--plan", choices=["all", "prompts", "models", "judge", "pilot"], default="all")
     p.set_defaults(func=cmd_record)
     return parser
 
