@@ -40,7 +40,7 @@ import Callout from '../../../components/Callout.astro';
 
 A tool is a function the harness offers to the model. The request carries a description of each tool: a name, a sentence about what it does, and the shape of its input written as <Term t="JSON Schema" />. The model reads these descriptions and decides whether a tool would help.
 
-When it wants one, the model stops and replies with a <Term t="tool_use" /> block and a `stop_reason` of `tool_use`. The block has three fields: `name`, `input` (JSON that fits the schema), and `id`.
+When it wants one, the model stops and replies with a <Term t="tool_use" /> block and a `stop_reason` of `tool_use`. The block has three fields: `name`, `input` (JSON written to match the schema), and `id`.
 
 The model never runs code. The harness reads the block, finds the function by name, calls it with the input, and sends the output back as a <Term t="tool_result" /> block. The result's `tool_use_id` copies the request's `id`. All the results for one assistant turn go back together in one `user` message.
 
@@ -94,7 +94,7 @@ Section 3 is the registry and the three tools.
 - `Tool` holds what the harness knows about one tool: `name`, `description`, `input_schema`, the function `fn`, and `needs_approval`.
 - `schema()` returns only `name`, `description` and `input_schema`. That dict is what goes into the `tools` list of each request (section 6).
 - `REGISTRY` maps each name to its `Tool`. The executor in lesson 6 looks names up here.
-- `tool(...)` is a decorator. It wraps `properties` and `required` into a full schema, with `"additionalProperties": False` so the model cannot invent extra fields, and stores the result in `REGISTRY`. The function itself is returned unchanged.
+- `tool(...)` is a decorator. It wraps `properties` and `required` into a full schema, with `"additionalProperties": False`, which tells the model not to add other fields, and stores the result in `REGISTRY`. The API does not enforce the schema, so a bad input still reaches `fn`. An unexpected or missing field makes `t.fn(**block.input)` raise a `TypeError`, and the executor (section 5) sends it back to the model as an error result. The function itself is returned unchanged.
 - `safe_path` keeps every file path inside `WORKSPACE`. Lesson 5 covers it.
 - `list_files`, `read_file` and `write_file` are plain functions that return strings. `read_file` cuts its output at 20,000 characters so one file cannot flood the conversation. `write_file` sets `needs_approval=True`, so the permission gate (step 6) asks you first.
 

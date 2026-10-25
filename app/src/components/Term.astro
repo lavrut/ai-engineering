@@ -39,13 +39,36 @@ const id = `term-${g.__aieTermSeq}`;
     font-size: var(--text-small);
     font-weight: 400;
     line-height: 1.45;
-    visibility: hidden;
-    opacity: 0;
-    transition: opacity 120ms ease;
+    /* display:none (not visibility:hidden) so a closed tooltip takes no layout
+       space and can never widen the page; aria-describedby still reads it. */
+    display: none;
   }
   .term:hover .term-def,
   .term:focus .term-def {
-    visibility: visible;
-    opacity: 1;
+    display: block;
   }
 </style>
+
+<script>
+  // An open tooltip starts at the term's left edge. Near the right side of a
+  // narrow screen that would overflow, so shift it left to stay in view.
+  const GUTTER = 8;
+
+  function place(term: HTMLElement) {
+    const def = term.querySelector<HTMLElement>('.term-def');
+    if (!def) return;
+    def.style.left = '';
+    const r = def.getBoundingClientRect();
+    if (r.width === 0) return; // not shown
+    const overflow = r.right - (document.documentElement.clientWidth - GUTTER);
+    if (overflow > 0) def.style.left = `${-Math.min(overflow, Math.max(0, r.left - GUTTER))}px`;
+  }
+
+  function onShow(e: Event) {
+    const term = (e.target as Element | null)?.closest?.<HTMLElement>('.term');
+    if (term) place(term);
+  }
+
+  document.addEventListener('mouseover', onShow);
+  document.addEventListener('focusin', onShow);
+</script>
