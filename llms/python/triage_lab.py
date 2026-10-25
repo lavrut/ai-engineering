@@ -226,9 +226,70 @@ def confusion_matrix(pairs: list[tuple]) -> dict[str, dict[str, int]]:
 
 
 # ── 6. LLM judge ────────────────────────────────────────────────────────────
+# Some qualities, like tone, have no exact answer a script can check. A stronger model
+# reads the ticket and the reply and grades each rubric item with a reason.
+def rubric_text(rubric: list[dict]) -> str:
+    """One line per rubric item: its id, then what it asks."""
+    return "\n".join(f"{item['id']}: {item['text']}" for item in rubric)
+
+
+def judge(ticket_text, reply, *, order="after", model=JUDGE_MODEL, mode=MODE, client=None,
+          root=DATA_DIR, prompts=None, case_id=None) -> dict:
+    """Grade one reply against the rubric. `order` is where the rubric sits in the user
+    message: "before" the reply or "after" it. The two orders are different requests with
+    different keys, so you can measure whether position changes the verdicts."""
+    if order not in ("before", "after"):
+        raise ValueError(f"order must be 'before' or 'after', not {order!r}")
+    prompts = prompts or load_prompts(Path(root) / "prompts.json")
+    rubric = rubric_text(prompts["rubric"])
+    system = prompts["judge"].replace("{rubric}", rubric)
+    ticket_part, reply_part, rubric_part = f"Ticket:\n{ticket_text}", f"Reply:\n{reply}", f"Rubric:\n{rubric}"
+    parts = [ticket_part, rubric_part, reply_part] if order == "before" else [ticket_part, reply_part, rubric_part]
+    params = {"model": model, "max_tokens": 2000, "system": system,
+              "messages": [{"role": "user", "content": "\n\n".join(parts)}],
+              "output_config": {"format": {"type": "json_schema", "schema": JUDGE_SCHEMA}}}
+    # The order is the prompt version, so a saved verdict only matches the order that produced it.
+    key = cache_key("judge", model, None, order, system, {"ticket": ticket_text, "reply": reply}, 0)
+    config = {"kind": "judge", "model": model, "effort": None, "prompt_version": order, "rep": 0}
+    return call_model(params, key=key, config=config, case_id=case_id, mode=mode, client=client, root=root)
+
+
+def verdicts(line: dict) -> dict[str, bool | None]:
+    """Pass/fail per criterion from a saved judge line; None for all when the line has no output."""
+    output = line.get("output")
+    return {rid: (output[rid]["pass"] if output else None) for rid in RUBRIC_IDS}
 
 
 # ── 7. Judge agreement ──────────────────────────────────────────────────────
+# A judge is only useful if it agrees with a careful human. Compare its verdicts with
+# hand labels, and check that merely moving the rubric does not change them.
+def agreement(judge_v: list, human_v: list, criterion: str = "") -> float:
+    """Share of replies where the judge and the human gave the same verdict on one criterion.
+    A reply the judge could not grade (None) counts as a disagreement."""
+    if len(judge_v) != len(human_v) or not judge_v:
+        raise ValueError(f"{criterion or 'criterion'}: need two equal-length, non-empty verdict lists")
+    return sum(j == h for j, h in zip(judge_v, human_v)) / len(judge_v)
+
+
+def cohen_kappa(a: list[bool], b: list[bool]) -> float:
+    """Agreement beyond chance: (po - pe) / (1 - pe), where po is the observed agreement and
+    pe the agreement two raters would reach by luck given how often each says true."""
+    if len(a) != len(b) or not a:
+        raise ValueError("need two equal-length, non-empty lists")
+    n = len(a)
+    po = sum(x == y for x, y in zip(a, b)) / n
+    pa, pb = sum(a) / n, sum(b) / n
+    pe = pa * pb + (1 - pa) * (1 - pb)
+    if pe == 1:                        # both raters always say the same thing: kappa is undefined
+        return 1.0 if po == 1 else 0.0
+    return (po - pe) / (1 - pe)
+
+
+def position_flips(before_v: list, after_v: list) -> int:
+    """How many replies get a different verdict when only the rubric's position changes."""
+    if len(before_v) != len(after_v):
+        raise ValueError("need two equal-length verdict lists")
+    return sum(x != y for x, y in zip(before_v, after_v))
 
 
 # ── 8. Runner ───────────────────────────────────────────────────────────────

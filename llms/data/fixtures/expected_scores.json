@@ -59,8 +59,24 @@
     "significant": false,
     "band": 0.37796447300922725
   },
+  "agreement": {
+    "addresses_issue": 0.75,
+    "tone": 1.0,
+    "no_false_promises": 0.75
+  },
+  "kappa": {
+    "addresses_issue": 0.5,
+    "tone": 1.0,
+    "no_false_promises": 0.0
+  },
+  "position_flips": {
+    "addresses_issue": 2,
+    "tone": 0,
+    "no_false_promises": 1
+  },
   "definitions": {
     "R9": "band = 1/sqrt(scored), scored = non-error graded lines across all reps; n = distinct cases incl. errors; scored = 0 raises ValueError.",
-    "R10": "compare takes one grade per case (duplicate case_id raises); band = 1/sqrt(min scored of the two sides); significant = abs(diff) > band; fixed/broken sorted by case_id, errors count as not correct, one-sided ids ignored."
+    "R10": "compare takes one grade per case (duplicate case_id raises); band = 1/sqrt(min scored of the two sides); significant = abs(diff) > band; fixed/broken sorted by case_id, errors count as not correct, one-sided ids ignored.",
+    "kappa": "kappa = (po - pe) / (1 - pe): po = observed agreement, pe = agreement expected by chance from each rater's share of true; if pe == 1 it is 1.0 when po == 1 else 0.0."
   }
 }
