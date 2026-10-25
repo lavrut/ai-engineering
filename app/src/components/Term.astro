@@ -1,0 +1,51 @@
+---
+import { glossary } from '../data/glossary';
+
+interface Props {
+  t: keyof typeof glossary;
+}
+
+const { t } = Astro.props;
+const definition: string = glossary[t];
+// Stable ids for aria-describedby: one per rendered instance.
+const g = globalThis as { __aieTermSeq?: number };
+g.__aieTermSeq = (g.__aieTermSeq ?? 0) + 1;
+const id = `term-${g.__aieTermSeq}`;
+---
+
+<span class="term" tabindex="0" aria-describedby={id}>
+  <slot>{t}</slot><span class="term-def" role="tooltip" id={id}>{definition}</span>
+</span>
+
+<style>
+  .term {
+    position: relative;
+    border-bottom: 1px dotted var(--muted);
+    cursor: help;
+  }
+  .term-def {
+    position: absolute;
+    left: 0;
+    top: calc(100% + 6px);
+    z-index: 10;
+    width: max-content;
+    max-width: min(32ch, 80vw);
+    padding: 8px 10px;
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    font-family: var(--font-body);
+    font-size: var(--text-small);
+    font-weight: 400;
+    line-height: 1.45;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  .term:hover .term-def,
+  .term:focus .term-def {
+    visibility: visible;
+    opacity: 1;
+  }
+</style>
