@@ -1,0 +1,99 @@
+---
+track: harness
+order: 1
+slug: what
+title: What a harness is
+goal: Tell the model apart from the program around it, and name the ten steps that turn a typed task into a finished answer.
+minutes: 12
+quiz:
+  - question: The model replies with a tool_use block asking for read_file. Who opens the file?
+    options:
+      - The model, on Anthropic's servers
+      - The harness, on your machine
+      - The API, which forwards the file to the model
+      - Nobody until the user pastes the file in
+    answer: 1
+    explanation: The model can only return text and requests. The harness looks up read_file in its registry, runs the Python function on your machine, and sends the file contents back in the next request.
+  - question: Which part of the harness reads stop_reason and decides whether to keep looping?
+    options:
+      - The permission gate
+      - The context manager
+      - The router
+      - The tool executor
+    answer: 2
+    explanation: Step 5, the router, reads stop_reason. tool_use sends the loop on to run tools; end_turn jumps to step 10 and shows the answer. The gate and executor only act after the router has chosen to run tools.
+  - question: After step 9, where does the loop go next?
+    options:
+      - Back to step 1, to ask the user for a new task
+      - Back to step 3, to send the updated history to the model
+      - Straight to step 10, to show the answer
+      - Back to step 6, to re-check permissions
+    answer: 1
+    explanation: Step 9 checks the token budget and compacts if needed, then the harness sends a fresh request with the tool results appended. The loop only reaches step 10 when the router sees end_turn.
+---
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+A language model is a function behind an API. You send it text, it sends text back. It cannot open files, run commands, or remember your last request. Everything that makes it act like an agent lives in ordinary code that you write.
+
+That code is the <Term t="harness" />. It takes your task, builds a request, sends it to the model, reads the reply, runs any tools the model asked for, and sends the results back. It repeats until the model says it is done.
+
+The model's reply can only take two forms: text for you, or a request to call a tool. A request to call a tool is a <Term t="tool_use" /> block: a tool name plus JSON input. The model never runs code. The harness does, and reports back with a <Term t="tool_result" />.
+
+The harness in this course has a handful of parts, each a short function:
+
+- **Entry point.** A small loop that reads your task from the terminal.
+- **Context builder.** Assembles each request from the <Term t="system prompt" />, the conversation so far, and the tool descriptions.
+- **Router.** Reads the reply's <Term t="stop_reason" /> and picks the next step.
+- **Permission gate.** Asks you before a risky tool runs, such as a file write.
+- **Tool executor.** Runs the approved tools and collects their output.
+- **Context manager.** Watches the size of the conversation and shrinks it when it grows too large.
+- **Trace log.** Writes every step to a file so you can see what happened.
+
+## See it
+
+This diagram is the whole course on one screen. Step through the ten steps with **Next** and watch which parts light up, or pick a step from the list. Steps 3 to 9 form the loop: one pass per model reply. The trace log on the right records every step.
+
+<FlowDiagram diagram="harness-flow" />
+
+## The code
+
+The harness is two files that do the same thing: `harness/python/harness.py` and `harness/go/main.go`. Each is split into nine numbered sections with the same titles, so you can read them side by side. Later lessons show these sections one at a time.
+
+| Section | What it holds | Flow step |
+|---|---|---|
+| 1. Configuration | Model id, limits, system prompt, API client | |
+| 2. Observability | `emit`, which writes `trace.jsonl` | every step |
+| 3. Tool registry | Tool definitions and the sandbox rule | |
+| 4. Permission gate | `approve` | 6 |
+| 5. Tool executor | `run_one`, `execute_tools` | 7 |
+| 6. Model call | `call_model` | 2 to 4 |
+| 7. Context management | `compact` | 9 |
+| 8. The agent loop | `run_agent` | 5, 8 |
+| 9. Entry point | `main`, the REPL | 1, 10 |
+
+<Callout kind="note" title="Why two languages">
+  Python is the easiest to read. Go shows the same design with explicit types, goroutines and deadlines. Pick one to run; the lessons point out where the Go version differs.
+</Callout>
+
+## Try it
+
+You need an Anthropic API key (lesson 2 covers it). Set up the Python harness and give it one read-only task:
+
+```bash
+cd harness/python
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+export ANTHROPIC_API_KEY=sk-ant-...
+mkdir -p workspace && echo "Buy milk. Call Sam." > workspace/notes.txt
+python harness.py
+```
+
+At the `you >` prompt, type `What files are in the workspace, and what does notes.txt say?`
+
+You should see lines such as `-> list_files({"path": "."})` and `-> read_file({"path": "notes.txt"})` as the harness runs each tool, then `agent >` with a short answer. Type `exit` to quit. A new `trace.jsonl` file in the same folder holds one line per event; you will read it in lesson 8.
+
+To run the Go version instead: `cd harness/go && go run .` (the workspace folder is `harness/go/workspace`).

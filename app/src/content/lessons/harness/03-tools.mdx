@@ -1,0 +1,134 @@
+---
+track: harness
+order: 3
+slug: tools
+title: Tools
+goal: Describe a Python function to the model as a tool, and follow one tool call from the model's request to the result it reads back.
+minutes: 15
+quiz:
+  - question: What does the model receive about the read_file tool?
+    options:
+      - The Python source of read_file
+      - Its name, description and input JSON Schema
+      - A compiled copy it can call on the server
+      - Only the name
+    answer: 1
+    explanation: Tool.schema() sends name, description and input_schema. The function itself (fn) never leaves the harness. The model decides from the description and schema when to ask for the tool and what input to send.
+  - question: The model asks for list_files and read_file in one reply. How do the results go back?
+    options:
+      - Two separate user messages, one per result
+      - One user message holding two tool_result blocks, each with the matching tool_use_id
+      - One assistant message with both outputs as text
+      - In the system prompt of the next request
+    answer: 1
+    explanation: Every tool_result for one assistant turn goes back together in ONE user message. Each block's tool_use_id copies the id of the tool_use block it answers, which is how the model knows which output belongs to which request.
+  - question: In the Go harness, when does register() run for the three built-in tools?
+    options:
+      - When the model first asks for a tool
+      - Inside main, before the REPL starts
+      - In init(), which Go runs automatically before main
+      - Each time callModel builds a request
+    answer: 2
+    explanation: Go runs every init() function in a package before main. The harness calls register() there, so the registry is full before any request is built. Python gets the same effect from decorators, which run when the module is imported.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+A tool is a function the harness offers to the model. The request carries a description of each tool: a name, a sentence about what it does, and the shape of its input written as <Term t="JSON Schema" />. The model reads these descriptions and decides whether a tool would help.
+
+When it wants one, the model stops and replies with a <Term t="tool_use" /> block and a `stop_reason` of `tool_use`. The block has three fields: `name`, `input` (JSON that fits the schema), and `id`.
+
+The model never runs code. The harness reads the block, finds the function by name, calls it with the input, and sends the output back as a <Term t="tool_result" /> block. The result's `tool_use_id` copies the request's `id`. All the results for one assistant turn go back together in one `user` message.
+
+Here is one round trip as JSON. The assistant turn the model wrote:
+
+```json
+{
+  "role": "assistant",
+  "content": [
+    {"type": "text", "text": "I'll look at the workspace first."},
+    {
+      "type": "tool_use",
+      "id": "toolu_01A",
+      "name": "list_files",
+      "input": {"path": "."}
+    }
+  ]
+}
+```
+
+The user turn the harness sends back on the next request:
+
+```json
+{
+  "role": "user",
+  "content": [
+    {
+      "type": "tool_result",
+      "tool_use_id": "toolu_01A",
+      "content": "notes.txt",
+      "is_error": false
+    }
+  ]
+}
+```
+
+The harness keeps its tools in a <Term t="tool registry" />: a table from name to schema and function. Only the schema goes to the model.
+
+## See it
+
+Step through one tool call, from the model's request to the result it reads on the next turn.
+
+<FlowDiagram diagram="tool-roundtrip" />
+
+## The code
+
+Section 3 is the registry and the three tools.
+
+<CodeTabs section={3} goNote="Go declares a Tool struct whose Run field is a function. Each tool is registered with register(Tool{...}) inside init(), which Go runs before main. Param() is the Go version of schema()." />
+
+- `Tool` holds what the harness knows about one tool: `name`, `description`, `input_schema`, the function `fn`, and `needs_approval`.
+- `schema()` returns only `name`, `description` and `input_schema`. That dict is what goes into the `tools` list of each request (section 6).
+- `REGISTRY` maps each name to its `Tool`. The executor in lesson 6 looks names up here.
+- `tool(...)` is a decorator. It wraps `properties` and `required` into a full schema, with `"additionalProperties": False` so the model cannot invent extra fields, and stores the result in `REGISTRY`. The function itself is returned unchanged.
+- `safe_path` keeps every file path inside `WORKSPACE`. Lesson 5 covers it.
+- `list_files`, `read_file` and `write_file` are plain functions that return strings. `read_file` cuts its output at 20,000 characters so one file cannot flood the conversation. `write_file` sets `needs_approval=True`, so the permission gate (step 6) asks you first.
+
+<Callout kind="note" title="The description is part of the prompt">
+  The model chooses tools from their descriptions. A vague description gets a tool called at the wrong time or with the wrong input. Write it the way you would explain the function to a new colleague.
+</Callout>
+
+## How Go does it
+
+Go has no decorators, so the registration is spelled out. Each tool is a `Tool` struct literal with its schema parts (`Properties`, `Required`) and a `Run` function. All three are passed to `register` inside `func init()`. Go calls every `init` in a package automatically before `main`, so the `registry` map is full before the first request, the same moment Python's decorators run at import.
+
+`Run` takes a `context.Context` and the raw JSON input as `json.RawMessage`. Each tool decodes that JSON into a small struct such as `struct{ Path string }`, and returns `(string, error)`. The context carries the 30-second timeout from the executor. A wrong field type in the model's input fails at decode time and goes back to the model as an error result.
+
+`Param()` turns a `Tool` into the SDK's `anthropic.ToolUnionParam`. The SDK writes `"type": "object"` into the schema for you; this version does not set `additionalProperties`. One more difference: `toolParams()` in section 6 lists the tool names in a fixed order. A new Go tool needs its name added there as well as a `register` call.
+
+## Try it
+
+Add a tool to the Python harness. In `harness/python/harness.py`, below `write_file` in section 3, add:
+
+```python
+@tool("count_words", "Count the words in a UTF-8 text file in the workspace.",
+      {"path": {"type": "string", "description": "File path relative to the workspace"}},
+      ["path"])
+def count_words(path: str) -> str:
+    return str(len(safe_path(path).read_text().split()))
+```
+
+Print the schemas the model will now see:
+
+```bash
+cd harness/python
+python -c "import json, harness; print(json.dumps([t.schema() for t in harness.REGISTRY.values()], indent=2))"
+```
+
+You should see four entries, the last one `count_words`, and no function code anywhere in the output. Then run `python harness.py` and ask `How many words are in notes.txt?`. You should see `-> count_words({"path": "notes.txt"})` before the answer.
+
+For a second exercise, change the description to something vague such as `"Does a thing."` and ask the same question. The model may skip the tool and read the file instead. The description is how the model decides.
