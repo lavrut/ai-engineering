@@ -2,7 +2,7 @@
 
 An interactive masterclass on building AI agent harnesses, with Python and Go side by side.
 
-Hosted page: (link added after publishing)
+Hosted page: https://claude.ai/artifact/MH9ZBPk8GC1duTWc4Ke5cw (private until shared from the page's Share menu)
 
 ## Layout
 
