@@ -44,18 +44,19 @@ def test_grade_non_ok_outcomes_are_all_false():
 def test_v1_scores_match_expected():
     exp = EXPECTED[V1]
     r = lab.report(graded(V1))
-    assert (r["n"], r["errors"]) == (exp["n"], exp["errors"])
+    assert (r["n"], r["errors"], r["scored"]) == (exp["n"], exp["errors"], exp["scored"])
     for field in ("category", "priority", "both"):
         assert r[field] == pytest.approx(exp[field])
+    assert r["band"] == pytest.approx(exp["band"])
 
 
 def test_v2_scores_over_two_reps_match_expected():
     exp = EXPECTED[V2]
-    r = lab.report(graded(V2), reps=exp["reps"])
-    assert (r["n"], r["errors"]) == (exp["n"], exp["errors"])
+    r = lab.report(graded(V2))
+    assert (r["n"], r["errors"], r["scored"]) == (exp["n"], exp["errors"], exp["scored"])
     for field in ("category", "priority", "both"):
         assert r[field] == pytest.approx(exp[field])
-    assert r["band"] == pytest.approx(EXPECTED["band_8_2"])
+    assert r["band"] == pytest.approx(exp["band"])
 
 
 def test_error_cases_excluded_from_accuracy():
@@ -80,8 +81,18 @@ def test_confusion_matrix_matches_expected():
 
 
 def test_noise_band():
-    assert lab.noise_band(8) == pytest.approx(EXPECTED["band_8_1"])
-    assert lab.noise_band(8, 2) == pytest.approx(0.25)
+    assert lab.noise_band(7) == pytest.approx(EXPECTED[V1]["band"])
+    assert lab.noise_band(16) == pytest.approx(0.25)
+
+
+def test_noise_band_needs_scored_cases():
+    with pytest.raises(ValueError, match="no scored cases"):
+        lab.noise_band(0)
+
+
+def test_compare_rejects_duplicate_case_ids():
+    with pytest.raises(ValueError):
+        lab.compare(graded(V2), graded(V2, rep=0))
 
 
 def test_compare_v1_v2_matches_expected():
@@ -90,7 +101,7 @@ def test_compare_v1_v2_matches_expected():
     assert c["a"] == pytest.approx(exp["a"])
     assert c["b"] == pytest.approx(exp["b"])
     assert c["diff"] == pytest.approx(exp["diff"])
-    assert c["band"] == pytest.approx(EXPECTED["band_8_1"])
+    assert c["band"] == pytest.approx(exp["band"])
     assert c["fixed"] == exp["fixed"]
     assert c["broken"] == exp["broken"]
     assert c["significant"] is exp["significant"]

@@ -237,30 +237,44 @@ def confusion_matrix(pairs: list[tuple]) -> dict[str, dict[str, int]]:
 # ── 9. Report and compare ───────────────────────────────────────────────────
 # A score on a small set is noisy. The band is how far a score can move by luck alone,
 # so a difference smaller than the band is not evidence of anything.
-def noise_band(n: int, reps: int = 1) -> float:
-    """Rough one-sigma noise on an accuracy, about 1/sqrt(samples). More cases or reps shrink it."""
-    return 1 / math.sqrt(n * reps)
+def noise_band(m: int) -> float:
+    """Rough one-sigma noise on an accuracy, about 1/sqrt(m), where m is the number of
+    scored lines (non-error, across all reps). More scored lines shrink it."""
+    if m <= 0:
+        raise ValueError("no scored cases")
+    return 1 / math.sqrt(m)
 
 
-def report(grades: list[dict], reps: int = 1) -> dict:
-    """Scores for one configuration. `grades` holds every graded line, all reps together."""
-    n = len({g["case_id"] for g in grades})
-    return {"n": n,
-            "errors": sum(g["outcome"] == "error" for g in grades),
+def report(grades: list[dict]) -> dict:
+    """Scores for one configuration; `grades` holds every graded line, all reps together.
+    n = distinct cases (errors included), errors = lines that errored, scored = lines the
+    accuracies are computed over (so scored = n * reps when nothing errors), band = noise_band(scored)."""
+    scored = sum(g["outcome"] != "error" for g in grades)
+    return {"n": len({g["case_id"] for g in grades}),
+            "errors": len(grades) - scored,
+            "scored": scored,
             "category": accuracy(grades, "category_ok"),
             "priority": accuracy(grades, "priority_ok"),
             "both": accuracy(grades, "both_ok"),
-            "band": noise_band(n, reps)}
+            "band": noise_band(scored)}
 
 
 def compare(grades_a: list[dict], grades_b: list[dict]) -> dict:
-    """Does B beat A? Pass one grade per case (use rep 0). diff = b - a on `both_ok`;
-    `fixed` are cases A got wrong and B got right, `broken` the reverse."""
+    """Does B beat A on `both_ok`? Pass exactly one grade per case (select one rep);
+    a duplicate case_id raises ValueError. diff = b - a. `fixed` are cases A got wrong and B
+    right, `broken` the reverse, sorted by case_id; an error counts as not correct, and ids
+    present on only one side are ignored in the flips. band = noise_band of the smaller
+    scored count (conservative); significant is strict: abs(diff) > band."""
+    for grades in (grades_a, grades_b):
+        ids = [g["case_id"] for g in grades]
+        if len(ids) != len(set(ids)):
+            raise ValueError("compare needs exactly one grade per case; select a single rep")
     a, b = accuracy(grades_a, "both_ok"), accuracy(grades_b, "both_ok")
     right_a = {g["case_id"]: g["both_ok"] for g in grades_a}
     right_b = {g["case_id"]: g["both_ok"] for g in grades_b}
     shared = sorted(right_a.keys() & right_b.keys())
-    band = noise_band(len(right_a))
+    scored = min(sum(g["outcome"] != "error" for g in grades_a), sum(g["outcome"] != "error" for g in grades_b))
+    band = noise_band(scored)
     return {"a": a, "b": b, "diff": b - a, "band": band,
             "fixed": [c for c in shared if right_b[c] and not right_a[c]],
             "broken": [c for c in shared if right_a[c] and not right_b[c]],
@@ -269,7 +283,7 @@ def compare(grades_a: list[dict], grades_b: list[dict]) -> dict:
 
 def gate(grades: list[dict], baseline_grades: list[dict], *, minimum: float = 0.7) -> dict:
     """A pass/fail check for CI: fail below the minimum, or below the baseline by more than the noise band."""
-    r, base = report(grades), report(baseline_grades)
+    r, base = report(grades), report(baseline_grades)   # the band comes from the scored lines
     reasons = []
     if r["both"] < minimum:
         reasons.append(f"both {r['both']:.3f} is below the minimum {minimum:.3f}")

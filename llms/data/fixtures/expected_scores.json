@@ -16,7 +16,9 @@
     "both": 0.42857142857142855,
     "errors": 1,
     "n": 8,
-    "reps": 1
+    "reps": 1,
+    "scored": 7,
+    "band": 0.37796447300922725
   },
   "triage__claude-haiku-5-5__v2_rules__default": {
     "category": 0.9375,
@@ -24,7 +26,9 @@
     "both": 0.8125,
     "errors": 0,
     "n": 8,
-    "reps": 2
+    "reps": 2,
+    "scored": 16,
+    "band": 0.25
   },
   "v1_basic_confusion_category": {
     "billing": {
@@ -52,8 +56,11 @@
       "f007"
     ],
     "broken": [],
-    "significant": false
+    "significant": false,
+    "band": 0.37796447300922725
   },
-  "band_8_1": 0.35355339059327373,
-  "band_8_2": 0.25
+  "definitions": {
+    "R9": "band = 1/sqrt(scored), scored = non-error graded lines across all reps; n = distinct cases incl. errors; scored = 0 raises ValueError.",
+    "R10": "compare takes one grade per case (duplicate case_id raises); band = 1/sqrt(min scored of the two sides); significant = abs(diff) > band; fixed/broken sorted by case_id, errors count as not correct, one-sided ids ignored."
+  }
 }
