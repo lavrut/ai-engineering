@@ -34,6 +34,18 @@ export const glossary = {
     'The harness’s table of tools, keyed by name. Each entry holds the schema the model sees and the function the harness runs.',
   goroutine:
     'A lightweight thread managed by the Go runtime, started with the go keyword; used to run work concurrently.',
+  'agent loop':
+    'The harness’s main loop: call the model, run any tools it asked for, send the results back, and repeat until it stops asking.',
+  tool_use_id:
+    'The field on a tool_result that copies the id of the tool_use block it answers, so the model can match each output to its request.',
+  'permission gate':
+    'The harness step that holds a risky tool call until a person approves or denies it.',
+  sandbox:
+    'A limit on what tools can reach. In this harness it is a path rule: every file path must resolve inside the workspace folder.',
+  'thread pool':
+    'A fixed set of worker threads that take jobs from a queue. Python’s ThreadPoolExecutor is one; it reuses threads instead of starting one per job.',
+  WaitGroup:
+    'A Go counter from the sync package: Add before starting a goroutine, Done when it finishes, Wait blocks until the count is back to zero.',
 } as const satisfies Record<string, string>;
 
 export type GlossaryKey = keyof typeof glossary;

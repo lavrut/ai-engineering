@@ -1,0 +1,126 @@
+---
+track: harness
+order: 5
+slug: permissions
+title: Permissions & sandboxing
+goal: Explain how the harness asks before a risky tool runs, what the model sees when you say no, and how safe_path keeps every file inside the workspace.
+minutes: 15
+quiz:
+  - question: You answer N when the harness asks to run write_file. What happens next?
+    options:
+      - The write is skipped, and the model gets a tool_result with is_error true saying "The user denied this action."
+      - The harness exits the session
+      - The model is asked again until you say yes
+      - The harness drops the tool_use block from the history
+    answer: 0
+    explanation: A denial is just another result. run_one returns "The user denied this action." with is_error true, the tool function never runs, and the loop calls the model again. The model reads the denial and decides what to do, usually explaining or trying another way.
+  - question: The model asks for two write_file calls in one reply. When are you asked, and when do they run?
+    options:
+      - Both prompts appear at once, and each write runs as soon as you answer it
+      - You are asked about each one in turn on the main thread, then the approved calls run together
+      - Only the first is asked about; the second is approved automatically
+      - Each write runs on its own thread, which shows its own prompt
+    answer: 1
+    explanation: Every prompt reads from the same terminal. If two threads called input() at once, their prompts would mix and one answer could land on the wrong question. So execute_tools collects every approval one by one first, and only then runs the calls in parallel.
+  - question: The model calls read_file with path "../../etc/passwd". What stops it?
+    options:
+      - The permission gate, because read_file needs approval
+      - The model, because the system prompt forbids it
+      - safe_path, which resolves the path and raises PermissionError because it lands outside WORKSPACE
+      - The API, which checks paths in tool input
+    answer: 2
+    explanation: read_file does not need approval, so the gate never sees it. Every tool passes its path through safe_path, which resolves it to an absolute path and refuses anything outside the workspace. The PermissionError becomes an error result for the model.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import LoopSimulator from '../../../components/LoopSimulator.tsx';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+The model decides which tools to call, but you decide which calls run. The harness puts two checks between a `tool_use` block and your files.
+
+The first is the <Term t="permission gate" />, step 6 of the flow. A tool registered with `needs_approval=True` does not run until you type `y` at a prompt. In this harness only `write_file` needs approval. Reading and listing are allowed without asking, because they cannot change anything.
+
+Saying no does not stop the session. The harness skips the tool and sends back a `tool_result` with `is_error` set to true and the text `The user denied this action.` The model reads that on its next turn like any other result and decides what to do.
+
+The second check is the <Term t="sandbox" />: a rule that every path a tool touches must resolve inside the workspace folder. It applies to every tool, approved or not, and it catches paths such as `../../etc/passwd` that the model might send by mistake or because a file it read told it to.
+
+## See it
+
+This session fixes a typo in `README.md`, which needs a write. Press **Step** three times: the model reads the file, gets the contents, then asks for `write_file`. Press **Step** once more and an "Approval needed" card shows the call's `path` and `content`. **Step** and **Run to end** are disabled until you choose. Press **Approve**, then **Step**: the result says `Wrote 100 characters to README.md` and the model confirms the fix.
+
+Now press **Reset**, step to the card again, and press **Deny**. The result turns red with an error tag and reads `The user denied this action.` One more **Step** shows the model's reply: it leaves the file alone and tells you where the typo is. Finally, switch the tool policy to **Allow everything** and press **Run to end**. No card appears and the write goes straight through.
+
+<LoopSimulator client:visible scenario="approve-write" showPolicy />
+
+## The code
+
+Section 4 is the gate.
+
+<CodeTabs section={4} goNote="Go's approve takes the input as a JSON string, cuts it to 200 bytes, prints the same prompt and reads one line from a shared bufio.Reader on os.Stdin. The comparison is the same: only y, in either case and with spaces trimmed, allows the call." />
+
+- `approve` prints the tool name and its input as JSON, cut to 200 characters. A long `content` argument shows only its start, so you approve from a preview.
+- `input("    Allow? [y/N] ")` waits for you. Only `y` or `Y` counts as yes. An empty line, `n` and even `yes` all deny.
+- `emit("permission", tool=name, allowed=decision)` writes the name and your decision to the trace. Tools that never needed approval write no `permission` event.
+
+`approve` is called from `execute_tools` in section 5, which lesson 6 shows in full. Its first loop builds a dict of decisions, one per call:
+
+```python
+allowed[b.id] = t is None or not t.needs_approval or approver(b.name, b.input)
+```
+
+Python stops at the first true part. An unknown tool and a tool that does not need approval are marked allowed without a prompt; `approver` is only called for a known tool with `needs_approval`. Later, `run_one` checks the decision. For `allowed=False` it never calls the function and returns `"The user denied this action."` with `is_error` true, still carrying the call's `tool_use_id`. Every `tool_use` gets its result, so the next request is valid. An unknown tool reaches `run_one` too and gets `Unknown tool: ...` as its error.
+
+### Why approvals come first, one at a time
+
+Lesson 6 runs tools in parallel on several threads. The approvals happen before that, on the main thread, one call at a time. Every prompt reads from the same terminal. Two threads calling `input()` at once would print their prompts on top of each other, and whichever thread read first would take your answer, possibly for the wrong call. Asking in a plain loop keeps each answer tied to its question. Once every decision is in, the approved calls run together.
+
+### The sandbox rule
+
+`safe_path` lives in section 3, next to the tools that use it:
+
+```python
+def safe_path(rel: str) -> Path:
+    """Sandbox rule: tools may only touch files inside WORKSPACE."""
+    p = (WORKSPACE / rel).resolve()
+    if not p.is_relative_to(WORKSPACE):
+        raise PermissionError(f"{rel} is outside the workspace")
+    return p
+```
+
+- `WORKSPACE / rel` joins the path onto the workspace. If `rel` is absolute, such as `/etc/passwd`, the join keeps only `rel`.
+- `.resolve()` turns the result into an absolute path, collapsing `..` and following symlinks. `notes/../../x` becomes a path one level above the workspace.
+- `is_relative_to(WORKSPACE)` checks that the resolved path is still inside. If not, `PermissionError` is raised. The executor catches it and the model gets `PermissionError: ../x is outside the workspace` as an error result.
+- `list_files`, `read_file` and `write_file` all call `safe_path` first, so no tool opens a path without the check.
+
+<Callout kind="warning" title="A path rule, not a jail">
+  `safe_path` only protects tools that call it. The tools still run as your user, with your permissions. A tool that ran shell commands could reach anything you can. For that kind of tool, run the harness inside a container or a separate user account as well.
+</Callout>
+
+## How Go does it
+
+The gate works the same way. `executeTools` keeps its decisions in a `[]bool` indexed by position instead of a dict keyed by id, and calls `ok(c.name, string(c.input))` only for known tools with `NeedsApproval`.
+
+`safePath` takes more lines because Go's path functions behave differently. `filepath.Join(workspace, "/etc/passwd")` would quietly produce a path inside the workspace, so the function first rejects absolute paths with `filepath.IsAbs`. It then builds the absolute path with `filepath.Abs` and checks that it equals `workspace` or starts with `workspace` plus a path separator. The separator matters: without it, a sibling folder named `workspace2` would pass.
+
+One difference to know: `filepath.Abs` cleans `..` out of the path but does not follow symlinks, while Python's `resolve()` does. A symlink inside the Go workspace that points outside it passes `safePath`. Calling `filepath.EvalSymlinks` before the prefix check would close that gap.
+
+## Try it
+
+See the sandbox refuse a path without calling the model:
+
+```bash
+cd harness/python
+python -c "import harness; harness.safe_path('../secret.txt')"
+```
+
+The last line of the output is `PermissionError: ../secret.txt is outside the workspace`. Try `'/etc/passwd'` and `'notes.txt'` as well; the last one prints nothing because it is allowed.
+
+Then deny a real write. Run `python harness.py` and ask `Create hello.txt containing hi.` When the prompt `Allow? [y/N]` appears, press Enter. You will still see a `-> write_file(...)` line, because the executor prints every call, but no file is created. The model's answer should say it did not write the file. Run the same task again and type `y`; this time `hello.txt` appears in `workspace/`. Check both decisions in the trace:
+
+```bash
+grep permission trace.jsonl
+```
+
+You should see one line with `"allowed": false` and one with `"allowed": true`.
