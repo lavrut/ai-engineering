@@ -1,0 +1,13 @@
+{
+  "key_vector": {
+    "kind": "triage",
+    "model": "claude-haiku-5-5",
+    "effort": null,
+    "prompt_version": "v2_rules",
+    "prompt_text": "Fixture prompt v2: triage the ticket using the category and priority rules.",
+    "input": "[fixture] Hola, no puedo iniciar sesión en mi cuenta.",
+    "rep": 0,
+    "canonical": "{\"effort\":null,\"input\":\"[fixture] Hola, no puedo iniciar sesión en mi cuenta.\",\"kind\":\"triage\",\"model\":\"claude-haiku-5-5\",\"prompt_text\":\"Fixture prompt v2: triage the ticket using the category and priority rules.\",\"prompt_version\":\"v2_rules\",\"rep\":0}",
+    "key": "87bf1509df729d9533aad30841ea9953106671b20b0b51c82835fdb29daa2dea"
+  }
+}
