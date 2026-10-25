@@ -1,0 +1,9 @@
+node_modules/
+dist/
+publish/
+.astro/
+__pycache__/
+*.pyc
+workspace/
+trace.jsonl
+.DS_Store
