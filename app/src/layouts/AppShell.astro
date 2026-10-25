@@ -19,6 +19,19 @@ const { title = 'AI Engineering' } = Astro.props;
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232D56D6'/%3E%3C/svg%3E"
     />
+    <script is:inline>
+      // Apply the reader's theme before first paint (mirrors lib/theme.ts).
+      // A theme the host already set is kept so "Auto" can return to it.
+      (function () {
+        var root = document.documentElement;
+        var host = root.getAttribute('data-theme');
+        if (host) root.setAttribute('data-host-theme', host);
+        try {
+          var t = localStorage.getItem('aie:theme');
+          if (t === 'light' || t === 'dark') root.setAttribute('data-theme', t);
+        } catch (e) {}
+      })();
+    </script>
     <slot name="head" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -302,6 +315,40 @@ const { title = 'AI Engineering' } = Astro.props;
     color: var(--muted);
     display: grid;
     gap: 2px;
+  }
+
+  .theme-switch {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 32px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+  .theme-switch-label {
+    margin-right: auto;
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .theme-switch button {
+    min-height: 32px;
+    padding: 4px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--ink);
+    font: 500 var(--text-small) / 1 var(--font-body);
+    cursor: pointer;
+  }
+  .theme-switch button:hover {
+    background: var(--surface-2);
+  }
+  .theme-switch button[aria-pressed='true'] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
   }
 
   /* ── Narrow screens: sidebar becomes a top disclosure ── */

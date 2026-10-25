@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'preact/hooks';
 import { progress } from '../lib/progressStore';
+import { type ThemeChoice, readTheme, saveTheme, watchHostTheme } from '../lib/theme';
+
+const THEMES: { id: ThemeChoice; label: string }[] = [
+  { id: 'light', label: 'Light' },
+  { id: 'dark', label: 'Dark' },
+  { id: 'auto', label: 'Auto' },
+];
 
 export type SidebarLesson = { id: string; title: string; order: number };
 export type SidebarTrack = {
@@ -23,10 +30,13 @@ export default function Sidebar({ tracks }: Props) {
   const [mounted, setMounted] = useState(false);
   const [, setVersion] = useState(0);
   const [active, setActive] = useState('');
+  const [theme, setTheme] = useState<ThemeChoice>('auto');
 
   useEffect(() => {
     setMounted(true);
     setActive(currentHash());
+    setTheme(readTheme());
+    const stopWatching = watchHostTheme();
     const onHash = () => {
       setActive(currentHash());
       setOpen(false);
@@ -36,10 +46,15 @@ export default function Sidebar({ tracks }: Props) {
     return () => {
       window.removeEventListener('hashchange', onHash);
       unsubscribe();
+      stopWatching();
     };
   }, []);
 
   const isDone = (id: string) => mounted && progress.isDone(id);
+  const chooseTheme = (choice: ThemeChoice) => {
+    saveTheme(choice);
+    setTheme(choice);
+  };
 
   return (
     <div class="sidebar" data-open={open ? 'true' : 'false'}>
@@ -117,6 +132,21 @@ export default function Sidebar({ tracks }: Props) {
             );
           })}
         </ol>
+        <div class="theme-switch" role="group" aria-label="Color theme">
+          <span class="theme-switch-label" aria-hidden="true">
+            Theme
+          </span>
+          {THEMES.map((t) => (
+            <button
+              type="button"
+              key={t.id}
+              aria-pressed={mounted && theme === t.id}
+              onClick={() => chooseTheme(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </nav>
     </div>
   );
