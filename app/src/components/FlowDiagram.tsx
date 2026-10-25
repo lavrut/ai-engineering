@@ -419,16 +419,15 @@ const css = `
 }
 .fd-edge.is-on .fd-edge-label { fill: var(--ink); font-weight: 600; }
 
-.fd-node { opacity: 0.5; transition: opacity 160ms ease; }
-.fd-node.is-on { opacity: 1; }
-.fd-node-box { fill: var(--surface); stroke-width: 1.5; }
-.fd-node.is-on .fd-node-box { stroke-width: 2.5; }
+.fd-node-box { fill: var(--surface); stroke-width: 1.5; stroke-opacity: 0.4; transition: stroke-opacity 160ms ease; }
+.fd-node.is-on .fd-node-box { stroke-width: 2.5; stroke-opacity: 1; }
 .fd-node-tint { fill-opacity: 0; stroke: none; }
 .fd-node.is-on .fd-node-tint { fill-opacity: 0.12; }
 .fd-node-tag {
   font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; fill: var(--muted);
 }
-.fd-node-label { font-family: var(--font-body); font-size: 15px; font-weight: 500; fill: var(--ink); }
+.fd-node-label { font-family: var(--font-body); font-size: 15px; font-weight: 500; fill: var(--muted); }
+.fd-node.is-on .fd-node-label { fill: var(--ink); }
 
 .fd-badge circle { fill: var(--surface); stroke: var(--muted); stroke-width: 1.25; }
 .fd-badge text { font-family: var(--font-mono); font-size: 12px; font-weight: 600; fill: var(--muted); }

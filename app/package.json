@@ -7,7 +7,8 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro check && astro build",
+    "build": "astro check && npm run typecheck:tests && astro build",
+    "typecheck:tests": "tsc -p tests --noEmit",
     "preview": "astro preview",
     "test": "vitest run",
     "package": "node scripts/package.mjs",

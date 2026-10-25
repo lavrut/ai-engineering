@@ -15,7 +15,7 @@ const barH = 22;
 const rowGap = 8;
 const laneTop = (lane: number) => 28 + lane * (calls.length * (barH + rowGap) + 44);
 const axisY = laneTop(2) - 20;
-const width = left + plotW + 24;
+const width = left + plotW + 40; // room for the ms label after the longest bar
 const height = axisY + 36;
 const ticks = [0, 500, 1000, 1500, 2000];
 
@@ -41,7 +41,7 @@ const par = calls.map((c) => ({ ...c, x: left, w: c.ms * scale }));
         <g>
           <text x={left - 8} y={laneTop(0) + i * (barH + rowGap) + 15} text-anchor="end" fill="var(--muted)" font-family="var(--font-mono)" font-size="12">{c.name}</text>
           <rect x={c.x} y={laneTop(0) + i * (barH + rowGap)} width={c.w} height={barH} rx="3" fill="var(--role-tool)" stroke="var(--bg)" stroke-width="1" />
-          <text x={c.x + 6} y={laneTop(0) + i * (barH + rowGap) + 15} fill="var(--bg)" font-family="var(--font-mono)" font-size="12" font-weight="600">{c.ms}</text>
+          <text x={c.x + c.w + 6} y={laneTop(0) + i * (barH + rowGap) + 15} fill="var(--ink)" font-family="var(--font-mono)" font-size="12" font-weight="600">{c.ms}</text>
         </g>
       ))}
 
@@ -50,7 +50,7 @@ const par = calls.map((c) => ({ ...c, x: left, w: c.ms * scale }));
         <g>
           <text x={left - 8} y={laneTop(1) + i * (barH + rowGap) + 15} text-anchor="end" fill="var(--muted)" font-family="var(--font-mono)" font-size="12">{c.name}</text>
           <rect x={c.x} y={laneTop(1) + i * (barH + rowGap)} width={c.w} height={barH} rx="3" fill="var(--role-tool)" stroke="var(--bg)" stroke-width="1" />
-          <text x={c.x + 6} y={laneTop(1) + i * (barH + rowGap) + 15} fill="var(--bg)" font-family="var(--font-mono)" font-size="12" font-weight="600">{c.ms}</text>
+          <text x={c.x + c.w + 6} y={laneTop(1) + i * (barH + rowGap) + 15} fill="var(--ink)" font-family="var(--font-mono)" font-size="12" font-weight="600">{c.ms}</text>
         </g>
       ))}
 
