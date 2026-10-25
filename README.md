@@ -60,4 +60,4 @@ npm run new:lesson -- <track> <slug> "<Title>"   # from templates/lesson.mdx
 cp templates/track.yaml src/content/tracks/<id>.yaml
 ```
 
-`npm test` enforces the checkable rules: section order, no leftover `TODO`, glossary terms, and colors only from `src/styles/tokens.css`.
+`npm test` enforces the checkable rules: section order, no leftover `TODO`, glossary terms, colors only from `src/styles/tokens.css`, and valid UTF-8 with no garbled characters in any source file.
