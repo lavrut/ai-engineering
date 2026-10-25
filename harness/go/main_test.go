@@ -202,3 +202,75 @@ func TestCompactionStartsFresh(t *testing.T) {
 		t.Errorf("summary prefix missing: %s", raw)
 	}
 }
+
+func TestSafePathRejectsSymlinkEscapes(t *testing.T) {
+	setup(t)
+	outside := t.TempDir()
+	secret := filepath.Join(outside, "secret.txt")
+	os.WriteFile(secret, []byte("SECRET"), 0o644)
+	os.Symlink(secret, filepath.Join(workspace, "link"))
+	os.Symlink(outside, filepath.Join(workspace, "dirlink"))
+	os.Symlink(filepath.Join(outside, "missing.txt"), filepath.Join(workspace, "dangle"))
+	os.WriteFile(filepath.Join(workspace, "ok.txt"), []byte("fine"), 0o644)
+
+	out := decode(t, executeTools(context.Background(), []call{
+		{"t1", "read_file", json.RawMessage(`{"path":"link"}`)},
+		{"t2", "list_files", json.RawMessage(`{"path":"dirlink"}`)},
+		{"t3", "write_file", json.RawMessage(`{"path":"link","content":"x"}`)},
+		{"t4", "write_file", json.RawMessage(`{"path":"dirlink/new.txt","content":"x"}`)},
+		{"t5", "write_file", json.RawMessage(`{"path":"dangle","content":"x"}`)},
+		{"t6", "read_file", json.RawMessage(`{"path":"ok.txt"}`)},
+		{"t7", "write_file", json.RawMessage(`{"path":"sub/new.txt","content":"x"}`)},
+	}, yes))
+	for i, r := range out[:5] {
+		if !r.IsError || strings.Contains(r.text(), "SECRET") {
+			t.Errorf("result %d should be refused: %+v", i, r)
+		}
+	}
+	if b, _ := os.ReadFile(secret); string(b) != "SECRET" {
+		t.Error("write through a symlink changed a file outside the workspace")
+	}
+	for _, name := range []string{"new.txt", "missing.txt"} {
+		if _, err := os.Stat(filepath.Join(outside, name)); err == nil {
+			t.Errorf("write through a symlink created %s outside the workspace", name)
+		}
+	}
+	if out[5].IsError || out[5].text() != "fine" {
+		t.Errorf("plain read should work: %+v", out[5])
+	}
+	if out[6].IsError {
+		t.Errorf("write to a new file in a new folder should work: %+v", out[6])
+	}
+}
+
+func TestPanickingToolBecomesError(t *testing.T) {
+	setup(t)
+	register(Tool{Name: "boom", Description: "Always panics.",
+		Run: func(context.Context, json.RawMessage) (string, error) { panic("kaboom") }})
+	t.Cleanup(func() { delete(registry, "boom") })
+
+	out := decode(t, executeTools(context.Background(), []call{
+		{"t1", "boom", json.RawMessage(`{}`)},
+		{"t2", "list_files", json.RawMessage(`{"path":"."}`)},
+	}, yes))
+	if !out[0].IsError || out[0].text() != "panic: kaboom" {
+		t.Errorf("panic should become an error result: %+v", out[0])
+	}
+	if out[1].IsError {
+		t.Errorf("other calls should still run: %+v", out[1])
+	}
+
+	replies := []*anthropic.Message{
+		reply(t, "tool_use", `[{"type":"tool_use","id":"t1","name":"boom","input":{}}]`, 100),
+		reply(t, "end_turn", textBlock("recovered"), 100),
+	}
+	fake := func(context.Context, anthropic.MessageNewParams) (*anthropic.Message, error) {
+		r := replies[0]
+		replies = replies[1:]
+		return r, nil
+	}
+	got, err := runAgent(context.Background(), "hi", fake, yes)
+	if err != nil || got != "recovered" {
+		t.Fatalf("run should continue after a panic: %q, %v", got, err)
+	}
+}

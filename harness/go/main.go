@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -89,14 +90,43 @@ func safePath(rel string) (string, error) {
 	if filepath.IsAbs(rel) { // Join would quietly re-root "/etc/passwd" inside the workspace
 		return "", fmt.Errorf("%s is outside the workspace", rel)
 	}
-	p, err := filepath.Abs(filepath.Join(workspace, rel))
+	root, err := resolve(workspace)
 	if err != nil {
 		return "", err
 	}
-	if p != workspace && !strings.HasPrefix(p, workspace+string(os.PathSeparator)) {
+	p, err := resolve(filepath.Join(root, rel)) // Join also cleans away ".."
+	if err != nil {
+		return "", err
+	}
+	if p != root && !strings.HasPrefix(p, root+string(os.PathSeparator)) {
 		return "", fmt.Errorf("%s is outside the workspace", rel)
 	}
 	return p, nil
+}
+
+// resolve follows symlinks like Python's Path.resolve(), so a link inside the
+// workspace can't point a tool outside it. The file may not exist yet (write_file
+// creates it), so it resolves the deepest part that exists and keeps the rest.
+func resolve(p string) (string, error) {
+	rest := ""
+	for {
+		real, err := filepath.EvalSymlinks(p)
+		if err == nil {
+			return filepath.Join(real, rest), nil
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			return "", err
+		}
+		if _, err := os.Lstat(p); err == nil { // p exists, so it is a link to nothing
+			return "", fmt.Errorf("%s is a broken symlink", filepath.Base(p))
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return filepath.Join(p, rest), nil
+		}
+		rest = filepath.Join(filepath.Base(p), rest)
+		p = parent
+	}
 }
 
 func str(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
@@ -227,7 +257,7 @@ func runOne(ctx context.Context, c call, allowed bool) anthropic.ContentBlockPar
 	default:
 		ctx, cancel := context.WithTimeout(ctx, toolTimeout) // every tool gets a deadline
 		defer cancel()
-		out, err := t.Run(ctx, c.input)
+		out, err := runTool(ctx, t, c.input)
 		if err != nil { // a tool failure is information for the model, not a crash
 			content = err.Error()
 		} else {
@@ -237,6 +267,16 @@ func runOne(ctx context.Context, c call, allowed bool) anthropic.ContentBlockPar
 	emit("tool_result", map[string]any{"tool": c.name, "is_error": isError,
 		"ms": time.Since(start).Milliseconds()})
 	return anthropic.NewToolResultBlock(c.id, content, isError)
+}
+
+// runTool turns a panicking tool into an error, so one bad tool can't crash the harness.
+func runTool(ctx context.Context, t Tool, input json.RawMessage) (out string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic: %v", r)
+		}
+	}()
+	return t.Run(ctx, input)
 }
 
 func executeTools(ctx context.Context, calls []call, ok approver) []anthropic.ContentBlockParamUnion {
