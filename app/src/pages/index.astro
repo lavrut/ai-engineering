@@ -45,9 +45,9 @@ for (const l of lessons) viewTitles[l.id] = `${l.data.title} · AI Engineering`;
       // Paint a deep-linked lesson first: until the router below runs, show
       // the lesson the hash names and hide home. Unknown hashes change
       // nothing, so they land on home as resolveView decides.
-      var t = location.hash.slice(1);
-      if (lessonViews.indexOf(t) !== -1) {
-        var s = document.createElement('style');
+      const t = location.hash.slice(1);
+      if (lessonViews.includes(t)) {
+        const s = document.createElement('style');
         s.id = 'early-view';
         s.textContent =
           'section[data-view="home"]{display:none!important}section[data-view="' + t + '"]{display:block!important}';

@@ -1,6 +1,6 @@
 // dist/ -> publish/: the page-host layout (index.html without a document
 // skeleton, chunks beside it under _astro/ with relative references).
-import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findBlockedUrls, rewriteChunk, transformHtml } from './package-lib.mjs';
@@ -15,6 +15,11 @@ function walk(dir) {
     const p = join(dir, name);
     return statSync(p).isDirectory() ? walk(p) : [p];
   });
+}
+
+if (!existsSync(join(dist, 'index.html'))) {
+  console.error('dist/index.html not found: run npm run build first.');
+  process.exit(1);
 }
 
 rmSync(publish, { recursive: true, force: true });

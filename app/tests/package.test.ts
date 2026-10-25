@@ -85,6 +85,25 @@ describe('findBlockedUrls', () => {
     ).toEqual(['https://evil.example/a.png', 'https://cdn.example/m.js']);
   });
 
+  it('reports protocol-relative URLs in every loading position', () => {
+    expect(findBlockedUrls('<script src="//evil.example/x.js"></script>')).toEqual(['//evil.example/x.js']);
+    expect(findBlockedUrls('<link rel=stylesheet href=//evil.example/a.css>')).toEqual(['//evil.example/a.css']);
+    expect(findBlockedUrls('a{background:url(//evil.example/b.png)}')).toEqual(['//evil.example/b.png']);
+    expect(findBlockedUrls('@import "//evil.example/c.css";')).toEqual(['//evil.example/c.css']);
+    expect(findBlockedUrls('import("//evil.example/m.js")')).toEqual(['//evil.example/m.js']);
+  });
+
+  it('allows protocol-relative allowlisted hosts and ignores protocol-relative anchors', () => {
+    expect(findBlockedUrls('<link href="//fonts.googleapis.com/css2">')).toEqual([]);
+    expect(findBlockedUrls('<a href="//example.com/page">x</a>')).toEqual([]);
+  });
+
+  it('scans a tag past a > inside a quoted attribute', () => {
+    expect(findBlockedUrls('<img alt="a > b" src="https://evil.example/i.png">')).toEqual([
+      'https://evil.example/i.png',
+    ]);
+  });
+
   it('allows every allowlisted host', () => {
     const hosts = [
       'fonts.googleapis.com',

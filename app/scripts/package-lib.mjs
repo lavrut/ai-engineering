@@ -61,16 +61,19 @@ export function rewriteChunk(js) {
 }
 
 /**
- * Absolute URLs in loading positions (src=, href= on non-anchor tags, url(),
- * import()/import/from) whose host is not allowlisted. Unique, in order.
+ * Absolute or protocol-relative URLs in loading positions (src=, href= on
+ * non-anchor tags, url(), import()/import/from) whose host is not
+ * allowlisted. Unique, in order.
  * @param {string} text
  * @returns {string[]}
  */
 export function findBlockedUrls(text) {
-  const URL_RE = String.raw`(https?:\/\/[^"'\`\s)>]+)`;
+  // Absolute (http/https) or protocol-relative (//host/...) URLs.
+  const URL_RE = String.raw`((?:https?:)?\/\/[^"'\`\s)>]+)`;
   const found = [];
 
-  const tagRe = /<([a-zA-Z][\w-]*)\b[^>]*>/g;
+  // A tag runs to the first > outside a quoted attribute value.
+  const tagRe = /<([a-zA-Z][\w-]*)\b(?:[^>"']|"[^"]*"|'[^']*')*>/g;
   const attrRe = new RegExp(String.raw`\b(?:src|href)\s*=\s*["']?` + URL_RE, 'gi');
   for (const tag of text.matchAll(tagRe)) {
     if (tag[1].toLowerCase() === 'a') continue;
@@ -90,7 +93,7 @@ export function findBlockedUrls(text) {
   for (const { url } of found.sort((a, b) => a.at - b.at)) {
     let host;
     try {
-      host = new URL(url).hostname;
+      host = new URL(url, 'https://base.invalid').hostname; // resolves //host too
     } catch {
       host = '';
     }
