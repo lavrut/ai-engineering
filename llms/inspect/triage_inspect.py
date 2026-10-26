@@ -15,6 +15,15 @@ API itself. Live mode is documented in the lesson, not run here.
 
 Run (from the repo root, in the venv):
     .venv-inspect/bin/pip install -r llms/inspect/requirements.txt
+
+    # the triage eval, free, from saved responses (add --split dev|test to limit it)
+    .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v1_basic
+    .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v2_rules --epochs 3
+    .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v3_examples
+
+Live (a paid run): swap `replay/` for `anthropic/` in --model. This costs money.
+Check the lab's estimate first: python triage_lab.py record --plan pilot (run from llms/python).
+`record` prints its cost estimate and asks "Make these paid calls? [y/N]" before it spends anything.
 """
 from __future__ import annotations
 
@@ -29,13 +38,19 @@ import inspect_ai
 from inspect_ai.dataset import Sample
 from inspect_ai.model import (
     ChatMessage,
+    ChatMessageSystem,
+    ResponseSchema,
     GenerateConfig,
     ModelAPI,
     ModelOutput,
     ModelUsage,
     modelapi,
 )
+from inspect_ai.scorer import CORRECT, INCORRECT, Score, Target, accuracy, scorer, stderr
+from inspect_ai.solver import Generate, Solver, TaskState, solver
 from inspect_ai.tool import ToolChoice, ToolInfo
+from inspect_ai.util import JSONSchema
+from inspect_ai import Task, task
 
 from triage_lab import (  # noqa: F401  (later sections use the rest)
     DATA_DIR,
@@ -111,6 +126,12 @@ class ReplayAPI(ModelAPI):
         user = next((_text(m) for m in reversed(input) if m.role == "user"), "")
         rep = int((config.extra_headers or {}).get(REP_HEADER, 0))   # no header means rep 0
 
+        try:
+            return self._replay(system, user, rep)
+        except ReplayMiss as miss:        # name the case: the rep and the start of the ticket
+            raise ReplayMiss(f"{miss} [rep {rep}, ticket {user[:40]!r}]") from None
+
+    def _replay(self, system: str, user: str, rep: int) -> ModelOutput:
         variant = next((v for v, text in self.prompts["triage"].items() if system == text), None)
         if variant is not None:
             key = triage_key(user, variant, self.model_name, None, rep, self.prompts)
@@ -132,3 +153,68 @@ class ReplayAPI(ModelAPI):
         out.usage = ModelUsage(input_tokens=line["input_tokens"], output_tokens=line["output_tokens"],
                                total_tokens=line["input_tokens"] + line["output_tokens"])
         return out
+
+
+# ── 4. Solver ───────────────────────────────────────────────────────────────
+@solver
+def triage_solver(variant: str) -> Solver:
+    """The lab's call: the variant's system prompt, the ticket, the lab's JSON schema.
+    No temperature, top_p or top_k are set (the lab sets none). The epoch picks the saved rep."""
+    system = ChatMessageSystem(content=load_prompts()["triage"][variant])
+    schema = ResponseSchema(name="triage", json_schema=JSONSchema.model_validate(TRIAGE_SCHEMA))
+
+    async def solve(state: TaskState, generate: Generate) -> TaskState:
+        state.messages.insert(0, system)
+        return await generate(state, extra_headers={REP_HEADER: str(state.epoch - 1)}, response_schema=schema)
+
+    return solve
+
+
+# ── 5. Code scorers ─────────────────────────────────────────────────────────
+# Category and priority have one right answer, so plain code grades them, as in the lab.
+def _field_scorer(field: str):
+    async def score(state: TaskState, target: Target) -> Score:
+        completion = state.output.completion
+        reason = state.output.stop_reason
+        try:
+            parsed = json.loads(completion) if completion else None
+        except json.JSONDecodeError:
+            parsed = None
+        if not isinstance(parsed, dict):      # no usable reply: wrong, with the reason
+            outcome = {"content_filter": "refusal", "max_tokens": "max_tokens"}.get(reason, "invalid_json")
+            return Score(value=INCORRECT, answer=completion or None, metadata={"outcome": outcome})
+        expected = target.text if field == "category" else state.metadata["priority"]
+        ok = parsed.get(field) == expected
+        return Score(value=CORRECT if ok else INCORRECT, answer=str(parsed.get(field)),
+                     explanation=f"expected {expected}", metadata={"outcome": "ok"})
+    return score
+
+
+@scorer(metrics=[accuracy(), stderr()])
+def category_match():
+    return _field_scorer("category")
+
+
+@scorer(metrics=[accuracy(), stderr()])
+def priority_match():
+    return _field_scorer("priority")
+
+
+# ── 7. The task ─────────────────────────────────────────────────────────────
+# The lab command that gives the same numbers (split all; run from llms/python).
+LAB_COMMANDS = {
+    "v1_basic": "python triage_lab.py run --prompt v1_basic --split all",
+    "v2_rules": "python triage_lab.py run --prompt v2_rules --split all --reps 3",
+    "v3_examples": "python triage_lab.py run --prompt v3_examples --split all",
+    "judge": "python triage_lab.py judge --prompt v2_rules --split test --order after",
+}
+
+
+@task
+def triage(variant: str = "v2_rules", split: str | None = None) -> Task:
+    """The lab's triage eval: one prompt variant over a split (None = all 60)."""
+    return Task(dataset=dataset(split), solver=triage_solver(variant),
+                scorer=[category_match(), priority_match()],
+                # The lab leaves an errored call out of the accuracy. By default Inspect stops the whole
+                # eval on the first sample error; False keeps going, logs the error, and scores only the rest.
+                fail_on_error=False)
