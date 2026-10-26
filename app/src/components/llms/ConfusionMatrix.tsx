@@ -108,15 +108,23 @@ export default function ConfusionMatrix({ recorded, tickets, runs, initial, spli
                           type="button"
                           class="cm2-btn"
                           aria-pressed={selected}
-                          aria-label={`Expected ${r}, answered ${c}: ${plural(n)}`}
+                          aria-label={`Expected ${r}, answered ${c}: ${plural(n)} (${diag ? 'correct' : 'mistake'})`}
                           onClick={() => setCell(selected ? null : [r, c])}
                         >
                           {n}
+                          {diag && (
+                            <span class="cm2-mark" aria-hidden="true">
+                              ✓
+                            </span>
+                          )}
                         </button>
                       ) : (
-                        <span class="cm2-zero" aria-label={`Expected ${r}, answered ${c}: none`}>
-                          ·
-                        </span>
+                        <>
+                          <span class="visually-hidden">{`Expected ${r}, answered ${c}: none`}</span>
+                          <span class="cm2-zero" aria-hidden="true">
+                            ·
+                          </span>
+                        </>
                       )}
                     </td>
                   );
@@ -126,12 +134,12 @@ export default function ConfusionMatrix({ recorded, tickets, runs, initial, spli
           </tbody>
         </table>
       </div>
-      <ul class="cm2-legend" aria-hidden="true">
+      <ul class="cm2-legend">
         <li>
-          <span class="cm2-swatch cm2-swatch-good" /> right (diagonal)
+          <span class="cm2-swatch cm2-swatch-good" aria-hidden="true" /> ✓ right: the diagonal
         </li>
         <li>
-          <span class="cm2-swatch cm2-swatch-bad" /> a mistake; darker means more tickets
+          <span class="cm2-swatch cm2-swatch-bad" aria-hidden="true" /> no mark: a mistake; darker means more tickets
         </li>
       </ul>
 
@@ -206,6 +214,7 @@ const css = `
 .cm2-btn[aria-pressed="true"] { outline: 3px solid var(--accent); outline-offset: 1px; }
 .cm2-btn:focus-visible, .cm2-picker select:focus-visible, .cm2-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .cm2-zero { color: var(--muted); }
+.cm2-mark { margin-left: 1px; font-size: 0.6875rem; font-weight: 400; vertical-align: super; }
 .cm2-legend { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 4px 20px; font-size: var(--text-small); color: var(--muted); }
 .cm2-legend li { display: flex; align-items: center; gap: 6px; }
 .cm2-swatch { width: 12px; height: 12px; border-radius: 2px; flex: none; }

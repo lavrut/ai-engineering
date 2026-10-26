@@ -5,7 +5,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   // As in astro.config.mjs: allow reading ../llms/data, which jsdom tests
   // otherwise refuse (the web environment applies Vite's fs.allow check).
-  server: { fs: { allow: ['..'] } },
+  server: { fs: { allow: ['.', '../llms'] } },
   test: {
     include: ['tests/**/*.test.{ts,tsx}'],
     environment: 'node',

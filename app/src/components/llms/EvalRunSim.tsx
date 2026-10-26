@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { simFrames, type EvalSimProps } from '../../lib/llmsAids';
 import NoRecordedRun from './NoRecordedRun';
 
@@ -11,11 +11,19 @@ export default function EvalRunSim({ recorded, model, label, calls, reps, band, 
   const [at, setAt] = useState(0);
   const [playing, setPlaying] = useState(false);
   const last = frames.length - 1;
+  const stepRef = useRef<HTMLButtonElement>(null);
+  const playRef = useRef<HTMLButtonElement>(null);
+  const resetRef = useRef<HTMLButtonElement>(null);
+  // Step and Play are disabled at the end; move keyboard focus to Reset so it is not dropped to the page.
+  const keepFocus = (from: HTMLButtonElement | null) => {
+    if (from && document.activeElement === from) resetRef.current?.focus();
+  };
 
   useEffect(() => {
     if (!playing) return;
     if (at >= last) {
       setPlaying(false);
+      keepFocus(playRef.current);
       return;
     }
     const t = setTimeout(() => setAt((i) => Math.min(i + 1, last)), TICK_MS);
@@ -55,13 +63,24 @@ export default function EvalRunSim({ recorded, model, label, calls, reps, band, 
       </header>
 
       <div class="ers-buttons">
-        <button type="button" class="ers-btn ers-btn-primary" disabled={at >= last} onClick={() => setAt((i) => Math.min(i + 1, last))}>
+        <button
+          ref={stepRef}
+          type="button"
+          class="ers-btn ers-btn-primary"
+          disabled={at >= last}
+          onClick={() => {
+            const next = Math.min(at + 1, last);
+            setAt(next);
+            if (next >= last) keepFocus(stepRef.current);
+          }}
+        >
           Step
         </button>
-        <button type="button" class="ers-btn" disabled={!playing && at >= last} onClick={() => setPlaying((p) => !p)}>
+        <button ref={playRef} type="button" class="ers-btn" disabled={!playing && at >= last} onClick={() => setPlaying((p) => !p)}>
           {playing ? 'Pause' : 'Play'}
         </button>
         <button
+          ref={resetRef}
           type="button"
           class="ers-btn"
           onClick={() => {

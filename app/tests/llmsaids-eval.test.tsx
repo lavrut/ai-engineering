@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/preact';
-import { buildLlmsData, callCost, loadLlmsData, noiseBand, type LlmsData } from '../src/lib/llmsData';
+import { buildLlmsData, callCost, gradeRun, loadLlmsData, noiseBand, runName, type LlmsData } from '../src/lib/llmsData';
 import {
   CATEGORIES,
   NONE,
@@ -226,14 +226,26 @@ describe('ConfusionMatrix', () => {
     expect(container.textContent).toContain(NONE);
   });
 
+  it('says right or wrong without colour: labels, a visible mark and hidden text for empty cells', () => {
+    const { container } = render(<ConfusionMatrix {...matrixProps(fixtureData(), { run: V1, split: 'all' })} />);
+    expect(screen.getByRole('button', { name: 'Expected billing, answered billing: 2 tickets (correct)' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Expected outage, answered bug: 1 ticket (mistake)' })).toBeTruthy();
+    expect(container.querySelectorAll('td.cm2-diag.has-count .cm2-mark')).toHaveLength(3); // billing, bug, account
+    expect(container.querySelector('.cm2-legend')!.getAttribute('aria-hidden')).toBeNull();
+    expect(container.querySelector('.cm2-legend')!.textContent).toContain('✓');
+    const empty = container.querySelector('td:not(.has-count)')!;
+    expect(empty.querySelector('[aria-label]')).toBeNull();
+    expect(empty.querySelector('.visually-hidden')!.textContent).toBe('Expected billing, answered bug: none');
+  });
+
   it('clicking a cell lists its tickets with the model answer', () => {
     const { container } = render(<ConfusionMatrix {...matrixProps(fixtureData(), { run: V1, split: 'all' })} />);
-    click('Expected outage, answered bug: 1 ticket');
+    click('Expected outage, answered bug: 1 ticket (mistake)');
     const list = container.querySelector('.cm2-cases')!;
     expect([...list.querySelectorAll('.cm2-case-id')].map((e) => e.textContent)).toEqual(['f004']);
     expect(list.textContent).toContain('answered bug');
     expect(list.textContent).toContain('Everything is down');
-    click('Expected outage, answered (none): 1 ticket');
+    click('Expected outage, answered (none): 1 ticket (mistake)');
     expect([...container.querySelectorAll('.cm2-case-id')].map((e) => e.textContent)).toEqual(['f008']);
     expect(container.querySelector('.cm2-cases')!.textContent).toContain('no answer');
   });
@@ -298,8 +310,26 @@ describe('EvalRunSim', () => {
     // One timer per frame: 4 calls + 2 repeats, then Play turns back off.
     for (let i = 0; i < 10; i++) act(() => void vi.advanceTimersByTime(1_000));
     expect(container.querySelectorAll('.ers-call.is-done')).toHaveLength(4);
-    expect(within(container.querySelector('.ers-reps') as HTMLElement).getAllByText(/%/).length).toBeGreaterThan(0);
+    // The final frame: every repeat's score and the band.
+    expect([...container.querySelectorAll('.ers-rep-score')].map((e) => e.textContent)).toEqual(['100.0%', '75.0%']);
+    expect(container.querySelector('.ers-band')!.textContent).toContain(`±${(noiseBand(4) * 100).toFixed(1)}%`);
+    expect(container.querySelector('.ers-state')!.textContent).toContain('done');
     expect(screen.getByRole('button', { name: 'Play' })).toBeTruthy();
+  });
+
+  it('moves focus to Reset when Step or Play is disabled at the end', () => {
+    vi.useFakeTimers();
+    render(<EvalRunSim {...props()} />);
+    const step = screen.getByRole('button', { name: 'Step' });
+    step.focus();
+    for (let i = 0; i < 6; i++) fireEvent.click(step);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Reset' }));
+    click('Reset');
+    const play = screen.getByRole('button', { name: 'Play' });
+    play.focus();
+    fireEvent.click(play);
+    for (let i = 0; i < 10; i++) act(() => void vi.advanceTimersByTime(1_000));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Reset' }));
   });
 
   it('shows the record command with no recorded run', () => {
@@ -331,5 +361,43 @@ describe('real data props', () => {
     expect(size(dataset)).toBeLessThan(16_000);
     expect(size(matrix)).toBeLessThan(13_000);
     expect(size(sim)).toBeLessThan(3_000);
+  });
+
+  // Expected values come from the Python lab, not from the code under test (replay, no API calls):
+  //   python3 llms/python/triage_lab.py run --prompt v1_basic --split dev
+  //     -> category 92.5%, priority 77.5%, both 70.0%, band +/-15.8%
+  //   python3 llms/python/triage_lab.py run --prompt v2_rules --split dev --reps 3 -> both 96.7% (mean of the reps)
+  //   per rep and the matrix, from triage_lab's own functions in llms/python:
+  //     python3 -c "import triage_lab as T; tk=T.split(T.load_tickets(),'dev')
+  //       print([T.accuracy([T.grade(t, T.triage(t,'v2_rules',rep=r)) for t in tk],'both_ok') for r in range(3)])
+  //       print(T.confusion_matrix([(t['category'], (T.triage(t,'v1_basic').get('output') or {}).get('category')) for t in tk]))"
+  //     -> [0.975, 0.975, 0.95]
+  //     -> billing {billing 7}, bug {bug 10, how_to 1}, account {account 5, how_to 2}, how_to {how_to 6},
+  //        feature_request {feature_request 6}, outage {outage 3}
+  it('matches the Python lab on the real recorded runs', () => {
+    const sim = evalSimProps(real, { run: V2 });
+    expect(sim.reps.map((r) => r.both)).toEqual([0.975, 0.975, 0.95]);
+    expect(sim.band).toBeCloseTo(noiseBand(40));
+    expect(sim.band).toBeCloseTo(0.158, 3);
+
+    const matrix = matrixProps(real, { run: V1 });
+    const v1 = matrix.runs.find((r) => r.name === V1)!;
+    const right = matrix.tickets.filter((t, i) => v1.answers[i] === t.category).length;
+    expect(right).toBe(37); // 92.5% of 40
+    const { rows, cols, counts } = matrixCounts(matrix.tickets, v1.answers);
+    const at = (e: string, a: string) => counts[rows.indexOf(e)][cols.indexOf(a)];
+    expect(at('billing', 'billing')).toBe(7);
+    expect(at('bug', 'bug')).toBe(10);
+    expect(at('bug', 'how_to')).toBe(1);
+    expect(at('account', 'account')).toBe(5);
+    expect(at('account', 'how_to')).toBe(2);
+    expect(at('outage', 'outage')).toBe(3);
+    expect(counts.flat().reduce((a, b) => a + b, 0)).toBe(40);
+    expect(cols.map((c) => at('how_to', c)).reduce((a, b) => a + b, 0)).toBe(6);
+
+    const v1Run = real.runs.find((r) => runName(r.config) === V1)!;
+    const dev = new Set(real.tickets.filter((t) => t.split === 'dev').map((t) => t.id));
+    const both = gradeRun(v1Run, real.tickets, 0).filter((g) => dev.has(g.case_id) && g.both_ok).length;
+    expect(both / 40).toBe(0.7);
   });
 });
