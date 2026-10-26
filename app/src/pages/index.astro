@@ -31,8 +31,10 @@ const sidebarTracks: SidebarTrack[] = tracks.map((t) => ({
 }));
 
 const lessonCounts = Object.fromEntries(sidebarTracks.map((t) => [t.id, t.lessons.length]));
-const firstHarness = sidebarTracks.find((t) => t.id === 'harness')?.lessons[0];
-const startHref = firstHarness ? `#${firstHarness.id}` : null;
+// One start link per live track that has lessons, in track order.
+const starts = sidebarTracks
+  .filter((t) => t.status === 'live' && t.lessons.length > 0)
+  .map((t) => ({ title: t.title, href: `#${t.lessons[0].id}` }));
 
 // view id -> document title, read by the router script below.
 const viewTitles: Record<string, string> = { home: 'AI Engineering' };
@@ -58,7 +60,7 @@ for (const l of lessons) viewTitles[l.id] = `${l.data.title} · AI Engineering`;
   <Sidebar slot="sidebar" tracks={sidebarTracks} client:load />
 
   <section data-view="home">
-    <Home tracks={tracks} lessonCounts={lessonCounts} startHref={startHref} />
+    <Home tracks={tracks} lessonCounts={lessonCounts} starts={starts} />
   </section>
 
   {

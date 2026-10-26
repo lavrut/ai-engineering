@@ -1,0 +1,118 @@
+---
+track: llms
+order: 1
+slug: what
+title: What an eval is
+goal: Name the parts of an eval (dataset, task, saved responses, graders, report) and run the triage eval for free in replay mode.
+minutes: 12
+quiz:
+  - question: You change the triage prompt and try it on three tickets you remember. All three look better. What do you know?
+    options:
+      - The new prompt is better, since every example improved
+      - Very little; three hand-picked tickets cannot show what the change fixed and broke across the whole set
+      - The new prompt is better on category but not on priority
+      - The new prompt is worse, because the old one was tested first
+    answer: 1
+    explanation: A prompt change usually fixes some cases and breaks others. Three tickets you chose yourself cannot show that trade. An eval runs every ticket in a fixed set, grades each answer the same way, and reports the share right, so you can see both what improved and what broke.
+  - question: Why can a code grader check the category, while the reply draft needs an LLM judge?
+    options:
+      - Code graders only work on short strings
+      - The category has one right answer to compare against; a reply has many acceptable wordings
+      - The judge is cheaper than code
+      - The reply is not saved, so code cannot read it
+    answer: 1
+    explanation: Each ticket's label says exactly which category is right, so an equality check grades it, free and the same every time. A good reply can be written a hundred ways. Whether it addresses the issue or has the right tone needs a reader, so a stronger model grades it against a rubric.
+  - question: You run python triage_lab.py run twice, with no API key set. Why are the two reports identical?
+    options:
+      - The model is deterministic at temperature 0
+      - The default mode is replay, which reads saved responses from disk instead of calling the model
+      - The lab caches the final report, not the responses
+      - The second run reuses the first run's process
+    answer: 1
+    explanation: MODE, the default for --mode, is "replay". Every model call is looked up by its key in a saved-response file, so no request is sent, nothing is billed and the same answers come back each time. A live call to the model can give a different answer on each run.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+You have built a feature on a model. You change the prompt, try it on a few inputs, and it looks better. Is it?
+
+You cannot tell from a few inputs. A change to a prompt, a model or a setting fixes some cases and breaks others. The ones you happen to try are not a fair sample, and you will read them the way you hope they turn out.
+
+An <Term t="eval" /> answers the question with a number. It has five parts:
+
+1. **A dataset.** A fixed set of inputs, each with the right answer written down beforehand. That answer is its label.
+2. **The task.** The prompt and model you are testing, run on every input.
+3. **Saved responses.** Every answer the model gives, stored, so you can grade it again without paying again.
+4. **Graders.** A <Term t="grader" /> turns one answer into a grade: right or wrong, pass or fail.
+5. **A report.** The share of inputs right, plus how much that share could move by luck alone.
+
+An eval is like a test suite, with one difference. A unit test passes or fails. A model's answers vary, and some cases are hard, so an eval reports a rate, such as 70% right, and you compare rates.
+
+This track's example is support-ticket triage for Lumen, a fictional cloud notes app. The model reads one ticket and returns three things:
+
+- a `category`: one of `billing`, `bug`, `account`, `how_to`, `feature_request` or `outage`;
+- a `priority`: one of `low`, `normal`, `high` or `urgent`;
+- a `reply`: a short draft answer to the customer.
+
+Category and priority have one right answer per ticket, so plain code grades them by comparing with the label. The reply has no single right answer. Lessons 5 and 6 grade it with a second, stronger model, the judge.
+
+The lab ships with real responses recorded from the API. By default it runs in replay mode: it reads those saved answers instead of calling the model. Every exercise in this track is free and gives the same numbers on every machine. Lesson 4 covers the other two modes, which do call the API.
+
+## See it
+
+Step through one eval run, from a ticket in the dataset to a line in the report. Watch where the code grader and the judge split: they read different parts of the same saved response.
+
+<FlowDiagram diagram="eval-pipeline" />
+
+The task model is called only in step 3, and its answer is saved in step 4. The code grader and the report read that saved answer. The judge in step 6 is a second model call, and its verdicts are saved the same way. That is why you can change a grader or the report and rerun all of it for free. Each step's code link opens the section that does it; lessons 2 to 4 walk through sections 2 to 5 and 8.
+
+## The code
+
+The lab is one file per language: `llms/python/triage_lab.py` and `llms/go/main.go`, with the same ten numbered sections. Section 1 is the configuration.
+
+<CodeTabs source="llms" section={1} goNote="The same values as constants and package variables. Go finds the data folder with runtime.Caller(0), which returns the path of the source file, where Python uses __file__." />
+
+- `TASK_MODEL = "claude-haiku-5-5"` is the model being tested. It is the smallest and cheapest of the three, which suits a task run on every incoming ticket.
+- `JUDGE_MODEL = "claude-opus-5-5"` grades the reply drafts. The judge runs on a stronger model than the task (lesson 5).
+- `MODE = "replay"` is the default for `--mode`, so `run` and `judge` read saved responses unless you ask for `record` or `live`. Replay needs no API key and never falls back to a paid call. Lookups of saved data, as in `compare`, `gate` and `agreement`, always replay, and a paid mode always prints its estimate and asks first, even if you edit this line.
+- `PRICES` holds dollars per million tokens, `(input, output)`, for each model. The runner multiplies tokens by these to estimate a run's cost before it starts (lesson 4).
+- `DATA_DIR` is `llms/data`, found from the file's own path, so the commands work from any folder. A data root holds `tickets.jsonl`, `prompts.json`, `reply_labels.jsonl` and `responses/`.
+- `CATEGORIES` and `PRIORITIES` are the only answers allowed. The answer schema in section 3 is built from these two lists, so the model cannot return anything else.
+
+<Callout kind="note" title="The numbers come from one recorded run">
+  Every score in this track comes from replaying the files in `llms/data/responses/`, recorded from the API on 2026-10-25. `llms/data/README.md` says how they were recorded and what they cost.
+</Callout>
+
+## Try it
+
+Run the eval on the 40 `dev` tickets with the shortest prompt, `v1_basic`. Replay reads saved responses, so no API key is needed and nothing is billed. The lab imports the SDK at the top, so install the requirements once:
+
+```bash
+cd llms/python
+pip install -r requirements.txt
+python triage_lab.py run --prompt v1_basic
+```
+
+You should see:
+
+```text
+v1_basic / claude-haiku-5-5 / effort default / dev split / 1 rep / replay
+  cases 40  scored lines 40  errors 0
+  category accuracy  92.5%
+  priority accuracy  77.5%
+  both accuracy      70.0%   noise band +/-15.8%
+```
+
+`both` is the share of tickets with category and priority both right. Now try the prompt that states the labelling rules, `v2_rules`:
+
+```bash
+python triage_lab.py run --prompt v2_rules
+```
+
+`both` rises to `97.5%`. Lesson 2 explains why much of that jump is less impressive than it looks. Then run the Go version from `llms/go` with `go run . run --prompt v1_basic`. The first `go run` may download the SDK modules, which is free but needs a network connection. It reads the same files and prints the same four numbers.
+
+A live run of the first command (`--mode live`) would make 40 Haiku calls. The lab prints its estimate before calling: `$0.02`, worst case `$0.04` if every reply used all of `max_tokens`. Don't run it now; replay gives you the recorded answers for free.

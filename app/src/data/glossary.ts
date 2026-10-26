@@ -50,6 +50,52 @@ export const glossary = {
     'A cap on how many requests or tokens an account may use per minute. A request over it gets HTTP 429 and should be retried after a short wait.',
   'JSON Lines':
     'A text format with one complete JSON object per line. Each line can be appended and read on its own, which suits logs.',
+  eval:
+    'A repeatable test of a model feature: run it on a fixed set of inputs with known right answers, grade every output, and report the share right.',
+  grader:
+    'The code or model that turns one output into a grade, such as right or wrong, by checking it against the label or a rubric.',
+  'dev set':
+    'The part of an eval set you tune on: read its mistakes, change the prompt and rerun as often as you like.',
+  'test set':
+    'The part of an eval set held back from tuning and read only to report a final score, so that score stays honest.',
+  'edge case':
+    'An input that is unusual or hard on purpose, such as a sarcastic, very short or non-English ticket; tagging them lets you score them on their own.',
+  'labelling guide':
+    'Written rules, applied in order, that decide each input’s right answer, so two labellers working alone reach the same label.',
+  baseline:
+    'The score a trivial method gets, such as always answering the most common label; a real score is judged by how far it beats this.',
+  'structured output':
+    'An API feature that makes the model’s reply follow a JSON Schema you send, so when the model finishes normally the answer parses and only uses allowed values.',
+  accuracy:
+    'The share of graded cases a model got right, from 0 to 1, usually shown as a percentage.',
+  'confusion matrix':
+    'A table that counts each pair of right answer and model answer; the diagonal holds the right answers and every other cell is one kind of mistake.',
+  'cache key':
+    'A hash of everything that shapes a model call (model, prompt text, input, repeat), used to find its saved answer; change any part and the key changes.',
+  'noise band':
+    'How far a score can move by luck alone, roughly 1/√m for m scored cases; a difference smaller than the band is not evidence.',
+  'LLM judge':
+    'A model call that grades another model’s output against written criteria, used where no exact right answer exists to compare with, such as a reply’s tone.',
+  rubric:
+    'The written criteria a grader checks an output against; in this lab, three pass-or-fail questions about a reply draft.',
+  agreement:
+    'The share of cases on which two raters, such as an LLM judge and a person, give the same verdict.',
+  "Cohen's kappa":
+    'Agreement between two raters corrected for chance: (observed − chance) / (1 − chance), where 1 is perfect, 0 is no better than chance and below 0 is worse.',
+  'position bias':
+    'A model’s tendency to answer differently depending on where things sit in its prompt, such as whether a rubric comes before or after the text it grades.',
+  'few-shot':
+    'Prompting with a few worked examples of inputs and their right outputs placed in the prompt itself.',
+  effort:
+    'A request setting, output_config.effort (low, medium, high, xhigh or max), for how much the model thinks before it answers; the thinking is billed as output tokens.',
+  weights:
+    'The numbers inside a model that turn an input into an output; training changes them, a prompt does not.',
+  'fine-tuning':
+    'Training an existing model further on your own examples, so its weights change and the new behaviour no longer has to be written into every prompt.',
+  LoRA:
+    'Low-rank adaptation: fine-tuning that freezes the model and trains two thin matrices A (d × r) and B (r × d) beside a weight matrix, whose product is added to it.',
+  'eval gate':
+    'A check that runs an eval on a change and fails, with a non-zero exit code, when the score falls below a minimum or further below a baseline than the noise band.',
 } as const satisfies Record<string, string>;
 
 export type GlossaryKey = keyof typeof glossary;

@@ -1,0 +1,82 @@
+{
+  "key_vector": {
+    "kind": "triage",
+    "model": "claude-haiku-5-5",
+    "effort": null,
+    "prompt_version": "v2_rules",
+    "prompt_text": "Fixture prompt v2: triage the ticket using the category and priority rules.",
+    "input": "[fixture] Hola, no puedo iniciar sesión en mi cuenta.",
+    "rep": 0,
+    "canonical": "{\"effort\":null,\"input\":\"[fixture] Hola, no puedo iniciar sesión en mi cuenta.\",\"kind\":\"triage\",\"model\":\"claude-haiku-5-5\",\"prompt_text\":\"Fixture prompt v2: triage the ticket using the category and priority rules.\",\"prompt_version\":\"v2_rules\",\"rep\":0}",
+    "key": "87bf1509df729d9533aad30841ea9953106671b20b0b51c82835fdb29daa2dea"
+  },
+  "triage__claude-haiku-5-5__v1_basic__default": {
+    "category": 0.7142857142857143,
+    "priority": 0.42857142857142855,
+    "both": 0.42857142857142855,
+    "errors": 1,
+    "n": 8,
+    "reps": 1,
+    "scored": 7,
+    "band": 0.37796447300922725
+  },
+  "triage__claude-haiku-5-5__v2_rules__default": {
+    "category": 0.9375,
+    "priority": 0.8125,
+    "both": 0.8125,
+    "errors": 0,
+    "n": 8,
+    "reps": 2,
+    "scored": 16,
+    "band": 0.25
+  },
+  "v1_basic_confusion_category": {
+    "billing": {
+      "billing": 2
+    },
+    "bug": {
+      "bug": 2
+    },
+    "account": {
+      "account": 1,
+      "(none)": 1
+    },
+    "outage": {
+      "bug": 1
+    }
+  },
+  "compare_v1_v2": {
+    "note": "rep-0 grades; diff = b - a; a=v1_basic, b=v2_rules",
+    "a": 0.42857142857142855,
+    "b": 0.75,
+    "diff": 0.32142857142857145,
+    "fixed": [
+      "f001",
+      "f004",
+      "f007"
+    ],
+    "broken": [],
+    "significant": false,
+    "band": 0.37796447300922725
+  },
+  "agreement": {
+    "addresses_issue": 0.75,
+    "tone": 1.0,
+    "no_false_promises": 0.75
+  },
+  "kappa": {
+    "addresses_issue": 0.5,
+    "tone": 1.0,
+    "no_false_promises": 0.0
+  },
+  "position_flips": {
+    "addresses_issue": 2,
+    "tone": 0,
+    "no_false_promises": 1
+  },
+  "definitions": {
+    "R9": "band = 1/sqrt(scored), scored = non-error graded lines across all reps; n = distinct cases incl. errors; scored = 0 raises ValueError.",
+    "R10": "compare takes one grade per case (duplicate case_id raises); band = 1/sqrt(min scored of the two sides); significant = abs(diff) > band; fixed/broken sorted by case_id, errors count as not correct, one-sided ids ignored.",
+    "kappa": "kappa = (po - pe) / (1 - pe): po = observed agreement, pe = agreement expected by chance from each rater's share of true; if pe == 1 it is 1.0 when po == 1 else 0.0."
+  }
+}

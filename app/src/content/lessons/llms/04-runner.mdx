@@ -1,0 +1,212 @@
+---
+track: llms
+order: 4
+slug: runner
+title: Running evals
+goal: Run an eval in replay, record or live mode, estimate and cap its cost before the first call, and use the noise band to tell a real difference from luck.
+minutes: 20
+quiz:
+  - question: You add one sentence to the v2_rules prompt and run the eval in replay mode. What happens?
+    options:
+      - The old saved answers are used, since the ticket did not change
+      - Replay stops with ReplayMiss, because the prompt text is part of the cache key and no answer is saved for the new text
+      - Replay calls the API for the missing answers and saves them
+      - The score drops to 0% for every ticket
+    answer: 1
+    explanation: The cache key is a hash of everything that shapes the answer, including the full prompt text. New text gives new keys, so stale answers can never be graded as if they came from the new prompt. Replay never falls back to a paid call; you record the new answers on purpose.
+  - question: Prompt B scores 97.5% on the 40 dev tickets and prompt A scores 90.0%. The noise band is ±15.8%. What can you conclude?
+    options:
+      - B is better by 7.5 points
+      - Nothing yet; a 7.5-point difference is inside the band, so luck alone could produce it
+      - A is better, because the band favours the lower score
+      - B is better, because 97.5% is above 95%
+    answer: 1
+    explanation: With 40 tickets, a score can move by about 1/√40, or 15.8 points, from which tickets happen to be in the set and from the model's randomness. A difference smaller than that is not evidence. More tickets shrink the band; v1_basic to v2_rules, at +27.5 points, clears it.
+  - question: The run's spending passes --max-cost while other calls are still in flight. What does the Python runner do?
+    options:
+      - Kills the running calls and discards everything
+      - Lets the running calls finish, starts no new ones, and raises CostLimit carrying every finished line
+      - Keeps going, because the cap is only a warning
+      - Retries the running calls on a cheaper model
+    answer: 1
+    explanation: run() sets a stop flag once the summed cost passes the cap. Work that has not started returns None, calls already running finish, and CostLimit holds every line that finished. In record mode those lines are already appended to the file, so the next run resumes instead of paying again.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import EvalRunSim from '../../../components/llms/EvalRunSim.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+Lessons 1 to 3 graded answers that were already saved. This lesson is about getting those answers: calling the model on every ticket, keeping what it said, knowing the bill in advance, and knowing how much a score can move by luck.
+
+### Three modes
+
+Every model call goes through one function, and `--mode` decides what it does:
+
+- **`replay`**, the default, reads the answer from a saved-response file. It is free, needs no API key and gives the same answer every time. If no answer is saved, it stops with `ReplayMiss`. It never falls back to a paid call.
+- **`record`** calls the API and appends the answer to the file. A request that is already saved without an error is skipped, so an interrupted recording resumes where it stopped and never pays twice.
+- **`live`** calls the API and saves nothing. Use it to try something once.
+
+Record once, then replay as often as you like. Every number in this track comes from replaying two approved recordings: the first run, and a re-record after the labelling guide changed the prompts.
+
+### The cache key
+
+Each saved answer is found by its <Term t="cache key" />: a sha256 hash of everything that shapes the answer. That is the kind of call, the model, the effort, the prompt version, the full prompt text, the input and the repeat number.
+
+Change any of them and the key changes. That protects you from a quiet mistake: grading old answers as if a new prompt had produced them. When `v2_rules` and `v3_examples` were rewritten from the labelling guide, their keys changed, replay missed, and they had to be recorded again.
+
+The repeat number is in the key so that one prompt can be recorded several times on the same ticket. Each repeat is its own answer.
+
+### Latest line wins
+
+A response file is append-only, one JSON line per call. If a call fails, its line is saved with an `error`, and recording it again appends a second line with the same key. Replay reads the file from the end, so the latest line for a key wins. The lab never edits a file in place. The committed files were pruned once, by hand, after the re-record: superseded and failed lines were removed, as `llms/data/README.md` records.
+
+### The runner
+
+The runner calls the model for every ticket and repeat on a <Term t="thread pool" /> of 8 workers, since each call spends most of its time waiting for the API. The results come back in input order: ticket by ticket, repeats in order.
+
+### Cost before calls
+
+Cost is tokens times price, so you can work it out before you spend anything. The runner estimates every paid run first, from rough token counts per call: 900 input and 700 output for a triage call. For Haiku, at $0.10 and $0.50 per million tokens, that is $0.00044 a call, or $0.0176 for the 40 dev tickets.
+
+It also prints a worst case, assuming every reply uses all of `MAX_TOKENS = 2000` output tokens: $0.0436 for the same 40. Then it asks before calling. A cap, `--max-cost`, $10 by default, is checked against the real spend from each response's `usage`.
+
+The estimate is deliberately rough. Haiku's recorded `v2_rules` calls averaged about 1,546 input and 215 output tokens, so the real input was larger and the output smaller than guessed. The full recording plan was estimated at $4.06 and cost $1.59. The re-recording after the labelling guide was estimated at $2.69 and cost $1.47.
+
+### Noise
+
+Run the same prompt on the same tickets three times and the score moves. Haiku with `v2_rules` on the 40 dev tickets scored 97.5%, 97.5% and 95.0%. `t034` was wrong every time; `t018` was right twice and wrong once.
+
+That is only the model's own randomness. A bigger source is which tickets happen to be in the set: a different 40 tickets would score differently. The <Term t="noise band" /> covers both, roughly, as `1/√m` for `m` scored lines. For one run of 40 that is ±15.8%.
+
+Pool the three repeats and the code reports 120 scored lines and ±9.1%. Read that band with care: all 120 lines come from the same 40 tickets. Repeats shrink only the model-randomness part. They tell you nothing about which tickets happen to be in the set, so ±9.1% understates the uncertainty; to shrink that part, you need more tickets.
+
+The rule that follows: **a difference smaller than the band is not evidence.** `v1_basic` to `v2_rules` on dev is +27.5 points, larger than 15.8, so it is a real difference. `v2_rules` and `v3_examples` both score 97.5%: nothing to choose between them on this set.
+
+`1/√m` is a cautious rule of thumb: twice the largest standard error an accuracy over `m` cases can have. Lesson 7 uses it to compare prompts.
+
+## See it
+
+The simulator replays the real recording of Haiku with `v2_rules` on dev: each call takes the latency it took when recorded, 8 at a time. Press **Play** and watch the token and cost totals grow, then the three repeats appear.
+
+<EvalRunSim />
+
+Every call is green except `t034`. The cost lands well under the $0.0176 estimate, because the real replies were short. The three repeats differ by 2.5 points. That spread is pure rerun variation: same prompt, same tickets. It sits well inside the ±15.8% band, which also allows for the larger, unseen variation from which tickets are in the set.
+
+## The code
+
+Section 4 is the model call with saved responses.
+
+<CodeTabs source="llms" section={4} goNote="callModel has the same three modes. Go has to write the cache key's JSON exactly as Python does, so canonicalJSON turns off HTML escaping and restores U+2028 and U+2029. The SDK client is created once, through sync.Once, and only when a paid mode needs it. The modelCaller type lets tests pass a fake." />
+
+- `ReplayMiss` is the error replay raises when no answer is saved. Nothing catches it to make a paid call instead.
+- `cache_key(...)` builds a dict of the seven things that shape the answer and dumps it as canonical JSON (`sort_keys=True`, no spaces), so the same request always gives the same string. `sha256` of that string is the key.
+- `response_path(...)` names one file per configuration, such as `triage__claude-haiku-5-5__v2_rules__default.jsonl`. All repeats share the file.
+- `MAX_TOKENS = 2000` caps each reply. The worst-case cost assumes every reply uses all of it.
+- `_WRITE_LOCK` lets one runner thread append to a file at a time, so two lines never interleave.
+- `already_recorded(path, key)` returns the latest line for a key if that line has no error. Record mode uses it to resume.
+- In `call_model`, the replay branch reads the file with `reversed(load_jsonl(path))`, so the latest line for the key wins, and raises `ReplayMiss` if there is none.
+- `if mode == "record"` checks `already_recorded` first and returns the saved line marked `"skipped": True`. The runner counts a skipped line as free.
+- `anthropic.Anthropic(max_retries=4)` is created only here, after replay has returned, so replay never needs a key. The SDK retries rate limits and overloads up to 4 times.
+- `line` is the saved record: `key`, `config`, `case_id`, `output`, `stop_reason`, both token counts, `latency_ms` and `error`.
+- `if response.stop_reason not in ("refusal", "max_tokens")` reads the JSON only from a normal finish. Bad JSON and `APIError` become an `error` string instead of an exception, so the line is saved and the run carries on.
+- `triage(...)` builds the request: the prompt version as `system`, the ticket as the user message, the schema in `output_config`, and `effort` only when you pass one. It sends no `temperature`.
+
+Section 8 is the runner and the cost estimate.
+
+<CodeTabs source="llms" section={8} goNote="callCost, estimateCost and worstCaseCost match the Python functions, and return an error for a model with no price. run has the same contract, with goroutines and a semaphore in place of the pool; the section below covers it. The recording plan lives only in Python." />
+
+- `EST_TOKENS` holds the rough tokens per call, `(input, output)`: `(900, 700)` for triage and `(1400, 900)` for the judge. The output includes any thinking.
+- `call_cost(model, input_tokens, output_tokens)` is tokens times `PRICES`, divided by a million.
+- `estimate_cost(kind, model, n_calls)` multiplies that by the number of calls. `worst_case_cost` uses `MAX_TOKENS` for the output instead.
+- `CostLimit` carries `lines`, every line that finished, and `spent`, the real dollars.
+- `jobs = [(case, rep) for case in cases for rep in range(reps)]` lists every call in order.
+- `stop` is a `threading.Event` and `lock` guards `spent`, since 8 threads add to it.
+- `work(job)` returns `None` without calling if `stop` is already set. Otherwise it calls `fn`, adds the line's real cost unless it was `skipped`, and sets `stop` once `spent` passes `max_cost`.
+- `pool.map(work, jobs)` returns results in the order of `jobs`, whatever order the threads finish in.
+- `if stop.is_set(): raise CostLimit(lines, spent)` hands back the finished lines. Calls in flight when the cap was hit still finish, so the real spend can pass the cap by the cost of up to 7 more calls.
+
+<Callout kind="warning" title="Paid modes ask first">
+  `record` and `live` print the estimate, the worst case and the cap, then ask `Make these paid calls? [y/N]`. Without a `y`, or `--yes`, nothing is called.
+</Callout>
+
+## How Go does it
+
+**A semaphore instead of a pool.** Go's `run` is generic, `run[C any]`, so the same runner takes tickets or labelled replies. It makes three slices with one slot per job: `results`, `done` and `errs`. `sem := make(chan struct{}, workers)` is a buffered channel used as a semaphore: sending into it takes a slot, and the send blocks while all 8 slots are taken. The loop sends before it starts each <Term t="goroutine" />, so calls start in input order and at most 8 run at once. Each goroutine releases its slot with `<-sem` when it finishes.
+
+**Writing by index.** Each goroutine writes only `results[i]`, `done[i]` and `errs[i]`, so the order of the slices is the order of the jobs, whatever order the calls finish in. A <Term t="WaitGroup" /> does the waiting: `wg.Add(1)` before each goroutine, `defer wg.Done()` inside it, and `wg.Wait()` after the loop. This is the same pattern as the harness executor, plus the semaphore.
+
+**Stopping.** A mutex, `mu`, guards `spent` and `stopped`. Before starting each job the loop checks `stopped`, and breaks if the cap was hit. The deferred `<-sem` runs after the unlock, so the next start already sees the new `stopped`. A failed call also stops the run, and `run` returns the first error in input order, as Python's `pool.map` raises the first exception. Over the cap, Go returns the finished lines with a `*CostLimit` as the error value instead of raising.
+
+**The same files.** Go reads and writes the files Python recorded, with the same keys, so replay gives identical scores: `go run . run --prompt v2_rules --reps 3` prints the same 96.7% as Python.
+
+## Try it
+
+Replay the three noise repeats together:
+
+```bash
+cd llms/python
+python triage_lab.py run --prompt v2_rules --reps 3
+```
+
+You should see:
+
+```text
+v2_rules / claude-haiku-5-5 / effort default / dev split / 3 reps / replay
+  cases 40  scored lines 120  errors 0
+  category accuracy  100.0%
+  priority accuracy  96.7%
+  both accuracy      96.7%   noise band +/-9.1%
+```
+
+Now look at each repeat, and change a prompt to watch its keys change. Save this as `llms/python/noise.py`:
+
+```python
+import triage_lab as L
+
+dev = L.split(L.load_tickets(), "dev")
+for rep in range(3):
+    grades = [L.grade(t, L.triage(t, "v2_rules", rep=rep)) for t in dev]
+    wrong = [g["case_id"] for g in grades if not g["both_ok"]]
+    print(f"rep {rep}  both {L.accuracy(grades, 'both_ok'):.1%}  wrong {wrong}")
+print(f"band for one run of 40: +/-{L.noise_band(40):.1%}")
+
+prompts = L.load_prompts()
+ticket = dev[0]
+before = L.triage_key(ticket["text"], "v2_rules", L.TASK_MODEL, None, 0, prompts)
+prompts["triage"]["v2_rules"] += "\nBe concise."
+after = L.triage_key(ticket["text"], "v2_rules", L.TASK_MODEL, None, 0, prompts)
+print(before[:12], after[:12])
+try:
+    L.triage(ticket, "v2_rules", prompts=prompts)
+except L.ReplayMiss as e:
+    print("ReplayMiss:", e)
+```
+
+```bash
+python noise.py
+```
+
+You should see:
+
+```text
+rep 0  both 97.5%  wrong ['t034']
+rep 1  both 97.5%  wrong ['t034']
+rep 2  both 95.0%  wrong ['t018', 't034']
+band for one run of 40: +/-15.8%
+5d1983c4d25c 053094d77cfe
+ReplayMiss: no saved response for triage / claude-haiku-5-5 / v2_rules / case t001 (rep 0). Record it: python triage_lab.py record ...
+```
+
+Two words added to the prompt give a different key, and replay refuses to grade old answers against it. The change is only in memory, so `prompts.json` is untouched.
+
+Last, compare the two prompts that tie:
+
+```bash
+python triage_lab.py compare --prompt v2_rules --vs v3_examples
+```
+
+It prints `diff +0.0%   band +/-15.8%` and `within the noise: not evidence of a difference`.
+
+All of this replays for free. A live run of the first command, `--reps 3` on the 40 dev tickets, would make 120 Haiku calls: the lab estimates `$0.05`, worst case `$0.13`, and asks before calling.

@@ -2,21 +2,38 @@
 import { Code } from 'astro:components';
 import Callout from './Callout.astro';
 import { extractSection } from '../lib/regions';
-import pythonSource from '../../../harness/python/harness.py?raw';
-import goSource from '../../../harness/go/main.go?raw';
+import harnessPython from '../../../harness/python/harness.py?raw';
+import harnessGo from '../../../harness/go/main.go?raw';
+import llmsPython from '../../../llms/python/triage_lab.py?raw';
+import llmsGo from '../../../llms/go/main.go?raw';
+import loraPython from '../../../llms/finetune/lora.py?raw';
+
+// harness: the reference harness. llms: the eval lab. lora: the LoRA script (Python only).
+const sources = {
+  harness: { python: harnessPython, go: harnessGo },
+  llms: { python: llmsPython, go: llmsGo },
+  lora: { python: loraPython, go: undefined },
+} as const;
 
 interface Props {
   section?: number;
   whole?: boolean;
   goNote?: string;
+  source?: keyof typeof sources;
+  /** Show only the Python tab. Implied by source="lora". */
+  pythonOnly?: boolean;
 }
 
-const { section, whole = false, goNote } = Astro.props;
+const { section, whole = false, goNote, source = 'harness' } = Astro.props;
 if (!whole && section === undefined) {
   throw new Error('CodeTabs needs either `section={n}` or `whole`');
 }
-const py = whole ? pythonSource : extractSection(pythonSource, section as number);
-const go = whole ? goSource : extractSection(goSource, section as number);
+const src = sources[source];
+if (!src) throw new Error(`CodeTabs: unknown source "${source}"`);
+const pythonOnly = Astro.props.pythonOnly || src.go === undefined;
+const pick = (text: string) => (whole ? text : extractSection(text, section as number));
+const py = pick(src.python);
+const go = pythonOnly || src.go === undefined ? undefined : pick(src.go);
 const themes = { light: 'github-light', dark: 'github-dark' } as const;
 ---
 
@@ -24,23 +41,31 @@ const themes = { light: 'github-light', dark: 'github-dark' } as const;
   <div class="tabbar">
     <div class="tabs" role="tablist" aria-label="Language">
       <button type="button" role="tab" data-lang="python" aria-selected="true" tabindex="0">Python</button>
-      <button type="button" role="tab" data-lang="go" aria-selected="false" tabindex="-1">Go</button>
+      {
+        go !== undefined && (
+          <button type="button" role="tab" data-lang="go" aria-selected="false" tabindex="-1">
+            Go
+          </button>
+        )
+      }
     </div>
     <button type="button" class="copy" data-copy>Copy</button>
   </div>
   <div role="tabpanel" data-panel="python">
     <Code code={py} lang="python" themes={themes} defaultColor={false} />
   </div>
-  <div role="tabpanel" data-panel="go" hidden>
-    <Code code={go} lang="go" themes={themes} defaultColor={false} />
-    {
-      goNote && (
-        <Callout kind="go" title="How Go does it">
-          {goNote}
-        </Callout>
-      )
-    }
-  </div>
+  {
+    go !== undefined && (
+      <div role="tabpanel" data-panel="go" hidden>
+        <Code code={go} lang="go" themes={themes} defaultColor={false} />
+        {goNote && (
+          <Callout kind="go" title="How Go does it">
+            {goNote}
+          </Callout>
+        )}
+      </div>
+    )
+  }
 </div>
 
 <style is:global>
@@ -123,8 +148,10 @@ const themes = { light: 'github-light', dark: 'github-dark' } as const;
 <script>
   import { LANG_EVENT as EVENT, LANG_KEY as KEY, pickLang, readLang, type Lang } from '../lib/lang';
 
-  function apply(lang: Lang) {
+  function apply(chosen: Lang) {
     document.querySelectorAll<HTMLElement>('[data-codetabs]').forEach((root) => {
+      // A Python-only block has no Go panel: it keeps showing Python when Go is chosen.
+      const lang = root.querySelector(`[data-panel="${chosen}"]`) ? chosen : 'python';
       root.querySelectorAll<HTMLElement>('[role="tab"]').forEach((tab) => {
         const on = tab.dataset.lang === lang;
         tab.setAttribute('aria-selected', String(on));

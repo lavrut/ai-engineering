@@ -1,12 +1,21 @@
 import { useEffect, useState } from 'preact/hooks';
-import { DEFAULT_NODE_H, DEFAULT_NODE_W, type DEdge, type DNode, type Diagram, type Role } from '../lib/diagram';
+import {
+  codeKey,
+  DEFAULT_NODE_H,
+  DEFAULT_NODE_W,
+  type CodeSource,
+  type DEdge,
+  type DNode,
+  type Diagram,
+  type Role,
+} from '../lib/diagram';
 import { LANG_EVENT, pickLang, readLang, type Lang } from '../lib/lang';
 
 type Props = {
   diagram: Diagram;
-  /** Harness source sections keyed by section number (only those the steps use). */
-  codePython: Record<number, string>;
-  codeGo: Record<number, string>;
+  /** Source sections keyed by codeKey ("6" for the harness, "llms:6" for the lab; only those the steps use). */
+  codePython: Record<string, string>;
+  codeGo: Record<string, string>;
   /** "replay": the code panel starts open (capstone). */
   mode?: 'replay';
 };
@@ -19,8 +28,15 @@ const ROLE_LABEL: Record<Role, string> = {
   tool: 'Tool',
   memory: 'Memory',
   logs: 'Logs',
+  dataset: 'Dataset',
+  grader: 'Grader',
 };
-const FILE_NAME: Record<Lang, string> = { python: 'harness.py', go: 'main.go' };
+/** The file each source shows per language; LoRA is Python only. */
+const FILE_NAME: Record<CodeSource, Partial<Record<Lang, string>>> = {
+  harness: { python: 'harness.py', go: 'main.go' },
+  llms: { python: 'triage_lab.py', go: 'main.go' },
+  lora: { python: 'lora.py' },
+};
 
 export default function FlowDiagram({ diagram, codePython, codeGo, mode }: Props) {
   const steps = diagram.steps;
@@ -74,7 +90,11 @@ export default function FlowDiagram({ diagram, codePython, codeGo, mode }: Props
   const routes = routeEdges(diagram);
   const roles = Array.from(new Set(diagram.nodes.map((n) => n.role)));
   const section = step.code?.section;
-  const code = section === undefined ? undefined : (lang === 'go' ? codeGo : codePython)[section];
+  const source = step.code?.source ?? 'harness';
+  const key = step.code ? codeKey(step.code) : undefined;
+  // A Python-only source (or a missing Go section) shows the Python code even when Go is chosen.
+  const codeLang: Lang = lang === 'go' && key !== undefined && codeGo[key] === undefined ? 'python' : lang;
+  const code = key === undefined ? undefined : (codeLang === 'go' ? codeGo : codePython)[key];
   const codeId = `${diagram.id}-code`;
   const arrow = `${diagram.id}-arrow`;
 
@@ -181,7 +201,7 @@ export default function FlowDiagram({ diagram, codePython, codeGo, mode }: Props
           </button>
           {showCode && code !== undefined && (
             <div class="fd-code" id={codeId}>
-              <p class="fd-code-label">{`${FILE_NAME[lang]} · section ${section}`}</p>
+              <p class="fd-code-label">{`${FILE_NAME[source][codeLang]} · section ${section}`}</p>
               <pre tabIndex={0}>{code}</pre>
             </div>
           )}

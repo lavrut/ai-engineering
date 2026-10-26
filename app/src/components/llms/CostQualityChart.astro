@@ -1,0 +1,18 @@
+---
+// Build-time wrapper: one point per recorded triage config on the dev split (rep 0):
+// cost per 1,000 tickets from the saved tokens and PRICES, both-fields accuracy and
+// its noise band (ruling R30). Only prompts recorded on every model are offered.
+import CostQualityChartIsland from './CostQualityChart.tsx';
+import { loadLlmsData } from '../../lib/llmsData';
+import { DEFAULT_AB, costChartProps } from '../../lib/llmsAids';
+
+interface Props {
+  /** Prompt version shown first: v1_basic or v2_rules. */
+  prompt?: string;
+}
+
+const { prompt = DEFAULT_AB.b } = Astro.props;
+const props = costChartProps(loadLlmsData(), { prompt });
+---
+
+<CostQualityChartIsland client:visible {...props} />

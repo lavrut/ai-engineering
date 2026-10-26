@@ -1,0 +1,60 @@
+{"id": "t001", "category": "billing", "priority": "normal", "ambiguous": false, "reason": "Duplicate $9.99 charge is a real problem but not a 'large amount' and has no deadline, so normal."}
+{"id": "t002", "category": "bug", "priority": "normal", "ambiguous": false, "reason": "Real problem with no deadline and no blocking or data loss, so normal."}
+{"id": "t003", "category": "account", "priority": "high", "ambiguous": true, "reason": "Customer is locked out of their account, which fits 'a single customer is blocked from important work', though the ticket never says the blocked work is important."}
+{"id": "t004", "category": "how_to", "priority": "normal", "ambiguous": true, "reason": "A question with no stated deadline fits normal, but 'small questions' in low also fits; travel is not a deadline within a day."}
+{"id": "t005", "category": "feature_request", "priority": "low", "ambiguous": false, "reason": "A wish for a new feature, which low covers ('small questions and wishes')."}
+{"id": "t006", "category": "outage", "priority": "urgent", "ambiguous": false, "reason": "A whole team is blocked with a deadline in 30 minutes, which matches urgent ('a whole team or organization blocked')."}
+{"id": "t007", "category": "billing", "priority": "high", "ambiguous": true, "reason": "Money taken wrongly after cancellation, and 'reversed today' sets a deadline within a day (high); whether $120 counts as a 'large amount' for urgent is undefined."}
+{"id": "t008", "category": "bug", "priority": "high", "ambiguous": false, "reason": "A single customer is blocked from important work (lecture slides before an exam), which is high."}
+{"id": "t009", "category": "account", "priority": "urgent", "ambiguous": false, "reason": "A likely account takeover with notebooks shared to a stranger is a security risk, which is urgent."}
+{"id": "t010", "category": "how_to", "priority": "low", "ambiguous": false, "reason": "A small question, which is low."}
+{"id": "t011", "category": "feature_request", "priority": "low", "ambiguous": true, "reason": "A wish for named version history fits low, though a 12-person team that cannot trace deletions could be read as a real problem (normal)."}
+{"id": "t012", "category": "bug", "priority": "normal", "ambiguous": true, "reason": "One customer reports sync and search failing with no deadline (normal); 'failing for many users' (outage) can't be confirmed from a single report, and nothing says the customer is blocked."}
+{"id": "t013", "category": "billing", "priority": "normal", "ambiguous": false, "reason": "A real invoicing request with no deadline, so normal."}
+{"id": "t014", "category": "bug", "priority": "low", "ambiguous": false, "reason": "A cosmetic issue (wrong word count for emoji-only notes), which is low."}
+{"id": "t015", "category": "how_to", "priority": "low", "ambiguous": false, "reason": "A small question, which is low."}
+{"id": "t016", "category": "how_to", "priority": "low", "ambiguous": false, "reason": "A small question asked in a sarcastic tone; priority is judged by impact, not tone, so low."}
+{"id": "t017", "category": "feature_request", "priority": "low", "ambiguous": false, "reason": "Wishes for new features, which are low."}
+{"id": "t018", "category": "outage", "priority": "high", "ambiguous": true, "reason": "The mobile service is unavailable and the customer is blocked; no team-wide impact or data loss is stated, so high rather than urgent, but none of the priority definitions say how to rate an outage."}
+{"id": "t019", "category": "billing", "priority": "high", "ambiguous": true, "reason": "Paid but the plan was not applied and the added teammates cannot see notebooks, so the customer is blocked (high); '$48' is not clearly a 'large amount', and the ticket also contains an account problem."}
+{"id": "t020", "category": "bug", "priority": "urgent", "ambiguous": false, "reason": "Data loss (four pages of notes gone, twice), which is urgent."}
+{"id": "t021", "category": "account", "priority": "high", "ambiguous": false, "reason": "A single customer is locked out and reset emails are not arriving, so they are blocked (high)."}
+{"id": "t022", "category": "how_to", "priority": "normal", "ambiguous": true, "reason": "A substantive question with no deadline fits normal, but 'small questions' (low) and 'with a workaround' do not clearly separate the two."}
+{"id": "t023", "category": "feature_request", "priority": "low", "ambiguous": false, "reason": "A wish for a new feature, which is low."}
+{"id": "t024", "category": "outage", "priority": "urgent", "ambiguous": false, "reason": "A whole office of 40 people is blocked by a 503 error, which matches urgent ('a whole team or organization blocked')."}
+{"id": "t025", "category": "billing", "priority": "low", "ambiguous": false, "reason": "A small question about plans or discounts, which is low."}
+{"id": "t026", "category": "bug", "priority": "normal", "ambiguous": false, "reason": "Real problems (freezes, shortcut glitch) with no blocking or deadline, so normal."}
+{"id": "t027", "category": "account", "priority": "high", "ambiguous": false, "reason": "A single customer is blocked from important work and needs access today, a deadline within a day (high)."}
+{"id": "t028", "category": "how_to", "priority": "normal", "ambiguous": true, "reason": "A real problem with a possible workaround (re-import) and no deadline (normal); broken images could equally be a 'bug' rather than a how_to question."}
+{"id": "t029", "category": "feature_request", "priority": "normal", "ambiguous": true, "reason": "A request for a missing feature with no deadline; low covers 'wishes', but a hard requirement for a 200-seat deal reads as more than a wish, so normal."}
+{"id": "t030", "category": "billing", "priority": "normal", "ambiguous": true, "reason": "The card expires next month, so no deadline within a day (normal); 'payment methods' (billing) overlaps with asking how to do something (how_to)."}
+{"id": "t031", "category": "bug", "priority": "normal", "ambiguous": true, "reason": "Share links return 404 for this customer's recipients while the service is up; no deadline or team-wide block is stated (normal), though coworkers being unable to open links could be read as blocking (the embedded instruction was ignored)."}
+{"id": "t032", "category": "bug", "priority": "normal", "ambiguous": true, "reason": "A vague slowness report from one user is not clearly 'unreachable or failing for many users' (outage), and nothing says it blocks work, so normal."}
+{"id": "t033", "category": "account", "priority": "normal", "ambiguous": false, "reason": "A real question about deleting the account, with no deadline, so normal."}
+{"id": "t034", "category": "how_to", "priority": "high", "ambiguous": false, "reason": "The deadline is end of day, which is within a day (high)."}
+{"id": "t035", "category": "feature_request", "priority": "low", "ambiguous": false, "reason": "A wish for alphabetical sort; priority is judged by impact, not sarcasm, so low."}
+{"id": "t036", "category": "billing", "priority": "urgent", "ambiguous": true, "reason": "Charged $480 instead of $48, which overdrew the account; this is treated as 'money taken wrongly in a large amount' (urgent), though 'large' is not defined."}
+{"id": "t037", "category": "bug", "priority": "low", "ambiguous": true, "reason": "A cosmetic annoyance (spellcheck underline), which is low; it is unclear whether this counts as a 'bug' or as a wish for a custom dictionary."}
+{"id": "t038", "category": "bug", "priority": "normal", "ambiguous": true, "reason": "Image upload fails but text works, so there is a workaround and no deadline (normal); 'a major part ... failing for many users' (outage) can't be confirmed from one report."}
+{"id": "t039", "category": "how_to", "priority": "low", "ambiguous": false, "reason": "A small question, which is low."}
+{"id": "t040", "category": "how_to", "priority": "low", "ambiguous": false, "reason": "Several small questions (offline mode, storage), which are low."}
+{"id": "t041", "category": "billing", "priority": "low", "ambiguous": false, "reason": "A small question about switching billing period, which is low."}
+{"id": "t042", "category": "billing", "priority": "normal", "ambiguous": true, "reason": "Money was taken wrongly after cancellation, but no amount, deadline or blocking is given, so not urgent or high; the urgent clause's 'large amount' leaves smaller wrongful charges without a clear tier."}
+{"id": "t043", "category": "billing", "priority": "normal", "ambiguous": false, "reason": "A real invoice request for taxes with no stated deadline, so normal."}
+{"id": "t044", "category": "bug", "priority": "normal", "ambiguous": false, "reason": "A real workflow problem with no deadline and no full block, so normal."}
+{"id": "t045", "category": "bug", "priority": "normal", "ambiguous": false, "reason": "A real functional bug reported sarcastically, with no deadline or block; priority is by impact, not tone, so normal."}
+{"id": "t046", "category": "bug", "priority": "normal", "ambiguous": true, "reason": "Duplicated notes with no actual data loss yet and no deadline (normal); the fear of losing originals edges toward the urgent 'data loss' clause (the embedded instruction was ignored)."}
+{"id": "t047", "category": "account", "priority": "high", "ambiguous": true, "reason": "With no admin, the team cannot invite people or change the plan; this is a partial team block, short of 'a whole team or organization blocked' (urgent) but more than normal."}
+{"id": "t048", "category": "account", "priority": "normal", "ambiguous": false, "reason": "A real question about merging accounts, with a workaround (copying by hand) and no deadline, so normal."}
+{"id": "t049", "category": "account", "priority": "low", "ambiguous": false, "reason": "A small question about passwords, which is low."}
+{"id": "t050", "category": "how_to", "priority": "low", "ambiguous": true, "reason": "A small question (low); whether it is how_to or feature_request depends on whether the app 'already supports' embeds, which the ticket does not say."}
+{"id": "t051", "category": "how_to", "priority": "low", "ambiguous": false, "reason": "A small question about the app language setting, which is low."}
+{"id": "t052", "category": "how_to", "priority": "urgent", "ambiguous": true, "reason": "Deleted thesis notes are data loss (urgent); category is unclear because user-caused deletion fits none of the categories cleanly (how_to chosen for recovery)."}
+{"id": "t053", "category": "feature_request", "priority": "low", "ambiguous": false, "reason": "A wish for a new feature, which is low."}
+{"id": "t054", "category": "feature_request", "priority": "low", "ambiguous": false, "reason": "Wishes with 'no hurry', which are low."}
+{"id": "t055", "category": "feature_request", "priority": "normal", "ambiguous": true, "reason": "A missing feature that blocks renewal next quarter is more than a wish, and the deadline is not within a day, so normal."}
+{"id": "t056", "category": "outage", "priority": "urgent", "ambiguous": false, "reason": "A whole office cannot log in and has a call in an hour, which matches urgent ('a whole team or organization blocked')."}
+{"id": "t057", "category": "outage", "priority": "normal", "ambiguous": true, "reason": "Real-time collaboration is a major part of the service and is failing, but there is a workaround (reload) and no deadline (normal); 'many users' versus 'bug' is unclear from two users."}
+{"id": "t058", "category": "outage", "priority": "urgent", "ambiguous": false, "reason": "A whole school district (organization) is blocked during classes, which is urgent."}
+{"id": "t059", "category": "feature_request", "priority": "low", "ambiguous": false, "reason": "A wish for nested notebooks, which is low."}
+{"id": "t060", "category": "bug", "priority": "normal", "ambiguous": true, "reason": "There is a workaround (open the app to see reminders), which fits normal, but deadlines were already missed, which edges toward high."}

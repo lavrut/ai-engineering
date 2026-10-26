@@ -120,17 +120,71 @@ describe('design tokens', () => {
   });
 });
 
+describe('role tokens', () => {
+  const css = readFileSync(join(app, 'src/styles/tokens.css'), 'utf8');
+  // The light block is the bare :root; the two dark blocks must stay identical.
+  const blocks = {
+    light: css.slice(css.indexOf(':root {'), css.indexOf('@media')),
+    'dark (media)': css.slice(css.indexOf('@media'), css.indexOf(':root[data-theme="dark"]')),
+    'dark (forced)': css.slice(css.indexOf(':root[data-theme="dark"]')),
+  };
+  const vars = (block: string) =>
+    Object.fromEntries([...block.matchAll(/(--[\w-]+):\s*(#[0-9a-fA-F]{6})\s*;/g)].map((m) => [m[1], m[2]]));
+  const luminance = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => {
+      const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+      return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a: string, b: string) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  const ROLES = ['user', 'harness', 'model', 'tool', 'memory', 'logs', 'dataset', 'grader'];
+
+  it.each(Object.entries(blocks))('%s defines every role with at least 3:1 contrast on --bg', (_name, block) => {
+    const v = vars(block);
+    const problems = ROLES.flatMap((r) => {
+      const c = v[`--role-${r}`];
+      if (!c) return [`--role-${r} missing`];
+      const ratio = contrast(c, v['--bg']);
+      return ratio >= 3 ? [] : [`--role-${r} ${c} is ${ratio.toFixed(2)}:1 on ${v['--bg']}`];
+    });
+    expect(problems).toEqual([]);
+  });
+
+  it('defines the same dark colours in both dark blocks', () => {
+    expect(vars(blocks['dark (media)'])).toEqual(vars(blocks['dark (forced)']));
+  });
+});
+
 describe('text integrity', () => {
   // UTF-8 bytes read as Latin-1 turn a middle dot or curly apostrophe into two or
   // three junk characters (A-circumflex, a-circumflex + euro sign, ...); U+FFFD marks
   // bytes that failed to decode.
   const MOJIBAKE = /Â[ -¿]|â€|â†|Ã[\u0080-¿]|�/;
   const repo = join(app, '..');
-  const roots = ['app/src', 'app/templates', 'app/scripts', 'app/tests', 'docs', 'harness/python', 'harness/go'];
+  const roots = [
+    'app/src',
+    'app/templates',
+    'app/scripts',
+    'app/tests',
+    'docs',
+    'harness/python',
+    'harness/go',
+    'llms/python',
+    'llms/go',
+    'llms/finetune',
+    'llms/data',
+  ];
   const sources = roots.flatMap((r) => files(join(repo, r), /\.(astro|tsx?|mjs|css|mdx?|ya?ml|jsonl?|py|go)$/));
 
   it('finds source files to check', () => {
     expect(sources.length).toBeGreaterThan(50);
+    for (const r of ['llms/python', 'llms/go', 'llms/finetune', 'llms/data', 'llms/data/fixtures']) {
+      expect(sources.some((f) => relative(repo, f).startsWith(`${r}/`)), r).toBe(true);
+    }
   });
 
   it('has no mis-decoded characters in any source file', () => {

@@ -1,0 +1,17 @@
+---
+// Build-time wrapper: passes rep 0's per-call latency, tokens and correctness on
+// the dev split, and each noise repeat's score (ruling R30). Default: Haiku v2_rules.
+import EvalRunSimIsland from './EvalRunSim.tsx';
+import { loadLlmsData } from '../../lib/llmsData';
+import { DEFAULT_SIM_RUN, evalSimProps } from '../../lib/llmsAids';
+
+interface Props {
+  /** A response file name without .jsonl, e.g. triage__claude-haiku-5-5__v2_rules__default. */
+  run?: string;
+}
+
+const { run = DEFAULT_SIM_RUN } = Astro.props;
+const props = evalSimProps(loadLlmsData(), { run });
+---
+
+<EvalRunSimIsland client:visible {...props} />

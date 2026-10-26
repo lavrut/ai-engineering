@@ -1,0 +1,4 @@
+{"id": "r001", "ticket_id": "f001", "reply": "Sorry about the double charge. I have refunded the duplicate, you will see it by tomorrow.", "labels": {"addresses_issue": true, "tone": true, "no_false_promises": false}}
+{"id": "r002", "ticket_id": "f002", "reply": "Thanks for the report. Please send us the note so we can reproduce the crash with tables.", "labels": {"addresses_issue": true, "tone": true, "no_false_promises": true}}
+{"id": "r003", "ticket_id": "f004", "reply": "No worries, these things happen. Have a great day!", "labels": {"addresses_issue": false, "tone": false, "no_false_promises": true}}
+{"id": "r004", "ticket_id": "f007", "reply": "Use Forgot password on the login page and we will email you a reset link.", "labels": {"addresses_issue": true, "tone": true, "no_false_promises": true}}

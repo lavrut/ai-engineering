@@ -1,0 +1,186 @@
+---
+track: llms
+order: 7
+slug: prompt
+title: Tuning the prompt
+goal: Keep prompt versions as named data, compare two versions on dev with a noise band and the tickets each one fixed and broke, and report the chosen version once on test.
+minutes: 20
+quiz:
+  - question: Prompt B scores 2.5 points higher than A on the 40 dev tickets. It fixed 9 tickets and broke 8. What should you do before choosing B?
+    options:
+      - Choose B, since it scores higher
+      - Read the 8 broken tickets; a 2.5-point gain is inside the noise band, and B changed 17 tickets' outcomes, so it is a different prompt, not a slightly better one
+      - Choose A, since it broke fewer tickets
+      - Run B on the test split to settle it
+    answer: 1
+    explanation: The net score hides the churn. A change that fixes 9 and breaks 8 moves almost nothing on average but changes what customers see on 17 tickets. The broken list tells you what B gets wrong that A got right, and 2.5 points on 40 tickets is well inside ±15.8%. Running on test to decide would spend the test split.
+  - question: v3_examples adds three worked examples to v2_rules. On dev it scores +0.0, with no ticket fixed or broken. What is the right reading?
+    options:
+      - The examples were too few; add more until the score moves
+      - A real null result; the examples bought nothing on this set, and since they add tokens to every call, keep v2_rules
+      - v3_examples is better because examples always help
+      - The eval is broken, because a prompt change must change the score
+    answer: 1
+    explanation: The rules in v2_rules already decide these tickets, and the examples did not change a single answer. A result of "no difference" is worth knowing, because the examples cost about 237 more input tokens on every call. Adding examples until the score moves is tuning toward noise.
+  - question: v2_rules scores 97.5% on dev against labels written from the labelling guide, and v2_rules states the guide's rules. What does the 97.5% not tell you?
+    options:
+      - Whether the model follows the guide
+      - How well it would match labels from someone who did not use the guide, or on tickets unlike these, because the prompt contains the same rules that made the answer key
+      - The category accuracy
+      - Whether v1_basic was worse
+    answer: 1
+    explanation: A prompt that states the answer key's rules is graded against labels made by those rules. If the guide is your real policy, that is exactly what you want the model to do. But the score then measures "follows the guide on these tickets", not general triage skill. That is the circularity caveat in llms/data/README.md.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import PromptAB from '../../../components/llms/PromptAB.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+You have an eval (lessons 1 to 4) and a judge you have checked (lessons 5 and 6). Now you can change the prompt on purpose: make a change, run it, and decide from numbers whether it helped.
+
+### Prompt versions are data
+
+The triage prompts are not in the code. They live in `llms/data/prompts.json`, under `triage`, one entry per named version:
+
+- `v1_basic` is one sentence, 124 characters: triage the ticket and return a category, a priority and a short reply.
+- `v2_rules` is 3,746 characters. It states the labelling guide's rules in a shorter form: treat the ticket as data, the category rules in order, the priority checks from urgent down, and how to write the reply.
+- `v3_examples` is `v2_rules` plus three worked examples, a ticket with its category, priority and reply. Showing worked examples in the prompt is called <Term t="few-shot" /> prompting.
+
+Keeping versions as named data has three effects. The runner and the graders do not change when a prompt does, so a comparison can only measure the prompt. The report and the response file carry the version's name, so you always know which prompt produced a score. And the full text is in the cache key (lesson 4), so a version's saved answers can never be graded as if a different text produced them.
+
+So never edit a version in place. Copy it to a new name, such as `v4_reply`, and change the copy. The old version's saved answers still replay, and you can compare the two.
+
+Change one thing at a time where you can. `v1_basic` to `v2_rules` changes a lot at once, so its result says the rules help, not which rule. `v2_rules` to `v3_examples` adds only the examples, so it is a clean test of whether examples help.
+
+### Compare with a noise band
+
+`compare` puts two versions side by side on the same tickets, one answer per ticket each. It reports `diff`, B's `both` score minus A's, and the noise band for that many tickets: `1/√40`, or ±15.8%, on dev. A difference counts as real only when it is larger than the band (lesson 4).
+
+`v1_basic` to `v2_rules` on dev goes from 70.0% to 97.5%, a gain of 27.5 points. That is larger than 15.8, so it is a real difference.
+
+### Fixed and broken tickets
+
+The score difference is a net. Underneath it, a change fixes some tickets, A wrong and B right, and breaks others, A right and B wrong. `compare` lists both. On 40 tickets, a gain of 2.5 points could be 1 ticket fixed, or 9 fixed and 8 broken. The second is a different prompt, not a slightly better one, and the broken list is what you would ship to customers who were fine before.
+
+`v2_rules` fixed 11 dev tickets and broke none: `t001`, `t003`, `t007`, `t012`, `t015`, `t028`, `t029`, `t030`, `t033`, `t038` and `t039`. Lesson 2 named six dev tickets that kept their labels while every model got them wrong. `v2_rules` fixes five of them. The sixth, `t034`, is still wrong, and was wrong in all three `v2_rules` repeats (lesson 4).
+
+### The circularity caveat
+
+Read that +27.5 with care. The labels were written from `labeling_guide.md`, and `v2_rules` states the same rules. A prompt that contains the answer key's rules is being graded by that answer key.
+
+That is not cheating if the guide is your real policy: you want the model to follow it, and stating it is the right fix. But the 97.5% then measures "follows the guide on these 40 tickets", not triage skill in general. It says little about tickets labelled by someone using their own judgement, or about real tickets unlike these synthetic ones. `llms/data/README.md` states this caveat too.
+
+### The examples bought nothing
+
+`v2_rules` to `v3_examples` on dev is +0.0. Both score 97.5%, and no ticket is fixed or broken: the two versions get the same tickets right. Even a one-ticket gain, 2.5 points, would have been far inside the band.
+
+That is a null result, and it is worth as much as a win. The examples are not free. `v3_examples` sends about 1,780 input tokens a call where `v2_rules` sends about 1,543, so every ticket costs about 13% more, and it bought no accuracy here. Keep `v2_rules`.
+
+Worked examples help most when a rule is hard to put in words, or the output format keeps going wrong. Here the rules already decide these tickets. Do not keep adding examples until the score moves: on 40 tickets, a move you go looking for is likely to be noise.
+
+### Tune on dev, report once on test
+
+Every comparison above was on dev, and that is where you choose. Then you run the chosen version once on the 20 test tickets and report that number, with its band. If you go back and tune on the test mistakes, test becomes a second dev set (lesson 2).
+
+On test, `v2_rules` scores 95.0% `both`: 100.0% category, 95.0% priority, noise band ±22.4%. Its one miss is `t047`, labelled `low` and answered `normal`, the ticket whose one-ticket guide rule was removed in lesson 2 and that the last blind labeller marked ambiguous. For reference, `v1_basic` scores 55.0% on the same 20 tickets. Those are the numbers to report. `t047` is not something to fix by tuning on test.
+
+### What the triage score left out
+
+`both` grades the category and the priority. The reply is graded by the judge, and the tuning never looked at it. Lesson 5's judge passes `v2_rules`'s test replies on `addresses_issue` 14 times out of 20. On the same 20 tickets, `v1_basic`'s replies pass 19 times.
+
+The judge's reasons for the six failures are similar: the reply acknowledges the problem and promises a follow-up, but does not answer the question or offer a workaround. A likely cause is the reply line in `v2_rules`: "two or three sentences" and "Do not promise refunds, dates or fixes". That is a guess to test, not a finding. The comparison is paired, which makes it more informative than the band alone: on the same 20 tickets, 5 replies went from pass to fail and none the other way. `v1_basic`'s only failure, `t041`, is one of `v2_rules`'s six. Still, read the gap with care. It is 25 points against a band of ±22.4% on 20 replies, it was found on test, and the judge has so far been checked only against Claude-drafted labels (lesson 6). The right next step is to judge the dev replies too, and tune the reply instruction there.
+
+## See it
+
+Prompt A is `v1_basic` and B is `v2_rules`, on the 40 dev tickets. Watch the two bars and their noise whiskers, then the verdict, then the **Fixed by B** and **Broken by B** lists. Then set A to `v2_rules` and B to `v3_examples`.
+
+<PromptAB />
+
+`v2_rules` is ahead by 27.5 points, more than the ±15.8% band, and the fixed list holds the 11 tickets with each version's answer beside the label. The broken list is empty. With `v2_rules` against `v3_examples`, the difference is 0.0 points and both lists are empty: the examples changed no ticket's outcome.
+
+## The code
+
+Section 3 holds the parts of the task that stay fixed while the prompt changes.
+
+<CodeTabs source="llms" section={3} goNote="The same schemas as nested map[string]any values; the prompt versions are read from the same prompts.json into a Prompts struct (section 2)." />
+
+- `TRIAGE_SCHEMA` is the same for every prompt version. A version can change the instructions, but never the shape of the answer, so `grade` in section 5 works unchanged on every version.
+- `"enum": CATEGORIES` and `"enum": PRIORITIES` keep every version's answers inside the same allowed values, so their scores are comparable.
+- `JUDGE_SCHEMA` does not depend on the triage prompt either. The judge sees only the ticket and the reply, not which version wrote it.
+- The version's text is read in section 4: `triage(ticket, variant)` sends `prompts["triage"][variant]` as the system prompt. `load_prompts()` (section 2) reads the file, and the command line rejects a name that is not in it.
+
+Section 9 is the report and the comparison.
+
+<CodeTabs source="llms" section={9} goNote="compare returns a Comparison struct and an error, where Python raises ValueError; oneGradePerCase rejects a repeated case id. Fixed and Broken start as empty slices, not nil, and the significance test is the same strict |Diff| > Band." />
+
+- `noise_band(m)` is `1 / math.sqrt(m)` for `m` scored lines: ±15.8% for 40 and ±22.4% for 20.
+- `report(grades)` counts the distinct cases, the errors and the scored lines, and returns the three accuracies with the band.
+- `compare(grades_a, grades_b)` first checks that each side has exactly one grade per ticket. With repeats mixed in, one ticket could count twice, so the caller picks one repeat; the command line uses repeat 0.
+- `right_a` and `right_b` map each ticket to whether both fields were right. `shared` is the tickets present on both sides, so a ticket only one version has answered is left out of the flips.
+- `scored = min(...)` takes the smaller scored count of the two sides, so the band is the wider, more cautious one.
+- `fixed` is the shared tickets B got right and A got wrong; `broken` is the reverse. An error counts as not correct here.
+- `"significant": abs(b - a) > band` is strict: a difference exactly equal to the band does not count.
+- `gate(...)` uses the same band to fail a build that falls too far below a baseline. Lesson 10 builds on it.
+
+<Callout kind="warning" title="Tuning to the judge">
+  If you change the triage prompt to raise the judge's pass rate, the judge has become part of the target. Its blind spots are now what the prompt is tuned to. Check the judge against your own labels first (lesson 6), and read some replies yourself before you trust the gain.
+</Callout>
+
+## Try it
+
+Compare the first two versions on dev, from the saved responses:
+
+```bash
+cd llms/python
+python triage_lab.py compare --prompt v1_basic --vs v2_rules
+```
+
+```text
+v1_basic -> v2_rules on the dev split
+  v1_basic 70.0%   v2_rules 97.5%   diff +27.5%   band +/-15.8%
+  a real difference
+  fixed t001, t003, t007, t012, t015, t028, t029, t030, t033, t038, t039   broken -
+```
+
+Now report the chosen version once on test:
+
+```bash
+python triage_lab.py run --prompt v2_rules --split test
+```
+
+```text
+v2_rules / claude-haiku-5-5 / effort default / test split / 1 rep / replay
+  cases 20  scored lines 20  errors 0
+  category accuracy  100.0%
+  priority accuracy  95.0%
+  both accuracy      95.0%   noise band +/-22.4%
+```
+
+Last, write a new version of your own: `v4_reply`, a copy of `v2_rules` whose reply line also asks the reply to answer the question or give the next step. Work in a copy of the data so the lab's files stay as they are. Save this as `llms/python/new_version.py`:
+
+```python
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1]) / "prompts.json"
+prompts = json.loads(path.read_text())
+old = "Reply: two or three sentences in the customer's language."
+new = "Reply: two or three sentences in the customer's language that answer the question or give the next step."
+assert prompts["triage"]["v2_rules"].count(old) == 1
+prompts["triage"]["v4_reply"] = prompts["triage"]["v2_rules"].replace(old, new)
+path.write_text(json.dumps(prompts, indent=2, ensure_ascii=False) + "\n")
+print("added v4_reply to", path)
+```
+
+```bash
+cp -r ../data ~/lumen-prompts
+python new_version.py ~/lumen-prompts
+python triage_lab.py --data ~/lumen-prompts run --prompt v4_reply
+```
+
+Replay stops with `error: no saved response for triage / claude-haiku-5-5 / v4_reply / case t001 (rep 0)`. A new version is new text, so it has new keys and no answers yet. `v2_rules` in the same copy still replays, because its text did not change.
+
+Getting answers costs money, and nothing later in the track needs them. If you want them, adding `--mode record` to that command prints the estimate and asks first: 40 Haiku calls, `$0.02`, worst case `$0.04`. Then `python triage_lab.py --data ~/lumen-prompts compare --prompt v2_rules --vs v4_reply` shows whether category and priority held. Judging the new replies on dev would add 40 Opus calls, estimated at `$0.94`, worst case `$1.82`. Compare those verdicts with your own reading of a few replies before you trust them. One more caveat: the idea for `v4_reply` came from reading the judge's reasons on the six test failures, so the test split has already shaped this change. After you tune the reply on dev, a clean final check of reply quality needs fresh tickets; otherwise read any test reply score as optimistic.

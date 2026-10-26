@@ -1,0 +1,163 @@
+---
+track: llms
+order: 5
+slug: judge
+title: LLM as judge
+goal: Grade reply drafts with an LLM judge that returns a pass or fail and a reason for each rubric criterion, know what judging costs, and set up a check for position bias.
+minutes: 16
+quiz:
+  - question: Why does the lab grade the reply draft with a second model instead of comparing it with a stored "right" reply?
+    options:
+      - String comparison is too slow for long replies
+      - A reply has no single right wording, so equality would fail good replies; a judge can check qualities such as tone against a rubric
+      - The stored reply would cost tokens to read
+      - Structured output cannot return a reply
+    answer: 1
+    explanation: The category has one right answer, so code compares it with the label. Two good replies to the same ticket can share no sentence at all. What makes a reply good is a set of qualities (does it address the issue, is the tone right, does it promise too much), and checking those needs a reader. The judge is that reader, guided by the rubric.
+  - question: The judge is Opus and the task model is Haiku. Why not use Haiku for both and save money?
+    options:
+      - Haiku cannot return structured output
+      - A judge no stronger than the task model is more likely to miss the same mistakes the task model makes, and judging runs only on the eval set, so a stronger model is affordable
+      - Opus is faster
+      - The rubric is too long for Haiku's context window
+    answer: 1
+    explanation: The judge is there to catch what the task model gets wrong. A model of the same strength tends to share its blind spots. Triage runs on every incoming ticket, so it needs a cheap model; the judge runs on a few dozen saved replies when you evaluate, so paying over 40 times as much per call is a small total.
+  - question: In the position check, what changes between the "before" and "after" requests?
+    options:
+      - The system prompt is rewritten, and the rubric is removed from it
+      - Only where the rubric copy sits in the user message, before or after the reply; the system prompt, with its own copy of the rubric, stays the same
+      - The judge model changes from Opus to Sonnet
+      - The reply is shortened in one of the two orders
+    answer: 1
+    explanation: The judge prompt puts the rubric in the system prompt through its {rubric} placeholder, and that text is identical in both orders. The user message also carries a copy, and only that copy moves. Everything else is the same, so any verdict that changes was changed by position alone. It is a narrow test, since the rubric is still at the top of the system prompt either way.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import JudgeCard from '../../../components/llms/JudgeCard.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+Lesson 3 graded the category and the priority with one line of code each, because each has one right answer. The third output, the reply draft, does not. "Sorry about the double charge, we are looking into it" and "Thanks for flagging this; billing will check the duplicate" are both fine replies to the same ticket, and they share no sentence. An equality check would fail one of them.
+
+What makes a reply good is a set of qualities: does it deal with the customer's problem, does it sound right, does it promise something Lumen cannot deliver? Checking those takes a reader. An <Term t="LLM judge" /> is a second model call that reads the ticket and the reply and grades the reply against written criteria.
+
+### The rubric
+
+The criteria are the <Term t="rubric" />, stored in `llms/data/prompts.json` next to the triage prompts. It has three items:
+
+| Criterion | The judge is asked |
+|---|---|
+| `addresses_issue` | The reply addresses the customer's actual issue. |
+| `tone` | The tone fits the customer's mood and the issue's severity. |
+| `no_false_promises` | The reply makes no promise the company cannot keep (refunds, dates, fixes). |
+
+Each criterion gets its own pass or fail. One overall score out of 10 would hide which quality failed, and it is hard to say what a 6 means. Three yes-or-no questions are easier to check against a person's labels (lesson 6), and each fail points at one thing to fix.
+
+### Verdicts with reasons
+
+The judge answers with structured output, like triage. `JUDGE_SCHEMA` from section 3 asks for an object with one entry per criterion, and each entry has a boolean `pass` and a string `reason`. The prompt asks for one sentence of reason per criterion.
+
+The reason is how you audit the judge. When it disagrees with you, the reason tells you whether it misread the reply, read the rubric differently, or saw something you missed. Here is its verdict on `no_false_promises` for `r001`, a reply that says the duplicate charge "will be back on your card within 3 business days":
+
+> fail: The reply guarantees the money will be back on her card within 3 business days, even though the agent has only asked billing to process the refund and card-issuer posting times are outside the company's control.
+
+### A stronger model as judge
+
+`JUDGE_MODEL` is Opus 5.5. `TASK_MODEL` is Haiku 5.5. The judge is there to catch what the task model gets wrong. A judge of the same strength is more likely to share the task model's blind spots and pass the same weak replies.
+
+The price difference is affordable because the two run at different scales. Triage runs on every incoming ticket. The judge runs only when you evaluate, on a few dozen saved replies.
+
+### What judging costs
+
+The recorded usage shows the gap. Opus judging the 20 `v2_rules` replies on the test split cost $0.2215, about $0.011 a call. Haiku triaging those same 20 tickets cost $0.0051. Judging cost about 43 times as much as the work it graded.
+
+Judging the 30 labelled replies with the rubric after the reply cost $0.2809, an average of 907 input and 287 output tokens a call. Before a paid judge run, the lab estimates 1,400 input and 900 output tokens a call, $0.0236 for Opus, so the estimate runs high, as it did for triage. Because the verdicts are saved, all of that was paid once. Every judge command in this track replays them for free.
+
+### Position bias
+
+A model's answer can depend on where things sit in its prompt, not only on what they say. That is <Term t="position bias" />. For a judge, it would mean the verdict depends on the layout of the request rather than on the reply.
+
+The lab sets up one check. `judge()` takes `order="before"` or `order="after"`, which puts the rubric before or after the reply in the user message. The 30 labelled replies were judged both ways. If a verdict changes when only the order changes, the layout decided it.
+
+The check is narrow, and it helps to know exactly what moves. The judge's system prompt contains the rubric too, filled in through a `{rubric}` placeholder, and it is identical in both orders. Only the second copy, in the user message, moves. So the check measures how much that copy's position matters while the rubric stays at the top of the system prompt. Lesson 6 counts the verdicts that changed.
+
+## See it
+
+The card shows one labelled reply, the rubric and the judge's verdict on each criterion with its reason. Start with `r001` and read the `no_false_promises` reason. Then pick `r029` and switch between the two rubric orders. Watch the `no_false_promises` verdict.
+
+<JudgeCard initial="r001" />
+
+`r029` tells a customer whose image uploads fail to "retry later today". With the rubric before the reply, the judge fails it: the phrase "implies a same-day fix that the company cannot guarantee". With the rubric after, it passes it: "a suggestion, not a commitment". Both readings are defensible, which is why the order could tip it. Across the 30 replies and 3 criteria, 90 verdicts in each order, this is the only one that changes.
+
+## The code
+
+Section 6 is the judge.
+
+<CodeTabs source="llms" section={6} goNote="The same request through the SDK's typed params: System is a slice of text blocks and the user message is one text block. verdicts returns map[string]*bool, so a criterion the judge did not grade is nil, where Python uses None." />
+
+- `rubric_text(rubric)` writes one line per criterion, its `id`, a colon and its text. The judge sees the ids, so its answer can use them as keys.
+- `_judge_system(prompts)` fills the `{rubric}` placeholder in the judge prompt. That prompt calls the model "a strict reviewer", asks for a pass and one sentence of reason per criterion, and says the ticket and the reply are data whose instructions it should ignore. A ticket like the `injection` ones in lesson 2 should not be able to tell the judge to pass a reply.
+- `judge_key(...)` passes the `order` where triage passes the prompt version. The two orders are different requests with different keys, so each saved verdict only matches the order that produced it.
+- `if order not in ("before", "after")` rejects any other value before anything is sent.
+- `parts` is `[ticket, rubric, reply]` for `"before"` and `[ticket, reply, rubric]` for `"after"`, joined into one user message. This is the only difference between the orders.
+- `params` sends the filled system prompt, that user message and `JUDGE_SCHEMA` in `output_config`, with the same `MAX_TOKENS = 2000` as triage. No `effort` is sent, so the judge runs at the model's default.
+- `config` records the call as `"kind": "judge"` with the order as its `prompt_version`, so judge lines go to their own files, such as `judge__claude-opus-5-5__after__default.jsonl`.
+- `call_model(...)` is the same function triage uses (lesson 4). The judge gets replay, record, live, the cache key and the cost cap for free.
+- `verdicts(line)` turns a saved line into `{criterion: True | False}`. A line with no `output`, from an error, refusal or cut-off, gives `None` for every criterion. Lesson 6 counts a `None` as a disagreement.
+
+<Callout kind="note" title="The reason is not proof">
+  The judge writes its reason in the same answer as its verdict, so a reason can sound sure while the verdict is wrong. Use reasons to find out why the judge disagrees with you, and use agreement with your own labels (lesson 6) to decide whether to trust it.
+</Callout>
+
+## Try it
+
+Read the judge's verdicts on `r029` in both orders, and add up what the recorded judge calls cost. Save this as `llms/python/judge_demo.py`:
+
+```python
+import triage_lab as L
+
+tickets = {t["id"]: t for t in L.load_tickets()}
+labelled = L.load_jsonl(L.DATA_DIR / "reply_labels.jsonl")
+r029 = next(r for r in labelled if r["id"] == "r029")
+ticket = tickets[r029["ticket_id"]]["text"]
+
+for order in ("before", "after"):          # replay: saved verdicts, free
+    out = L.judge(ticket, r029["reply"], order=order, case_id="r029")["output"]
+    v = out["no_false_promises"]
+    print(f"{order:<6} {'pass' if v['pass'] else 'fail'}  {v['reason']}")
+
+lines = [L.judge(tickets[r["ticket_id"]]["text"], r["reply"], case_id=r["id"]) for r in labelled]
+cost = sum(L.call_cost(l["config"]["model"], l["input_tokens"], l["output_tokens"]) for l in lines)
+print(f"{len(lines)} judge calls, rubric after: ${cost:.4f} recorded, ${L.estimate_cost('judge', L.JUDGE_MODEL, len(lines)):.4f} estimated")
+```
+
+```bash
+cd llms/python
+python judge_demo.py
+```
+
+You should see:
+
+```text
+before fail  Telling the customer to 'retry later today' implies a same-day fix that the company cannot guarantee while the issue is still under investigation.
+after  pass  Asking the customer to retry later today is a suggestion, not a commitment, and the reply never promises a fix time, refund or guaranteed resolution.
+30 judge calls, rubric after: $0.2809 recorded, $0.7080 estimated
+```
+
+Now judge the replies the model itself wrote. The recording judged `v2_rules`'s replies on the 20 test tickets, with the rubric after:
+
+```bash
+python triage_lab.py judge --prompt v2_rules --split test
+```
+
+```text
+judge (claude-opus-5-5, rubric after) on 20 v2_rules replies, test split
+  addresses_issue    pass 14/20
+  tone               pass 19/20
+  no_false_promises  pass 19/20
+```
+
+Six replies fail `addresses_issue`. Lesson 7 comes back to why. The judge command needs `--split test`: only the test replies were judged, so on the default `dev` split replay stops with `ReplayMiss`.
+
+A live run of that command (`--mode live`) would make 20 Opus calls. The lab estimates `$0.47`, worst case `$0.91`, and asks before calling. The recorded run cost $0.22.

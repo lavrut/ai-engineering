@@ -1,0 +1,60 @@
+{"id": "t001", "category": "billing", "priority": "high", "ambiguous": false, "reason": "H1: a duplicate $9.99 charge is a wrongful charge under $100."}
+{"id": "t002", "category": "bug", "priority": "normal", "ambiguous": false, "reason": "Normal: a malfunction that used to work and does not block access."}
+{"id": "t003", "category": "account", "priority": "high", "ambiguous": false, "reason": "H2: one person can't sign in and the ticket gives no workaround."}
+{"id": "t004", "category": "how_to", "priority": "low", "ambiguous": false, "reason": "L2: a general how-to question with nothing broken."}
+{"id": "t005", "category": "feature_request", "priority": "low", "ambiguous": false, "reason": "L3: a personal wish with no team, purchase or renewal impact."}
+{"id": "t006", "category": "outage", "priority": "urgent", "ambiguous": false, "reason": "U3: a whole team can't open their notes (C1a, more than one user)."}
+{"id": "t007", "category": "billing", "priority": "urgent", "ambiguous": false, "reason": "U4: a $120 charge after cancellation is over $100; the dispute threat is ignored per R0."}
+{"id": "t008", "category": "bug", "priority": "high", "ambiguous": false, "reason": "H2: one person can't open their notes in the iOS app and no workaround is given; Friday is not within 24 hours."}
+{"id": "t009", "category": "account", "priority": "urgent", "ambiguous": false, "reason": "U2: a login alert from an unknown city and unrecognized shares are signs of unauthorized access."}
+{"id": "t010", "category": "how_to", "priority": "low", "ambiguous": false, "reason": "L2: a general how-to question."}
+{"id": "t011", "category": "feature_request", "priority": "normal", "ambiguous": false, "reason": "N-F: a feature request that names a team of 12 relying on it."}
+{"id": "t012", "category": "bug", "priority": "normal", "ambiguous": false, "reason": "Normal: both issues (sync, search) are one-user malfunctions that don't block access; sync is mentioned first."}
+{"id": "t013", "category": "billing", "priority": "normal", "ambiguous": false, "reason": "Normal: a request for staff to act (a custom invoice)."}
+{"id": "t014", "category": "bug", "priority": "low", "ambiguous": false, "reason": "L1: a wrong word count is cosmetic."}
+{"id": "t015", "category": "account", "priority": "low", "ambiguous": false, "reason": "L2: a general question about changing the display name (C3)."}
+{"id": "t016", "category": "how_to", "priority": "low", "ambiguous": false, "reason": "L2: a general question about notification settings; tone is ignored."}
+{"id": "t017", "category": "feature_request", "priority": "low", "ambiguous": false, "reason": "L3: personal wishes with no stated business impact."}
+{"id": "t018", "category": "outage", "priority": "high", "ambiguous": true, "reason": "H2: one person can't use the mobile app and no workaround is given; C1b applies because Lumen says it is 'temporarily unavailable'."}
+{"id": "t019", "category": "billing", "priority": "high", "ambiguous": false, "reason": "H1: a $48 payment for an upgrade not received ties with the H4 shared-notebook issue, and the charge is mentioned first."}
+{"id": "t020", "category": "bug", "priority": "urgent", "ambiguous": false, "reason": "U1: the note content is gone and was not recovered."}
+{"id": "t021", "category": "account", "priority": "high", "ambiguous": false, "reason": "H2: one person can't sign in, the reset email never arrives, and no workaround is given."}
+{"id": "t022", "category": "how_to", "priority": "low", "ambiguous": false, "reason": "L2: a general question about what happens when notes are moved or notebooks merged."}
+{"id": "t023", "category": "feature_request", "priority": "low", "ambiguous": false, "reason": "L3: a personal wish with no stated impact."}
+{"id": "t024", "category": "outage", "priority": "urgent", "ambiguous": false, "reason": "U3: 40 people in one office can't open their notes (503, C1)."}
+{"id": "t025", "category": "billing", "priority": "low", "ambiguous": false, "reason": "L2: a general question about discounts."}
+{"id": "t026", "category": "bug", "priority": "normal", "ambiguous": false, "reason": "Normal: two non-blocking malfunctions (a freeze and the shortcut)."}
+{"id": "t027", "category": "account", "priority": "high", "ambiguous": false, "reason": "H2/H3: one person can't sign in, no workaround is given, and the deadline is today."}
+{"id": "t028", "category": "bug", "priority": "normal", "ambiguous": false, "reason": "Normal: a broken import is a malfunction that doesn't block access."}
+{"id": "t029", "category": "feature_request", "priority": "normal", "ambiguous": false, "reason": "N-F: a feature request tied to a deal being evaluated."}
+{"id": "t030", "category": "billing", "priority": "low", "ambiguous": false, "reason": "L2: a general question about updating the payment method (C2 beats how_to)."}
+{"id": "t031", "category": "bug", "priority": "high", "ambiguous": false, "reason": "H4: a share link that several coworkers can't open; the embedded instructions are ignored per R0."}
+{"id": "t032", "category": "bug", "priority": "normal", "ambiguous": false, "reason": "Normal: slowness for one user is a non-blocking malfunction."}
+{"id": "t033", "category": "account", "priority": "low", "ambiguous": false, "reason": "L2: an intent followed by a what/how-long question about deleting an account."}
+{"id": "t034", "category": "how_to", "priority": "high", "ambiguous": true, "reason": "H3: an end-of-day deadline, and high is checked before L2 even though nothing is broken."}
+{"id": "t035", "category": "feature_request", "priority": "low", "ambiguous": false, "reason": "L3: a personal wish; the sarcasm is ignored."}
+{"id": "t036", "category": "billing", "priority": "urgent", "ambiguous": false, "reason": "U4: a wrongful $480 charge that caused an overdraft."}
+{"id": "t037", "category": "bug", "priority": "low", "ambiguous": true, "reason": "L1: a misplaced spellcheck underline is cosmetic."}
+{"id": "t038", "category": "bug", "priority": "normal", "ambiguous": false, "reason": "Normal: a one-user feature failure (H4 needs a group) that doesn't block access to notes."}
+{"id": "t039", "category": "account", "priority": "low", "ambiguous": false, "reason": "L2: a general question about adding accounts."}
+{"id": "t040", "category": "how_to", "priority": "low", "ambiguous": false, "reason": "L2: both questions are low, and offline mode is mentioned first."}
+{"id": "t041", "category": "billing", "priority": "low", "ambiguous": false, "reason": "L2: a general question about what happens when switching billing."}
+{"id": "t042", "category": "billing", "priority": "high", "ambiguous": false, "reason": "H1: a charge after cancellation with no amount stated over $100."}
+{"id": "t043", "category": "billing", "priority": "normal", "ambiguous": false, "reason": "Normal: a request for staff to send a copy of a past invoice."}
+{"id": "t044", "category": "bug", "priority": "normal", "ambiguous": false, "reason": "Normal: wrong search results are a non-blocking malfunction."}
+{"id": "t045", "category": "bug", "priority": "normal", "ambiguous": false, "reason": "Normal: a checkbox that toggles itself is a malfunction that doesn't block access."}
+{"id": "t046", "category": "bug", "priority": "normal", "ambiguous": false, "reason": "Normal: duplicated content is excluded from U1; the embedded instruction is ignored."}
+{"id": "t047", "category": "account", "priority": "low", "ambiguous": true, "reason": "L2: a how-to question about transferring admin rights, though it likely needs staff action (which would make it normal)."}
+{"id": "t048", "category": "account", "priority": "low", "ambiguous": false, "reason": "L2: a general question about merging accounts."}
+{"id": "t049", "category": "account", "priority": "low", "ambiguous": false, "reason": "L2: a general question about changing the password."}
+{"id": "t050", "category": "how_to", "priority": "low", "ambiguous": false, "reason": "L2: the customer only says the attempt didn't work, so it's how_to per the tie-breaker."}
+{"id": "t051", "category": "how_to", "priority": "low", "ambiguous": false, "reason": "L2: a general question about changing the language."}
+{"id": "t052", "category": "how_to", "priority": "urgent", "ambiguous": false, "reason": "U1: the content is gone whoever caused it; deleting it themselves makes it how_to."}
+{"id": "t053", "category": "feature_request", "priority": "low", "ambiguous": false, "reason": "L3: personal use with no team, purchase or renewal impact."}
+{"id": "t054", "category": "feature_request", "priority": "low", "ambiguous": false, "reason": "L3: personal wishes (the icon size is cosmetic too) with no stated impact."}
+{"id": "t055", "category": "feature_request", "priority": "normal", "ambiguous": false, "reason": "N-F: the renewal depends on the feature."}
+{"id": "t056", "category": "outage", "priority": "urgent", "ambiguous": false, "reason": "U3: more than one person (the Berlin office) can't sign in."}
+{"id": "t057", "category": "outage", "priority": "normal", "ambiguous": true, "reason": "Normal: reloading is a stated workaround, so H4 fails; the category is C1a because a whole feature fails for more than one user."}
+{"id": "t058", "category": "outage", "priority": "urgent", "ambiguous": false, "reason": "U3: teachers across several schools can't open the notebooks they already had."}
+{"id": "t059", "category": "feature_request", "priority": "low", "ambiguous": false, "reason": "L3: a personal wish."}
+{"id": "t060", "category": "bug", "priority": "normal", "ambiguous": false, "reason": "Normal: a non-blocking malfunction; the missed deadlines have already passed and the app shows the reminders."}

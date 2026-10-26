@@ -1,0 +1,22 @@
+{
+  "triage": {
+    "v1_basic": "Fixture prompt v1: triage the ticket.",
+    "v2_rules": "Fixture prompt v2: triage the ticket using the category and priority rules.",
+    "v3_examples": "Fixture prompt v3: rules plus examples."
+  },
+  "judge": "Fixture judge prompt. Rubric:\n{rubric}",
+  "rubric": [
+    {
+      "id": "addresses_issue",
+      "text": "The reply addresses the customer's actual issue."
+    },
+    {
+      "id": "tone",
+      "text": "The tone fits the customer's mood and the issue's severity."
+    },
+    {
+      "id": "no_false_promises",
+      "text": "The reply makes no promise the company cannot keep (refunds, dates, fixes)."
+    }
+  ]
+}

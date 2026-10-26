@@ -1,19 +1,32 @@
 ---
 // Build-time wrapper for the FlowDiagram island: picks the diagram by key and
-// passes along only the harness sections that its steps link to.
+// passes along only the source sections that its steps link to. A step's
+// `code.source` (default 'harness') says which files the section comes from.
 import FlowDiagramIsland from './FlowDiagram.tsx';
 import { extractSection } from '../lib/regions';
+import { codeKey, type CodeSource } from '../lib/diagram';
+import { evalPipeline } from '../data/diagrams/eval-pipeline';
 import { harnessFlow } from '../data/diagrams/harness-flow';
 import { requestResponse } from '../data/diagrams/request-response';
 import { toolRoundtrip } from '../data/diagrams/tool-roundtrip';
-import pythonSource from '../../../harness/python/harness.py?raw';
-import goSource from '../../../harness/go/main.go?raw';
+import harnessPython from '../../../harness/python/harness.py?raw';
+import harnessGo from '../../../harness/go/main.go?raw';
+import llmsPython from '../../../llms/python/triage_lab.py?raw';
+import llmsGo from '../../../llms/go/main.go?raw';
+import loraPython from '../../../llms/finetune/lora.py?raw';
 
 const diagrams = {
+  'eval-pipeline': evalPipeline,
   'harness-flow': harnessFlow,
   'request-response': requestResponse,
   'tool-roundtrip': toolRoundtrip,
 } as const;
+
+const sources: Record<CodeSource, { python: string; go?: string }> = {
+  harness: { python: harnessPython, go: harnessGo },
+  llms: { python: llmsPython, go: llmsGo },
+  lora: { python: loraPython },
+};
 
 interface Props {
   diagram: keyof typeof diagrams;
@@ -24,9 +37,15 @@ const { diagram: key, mode } = Astro.props;
 const diagram = diagrams[key];
 if (!diagram) throw new Error(`FlowDiagram: unknown diagram "${key}"`);
 
-const sections = [...new Set(diagram.steps.flatMap((s) => (s.code ? [s.code.section] : [])))];
-const codePython = Object.fromEntries(sections.map((n) => [n, extractSection(pythonSource, n)]));
-const codeGo = Object.fromEntries(sections.map((n) => [n, extractSection(goSource, n)]));
+const codePython: Record<string, string> = {};
+const codeGo: Record<string, string> = {};
+for (const step of diagram.steps) {
+  if (!step.code) continue;
+  const src = sources[step.code.source ?? 'harness'];
+  const k = codeKey(step.code);
+  codePython[k] = extractSection(src.python, step.code.section);
+  if (src.go) codeGo[k] = extractSection(src.go, step.code.section);
+}
 ---
 
 <FlowDiagramIsland client:visible diagram={diagram} codePython={codePython} codeGo={codeGo} mode={mode} />

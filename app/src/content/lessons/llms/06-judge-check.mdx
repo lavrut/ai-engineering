@@ -1,0 +1,205 @@
+---
+track: llms
+order: 6
+slug: judge-check
+title: Judging the judge
+goal: Measure how often an LLM judge agrees with human labels, correct that for chance with Cohen's kappa, count position flips, and review the reply labels yourself.
+minutes: 22
+quiz:
+  - question: Your labels say 75% of replies pass. A judge says pass to every reply. What are its agreement and kappa?
+    options:
+      - 75% agreement and kappa 0.75
+      - 75% agreement and kappa 0, because always saying pass matches the labels exactly as often as chance predicts
+      - 100% agreement, because it never fails a good reply
+      - 25% agreement and kappa below 0
+    answer: 1
+    explanation: The judge matches every pass label and misses every fail, so it agrees on 75%. But a rater who always says pass would agree that often with any labels that are 75% pass, so chance agreement is also 75%. Kappa is (0.75 − 0.75) / (1 − 0.75) = 0. The judge has shown no skill at telling good replies from bad ones.
+  - question: With the rubric before the reply, the judge fails r029 on no_false_promises; with it after, it passes. What does this flip tell you?
+    options:
+      - The "after" order is correct, because it matches the label
+      - The verdict on that reply depends on layout, so it is a borderline case; one flip in 90 verdicts is small, but many flips would mean the judge reacts to layout instead of the reply
+      - The judge is broken and cannot be used
+      - The label for r029 is wrong
+    answer: 1
+    explanation: Nothing about the reply changed, so the flip shows that position tipped a close call ("retry later today" can be read as a suggestion or a promise). It does not say which verdict is right. Count flips across all verdicts; a few mark borderline cases, many mean the prompt layout is steering the judge.
+  - question: Agreement on tone is low. You rewrite the judge prompt until it matches all 30 labels, then report its agreement on those 30. What went wrong?
+    options:
+      - Nothing; the judge now agrees with the labels
+      - The 30 labels were used to tune the judge, so agreement on them is now optimistic; measure on labels you did not tune on
+      - Judge prompts should never be changed
+      - Tone cannot be judged by a model
+    answer: 1
+    explanation: This is the dev and test problem from lesson 2 again. Every change you keep because it raised agreement on these 30 fits the judge to them. To know how it does on replies it has not seen, label a fresh set and measure there once.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import AgreementView from '../../../components/llms/AgreementView.astro';
+import LabelingPage from '../../../components/llms/LabelingPage.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+Lesson 5 ended with a number: the judge passes 14 of 20 `v2_rules` replies on `addresses_issue`. Before you act on it, you need to know whether the judge grades the way a careful person would. A code grader you can read and test. A judge you can only measure: give it replies that a person has already labelled and count how often the two agree.
+
+### Whose labels these are
+
+`llms/data/reply_labels.jsonl` holds 30 reply drafts, `r001` to `r030`, each written for one dev ticket and labelled pass or fail on the three rubric criteria. Some are good replies and some are plainly bad, such as `r015`: "Ha, sync problems are the worst! Just restart your phone and everything will be fixed. :)" They stand in for the human side of every agreement number in this lesson.
+
+**Claude drafted these labels, and they have not been reviewed by you yet.** `llms/data/README.md` marks them as pending your review. Two drafted tone labels, on `r017` and `r022`, were corrected before any judge verdict was committed, so neither was changed to match a verdict. `git log -- llms/data/reply_labels.jsonl llms/data/responses/` shows the label fix committed at 19:31 on 2026-10-25 and the first judge verdicts at 20:08. Until you review them, read every number below as "the judge against Claude-drafted labels": one model agreeing with another. That probably overstates how well the judge would agree with you, for the same reason as the 60/60 in lesson 2.
+
+The Try it below has a labelling page for all 30 replies. Once you review them there, the agreement view on this page uses your labels instead.
+
+### Agreement
+
+<Term t="agreement" /> is the simplest measure: on one criterion, the share of replies where the judge's verdict equals the label. With the rubric after the reply, the judge agrees on 28 of 30 replies for `addresses_issue` (93.3%), 29 of 30 for `tone` (96.7%) and 30 of 30 for `no_false_promises` (100%).
+
+A reply the judge could not grade, because its call failed or was refused, counts as a disagreement. None of these 30 were ungraded.
+
+### Why agreement is not enough
+
+Agreement ignores how often each side says pass. The drafted labels pass 24 of 30 replies on `addresses_issue`. A "judge" that says pass to everything, without reading a word, would agree 80% of the time.
+
+Take a plainer case. If 75% of your labels are pass and the judge always says pass, it agrees on 75%. That is exactly what luck would give, so it has shown no skill at all.
+
+<Term t="Cohen's kappa" /> corrects for that. It compares the observed agreement, `po`, with the agreement two raters would reach by chance given how often each says pass, `pe`:
+
+```text
+kappa = (po - pe) / (1 - pe)
+```
+
+Kappa is 1 for perfect agreement, 0 for no better than chance and below 0 for worse than chance. As long as the labels contain at least one fail, the always-pass judge scores kappa 0 however high its agreement looks.
+
+Work it through for `addresses_issue`. The judge passes 22 of 30 replies and the labels pass 24. By chance they would both say pass `(22/30) × (24/30)` of the time and both say fail `(8/30) × (6/30)` of the time, so `pe` is 0.64. `po` is 28/30, or 0.933, so kappa is `(0.933 − 0.64) / (1 − 0.64)`, or 0.81. With the rubric after the reply, kappa is 0.81 for `addresses_issue`, 0.89 for `tone` and 1.00 for `no_false_promises`. A common rough reading takes kappa above 0.8 as strong agreement.
+
+Thirty replies is a small set. One reply is 3.3 points of agreement, and it moves kappa further: one disagreement on `no_false_promises` takes kappa from 1.00 to 0.92. Treat these as rough numbers.
+
+### Reading the disagreements
+
+There are three, and in each one the judge is stricter than the label:
+
+- `r022`, `addresses_issue`: "Your account will be unlocked within the hour. Don't worry!" The customer's two-factor device is broken and they have no recovery codes. The judge fails it because the reply "ignores the broken two-factor device and missing recovery codes". The label passes it.
+- `r003`, `addresses_issue`: a whole team cannot reach Lumen half an hour before a client presentation, and the reply promises a fix "within 15 minutes" and nothing else. The judge wants a way to reach the notes before the presentation.
+- `r012`, `tone`: a one-line display-name question gets "We value every customer and your feedback matters greatly to us." The judge calls that dismissive boilerplate.
+
+A disagreement is a question, not a verdict against the judge. You may well side with the judge on `r022`. That is the point of reviewing the labels yourself: sometimes the label is what was wrong.
+
+### Position flips
+
+Lesson 5 judged each labelled reply twice, with the rubric copy in the user message before or after the reply. A position flip is a verdict that changes between the two orders. Here there is one in 90: `r029` on `no_false_promises`, where "retry later today" is a promise in one order and a suggestion in the other.
+
+The flip moves the numbers. With the rubric before the reply, the judge fails `r029`, disagreeing with the label, so `no_false_promises` agreement is 29 of 30 and kappa 0.92. With it after, it is 30 of 30 and 1.00. The other two criteria are identical in both orders.
+
+A flip does not say which order is right. It marks a verdict that position can tip, so a close call. A few flips are normal. Many would mean the layout of the prompt, not the reply, is deciding verdicts. You would then fix one order for every call, or run both and treat a disagreement between them as "unsure".
+
+### When agreement is low
+
+Work through it in this order:
+
+1. **Read the disagreements and the judge's reasons.** Decide for each one whether the label or the judge is wrong.
+2. **Fix wrong labels without looking at the judge.** Re-read the reply against the rubric, not the verdict. A label changed to match the judge makes agreement measure nothing, the same mistake as the `t047` rule in lesson 2. The labelling page below does not show the judge's verdicts, for this reason.
+3. **Sharpen a vague criterion.** If the judge and you read a criterion differently, write down what it means. For example: does "retry later today" count as a promise? Split a criterion that mixes two questions.
+4. **Change the judge.** Add a passing and a failing example to the judge prompt, or try a stronger model.
+5. **Measure again on labels you did not tune on.** Rewriting the judge until it matches these 30 makes agreement on these 30 optimistic, like tuning on the test set. Label a fresh set for the final check.
+6. **Stop trusting that criterion if it stays low.** Have people grade it, and keep the judge for the criteria where it agrees.
+
+## See it
+
+The table compares the judge's verdicts with the labels, per criterion. The line at the top says whose labels it is using. Until you review them, that is the drafted file. Press **Swap order** and watch the `no_false_promises` row. Then read the rows below, which show only the replies where the judge and the label differ or the verdict flips.
+
+<AgreementView />
+
+With the rubric after the reply, `no_false_promises` is at 100.0% and kappa 1.00. Swap to before and it drops to 96.7% and 0.92: `r029` turns from a match into a miss. `addresses_issue` stays at 93.3% (0.81) and `tone` at 96.7% (0.89) in both orders, and the flip count, 1 of 30 for `no_false_promises`, is the same either way. Review some labels in the Try it and this table recomputes with yours.
+
+## The code
+
+Section 7 is the three measures.
+
+<CodeTabs source="llms" section={7} goNote="The same three functions. A verdict is a *bool, nil when the judge gave none, so the comparisons look different; the section below explains why." />
+
+- `agreement(judge_v, human_v, criterion)` counts the positions where the two lists hold the same value and divides by the length. A `None` from the judge never equals `True` or `False`, so an ungraded reply counts as a disagreement.
+- `if len(judge_v) != len(human_v) or not judge_v` raises a `ValueError` naming the criterion. Two lists of different lengths mean the replies are out of step, and any number computed from them would be wrong.
+- `cohen_kappa(a, b)` computes `po`, the observed agreement, and `pa` and `pb`, how often each rater says `True`.
+- `pe = pa * pb + (1 - pa) * (1 - pb)` is the chance that two raters with those rates agree by luck: both say pass, or both say fail.
+- `if pe == 1` handles the one case where the formula divides by zero. `pe` is 1 only when both raters give the same single answer every time, so they also agree on every reply; kappa is undefined there, and the code returns 1.0. Two raters who each always give a different answer have `pe` of 0, and the normal formula gives 0.
+- `position_flips(before_v, after_v)` counts the replies whose verdict differs between the two orders.
+- `cmd_agreement` in section 10 calls these per criterion and per order. It passes `[bool(x) for x in judge_v]` to kappa, which needs booleans, so an ungraded verdict counts as a fail there.
+
+## How Go does it
+
+**Three states in a pointer.** A verdict can be pass, fail or missing. Python uses `True`, `False` or `None`. Go's `bool` has no third value, so `verdicts` returns `map[string]*bool`: a pointer to a bool, `nil` when the judge gave no verdict.
+
+**Comparing values, not pointers.** For two pointers, `x == y` is true only when they point at the same variable, whatever the bools hold. Two separate `true` values would count as different. So the comparisons dereference with `*`, and check for `nil` first, because dereferencing a `nil` pointer panics:
+
+- `agreement` counts a match only when `j != nil && *j == humanV[i]`, so a `nil` is a disagreement, as in Python.
+- `positionFlips` counts a flip when `(x == nil) != (y == nil) || (x != nil && *x != *y)`: one side is missing and the other is not, or both are present and differ.
+- `asBools` turns `[]*bool` into `[]bool` with `nil` as `false`, the same as Python's `bool(None)`, before calling `cohenKappa`.
+
+`go run . agreement` from `llms/go` prints the same table as Python.
+
+## Try it
+
+Print the agreement table from the replayed verdicts. No API call is made:
+
+```bash
+cd llms/python
+python triage_lab.py agreement
+```
+
+```text
+judge vs human, rubric before the reply (30 replies)
+  addresses_issue    agreement 93.3%   kappa 0.81
+  tone               agreement 96.7%   kappa 0.89
+  no_false_promises  agreement 96.7%   kappa 0.92
+judge vs human, rubric after the reply (30 replies)
+  addresses_issue    agreement 93.3%   kappa 0.81
+  tone               agreement 96.7%   kappa 0.89
+  no_false_promises  agreement 100.0%   kappa 1.00
+position flips: verdicts that change when only the rubric position changes
+  addresses_issue    0 of 30
+  tone               0 of 30
+  no_false_promises  1 of 30
+```
+
+Now see what kappa does to a judge that always says pass. Save this as `llms/python/kappa_demo.py`:
+
+```python
+import triage_lab as L
+
+labels = [r["labels"] for r in L.load_jsonl(L.DATA_DIR / "reply_labels.jsonl")]
+for rid in L.RUBRIC_IDS:
+    human = [l[rid] for l in labels]
+    always_pass = [True] * len(human)
+    print(f"{rid:<18} labels pass {sum(human)}/{len(human)}  "
+          f"agreement {L.agreement(always_pass, human, rid):.1%}  kappa {L.cohen_kappa(always_pass, human):.2f}")
+```
+
+```bash
+python kappa_demo.py
+```
+
+```text
+addresses_issue    labels pass 24/30  agreement 80.0%  kappa 0.00
+tone               labels pass 25/30  agreement 83.3%  kappa 0.00
+no_false_promises  labels pass 22/30  agreement 73.3%  kappa 0.00
+```
+
+High agreement, zero kappa: the judge that never reads anything.
+
+### Review the labels
+
+Last, make the labels yours. Go through all 30 replies below. Read the ticket and the reply, set each criterion, and press **Confirm labels** when the draft is right. Judge each reply against the rubric, not against what you saw the judge say above. Your labels stay in this browser, and the agreement table above switches to them as you go.
+
+<LabelingPage />
+
+When all 30 are reviewed, press **Copy JSONL**, paste the text over `llms/data/reply_labels.jsonl`, and run `python triage_lab.py agreement` again. The judge's verdicts are saved, so this costs nothing; only the human side changed. Then commit the file, and update the note in `llms/data/README.md` that says the labels are pending review:
+
+```bash
+git add llms/data/reply_labels.jsonl llms/data/README.md
+git commit -m "data(llms): review the reply labels"
+```
+
+From then on, the agreement numbers are the judge against you.
+
+<Callout kind="note" title="Changing a reply changes its key">
+  Change only the labels. The judge's saved verdicts are found by a cache key built from the ticket and the reply text. Edit a reply and replay has no verdict for it, and `agreement` stops with `ReplayMiss`. Judging all 30 again in both orders would make 60 Opus calls, which the lab estimates at about $1.42.
+</Callout>

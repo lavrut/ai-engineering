@@ -1,0 +1,8 @@
+{"id": "f001", "text": "[fixture] I was charged twice this month, please check.", "category": "billing", "priority": "high", "tags": ["angry_minor"], "split": "dev"}
+{"id": "f002", "text": "[fixture] The app crashes when I open a note with a table.", "category": "bug", "priority": "normal", "tags": [], "split": "dev"}
+{"id": "f003", "text": "[fixture] Hola, no puedo iniciar sesión en mi cuenta.", "category": "account", "priority": "normal", "tags": ["non_english"], "split": "dev"}
+{"id": "f004", "text": "[fixture] Everything is down for our whole team right now!", "category": "outage", "priority": "urgent", "tags": [], "split": "dev"}
+{"id": "f005", "text": "[fixture] Can I get an invoice for May?", "category": "billing", "priority": "low", "tags": [], "split": "test"}
+{"id": "f006", "text": "[fixture] Search returns nothing since this morning.", "category": "bug", "priority": "high", "tags": [], "split": "test"}
+{"id": "f007", "text": "[fixture] How do I reset my password?", "category": "account", "priority": "low", "tags": ["very_short"], "split": "test"}
+{"id": "f008", "text": "[fixture] Login fails for everyone in our office.", "category": "outage", "priority": "urgent", "tags": ["multi_issue"], "split": "test"}
