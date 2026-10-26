@@ -88,7 +88,7 @@ Each file uses numbered `# ── N. Title` sections (Go `// ── N. Title`), 
 
 **`ml/go/main.go`:** 1 Configuration, 2 Model loading, 3 Tokenizer and TF-IDF, 4 Prediction, 5 HTTP server (`net/http`), 6 Drift (PSI), 7 Entry point (`serve`, `predict`, `drift`). Go reimplements tokenization and scoring from the JSON alone.
 
-**`monitor.py`:** PSI per month against the training distribution for (a) predicted-category mix and (b) the input word distribution over the top vocabulary terms; buckets with a small epsilon; months under 30 complaints shown but not alerted; alert threshold 0.2, with lessons explaining it is a convention, not a law.
+**`monitor.py`:** PSI per month and per quarter for (a) predicted-category mix and (b) the input word distribution (top training terms, drift-only stop words excluded, plus "other"); epsilon 1e-4. (Revised 2026-10-26 after review, rulings R21–R22.) The reference is v1's predictions and tokens on the 2022 test split — unseen data the year before deployment; the in-sample training reference is kept only as a labelled comparison, because it shows false drift. Each period records `alert_convention` (PSI ≥ 0.2) and `alert_calibrated` (PSI above max(leave-out bootstrap p95, the largest 2022-period-vs-rest-of-2022 PSI)); months under 30 complaints never alert; the expected number of chance alerts is recorded. Lessons explain that 0.2 is a convention for coarse bins that fires on noise at small n.
 
 **`compare_llm.py`:** Claude Haiku 5.5 classifies the same 200 test complaints with structured output; saved-response replay, estimate, confirmation and $10 cap, reusing the LLMs track's pattern. Replay is free; recording needs the user's approval.
 
