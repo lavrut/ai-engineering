@@ -116,12 +116,12 @@ With `v2_rules`, Haiku is the cheapest dot at or above 90%, far to the left of t
 
 Section 1 is where the models and their prices live.
 
-<CodeTabs source="llms" section={1} goNote="The same constants: taskModel, judgeModel and defaultMode in a const block, and prices as a map[string][2]float64. dataDir is resolved from the source file with runtime.Caller, as Python does with __file__." />
+<CodeTabs source="llms" section={1} goNote="The same values: taskModel and judgeModel in a const block, defaultMode as a variable (the default for --mode), and prices as a map[string][2]float64. dataDir is resolved from the source file with runtime.Caller, as Python does with __file__." />
 
 - `TASK_MODEL = "claude-haiku-5-5"` is the model that triages when you pass no `--model`. The table above is why it is Haiku.
 - `JUDGE_MODEL = "claude-opus-5-5"` grades the replies. The judge stays on the stronger model (lesson 5): it runs far fewer calls, and a weak judge would make every reply score doubtful.
-- `MODE = "replay"` keeps every run free unless you ask for `record` or `live`.
-- `PRICES` maps each model to `(input, output)` dollars per million tokens. `call_cost` and `estimate_cost` (section 8) read it, and the app's chart prices its dots with the same numbers. A model missing from `PRICES` stops the run with a `KeyError` while the estimate is made, before any paid call.
+- `MODE = "replay"` is the default for `--mode`: every run stays free unless you ask for `record` or `live`, and a paid mode still prints its estimate and asks first.
+- `PRICES` maps each model to `(input, output)` dollars per million tokens. `call_cost` and `estimate_cost` (section 8) read it, and the app's chart prices its dots with the same numbers. A model missing from `PRICES` stops the run with `error: no price for model ...` while the estimate is made, before any paid call.
 
 Section 3 is what stays fixed when the model changes.
 

@@ -23,7 +23,7 @@ def fake_line(model="claude-haiku-5-5", input_tokens=1_000_000, output_tokens=0,
 def test_call_cost_uses_prices():
     assert lab.call_cost("claude-haiku-5-5", 1_000_000, 1_000_000) == pytest.approx(0.60)
     assert lab.call_cost("claude-opus-5-5", 500_000, 0) == pytest.approx(2.00)
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match='no price for model "claude-unknown"'):
         lab.call_cost("claude-unknown", 1, 1)
 
 
@@ -295,3 +295,94 @@ def test_pilot_plan_is_small_and_matches_full_plan_keys(empty_root):
     # when v2_rules wins, the pilot's requests are exactly the full plan's: 3 of 4 dev tickets, 3 of 8 judge calls
     assert lab.remaining_calls(opus_high, empty_root, best="v2_rules") == 1
     assert lab.remaining_calls(labels, empty_root) == 5
+
+
+# MODE is only the CLI's default --mode: replay-only lookups never spend ----------
+def edited_lab(mode: str):
+    """A fresh copy of triage_lab with its MODE line edited, as a learner would edit the file.
+    (Setting lab.MODE at run time would not do: default arguments are bound when the file loads.)"""
+    import types
+    source = Path(lab.__file__).read_text(encoding="utf-8")
+    line = next(l for l in source.splitlines() if l.startswith("MODE = "))
+    module = types.ModuleType("triage_lab_edited")
+    module.__file__ = lab.__file__
+    exec(compile(source.replace(line, f'MODE = "{mode}"'), lab.__file__, "exec"), module.__dict__)
+    assert module.MODE == mode
+    return module
+
+
+@pytest.mark.parametrize("mode", ["live", "record"])
+def test_editing_mode_never_makes_unconfirmed_calls(root, monkeypatch, capsys, mode):
+    lab = edited_lab(mode)
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(isatty=lambda: False))
+    client = FakeClient()
+    monkeypatch.setattr(lab.anthropic, "Anthropic", lambda **k: client)   # a call without a client is counted too
+    data = ["--data", str(root)]
+    for argv in (["run"], ["run", "--mode", "replay"],
+                 ["compare", "--prompt", "v1_basic", "--vs", "v2_rules"],
+                 ["judge"], ["judge", "--mode", "replay"],
+                 ["agreement"],
+                 ["gate", "--prompt", "v2_rules", "--baseline", "v1_basic", "--minimum", "0.0"],
+                 ["record", "--plan", "all"], ["record", "--plan", "judge"]):
+        lab.main(argv + data, client=client)
+        assert client.calls == [], argv
+    out = capsys.readouterr().out
+    assert "Nothing was called" in out
+
+
+@pytest.mark.parametrize("mode", ["live", "record"])
+def test_library_calls_default_to_replay(root, monkeypatch, mode):
+    lab = edited_lab(mode)
+    client = FakeClient()
+    monkeypatch.setattr(lab.anthropic, "Anthropic", lambda **k: client)
+    prompts = lab.load_prompts(root / "prompts.json")
+    ticket = lab.load_tickets(root / "tickets.jsonl")[0]
+    lab.triage(ticket, "v2_rules", client=client, root=root, prompts=prompts)
+    label = lab._label_cases(root, lab.load_tickets(root / "tickets.jsonl"))[0]
+    lab.judge(label["ticket"], label["reply"], client=client, root=root, prompts=prompts)
+    with pytest.raises(lab.ReplayMiss):       # the fixtures hold no v3_examples lines: a miss, not a call
+        lab.best_prompt(root, prompts, quiet=True)
+    for step in lab.RECORDING_PLAN:
+        lab.remaining_calls(step, root, best="v2_rules")
+    assert client.calls == []
+
+
+@pytest.mark.parametrize("mode", ["record", "live"])
+def test_judge_paid_mode_refuses_without_yes(root, monkeypatch, capsys, mode):
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(isatty=lambda: False))
+    client = FakeClient()
+    assert lab.main(["judge", "--mode", mode, "--data", str(root)], client=client) == 1
+    assert client.calls == []
+    assert "Nothing was called" in capsys.readouterr().out
+
+
+def test_live_cap_message_says_nothing_is_saved(root, capsys):
+    client = FakeClient()
+    code = lab.main(["run", "--mode", "live", "--yes", "--max-cost", "0.0001", "--workers", "1",
+                     "--model", "claude-opus-5-5", "--data", str(root)], client=client)
+    assert code == 2
+    out = capsys.readouterr().out
+    assert "Live mode saves nothing." in out and "Finished calls are saved" not in out
+
+
+@pytest.mark.parametrize("argv, message", [
+    (["run", "--prompt", "nope"], "error: unknown prompt 'nope'; choose from v1_basic, v2_rules, v3_examples"),
+    (["run", "--mode", "live", "--yes", "--model", "claude-nope"], 'error: no price for model "claude-nope"'),
+])
+def test_cli_errors_print_one_line_without_a_traceback(root, argv, message, capsys):
+    assert lab.main(argv + ["--data", str(root)], client=FakeClient()) == 1
+    assert capsys.readouterr().err.strip() == message
+
+
+def test_cli_every_error_line_is_caught(root, capsys, tmp_path):
+    # every saved line errored: nothing is scored, so the report cannot be computed
+    path = root / "responses" / "triage__claude-haiku-5-5__v1_basic__default.jsonl"
+    lines = [json.loads(l) for l in path.read_text().splitlines()]
+    path.write_text("".join(json.dumps({**l, "error": "overloaded"}) + "\n" for l in lines))
+    assert lab.main(["run", "--prompt", "v1_basic", "--data", str(root)]) == 1
+    assert capsys.readouterr().err.strip() == "error: no scored cases"
+
+
+def test_cli_zero_workers_runs_one_at_a_time(capsys):
+    assert lab.main(["run", "--workers", "0", "--data", str(FIXTURES)]) == 0
+    assert "accuracy" in capsys.readouterr().out

@@ -29,7 +29,7 @@ quiz:
       - The lab caches the final report, not the responses
       - The second run reuses the first run's process
     answer: 1
-    explanation: MODE is "replay". Every model call is looked up by its key in a saved-response file, so no request is sent, nothing is billed and the same answers come back each time. A live call to the model can give a different answer on each run.
+    explanation: MODE, the default for --mode, is "replay". Every model call is looked up by its key in a saved-response file, so no request is sent, nothing is billed and the same answers come back each time. A live call to the model can give a different answer on each run.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
 import FlowDiagram from '../../../components/FlowDiagram.astro';
@@ -78,7 +78,7 @@ The lab is one file per language: `llms/python/triage_lab.py` and `llms/go/main.
 
 - `TASK_MODEL = "claude-haiku-5-5"` is the model being tested. It is the smallest and cheapest of the three, which suits a task run on every incoming ticket.
 - `JUDGE_MODEL = "claude-opus-5-5"` grades the reply drafts. The judge runs on a stronger model than the task (lesson 5).
-- `MODE = "replay"` makes every command read saved responses unless you ask for `record` or `live`. Replay needs no API key and never falls back to a paid call.
+- `MODE = "replay"` is the default for `--mode`, so `run` and `judge` read saved responses unless you ask for `record` or `live`. Replay needs no API key and never falls back to a paid call. Lookups of saved data, as in `compare`, `gate` and `agreement`, always replay, and a paid mode always prints its estimate and asks first, even if you edit this line.
 - `PRICES` holds dollars per million tokens, `(input, output)`, for each model. The runner multiplies tokens by these to estimate a run's cost before it starts (lesson 4).
 - `DATA_DIR` is `llms/data`, found from the file's own path, so the commands work from any folder. A data root holds `tickets.jsonl`, `prompts.json`, `reply_labels.jsonl` and `responses/`.
 - `CATEGORIES` and `PRIORITIES` are the only answers allowed. The answer schema in section 3 is built from these two lists, so the model cannot return anything else.

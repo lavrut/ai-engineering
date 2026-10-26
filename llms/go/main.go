@@ -49,10 +49,11 @@ import (
 
 // ── 1. Configuration ────────────────────────────────────────────────────────
 const (
-	taskModel   = "claude-haiku-5-5" // the model that does the triage
-	judgeModel  = "claude-opus-5-5"  // the model that grades the replies
-	defaultMode = "replay"           // replay (saved responses) | record | live
+	taskModel  = "claude-haiku-5-5" // the model that does the triage
+	judgeModel = "claude-opus-5-5"  // the model that grades the replies
 )
+
+var defaultMode = "replay" // the CLI's default --mode: replay (saved responses) | record | live
 
 // Dollars per million tokens: {input, output}. Used to estimate cost before any paid run.
 var prices = map[string][2]float64{
@@ -415,6 +416,7 @@ func triageKey(ticketText, variant, model, effort string, rep int, p Prompts) st
 
 // callOpts are the optional arguments of triage and judge. Zero values mean: the
 // default model, replay, rep 0, no effort, llms/data, prompts read from the root.
+// Only an explicit mode "record" or "live" can spend.
 type callOpts struct {
 	model, effort string
 	rep           int
@@ -429,7 +431,7 @@ func (o callOpts) withDefaults(model string) (callOpts, Prompts, error) {
 		o.model = model
 	}
 	if o.mode == "" {
-		o.mode = defaultMode
+		o.mode = "replay"
 	}
 	if o.root == "" {
 		o.root = dataDir
@@ -1084,7 +1086,11 @@ func load(o options) (Prompts, []Ticket, error) {
 func stoppedAtCap(w io.Writer, err error, o options) bool {
 	var limit *CostLimit
 	if errors.As(err, &limit) {
-		fmt.Fprintf(w, "Stopped: spent $%.4f, over --max-cost %s. Finished calls are saved.\n", limit.Spent, pyFloat(o.maxCost))
+		saved := "Live mode saves nothing."
+		if o.mode == "record" {
+			saved = "Finished calls are saved."
+		}
+		fmt.Fprintf(w, "Stopped: spent $%.4f, over --max-cost %s. %s\n", limit.Spent, pyFloat(o.maxCost), saved)
 		return true
 	}
 	return false
@@ -1175,7 +1181,7 @@ func cmdJudge(ctx context.Context, o options, caller modelCaller, w io.Writer) (
 	type pair struct{ ticket, reply string }
 	replies, ids := map[string]pair{}, []string{}
 	for _, t := range cases { // the reply to judge is the saved triage reply
-		line, err := triage(ctx, t, variant, callOpts{model: o.model, effort: o.effort, root: o.data, prompts: &prompts})
+		line, err := triage(ctx, t, variant, callOpts{model: o.model, effort: o.effort, mode: "replay", root: o.data, prompts: &prompts})
 		if err != nil {
 			return 1, err
 		}
@@ -1231,7 +1237,7 @@ func cmdAgreement(ctx context.Context, o options, w io.Writer) (int, error) {
 	for _, order := range []string{"before", "after"} {
 		byOrder[order] = map[string][]*bool{}
 		for _, l := range labels {
-			line, err := judge(ctx, text[l.TicketID], l.Reply, order, callOpts{root: o.data, prompts: &prompts}, l.ID)
+			line, err := judge(ctx, text[l.TicketID], l.Reply, order, callOpts{mode: "replay", root: o.data, prompts: &prompts}, l.ID)
 			if err != nil {
 				return 1, err
 			}

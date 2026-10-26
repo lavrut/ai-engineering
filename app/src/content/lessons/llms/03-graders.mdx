@@ -67,7 +67,7 @@ Every saved line gets an outcome before it is graded:
 
 A refusal or a cut-off reply is something the model did. A customer would get no triage, so it counts against the model. An error is different: the model never produced an answer, because the request failed. Counting it as wrong would make your accuracy partly a measure of your network. So errors are left out of the share, and the report prints how many there were, so a run full of errors cannot hide.
 
-The recorded run had none of these. Every call ended with `stop_reason` `end_turn`, and the longest reply used 659 of its 2,000 output tokens. The Try it below fakes one of each, so you can watch the arithmetic.
+The recorded run had none of these in the end: the latest line for every request ended with `stop_reason` `end_turn`, and the longest reply (Haiku, `v2_rules`) used 761 of its 2,000 output tokens. The Try it below fakes one of each, so you can watch the arithmetic.
 
 ### The confusion matrix
 

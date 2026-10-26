@@ -60,7 +60,7 @@ The repeat number is in the key so that one prompt can be recorded several times
 
 ### Latest line wins
 
-A response file is append-only, one JSON line per call. If a call fails, its line is saved with an `error`, and recording it again appends a second line with the same key. Replay reads the file from the end, so the latest line for a key wins. Nothing is ever edited in place.
+A response file is append-only, one JSON line per call. If a call fails, its line is saved with an `error`, and recording it again appends a second line with the same key. Replay reads the file from the end, so the latest line for a key wins. The lab never edits a file in place. The committed files were pruned once, by hand, after the re-record: superseded and failed lines were removed, as `llms/data/README.md` records.
 
 ### The runner
 

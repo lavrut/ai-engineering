@@ -764,3 +764,92 @@ func TestLoadJSONLNamesFileAndLine(t *testing.T) {
 		t.Errorf("err %v", err)
 	}
 }
+
+// routeAPIToRecorder sends any call that would reach the real API (a nil caller falls back
+// to apiCaller) to the recorder instead, so the test counts it and nothing leaves the machine.
+func routeAPIToRecorder(t *testing.T, rec *recorder) {
+	apiOnce = sync.Once{}
+	apiOnce.Do(func() { apiCall = rec.call(t) })
+	t.Cleanup(func() { apiOnce, apiCall = sync.Once{}, nil })
+}
+
+// defaultMode is only the CLI's default --mode: editing it must never turn a replay-only
+// lookup into a paid call, and every paid path still asks first.
+func TestEditingDefaultModeNeverMakesUnconfirmedCalls(t *testing.T) {
+	root := copyFixtures(t)
+	isTerminal = func() bool { return false }
+	defer func() { isTerminal = stdinIsTerminal }()
+	defer func(m string) { defaultMode = m }(defaultMode)
+	for _, mode := range []string{"live", "record"} {
+		defaultMode = mode
+		rec := &recorder{}
+		routeAPIToRecorder(t, rec)
+		for _, args := range [][]string{
+			{"run"}, {"run", "--mode", "replay"},
+			{"compare", "--prompt", "v1_basic", "--vs", "v2_rules"},
+			{"judge"}, {"judge", "--mode", "replay"},
+			{"agreement"},
+			{"gate", "--prompt", "v2_rules", "--baseline", "v1_basic", "--minimum", "0.0"},
+		} {
+			runCLI(t, rec.call(t), append(args, "--data", root)...)
+			if rec.n() != 0 {
+				t.Fatalf("defaultMode %s, %v: %d calls, want 0", mode, args, rec.n())
+			}
+		}
+	}
+}
+
+func TestLibraryCallsDefaultToReplay(t *testing.T) {
+	defer func(m string) { defaultMode = m }(defaultMode)
+	defaultMode = "live"
+	rec := &recorder{}
+	routeAPIToRecorder(t, rec)
+	ctx := context.Background()
+	prompts := must(loadPrompts(filepath.Join(fixtures, "prompts.json")))
+	tk := must(loadTickets(filepath.Join(fixtures, "tickets.jsonl")))[0]
+	if _, err := triage(ctx, tk, "v2_rules", callOpts{caller: rec.call(t), root: fixtures, prompts: &prompts}); err != nil {
+		t.Fatal(err)
+	}
+	l := must(loadJSONL[ReplyLabel](filepath.Join(fixtures, "reply_labels.jsonl")))[0]
+	judge(ctx, tk.Text, l.Reply, "after", callOpts{caller: rec.call(t), root: fixtures, prompts: &prompts}, l.ID) // a hit or a miss, never a call
+	if rec.n() != 0 {
+		t.Errorf("zero-value callOpts must replay; got %d calls", rec.n())
+	}
+}
+
+func TestJudgePaidModesRefuseWithoutYes(t *testing.T) {
+	root := copyFixtures(t)
+	isTerminal = func() bool { return false }
+	defer func() { isTerminal = stdinIsTerminal }()
+	rec := &recorder{}
+	for _, mode := range []string{"record", "live"} {
+		code, out, _ := runCLI(t, rec.call(t), "judge", "--mode", mode, "--data", root)
+		if code != 1 || !strings.Contains(out, "Nothing was called") || rec.n() != 0 {
+			t.Errorf("judge --mode %s: exit %d, calls %d, %q", mode, code, rec.n(), out)
+		}
+	}
+}
+
+func TestLiveCapMessageSaysNothingIsSaved(t *testing.T) {
+	rec := &recorder{}
+	code, out, _ := runCLI(t, rec.call(t), "run", "--mode", "live", "--yes", "--max-cost", "0.0001", "--workers", "1",
+		"--model", "claude-opus-5-5", "--data", copyFixtures(t))
+	if code != 2 || !strings.Contains(out, "Live mode saves nothing.") || strings.Contains(out, "Finished calls are saved") {
+		t.Errorf("capped live run: %d %q", code, out)
+	}
+}
+
+func TestCLIErrorsAreOneLine(t *testing.T) {
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"run", "--prompt", "nope"}, "error: unknown prompt 'nope'; choose from v1_basic, v2_rules, v3_examples"},
+		{[]string{"run", "--mode", "live", "--yes", "--model", "claude-nope"}, `error: no price for model "claude-nope"`},
+	} {
+		code, _, errOut := runCLI(t, (&recorder{}).call(t), append(c.args, "--data", fixtures)...)
+		if code != 1 || strings.TrimSpace(errOut) != c.want {
+			t.Errorf("%v: exit %d, stderr %q, want %q", c.args, code, errOut, c.want)
+		}
+	}
+}
