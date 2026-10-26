@@ -244,7 +244,44 @@ def test_parity_judge(tmp_path):
     for rid in lab.RUBRIC_IDS:
         assert len(expected[rid]) == 20
         lab_mean = sum(expected[rid]) / 20
-        assert abs(metric(log, rid, "mean") - lab_mean) < 1e-9
-        assert abs(metric(log, rid, "mean") - pinned[rid]) < 1e-9
+        assert abs(metric(log, rid, "graded_mean") - lab_mean) < 1e-9
+        assert abs(metric(log, rid, "graded_mean") - pinned[rid]) < 1e-9
     graded = [s for s in log.samples if s.scores["rubric_judge"].metadata["graded"]]
     assert len(graded) == 20
+
+
+def judged_root(tmp_path, null_reply_id, null_judge_id, ids):
+    """Synthetic data root: triage + opus judge lines for `ids`; one ticket with a null triage reply,
+    one with a judge line whose output is null (no error). Everything else passes all three criteria."""
+    root = tmp_root(tmp_path, "v2_rules", lambda t: (
+        {"output": None} if t["id"] == null_reply_id else
+        {"output": {"category": t["category"], "priority": t["priority"], "reply": f"reply {t['id']}"}}
+        if t["id"] in ids else None))
+    verdict = {"pass": True, "reason": "ok"}
+    out = []
+    for t in lab.load_tickets():
+        if t["id"] in ids and t["id"] != null_reply_id:
+            key = lab.judge_key(t["text"], f"reply {t['id']}", "after", "claude-opus-5-5", PROMPTS)
+            output = None if t["id"] == null_judge_id else {rid: verdict for rid in lab.RUBRIC_IDS}
+            out.append(json.dumps({"key": key, "output": output, "stop_reason": "end_turn", "input_tokens": 1,
+                                   "output_tokens": 1, "error": None}))
+    path = lab.response_path("judge", "claude-opus-5-5", "after", None, root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(out) + "\n")
+    return root
+
+
+def test_ungraded_samples_left_out_of_means(tmp_path):
+    test_ids = [t["id"] for t in lab.split(lab.load_tickets(), "test")][:4]
+    root = judged_root(tmp_path / "data", test_ids[0], test_ids[1], test_ids)
+    grader = get_model("replay/claude-opus-5-5", root=str(root))
+    log = inspect_eval(ti.triage_judged(), model="replay/claude-haiku-5-5", model_roles={"grader": grader},
+                       model_args={"root": str(root)}, sample_id=test_ids, log_dir=str(tmp_path / "logs"),
+                       display="none")[0]
+    assert log.status == "success"
+    by_id = {s.id: s.scores["rubric_judge"].metadata for s in log.samples}
+    assert not by_id[test_ids[0]]["graded"] and not by_id[test_ids[1]]["graded"]
+    assert by_id[test_ids[1]]["verdicts"] == dict.fromkeys(lab.RUBRIC_IDS)
+    assert sum(m["graded"] for m in by_id.values()) == 2
+    for rid in lab.RUBRIC_IDS:       # 2 graded, both pass: 1.0, not 2/4
+        assert metric(log, rid, "graded_mean") == 1.0

@@ -51,7 +51,7 @@ from inspect_ai.model import (
     get_model,
     modelapi,
 )
-from inspect_ai.scorer import CORRECT, INCORRECT, Score, Target, accuracy, mean, scorer, stderr
+from inspect_ai.scorer import CORRECT, INCORRECT, Score, Target, SampleScore, accuracy, metric, scorer, stderr
 from inspect_ai.solver import Generate, Solver, TaskState, solver
 from inspect_ai.tool import ToolChoice, ToolInfo
 from inspect_ai.util import JSONSchema
@@ -120,6 +120,7 @@ def parse_judge_message(text: str, rubric: str) -> tuple[str, str, str]:
     first; then split ticket from reply at the first "\n\nReply:\n" (a reply may itself contain blank lines
     or the word "Reply:"; ticket texts never contain the marker)."""
     rubric_part = "\n\nRubric:\n" + rubric
+    # Contrived edge: a "before"-order reply that itself ends with this rubric suffix would parse as "after".
     if not text.startswith("Ticket:\n"):
         raise ReplayMiss(f"unrecognised judge message {text[:40]!r}. Record it: python triage_lab.py record ...")
     body = text[len("Ticket:\n"):]
@@ -241,8 +242,20 @@ def judge_message(ticket: str, reply: str, rubric: str) -> str:
     return f"Ticket:\n{ticket}\n\nReply:\n{reply}\n\nRubric:\n{rubric}"
 
 
-@scorer(metrics={rid: [mean()] for rid in RUBRIC_IDS})
+@metric
+def graded_mean():
+    """Pass rate (Inspect hands a dict-valued scorer's metric one key at a time) over the graded samples only. The lab leaves a ticket with no reply and a
+    judge line with no output out of the denominator, so a plain mean() (which counts them as fails) is wrong."""
+    def compute(scores: list[SampleScore]) -> float:
+        graded = [s.score.value for s in scores if s.score.metadata and s.score.metadata["graded"]]
+        return sum(graded) / len(graded) if graded else 0.0
+    return compute
+
+
+@scorer(metrics={rid: [graded_mean()] for rid in RUBRIC_IDS})
 def rubric_judge():
+    """The judge scorer. It reads the rubric from the default prompts.json; the judge request is rebuilt from it,
+    so a rubric edited under `-M root` is a loud ReplayMiss, never a wrong answer."""
     prompts = load_prompts()
     rubric = rubric_text(prompts["rubric"])
     schema = ResponseSchema(name="judge", json_schema=JSONSchema.model_validate(JUDGE_SCHEMA))
