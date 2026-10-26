@@ -15,9 +15,19 @@ before the log (not renormalised), so an empty bucket gives a finite number:
 Each term is >= 0, so PSI >= 0, and 0 only when the distributions match. Rule of thumb: below
 0.1 stable, 0.1-0.2 watch, 0.2 or more alert. Go repeats this to 1e-12 (psi_cases.json).
 
-Two signals per stream month, against the training split (2019-2021), with the production model:
-  (a) predicted-category mix: what v1 says the month's complaints are about;
+Two signals per stream month (and per quarter), with the production model, against a REFERENCE:
+  (a) predicted-category mix: what v1 says the period's complaints are about;
   (b) input words: which top-K training words the text uses, plus an "other" bucket.
+
+The reference is the 2022 test split: data v1 did not train on, the year before deployment.
+Scoring the training rows themselves would be in-sample (v1 is 90% right there, 77-79% on unseen
+months), which makes every unseen month look drifted; that variant is kept in drift.json only as
+`reference_training_in_sample`, to show why it misleads.
+
+0.2 is an industry convention for coarse, decile-style bins, not a law. With 50 complaints and 6
+classes, sampling noise alone pushes PSI past 0.2 in about one month in five, so each signal also
+gets a null band: PSI between bootstrap samples of the reference and the reference itself. The
+calibrated alert asks for PSI above that null's 95th percentile.
 
 Run (from ml/python):
     python monitor.py                   # print the table, write nothing
@@ -32,6 +42,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+import numpy as np
+
 import train
 
 ML_DIR = train.ML_DIR
@@ -40,14 +52,21 @@ import fetch_sample                            # noqa: E402
 
 # ── 1. Configuration ────────────────────────────────────────────────────────
 EPSILON = 1e-4          # added to every proportion before the log
-ALERT_AT = 0.2          # PSI at or above this is an alert
-MIN_N = 30              # a month with fewer complaints is shown but never alerted: PSI on a few
-                        # dozen texts is mostly noise
-# K = 50: the top 50 words hold roughly a third of all training tokens, so every bucket expects
-# real mass (>= 0.3%), while the 50+1 buckets stay few enough for a month of 50 complaints
-# (~30,000 tokens) to fill them. Chosen for readability, not tuned to alerts.
+ALERT_AT = 0.2          # the conventional PSI alert level
+MIN_N = 30              # a period with fewer complaints is shown but never alerted
+# K = 50: with stop words out, the top 50 words hold 23% of the remaining training tokens (the
+# smallest bucket 0.25%); a month of 50 complaints has about 5,000 such tokens, enough to fill
+# 51 buckets. Chosen for readability, not tuned to alerts. (Before the stop-word list the top 50
+# held 46.8%; those were function words.)
 TOP_K = 50
-SHOWN_WORDS = 5         # words listed per month in top_shifted_words
+SHOWN_WORDS = 5         # words listed per period in top_shifted_words
+DRAWS = 5000            # bootstrap draws per null band
+# Common English function words, left out of the word buckets (drift only; the model's tokenizer
+# is unchanged). "not" and "no" stay: they carry meaning here.
+STOP_WORDS = frozenset("""a about after all also am an and any are as at be been but by can did do
+does for from had has have he her his i if in into is it its me my of on or our out she so than
+that the their them then there they this to up us was we were what when which who will with would
+you your""".split())
 PATHS = {"registry": ML_DIR / "registry.json", "readme": ML_DIR / "data" / "README.md",
          "reports": ML_DIR / "reports"}
 
@@ -73,58 +92,98 @@ def psi(expected_counts: list[float], actual_counts: list[float], eps: float = E
 
 # ── 3. Buckets ──────────────────────────────────────────────────────────────
 def top_words(train_rows: list[dict], model_json: dict, k: int = TOP_K) -> list[str]:
-    """The k most frequent words of the training text (ties alphabetical), words the model knows."""
-    known = set(model_json["vocabulary"])
+    """The k most frequent training words the model knows, stop words excluded (ties alphabetical)."""
+    known = set(model_json["vocabulary"]) - STOP_WORDS
     freq = Counter(t for r in train_rows for t in train.tokenize(r["narrative"], model_json["tokenizer"])
                    if t in known)
     return [t for t, _ in sorted(freq.items(), key=lambda kv: (-kv[1], kv[0]))[:k]]
 
 
-def word_counts(rows: list[dict], words: list[str], model_json: dict) -> list[int]:
-    """Token counts per bucket: one per top word, then "other" (every remaining token)."""
-    index = {w: i for i, w in enumerate(words)}
-    counts = [0] * (len(words) + 1)
-    for r in rows:
+def featurize(rows: list[dict], words: list[str], model_json: dict, index: dict):
+    """Per complaint: a one-hot predicted category, and token counts per word bucket
+    (the top words, then "other"; stop words are not counted). Two integer matrices."""
+    slot = {w: i for i, w in enumerate(words)}
+    classes = {c: i for i, c in enumerate(model_json["classes"])}
+    labels = np.zeros((len(rows), len(classes)), dtype=np.int64)
+    counts = np.zeros((len(rows), len(words) + 1), dtype=np.int64)
+    for i, r in enumerate(rows):
+        labels[i, classes[train.score(model_json, r["narrative"], index)["label"]]] = 1
         for t in train.tokenize(r["narrative"], model_json["tokenizer"]):
-            counts[index.get(t, len(words))] += 1
-    return counts
+            if t not in STOP_WORDS:
+                counts[i, slot.get(t, len(words))] += 1
+    return labels, counts
 
 
-def label_counts(rows: list[dict], model_json: dict, index: dict) -> list[int]:
-    """How many complaints the model puts in each category (classes in model order)."""
-    labels = Counter(train.score(model_json, r["narrative"], index)["label"] for r in rows)
-    return [labels[c] for c in model_json["classes"]]
+def null_band(ref: tuple, size: int, draws: int = DRAWS, seed: int = train.SEED) -> dict:
+    """What PSI looks like with NO drift: `draws` samples of `size` complaints (with replacement)
+    from the reference, each compared with the whole reference. Returns p50 and p95 per signal."""
+    labels, counts = ref
+    rng = np.random.default_rng(seed)
+    out = {}
+    for name, m in (("predictions", labels), ("words", counts)):
+        expected = m.sum(axis=0).tolist()
+        values = []
+        for _ in range(draws // 250):
+            idx = rng.integers(0, len(m), size=(250, size))
+            values += [psi(expected, row) for row in m[idx].sum(axis=1).tolist()]
+        p50, p95 = np.percentile(values, [50, 95])
+        out[name] = {"p50": float(p50), "p95": float(p95)}
+    return {"n": size, "draws": draws, "seed": seed, **out}
 
 
-# ── 4. Monthly drift ────────────────────────────────────────────────────────
-def monthly_drift(stream_rows: list[dict], model_json: dict, train_rows: list[dict]) -> list[dict]:
-    """One dict per month in the stream: n, psi_predictions, psi_words, alert, top_shifted_words."""
+# ── 4. Monthly and quarterly drift ──────────────────────────────────────────
+def _period(date: str, unit: str) -> str:
+    return date[:7] if unit == "month" else f"{date[:4]}-Q{(int(date[5:7]) - 1) // 3 + 1}"
+
+
+def drift(stream_rows: list[dict], model_json: dict, reference_rows: list[dict],
+          unit: str = "month", train_rows: list[dict] | None = None) -> list[dict]:
+    """One dict per period of the stream: n, psi_predictions, psi_words, alert_convention
+    (PSI >= 0.2, n >= 30), alert_calibrated (PSI above that signal's null p95, n >= 30) and
+    top_shifted_words. Words are chosen from `train_rows` (default: the reference)."""
     index = {t: i for i, t in enumerate(model_json["vocabulary"])}
-    words = top_words(train_rows, model_json)
-    exp_words = word_counts(train_rows, words, model_json)
-    exp_labels = label_counts(train_rows, model_json, index)
+    words = top_words(train_rows or reference_rows, model_json)
+    ref = featurize(reference_rows, words, model_json, index)
+    exp_pred, exp_words = ref[0].sum(axis=0).tolist(), ref[1].sum(axis=0).tolist()
     e_prop = proportions(exp_words)
-    by_month: dict[str, list[dict]] = {}
+    groups: dict[str, list[dict]] = {}
     for r in stream_rows:
-        by_month.setdefault(r["date"][:7], []).append(r)
+        groups.setdefault(_period(r["date"], unit), []).append(r)
+    nulls: dict[int, dict] = {}
     out = []
-    for month in sorted(by_month):
-        rows = by_month[month]
-        act_words = word_counts(rows, words, model_json)
+    for key in sorted(groups):
+        rows = groups[key]
+        n = len(rows)
+        labels, counts = featurize(rows, words, model_json, index)
+        act_pred, act_words = labels.sum(axis=0).tolist(), counts.sum(axis=0).tolist()
         parts = contributions(exp_words, act_words)
         a_prop = proportions(act_words)
         shifted = sorted(range(len(words)), key=lambda i: (-parts[i], words[i]))[:SHOWN_WORDS]
-        psi_pred = psi(exp_labels, label_counts(rows, model_json, index))
-        psi_words = sum(parts)
+        p_pred, p_words = psi(exp_pred, act_pred), sum(parts)
+        big = n >= MIN_N
+        if big and n not in nulls:
+            nulls[n] = null_band(ref, n)
+        null = nulls.get(n)
         out.append({
-            "month": month, "n": len(rows),
-            "psi_predictions": psi_pred, "psi_words": psi_words,
-            "alert": len(rows) >= MIN_N and (psi_pred >= ALERT_AT or psi_words >= ALERT_AT),
+            "period": key, "n": n, "psi_predictions": p_pred, "psi_words": p_words,
+            "alert_convention": big and (p_pred >= ALERT_AT or p_words >= ALERT_AT),
+            "alert_calibrated": big and (p_pred > null["predictions"]["p95"]
+                                         or p_words > null["words"]["p95"]),
             "top_shifted_words": [{"word": words[i], "contribution": parts[i],
                                    "direction": "up" if a_prop[i] > e_prop[i] else "down"}
                                   for i in shifted],
         })
     return out
+
+
+def monthly_drift(stream_rows, model_json, reference_rows, train_rows=None) -> list[dict]:
+    return [{"month": p.pop("period"), **p}
+            for p in drift(stream_rows, model_json, reference_rows, "month", train_rows)]
+
+
+def quarterly_drift(stream_rows, model_json, reference_rows, train_rows=None) -> list[dict]:
+    return [{"quarter": p.pop("period"), **p}
+            for p in drift(stream_rows, model_json, reference_rows, "quarter", train_rows)]
 
 
 # ── 5. Report ───────────────────────────────────────────────────────────────
@@ -137,10 +196,12 @@ def real_counts() -> Counter:
     for line in block.splitlines():
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
         if cells[0] == "Category":
-            years = cells[1:7]
+            years = cells[1:1 + len(fetch_sample.YEARS)]
         elif years and cells[0] in fetch_sample.CATEGORIES:
-            for y, c in zip(years, cells[1:7]):
+            for y, c in zip(years, cells[1:]):
                 counts[(y, cells[0])] = int(c.replace(",", ""))
+    if len(counts) != len(fetch_sample.CATEGORIES) * len(fetch_sample.YEARS):
+        raise ValueError(f"README count table incomplete: {len(counts)} cells")
     return counts
 
 
@@ -162,11 +223,26 @@ def production_model() -> dict:
 def build_report(rows: list[dict], generated_by: str) -> dict:
     splits = train.split_by_time(rows)
     model = production_model()
+    index = {t: i for i, t in enumerate(model["vocabulary"])}
+    words = top_words(splits["train"], model)
+    ref = featurize(splits["test"], words, model, index)
     sample = Counter((r["date"][:4], r["product"]) for r in rows)
+    in_sample = [{k: m[k] for k in ("month", "n", "psi_predictions", "psi_words", "alert_convention")}
+                 for m in monthly_drift(splits["stream"], model, splits["train"])]
     return {"generated_by": generated_by,
             "settings": {"alert_at": ALERT_AT, "epsilon": EPSILON, "min_n": MIN_N,
-                         "top_k": TOP_K, "model_version": model["version"]},
-            "months": monthly_drift(splits["stream"], model, splits["train"]),
+                         "top_k": TOP_K, "model_version": model["version"],
+                         "reference": "2022 test split (v1 predictions and tokens); words chosen "
+                                      "from the training split, stop words excluded",
+                         "stop_words": sorted(STOP_WORDS)},
+            "null": {"reference": "bootstrap samples of the 2022 test split vs the whole split",
+                     "month": null_band(ref, 50), "quarter": null_band(ref, 150)},
+            "months": monthly_drift(splits["stream"], model, splits["test"], splits["train"]),
+            "quarters": quarterly_drift(splits["stream"], model, splits["test"], splits["train"]),
+            "reference_training_in_sample": {
+                "note": "v1 scoring its own training rows (in-sample) as the reference; unseen "
+                        "months then look drifted. Shown to explain why it misleads.",
+                "months": in_sample},
             # The sample is stratified, so its class mix barely moves (README); production's did.
             "real_class_shares": class_shares(real_counts()),
             "sample_class_shares": class_shares(sample)}
@@ -180,11 +256,16 @@ def main(argv: list[str] | None = None) -> None:
     args = ap.parse_args(argv)
     rows = train.load_complaints(train.PATHS["complaints"])
     report = build_report(rows, " ".join(["python monitor.py", *argv]))
-    print(f"{'month':<9}{'n':>4}{'psi_pred':>10}{'psi_words':>11}  alert  top shifted words")
-    for m in report["months"]:
-        top = ", ".join(f"{w['word']}{'+' if w['direction'] == 'up' else '-'}" for w in m["top_shifted_words"])
-        print(f"{m['month']:<9}{m['n']:>4}{m['psi_predictions']:>10.4f}{m['psi_words']:>11.4f}  "
-              f"{'ALERT' if m['alert'] else '-':<6} {top}")
+    for unit, key in (("month", "months"), ("quarter", "quarters")):
+        null = report["null"][unit]
+        print(f"null p95 at n={null['n']}: predictions {null['predictions']['p95']:.4f}, "
+              f"words {null['words']['p95']:.4f}")
+        print(f"{unit:<9}{'n':>4}{'psi_pred':>10}{'psi_words':>11}  conv  calib  top shifted words")
+        for m in report[key]:
+            top = ", ".join(f"{w['word']}{'+' if w['direction'] == 'up' else '-'}"
+                            for w in m["top_shifted_words"])
+            print(f"{m[unit]:<9}{m['n']:>4}{m['psi_predictions']:>10.4f}{m['psi_words']:>11.4f}  "
+                  f"{'YES' if m['alert_convention'] else '-':<6}{'YES' if m['alert_calibrated'] else '-':<7}{top}")
     if args.write_reports:
         path = PATHS["reports"] / "drift.json"
         path.parent.mkdir(parents=True, exist_ok=True)
