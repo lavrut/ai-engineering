@@ -43,7 +43,7 @@ Lesson 5 ended with a number: the judge passes 14 of 20 `v2_rules` replies on `a
 
 ### Whose labels these are
 
-`llms/data/reply_labels.jsonl` holds 30 reply drafts, `r001` to `r030`, each written for one dev ticket and labelled pass or fail on the three rubric criteria. Some are good replies and some are plainly bad, such as `r015`: "Ha, sync problems are the worst! Just restart your phone and everything will be fixed. :)" They stand for the human side of every agreement number in this lesson.
+`llms/data/reply_labels.jsonl` holds 30 reply drafts, `r001` to `r030`, each written for one dev ticket and labelled pass or fail on the three rubric criteria. Some are good replies and some are plainly bad, such as `r015`: "Ha, sync problems are the worst! Just restart your phone and everything will be fixed. :)" They stand in for the human side of every agreement number in this lesson.
 
 **Claude drafted these labels, and they have not been reviewed by you yet.** `llms/data/README.md` marks them as pending your review. Two drafted tone labels, on `r017` and `r022`, were corrected before any judge verdict was committed, so neither was changed to match a verdict. `git log -- llms/data/reply_labels.jsonl llms/data/responses/` shows the label fix committed at 19:31 on 2026-10-25 and the first judge verdicts at 20:08. Until you review them, read every number below as "the judge against Claude-drafted labels": one model agreeing with another. That probably overstates how well the judge would agree with you, for the same reason as the 60/60 in lesson 2.
 
@@ -67,7 +67,7 @@ Take a plainer case. If 75% of your labels are pass and the judge always says pa
 kappa = (po - pe) / (1 - pe)
 ```
 
-Kappa is 1 for perfect agreement, 0 for no better than chance and below 0 for worse than chance. The always-pass judge scores kappa 0 however high its agreement looks.
+Kappa is 1 for perfect agreement, 0 for no better than chance and below 0 for worse than chance. As long as the labels contain at least one fail, the always-pass judge scores kappa 0 however high its agreement looks.
 
 Work it through for `addresses_issue`. The judge passes 22 of 30 replies and the labels pass 24. By chance they would both say pass `(22/30) × (24/30)` of the time and both say fail `(8/30) × (6/30)` of the time, so `pe` is 0.64. `po` is 28/30, or 0.933, so kappa is `(0.933 − 0.64) / (1 − 0.64)`, or 0.81. With the rubric after the reply, kappa is 0.81 for `addresses_issue`, 0.89 for `tone` and 1.00 for `no_false_promises`. A common rough reading takes kappa above 0.8 as strong agreement.
 
@@ -120,7 +120,7 @@ Section 7 is the three measures.
 - `if len(judge_v) != len(human_v) or not judge_v` raises a `ValueError` naming the criterion. Two lists of different lengths mean the replies are out of step, and any number computed from them would be wrong.
 - `cohen_kappa(a, b)` computes `po`, the observed agreement, and `pa` and `pb`, how often each rater says `True`.
 - `pe = pa * pb + (1 - pa) * (1 - pb)` is the chance that two raters with those rates agree by luck: both say pass, or both say fail.
-- `if pe == 1` handles raters who each give one answer every time. Kappa is undefined there, since `1 - pe` is 0, so the code returns 1.0 if they also agree and 0.0 if not.
+- `if pe == 1` handles the one case where the formula divides by zero. `pe` is 1 only when both raters give the same single answer every time, so they also agree on every reply; kappa is undefined there, and the code returns 1.0. Two raters who each always give a different answer have `pe` of 0, and the normal formula gives 0.
 - `position_flips(before_v, after_v)` counts the replies whose verdict differs between the two orders.
 - `cmd_agreement` in section 10 calls these per criterion and per order. It passes `[bool(x) for x in judge_v]` to kappa, which needs booleans, so an ungraded verdict counts as a fail there.
 

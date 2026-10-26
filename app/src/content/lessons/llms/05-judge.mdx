@@ -70,7 +70,7 @@ The price difference is affordable because the two run at different scales. Tria
 
 ### What judging costs
 
-The recorded usage shows the gap. Opus judging the 20 `v2_rules` replies on the test split cost $0.2215, about $0.011 a call. Haiku triaging those same 20 tickets cost $0.0052. Judging cost about 43 times as much as the work it graded.
+The recorded usage shows the gap. Opus judging the 20 `v2_rules` replies on the test split cost $0.2215, about $0.011 a call. Haiku triaging those same 20 tickets cost $0.0051. Judging cost about 43 times as much as the work it graded.
 
 Judging the 30 labelled replies with the rubric after the reply cost $0.2809, an average of 907 input and 287 output tokens a call. Before a paid judge run, the lab estimates 1,400 input and 900 output tokens a call, $0.0236 for Opus, so the estimate runs high, as it did for triage. Because the verdicts are saved, all of that was paid once. Every judge command in this track replays them for free.
 
@@ -80,7 +80,7 @@ A model's answer can depend on where things sit in its prompt, not only on what 
 
 The lab sets up one check. `judge()` takes `order="before"` or `order="after"`, which puts the rubric before or after the reply in the user message. The 30 labelled replies were judged both ways. If a verdict changes when only the order changes, the layout decided it.
 
-The check is narrow, and it helps to know exactly what moves. The judge's <Term t="system prompt" /> contains the rubric too, filled in through a `{rubric}` placeholder, and it is identical in both orders. Only the second copy, in the user message, moves. So the check measures how much that copy's position matters while the rubric stays at the top of the system prompt. Lesson 6 counts the verdicts that changed.
+The check is narrow, and it helps to know exactly what moves. The judge's system prompt contains the rubric too, filled in through a `{rubric}` placeholder, and it is identical in both orders. Only the second copy, in the user message, moves. So the check measures how much that copy's position matters while the rubric stays at the top of the system prompt. Lesson 6 counts the verdicts that changed.
 
 ## See it
 
