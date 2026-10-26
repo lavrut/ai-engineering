@@ -141,8 +141,9 @@ export default function PromptAB(props: PromptAbProps) {
         )}
       </div>
       <p class="pab-note">
-        The band is 1/√n for the {Math.round(1 / c.band ** 2)} scored tickets: a rough one-sigma noise for a single run.
-        A smaller difference could come from the model&apos;s run-to-run variation alone.
+        The band is 1/√n for the {Math.round(1 / c.band ** 2)} scored tickets: about two standard errors at worst. It
+        allows for which tickets happen to be in the set and for the model&apos;s run-to-run variation, so a smaller
+        difference is not evidence.
       </p>
 
       <CaseList title="Fixed by B" ids={c.fixed} tickets={tickets} answersA={answersOf(a)} answersB={answersOf(b)} />

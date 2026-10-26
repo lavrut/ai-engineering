@@ -307,7 +307,7 @@ export function callCost(model: string, inputTokens: number, outputTokens: numbe
 }
 
 // ── Report and compare (section 9) ──────────────────────────────────────────
-/** Rough one-sigma noise on an accuracy: 1/sqrt(m), m = scored (non-error) lines across all reps. */
+/** Rough noise on an accuracy, 1/sqrt(m): about two standard errors at worst (p = 0.5); m = scored (non-error) lines across all reps. */
 export function noiseBand(m: number): number {
   if (m <= 0) throw new Error('no scored cases');
   return 1 / Math.sqrt(m);

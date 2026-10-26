@@ -74,6 +74,18 @@ export const glossary = {
     'A hash of everything that shapes a model call (model, prompt text, input, repeat), used to find its saved answer; change any part and the key changes.',
   'noise band':
     'How far a score can move by luck alone, roughly 1/√m for m scored cases; a difference smaller than the band is not evidence.',
+  'LLM judge':
+    'A model call that grades another model’s output against written criteria, used where no exact right answer exists to compare with, such as a reply’s tone.',
+  rubric:
+    'The written criteria a grader checks an output against; in this lab, three pass-or-fail questions about a reply draft.',
+  agreement:
+    'The share of cases on which two raters, such as an LLM judge and a person, give the same verdict.',
+  "Cohen's kappa":
+    'Agreement between two raters corrected for chance: (observed − chance) / (1 − chance), where 1 is perfect, 0 is no better than chance and below 0 is worse.',
+  'position bias':
+    'A model’s tendency to answer differently depending on where things sit in its prompt, such as whether a rubric comes before or after the text it grades.',
+  'few-shot':
+    'Prompting with a few worked examples of inputs and their right outputs placed in the prompt itself.',
 } as const satisfies Record<string, string>;
 
 export type GlossaryKey = keyof typeof glossary;
