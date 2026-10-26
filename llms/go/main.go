@@ -363,19 +363,7 @@ func callModel(ctx context.Context, params anthropic.MessageNewParams, key strin
 		line.InputTokens, line.OutputTokens = int(resp.Usage.InputTokens), int(resp.Usage.OutputTokens)
 		// A refusal or a cut-off reply has no usable JSON; leave output null.
 		if resp.StopReason != anthropic.StopReasonRefusal && resp.StopReason != anthropic.StopReasonMaxTokens {
-			i := slices.IndexFunc(resp.Content, func(b anthropic.ContentBlockUnion) bool { return b.Type == "text" })
-			if i < 0 {
-				line.Error = ptr("no text block in response")
-			} else {
-				var parsed any
-				if err := json.Unmarshal([]byte(resp.Content[i].Text), &parsed); err != nil {
-					line.Error = ptr("invalid JSON: " + err.Error())
-				} else {
-					var compact bytes.Buffer // one line per saved response
-					json.Compact(&compact, []byte(resp.Content[i].Text))
-					line.Output = compact.Bytes()
-				}
-			}
+			line.Output, line.Error = parseOutput(resp)
 		}
 	}
 	line.LatencyMs = int(math.Round(float64(time.Since(start).Microseconds()) / 1000))
@@ -386,6 +374,23 @@ func callModel(ctx context.Context, params anthropic.MessageNewParams, key strin
 		}
 	}
 	return line, nil
+}
+
+// parseOutput reads the JSON answer from the first text block. A missing block or bad
+// JSON is returned as an error message, so the line is saved and the call is not paid twice.
+func parseOutput(resp *anthropic.Message) (json.RawMessage, *string) {
+	i := slices.IndexFunc(resp.Content, func(b anthropic.ContentBlockUnion) bool { return b.Type == "text" })
+	if i < 0 {
+		return nil, ptr("no text block in response")
+	}
+	text := []byte(resp.Content[i].Text)
+	var parsed any
+	if err := json.Unmarshal(text, &parsed); err != nil {
+		return nil, ptr("invalid JSON: " + err.Error())
+	}
+	var compact bytes.Buffer // one line per saved response
+	json.Compact(&compact, text)
+	return compact.Bytes(), nil
 }
 
 func appendLine(path string, line Line) error {
@@ -837,17 +842,10 @@ type Comparison struct {
 // on only one side are ignored in the flips. Band = noiseBand of the smaller scored count
 // (conservative); Significant is strict: |Diff| > Band.
 func compare(gradesA, gradesB []Grade) (Comparison, error) {
-	rightA, rightB := map[string]bool{}, map[string]bool{}
-	for _, side := range []struct {
-		grades []Grade
-		right  map[string]bool
-	}{{gradesA, rightA}, {gradesB, rightB}} {
-		for _, g := range side.grades {
-			if _, dup := side.right[g.CaseID]; dup {
-				return Comparison{}, errors.New("compare needs exactly one grade per case; select a single rep")
-			}
-			side.right[g.CaseID] = g.BothOK
-		}
+	rightA, errA := oneGradePerCase(gradesA)
+	rightB, errB := oneGradePerCase(gradesB)
+	if err := errors.Join(errA, errB); err != nil {
+		return Comparison{}, err
 	}
 	a, b := accuracy(gradesA, "both_ok"), accuracy(gradesB, "both_ok")
 	band, err := noiseBand(min(scoredLines(gradesA), scoredLines(gradesB)))
@@ -872,6 +870,18 @@ func compare(gradesA, gradesB []Grade) (Comparison, error) {
 		}
 	}
 	return c, nil
+}
+
+// oneGradePerCase maps case id to both_ok, and fails on a repeated case id.
+func oneGradePerCase(grades []Grade) (map[string]bool, error) {
+	right := map[string]bool{}
+	for _, g := range grades {
+		if _, dup := right[g.CaseID]; dup {
+			return nil, errors.New("compare needs exactly one grade per case; select a single rep")
+		}
+		right[g.CaseID] = g.BothOK
+	}
+	return right, nil
 }
 
 type GateResult struct {
@@ -1040,6 +1050,27 @@ func gradesFor(ctx context.Context, o options, tickets []Ticket, prompts Prompts
 	return grades, nil
 }
 
+// replayGrades grades one prompt version from saved responses, one rep (rep 0).
+func replayGrades(ctx context.Context, o options, tickets []Ticket, prompts Prompts, name string) ([]Grade, error) {
+	variant, err := promptName(prompts, name)
+	if err != nil {
+		return nil, err
+	}
+	return gradesFor(ctx, o, tickets, prompts, variant, "replay", nil, 1)
+}
+
+// confirmPaid asks before a paid mode makes calls; replay is free and needs no yes.
+func confirmPaid(w io.Writer, o options, kind, model, prompt, effort string, calls int) (bool, error) {
+	if o.mode == "replay" {
+		return true, nil
+	}
+	row, err := newRow(kind, model, prompt, effort, calls)
+	if err != nil {
+		return false, err
+	}
+	return confirm(w, []costRow{row}, o.yes, o.maxCost), nil
+}
+
 func load(o options) (Prompts, []Ticket, error) {
 	prompts, err := loadPrompts(filepath.Join(o.data, "prompts.json"))
 	if err != nil {
@@ -1067,14 +1098,8 @@ func cmdRun(ctx context.Context, o options, caller modelCaller, w io.Writer) (in
 	if err != nil {
 		return 1, err
 	}
-	if o.mode != "replay" {
-		row, err := newRow("triage", o.model, variant, o.effort, len(selectSplit(tickets, o.split))*o.reps)
-		if err != nil {
-			return 1, err
-		}
-		if !confirm(w, []costRow{row}, o.yes, o.maxCost) {
-			return 1, nil
-		}
+	if ok, err := confirmPaid(w, o, "triage", o.model, variant, o.effort, len(selectSplit(tickets, o.split))*o.reps); !ok {
+		return 1, err
 	}
 	grades, err := gradesFor(ctx, o, tickets, prompts, variant, o.mode, caller, o.reps)
 	if stoppedAtCap(w, err, o) {
@@ -1104,17 +1129,15 @@ func cmdCompare(ctx context.Context, o options, w io.Writer) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	var sides [2][]Grade
-	for i, name := range []string{o.prompt, o.vs} { // one rep each (rep 0)
-		variant, err := promptName(prompts, name)
-		if err != nil {
-			return 1, err
-		}
-		if sides[i], err = gradesFor(ctx, o, tickets, prompts, variant, "replay", nil, 1); err != nil {
-			return 1, err
-		}
+	a, err := replayGrades(ctx, o, tickets, prompts, o.prompt) // one rep each (rep 0)
+	if err != nil {
+		return 1, err
 	}
-	c, err := compare(sides[0], sides[1])
+	b, err := replayGrades(ctx, o, tickets, prompts, o.vs)
+	if err != nil {
+		return 1, err
+	}
+	c, err := compare(a, b)
 	if err != nil {
 		return 1, err
 	}
@@ -1145,14 +1168,8 @@ func cmdJudge(ctx context.Context, o options, caller modelCaller, w io.Writer) (
 		return 1, err
 	}
 	cases := selectSplit(tickets, o.split)
-	if o.mode != "replay" {
-		row, err := newRow("judge", judgeModel, variant, "", len(cases))
-		if err != nil {
-			return 1, err
-		}
-		if !confirm(w, []costRow{row}, o.yes, o.maxCost) {
-			return 1, nil
-		}
+	if ok, err := confirmPaid(w, o, "judge", judgeModel, variant, "", len(cases)); !ok {
+		return 1, err
 	}
 	type pair struct{ ticket, reply string }
 	replies, ids := map[string]pair{}, []string{}
@@ -1255,17 +1272,15 @@ func cmdGate(ctx context.Context, o options, w io.Writer) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	var sides [2][]Grade
-	for i, name := range []string{o.prompt, o.baseline} {
-		variant, err := promptName(prompts, name)
-		if err != nil {
-			return 1, err
-		}
-		if sides[i], err = gradesFor(ctx, o, tickets, prompts, variant, "replay", nil, 1); err != nil {
-			return 1, err
-		}
+	candidate, err := replayGrades(ctx, o, tickets, prompts, o.prompt)
+	if err != nil {
+		return 1, err
 	}
-	result, err := gate(sides[0], sides[1], o.minimum)
+	baseline, err := replayGrades(ctx, o, tickets, prompts, o.baseline)
+	if err != nil {
+		return 1, err
+	}
+	result, err := gate(candidate, baseline, o.minimum)
 	if err != nil {
 		return 1, err
 	}
@@ -1343,28 +1358,23 @@ func cli(args []string, caller modelCaller, stdout, stderr io.Writer) int {
 	if err := sub.Parse(top.Args()[1:]); err != nil {
 		return 2
 	}
-	for _, err := range []error{
-		oneOf("split", o.split, "dev", "test", "all"),
-		oneOf("mode", o.mode, "replay", "record", "live"),
-		func() error {
-			if sub.NArg() > 0 {
-				return fmt.Errorf("unrecognized arguments: %s", strings.Join(sub.Args(), " "))
-			}
-			if command == "judge" {
-				return oneOf("order", o.order, "before", "after")
-			}
-			return nil
-		}(),
-	} {
-		if err != nil {
-			fmt.Fprintf(stderr, "%s\nerror: %v\n", usage, err)
-			return 2
-		}
+	err := oneOf("split", o.split, "dev", "test", "all")
+	if err == nil {
+		err = oneOf("mode", o.mode, "replay", "record", "live")
+	}
+	if err == nil && command == "judge" {
+		err = oneOf("order", o.order, "before", "after")
+	}
+	if err == nil && sub.NArg() > 0 {
+		err = fmt.Errorf("unrecognized arguments: %s", strings.Join(sub.Args(), " "))
+	}
+	if err != nil {
+		fmt.Fprintf(stderr, "%s\nerror: %v\n", usage, err)
+		return 2
 	}
 
 	ctx := context.Background()
 	var code int
-	var err error
 	switch command {
 	case "run":
 		code, err = cmdRun(ctx, o, caller, stdout)
