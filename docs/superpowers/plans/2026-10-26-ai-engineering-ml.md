@@ -45,14 +45,14 @@
 
 ### Task 1: CFPB sample and fetch script
 
-**Files:** Create `ml/data/fetch_sample.py`, `ml/data/complaints.jsonl`, `ml/data/category_map.json`, `ml/data/README.md`, `ml/data/fixtures/api_response.json`, `ml/python/tests/test_fetch.py`, `ml/python/tests/conftest.py`, `ml/python/requirements.txt` (`scikit-learn`, `numpy`, `fastapi`, `uvicorn`, `httpx`, `pytest`; `mlflow` commented as optional).
+**Files:** Create `ml/data/fetch_sample.py`, `ml/data/complaints.jsonl`, `ml/data/category_map.json`, `ml/data/README.md`, `ml/data/fixtures/archive_rows.csv`, `ml/python/tests/test_fetch.py`, `ml/python/tests/conftest.py`, `ml/python/requirements.txt` (`scikit-learn`, `numpy`, `fastapi`, `uvicorn`, `httpx`, `pytest`; `mlflow` commented as optional).
 
-**Interfaces — Produces:** `parse_hits(api_json) -> list[dict]` (complaint lines), `map_product(raw, mapping) -> str | None`, `stratified_sample(rows, per_year, seed) -> list[dict]`.
+**Interfaces — Produces:** `parse_rows(csv_rows) -> list[dict]` (complaint lines), `map_product(raw, mapping) -> str | None`, `stratified_sample(rows, per_year, seed) -> list[dict]`.
 
-- [ ] **Step 1: Verify the API** before writing code: fetch the CFPB Consumer Complaint Database API documentation and one small query (e.g. 5 records with narratives) to confirm the endpoint, query parameters and field names. Record them in `ml/data/README.md`. Save that small response as `fixtures/api_response.json` (strip nothing — it is public data).
-- [ ] **Step 2: Failing tests:** `test_parse_hits_keeps_required_fields`, `test_map_product_merges_renamed_categories` (an old and a new name map to one current name; an unknown name returns None), `test_stratified_sample_is_deterministic_and_balanced_by_month`.
-- [ ] **Step 3: Implement** `fetch_sample.py` (sections: 1 Query, 2 Fetch with retries and a clear error, 3 Parse, 4 Map categories, 5 Sample, 6 Write). Choose the categories from real counts (5–7 with ≥ 60 complaints per year in every year 2019–2024 after mapping); target 600 per year.
-- [ ] **Step 4: Run the fetch once**, commit the sample; README records query, fetch date, counts per year × category, dropped rows, licence (US public domain) and the scrubbing note.
+- [ ] **Step 1: Verify the archive** before writing code (revised 2026-10-26: the live API no longer carries narratives): read the CFPB narratives archive page, identify the export files covering 2019–2024, check their sizes (HEAD requests) and their CSV columns (stream only the start of one file). Record the files and columns in `ml/data/README.md`. Save a few rows of a real export, as published, to `fixtures/archive_rows.csv` for the parsing tests.
+- [ ] **Step 2: Failing tests:** `test_parse_rows_keeps_required_fields`, `test_map_product_merges_renamed_categories` (an old and a new name map to one current name; an unknown name returns None), `test_stratified_sample_is_deterministic_and_balanced_by_month`.
+- [ ] **Step 3: Implement** `fetch_sample.py` (sections: 1 Archive files, 2 Download with retries, checksum and a clear error, 3 Parse, 4 Map categories, 5 Sample, 6 Write). Choose the categories from real counts (5–7 with ≥ 60 complaints per year in every year 2019–2024 after mapping); target 600 per year.
+- [ ] **Step 4: Run the fetch once**, commit the sample; README records archive files (names, URLs, sizes, SHA-256), fetch date, counts per year × category, dropped rows, licence (US public domain) and the scrubbing note.
 - [ ] **Step 5:** `cd ml/python && python3 -m pytest -q` → PASS. **Commit** `data(ml): add CFPB complaint sample and fetch script`.
 
 ### Task 2: Features (train.py §1–3)

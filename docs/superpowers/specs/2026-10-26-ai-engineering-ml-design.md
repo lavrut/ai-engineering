@@ -56,12 +56,12 @@ The app reads small derived summaries at build time (vocabulary slice, top words
 
 ## 4. Data
 
-- **Source:** CFPB Consumer Complaint Database public API; US-government public-domain data. Narratives are published only with consumer consent and are already scrubbed (personal details replaced with `XXXX`).
+- **Source:** the CFPB's official Consumer Complaint Database **Narratives Archive** (FOIA electronic reading room), a set of ZIP exports covering complaints received December 2011 – August 14, 2026. The live API and bulk download stopped carrying narratives in August 2026 (CFPB announcement of 2026-08-14; ccdb5-api PR #256 merged 2026-08-18), so the archive is the source. US-government public-domain data. Narratives were published only with consumer consent and were scrubbed by CFPB (personal details replaced with `XXXX`). The exports are streamed once in a scratch directory and only the sample is committed. Any HTTP request sends a generic User-Agent with no personal data.
 - **Sample:** complaints with a narrative, about 600 per year for 2019–2024 (about 3,600 total), stratified by month, fixed random seed. Restricted to about six product categories with enough volume (for example credit reporting, debt collection, credit card, checking or savings account, mortgage, money transfer); the exact list is fixed in Task 1 from real counts.
 - **Fields kept:** `id` (complaint ID), `date` (date received), `product` (mapped to the current name), `product_raw` (as published), `narrative`.
 - **Category renames:** CFPB has renamed product categories over time; `category_map.json` records the mapping, and lessons 2 and 10 use it as a real example of label drift.
 - **Splits (by time):** train 2019–2021, test 2022, production stream 2023–2024 by month.
-- `fetch_sample.py` records the exact query, fetch date, row counts per year and category, and any rows dropped, in `ml/data/README.md`. If the API has changed, it fails clearly; the committed sample keeps working.
+- `fetch_sample.py` records the archive files used (names, URLs, sizes, SHA-256), fetch date, row counts per year and category, and any rows dropped, in `ml/data/README.md`. If the archive moves or changes, it fails clearly; the committed sample keeps working. Lesson 2 tells the story of the source disappearing, as a real reason to commit a fixed sample.
 
 ## 5. Code
 
@@ -140,6 +140,6 @@ Each lesson follows `docs/STYLE.md`. Every number comes from the committed data 
 
 ## 11. Open items
 
-- Task 1 verifies the CFPB API's current endpoint and fields before the download and fixes the category list from real counts.
+- Task 1 verifies the archive's files and columns before the download and fixes the category list from real counts. (Revised 2026-10-26: the live API no longer has narratives; the user chose the official archive.)
 - The lesson 6 recording needs the user's approval of its printed estimate.
 - After this track: the queued LLMs lesson 11 on an eval framework.
