@@ -22,8 +22,8 @@
  },
  "data_version": "sha256:5c2b05a03e9dfee3a9fc28e25bc9c619cc420deda0cb663525c0a29ae3a3f8b6",
  "model": {
-  "path": null,
-  "sha256": "f29d564375db6b5c202b4327b4211a3b5a888177006f3d98d5cf90ac94e031cf"
+  "path": "models/v1.json",
+  "sha256": "a804df411869ed9f7416419f63c13f262c912e3f19c5669d2176d89bfd6806b3"
  },
  "metrics": {
   "test": {
@@ -59,6 +59,6 @@
    }
   }
  },
- "git_commit": "e5f789200e60b8bb1c5c532455692eb1ba2ddcd4",
- "git_dirty": true
+ "git_commit": "256e694e42f09fa011cf13aaade487fe543778e7",
+ "git_dirty": false
 }
