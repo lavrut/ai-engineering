@@ -2,6 +2,7 @@ import { useState } from "preact/hooks";
 import {
   alertCounts,
   chanceReading,
+  nullDesignNote,
   driftGeometry,
   pct,
   spreadLabels,
@@ -393,7 +394,7 @@ export default function DriftChart(p: DriftChartProps) {
             <rect class="dc-band" x="0" y="1" width="28" height="8" />
           </svg>
           null p50–p95: PSI with no drift, from {u.nullN}-complaint draws of
-          2022
+          2022 with a 2022 {unit}&apos;s category counts
         </li>
         <li>
           <svg viewBox="0 0 28 10" aria-hidden="true">
@@ -547,6 +548,7 @@ export default function DriftChart(p: DriftChartProps) {
         </table>
       </div>
       <p class="dc-hint">{p.expectedNote}</p>
+      <p class="dc-hint">{nullDesignNote(p, unit)}</p>
 
       <div class="dc-shares">
         <p class="dc-eyebrow">
@@ -607,7 +609,8 @@ export default function DriftChart(p: DriftChartProps) {
           The sample is stratified by design, so it mutes the real shift in
           class mix (bars run from 0 to 100%). Drift measured on the sample
           cannot see that shift; on the full stream the predictions signal
-          could, against a null sized for that volume.
+          could, against a null sized for that volume and drawn the way that
+          stream is sampled.
         </p>
       </div>
       <style>{css}</style>

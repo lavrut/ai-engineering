@@ -99,7 +99,9 @@ Everything in the ML track runs on a laptop CPU, offline and free. The only paid
 pip install -r ml/python/requirements.txt
 ```
 
-The scientific stack is pinned to exact versions (`scikit-learn==1.8.0`, `numpy==2.5.4`, `scipy==1.17.1`). The track checks that retraining reproduces `ml/models/v1.json`, the runs and the registry byte for byte, and the drift thresholds come from NumPy's seeded random generator. Another version's solver or generator can change the last digits, and with them the model's SHA-256. The server packages (`fastapi`, `uvicorn`, `httpx`) and `anthropic` (used by `compare_llm.py`, even in free replay mode) are lower bounds. The Go code needs only the standard library.
+The ML track needs Python 3.12 or later: from 3.12, `sum()` adds floats with compensation (Neumaier), and the Python/Go parity checks and the byte-identical rebuilds rely on it.
+
+The scientific stack is pinned to exact versions (`scikit-learn==1.8.0`, `numpy==2.5.4`, `scipy==1.17.1`). The track checks that retraining reproduces `ml/models/v1.json`, the runs and the registry byte for byte, and the drift thresholds come from NumPy's seeded random generator. Another version's solver or generator can change the last digits, and with them the model's SHA-256. The server packages (`fastapi`, `uvicorn`, `httpx`), `anthropic` (used by `compare_llm.py`, even in free replay mode), `brotli` (older versions make every API call fail under the SDK's HTTP client) and `pytest` are lower bounds. The Go code needs only the standard library.
 
 ### Train and evaluate
 

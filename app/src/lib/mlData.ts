@@ -96,10 +96,14 @@ export type DriftPeriod = {
 export type NullSignal = {
   p50: number;
   p95: number;
+  /** Share of no-drift draws with PSI >= alert_at. */
+  share_at_or_above_alert_at: number;
   within_2022: Record<string, number>;
   within_2022_max: number;
   threshold: number;
 };
+type UnstratifiedSignal = { p50: number; p95: number; share_at_or_above_alert_at: number };
+export type UnstratifiedBand = { n: number; draws: number; seed: number; predictions: UnstratifiedSignal; words: UnstratifiedSignal };
 export type NullBand = { n: number; draws: number; seed: number; predictions: NullSignal; words: NullSignal };
 export type DriftReport = {
   generated_by: string;
@@ -122,6 +126,13 @@ export type DriftReport = {
     };
     month: NullBand;
     quarter: NullBand;
+  };
+  /** For comparison only (not used for alerts): simple random draws, with no regard to the sample's
+   *  per-category quotas. What an unstratified stream would see. */
+  null_unstratified: {
+    note: string;
+    month: UnstratifiedBand;
+    quarter: UnstratifiedBand;
   };
   months: (DriftPeriod & { month: string })[];
   quarters: (DriftPeriod & { quarter: string })[];

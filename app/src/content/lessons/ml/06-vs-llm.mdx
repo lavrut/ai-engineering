@@ -50,6 +50,8 @@ Both read the same 200 complaints: a sample of the 2022 test year, stratified by
 
 On those 200 complaints Claude is right 86.5% of the time and v1 81.0%. The gap is 5.5 points. The noise band for 200 complaints is ±7.1 points (1/√200), so the gap is inside it: **this sample cannot tell them apart on accuracy.** Claude may well be better; showing it would take more complaints.
 
+A paired test agrees. The ±7.1-point band describes the noise in one proportion, not in the difference between two models scored on the same complaints; the paired view counts only the complaints where they disagree. v1 alone is right on 11, Claude alone on 22, and McNemar's test on those 33 gives p ≈ 0.08: not below the usual 0.05.
+
 v1 scores 81.0% here and 80.8% on all 600 test complaints: the 200 are a sample, and its number moves a little with which complaints are in it.
 
 Macro-F1 is 0.835 for Claude and 0.765 for v1. Per category, Claude is ahead on checking (0.809 against 0.636), credit card (0.783 against 0.651) and mortgage (0.976 against 0.900), and the two tie on debt collection at 0.773. Read those with care: the sample has 87 credit reporting complaints, and between 20 and 25 in each other category, so every per-category number is far noisier than the ±7.1 points on accuracy.

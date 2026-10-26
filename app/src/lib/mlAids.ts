@@ -681,10 +681,13 @@ export type DriftPoint = {
   top: ShiftedWord[];
 };
 export type InSamplePoint = { label: string; n: number; predictions: number; words: number; predictions_convention: boolean; words_convention: boolean };
-export type NullView = { p50: number; p95: number; within_2022_max: number; threshold: number };
+export type NullView = { p50: number; p95: number; within_2022_max: number; threshold: number; shareAtAlert: number };
+/** The unstratified comparison null: what simple random draws (an unstratified stream) would give. */
+export type UnstratifiedView = { p50: number; p95: number; shareAtAlert: number };
 export type DriftUnitView = {
   periods: DriftPoint[];
   null: Record<Signal, NullView>;
+  unstratified: Record<Signal, UnstratifiedView>;
   /** Null sample size (complaints per draw). */
   nullN: number;
   expected: { per_signal: number; either_signal_max: number };
@@ -729,7 +732,10 @@ export function driftChartProps(drift: DriftReport): DriftChartProps {
   });
   const unit = (u: DriftUnit, rows: (DriftPeriod & { label: string })[]): DriftUnitView => {
     const nb = drift.null[u];
-    const nullView = (s: Signal): NullView => ({ p50: sig(nb[s].p50), p95: sig(nb[s].p95), within_2022_max: sig(nb[s].within_2022_max), threshold: sig(nb[s].threshold) });
+    const nullView = (s: Signal): NullView => ({ p50: sig(nb[s].p50), p95: sig(nb[s].p95), within_2022_max: sig(nb[s].within_2022_max), threshold: sig(nb[s].threshold), shareAtAlert: sig(nb[s].share_at_or_above_alert_at) });
+    const ub = drift.null_unstratified[u];
+    if (ub.n !== nb.n) throw new Error(`drift.json: unstratified ${u} null has n=${ub.n}, not ${nb.n}`);
+    const unstratView = (s: Signal): UnstratifiedView => ({ p50: sig(ub[s].p50), p95: sig(ub[s].p95), shareAtAlert: sig(ub[s].share_at_or_above_alert_at) });
     const periods = rows.map((r) => {
       const big = r.n >= minN;
       const p: DriftPoint = {
@@ -753,6 +759,7 @@ export function driftChartProps(drift: DriftReport): DriftChartProps {
     return {
       periods,
       null: { predictions: nullView('predictions'), words: nullView('words') },
+      unstratified: { predictions: unstratView('predictions'), words: unstratView('words') },
       nullN: nb.n,
       expected: drift.null.expected_chance_alerts[u],
       scale: { predictions: scale('predictions'), words: scale('words') },
@@ -817,7 +824,8 @@ const quarterMonths = (q: string) => {
  *  maximum makes it rarer), so the binomial tail at that rate is an upper bound on how often a
  *  count this high happens with no drift. Above the expectation, the reading names why the
  *  evidence stays weak: alerts that barely clear a threshold set by a single 2022 period, and
- *  quarterly alerts that overlap a month alert (not independent evidence). It also gives the
+ *  quarterly alerts that overlap a month alert (not independent evidence). A count that chance
+ *  gives at least 10% of the time is read as within chance, even above the expectation. It also gives the
  *  either-signal chance, up to twice the per-signal one, since the reader watches two signals. */
 export function chanceReading(p: DriftChartProps, u: DriftUnit): string {
   const v = p.units[u];
@@ -833,7 +841,8 @@ export function chanceReading(p: DriftChartProps, u: DriftUnit): string {
   const tail =
     ` With no drift, ${seen} or more on a given signal happens up to ${pct(binomialTail(n, rate, seen))} of the time ` +
     `(binomial, at the null's upper-bound rate of ${pct(rate, 0)} per ${u})`;
-  if (seen <= v.expected.per_signal) return `${head}${tail}: within what chance gives.`;
+  // At or below the expectation, or a count chance alone gives at least one time in ten: not evidence.
+  if (seen <= v.expected.per_signal || binomialTail(n, rate, seen) >= 0.1) return `${head}${tail}: within what chance gives.`;
   // Two signals are two chances: by the union bound, the either-signal figure is up to twice the per-signal one.
   const either = `, and on either of the two signals up to ${pct(Math.min(1, 2 * binomialTail(n, rate, seen)))} (two signals, two chances)`;
   const nul = v.null[s];
@@ -852,6 +861,20 @@ export function chanceReading(p: DriftChartProps, u: DriftUnit): string {
     }
   }
   return `${head}${tail}${either}: weak evidence at most${reasons.length ? `, because ${reasons.join(', and ')}` : ''}.`;
+}
+
+/** Why the null is stratified, with the numbers: the sample's periods have fixed per-category quotas,
+ *  so the null copies one 2022 period's category counts per draw. Simple random draws (what an
+ *  unstratified stream would see) add class-mix noise this sample never has. */
+export function nullDesignNote(p: DriftChartProps, u: DriftUnit): string {
+  const v = p.units[u];
+  const [s, us] = [v.null.predictions, v.unstratified.predictions];
+  return (
+    `The no-drift draws copy how the sample was drawn: each takes one 2022 ${u}'s count of complaints per category. ` +
+    `Simple random draws of ${v.nullN}, the noise an unstratified stream would see, would put the predictions p95 at ` +
+    `${us.p95.toFixed(3)} instead of ${s.p95.toFixed(3)}, and ${pct(us.shareAtAlert)} of no-drift ${u}s at or above ` +
+    `${p.alertAt} instead of ${pct(s.shareAtAlert)}.`
+  );
 }
 
 /** x and y in SVG units for one drift chart (periods evenly spaced, 0 at the bottom). */

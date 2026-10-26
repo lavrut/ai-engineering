@@ -10,6 +10,7 @@ import {
   alertCounts,
   binomialTail,
   chanceReading,
+  nullDesignNote,
   diffRuns,
   driftChartProps,
   driftScale,
@@ -374,9 +375,15 @@ describe('drift chart data', () => {
     expect(p.units.quarter.periods).toHaveLength(8);
     expect(p.units.month.periods[0].label).toBe('2023-01');
     expect(p.units.quarter.periods[7].label).toBe('2024-Q4');
-    expect(p.units.month.null.predictions.threshold).toBeCloseTo(0.30592, 5);
-    expect(p.units.month.null.words.p50).toBeCloseTo(0.032913, 6);
-    expect(p.units.month.null.words.p95).toBeCloseTo(0.052334, 6);
+    // The null is stratified like the sample (each draw copies a 2022 period's category counts).
+    expect(p.units.month.null.predictions.p50).toBeCloseTo(0.045937, 6);
+    expect(p.units.month.null.predictions.threshold).toBeCloseTo(0.143781, 6); // the p95 wins (within-2022 max 0.134)
+    expect(p.units.month.null.predictions.shareAtAlert).toBeCloseTo(0.0138, 6);
+    expect(p.units.month.null.words.p50).toBeCloseTo(0.030259, 6);
+    expect(p.units.month.null.words.p95).toBeCloseTo(0.046561, 6);
+    expect(p.units.quarter.null.predictions.threshold).toBeCloseTo(0.052563, 6);
+    // The unstratified comparison: what simple random draws (an unstratified stream) would give.
+    expect(p.units.month.unstratified.predictions).toEqual({ p50: 0.102056, p95: 0.305916, shareAtAlert: 0.1496 });
     expect(p.units.month.null.words.threshold).toBeCloseTo(0.061879, 6); // the within-2022 max wins
     expect(p.units.quarter.null.words.threshold).toBeCloseTo(0.026036, 6);
     expect(p.alertAt).toBe(0.2);
@@ -385,7 +392,10 @@ describe('drift chart data', () => {
   it('marks alerts per signal, matching the report', () => {
     expect(month('2024-11')).toMatchObject({ n: 50, words_calibrated: true, predictions_calibrated: false, words_convention: false });
     expect(month('2024-11').words).toBeCloseTo(0.082338, 5); // vs threshold 0.0619
-    expect(alertCounts(p.units.month.periods)).toEqual({ predictions: { calibrated: 0, convention: 0 }, words: { calibrated: 1, convention: 0 } });
+    expect(month('2024-06')).toMatchObject({ predictions_calibrated: true, predictions_convention: false, words_calibrated: false });
+    expect(month('2024-06').predictions).toBeCloseTo(0.192277, 5); // vs threshold 0.1438, under 0.2
+    expect(p.units.month.periods.filter((m) => m.predictions_calibrated).map((m) => m.label)).toEqual(['2024-01', '2024-06']);
+    expect(alertCounts(p.units.month.periods)).toEqual({ predictions: { calibrated: 2, convention: 0 }, words: { calibrated: 1, convention: 0 } });
     expect(alertCounts(p.units.quarter.periods)).toEqual({ predictions: { calibrated: 0, convention: 0 }, words: { calibrated: 2, convention: 0 } });
     expect(p.units.quarter.periods.filter((q) => q.words_calibrated).map((q) => q.label)).toEqual(['2024-Q1', '2024-Q4']);
   });
@@ -400,10 +410,18 @@ describe('drift chart data', () => {
     expect(binomialTail(24, 0.05, 1)).toBeCloseTo(1 - 0.95 ** 24, 12);
     expect(binomialTail(8, 0.05, 2)).toBeCloseTo(1 - 0.95 ** 8 - 8 * 0.05 * 0.95 ** 7, 12);
     expect(binomialTail(8, 0.05, 0)).toBeCloseTo(1, 12);
+    // Two monthly predictions alerts: above the 1.2 expectation, but chance gives 2 or more up to
+    // 33.9% of the time (at least one time in ten), so within chance.
+    expect(binomialTail(24, 0.05, 2)).toBeCloseTo(1 - 0.95 ** 24 - 24 * 0.05 * 0.95 ** 23, 12);
     expect(chanceReading(p, 'month')).toBe(
       'By chance alone, expect on average at most about 1.2 calibrated alerts per signal over 24 months (2.4 on either). ' +
-        'Seen: predictions 0, words 1. With no drift, 1 or more on a given signal happens up to 70.8% of the time ' +
+        'Seen: predictions 2, words 1. With no drift, 2 or more on a given signal happens up to 33.9% of the time ' +
         "(binomial, at the null's upper-bound rate of 5% per month): within what chance gives.",
+    );
+    expect(nullDesignNote(p, 'month')).toBe(
+      "The no-drift draws copy how the sample was drawn: each takes one 2022 month's count of complaints per category. " +
+        'Simple random draws of 50, the noise an unstratified stream would see, would put the predictions p95 at 0.306 ' +
+        'instead of 0.144, and 15.0% of no-drift months at or above 0.2 instead of 1.4%.',
     );
     // Two quarterly word alerts: unusual under the null (5.7%), but weak evidence at most.
     expect(chanceReading(p, 'quarter')).toBe(
@@ -460,7 +478,8 @@ describe('DriftChart', () => {
   it('draws both signals with the threshold, the null band and the labelled convention', () => {
     const { container } = render(<DriftChart {...p} />);
     expect(screen.getAllByRole('img')).toHaveLength(2);
-    expect(container.textContent).toContain('calibrated threshold 0.306');
+    expect(container.textContent).toContain('calibrated threshold 0.144');
+    expect(container.textContent).toContain('15.0% of no-drift months at or above 0.2 instead of 1.4%');
     expect(container.textContent).toContain('0.2 convention (rule of thumb)');
     expect(container.textContent).toContain('null p50–p95');
     expect(container.textContent).toContain('within what chance gives');

@@ -14,14 +14,14 @@ quiz:
       - PSI only works on test data
     answer: 1
     explanation: A model's behaviour on the data it was fitted to is not its behaviour on new data. Comparing new months with in-sample predictions measures that gap, not a change in the world. Unseen data from the year before deployment is the fair reference.
-  - question: The calibrated monitor raised 1 monthly alert in 24 months, on the words signal. With no drift at all, about 1.2 per signal are expected. What should you conclude?
+  - question: The calibrated monitor alerted in 3 of 24 months, twice on the predicted-category mix (January and June 2024) and once on words (November 2024). With no drift at all, at most 1.2 alerts per signal are expected on average. What should you conclude?
     options:
-      - The language of complaints changed in November 2024
+      - The mix of complaints changed in 2024
       - It is within what chance gives; nothing here is evidence of drift
       - Retrain immediately
       - The threshold is wrong and should be lowered
     answer: 1
-    explanation: The threshold is set so that about 5% of no-drift months still cross it. Over 24 months that is about 1.2 alerts per signal by chance, so seeing one is what noise alone produces.
+    explanation: Each threshold is crossed by at most 5% of no-drift months, so 24 months give at most 1.2 alerts per signal on average. Two or more on one signal still happens up to 34% of the time with no drift, so two predictions alerts and one words alert are what noise alone can produce.
   - question: In the real CFPB data, credit reporting grew from 72.4% of these complaints in 2022 to 80.0% in 2024. Why can the monitor not see that in this course's sample?
     options:
       - PSI cannot measure class shares
@@ -69,22 +69,28 @@ The fair reference is unseen data from just before deployment: v1's predictions 
 
 ### Is 0.2 even the right line?
 
-With 50 complaints a month and six categories, sampling noise alone moves the predictions PSI a lot. The monitor measures that, two ways, using only 2022, so with no drift by construction:
+With 50 complaints a month and six categories, sampling noise alone moves the predictions PSI. The monitor measures that, two ways, using only 2022, so with no drift by construction:
 
-- **Leave-out:** draw 50 of the 600 complaints of 2022, 5,000 times, and compare each draw with the remaining 550. With no drift at all, the median predictions PSI is 0.102 and the 95th percentile 0.306. So the 0.2 convention would fire on pure noise in roughly 13–15% of months.
-- **Within 2022:** compare each month of 2022 with the rest of 2022. This includes the real month-to-month variation that random draws miss. The largest is 0.134 on predictions and 0.062 on words.
+- **Leave-out, drawn like the sample:** 5,000 times, pick one month of 2022 at random and draw from all of 2022, without replacement, as many complaints of each category as that month has (for January 2022, 20 credit reporting, 7 debt collection, 6 each of checking, credit card and mortgage, and 5 money transfer). Compare each draw with the remaining 550. With no drift, the median predictions PSI is 0.046 and the 95th percentile 0.144; 1.4% of the draws reach 0.2.
+- **Within 2022:** compare each month of 2022 with the rest of 2022. This includes the real month-to-month variation that the draws miss. The largest is 0.134 on predictions and 0.062 on words.
 
-The calibrated threshold for each signal is the larger of the two: the leave-out 95th percentile, or the within-2022 maximum. For months that is 0.306 on predictions and 0.062 on words. For quarters of 150 complaints, noise is smaller and so are the thresholds: 0.103 on predictions and 0.026 on words. Months under 30 complaints would never alert; every period here has 50 or 150.
+The calibrated threshold for each signal is the larger of the two: the leave-out 95th percentile, or the within-2022 maximum. For months that is 0.144 on predictions (the 95th percentile) and 0.062 on words (the within-2022 maximum). For quarters of 150 complaints, noise is smaller and so are the thresholds: 0.053 on predictions and 0.026 on words. Months under 30 complaints would never alert; every period here has 50 or 150.
+
+### The noise model must match the sampling
+
+Why copy a month's category counts instead of drawing any 50 complaints? Because that is how the sample's months were drawn. Lesson 2's quotas give every category at least 5 complaints a month and fill the rest from that month's real mix, so a real month's class mix barely varies. A random draw of 50 has no quotas: its class mix wanders, and that adds noise to the predictions PSI that real months never have.
+
+Drawn at random, the no-drift median is 0.102 and the 95th percentile 0.306, and 15.0% of no-drift months reach 0.2. That is the right null for an unstratified production stream of 50 complaints a month: there, the 0.2 convention would fire on pure noise about one month in seven. It is the wrong null for this sample, where draws made like its months reach 0.2 only 1.4% of the time: it would set the predictions threshold twice as high as the sample's noise warrants, and miss real movement. `drift.json` keeps the random draws as `null_unstratified`, for comparison only. The words signal moves much less (95th percentile 0.047 drawn like the sample, 0.052 at random), and its threshold is the within-2022 maximum either way.
 
 ### What the calibrated monitor found
 
-Monthly: **one alert in 24 months**, November 2024, on words (0.082 against 0.062). The threshold is set so that about 5% of no-drift months still cross it, so 24 months should give about 1.2 alerts per signal by chance. One is within what chance gives.
+Monthly: **alerts in 3 of 24 months**. On predictions, January 2024 (0.171) and June 2024 (0.192), both above the 0.144 threshold and below 0.2; on words, November 2024 (0.082 against 0.062). Each threshold is crossed by at most 5% of no-drift months (the 95th percentile by construction; where the within-2022 maximum is higher, by fewer), so 24 months give at most 1.2 alerts per signal on average by chance. Treating months as independent, two or more on predictions happens up to 33.9% of the time with no drift, one or more on words up to 70.8%, and three or more months with an alert on either signal up to 43.6% (at most 10% a month for the two together). All of that is within what chance gives.
 
-Quarterly: **two alerts in 8 quarters**, 2024-Q1 and 2024-Q4, both on words. About 0.4 per signal are expected by chance, and two or more on one signal happens up to 5.7% of the time with no drift; with two signals that is up to 11.4%. That is weak evidence at most. 2024-Q1 (0.0277) barely clears a threshold (0.026) set by a single 2022 quarter, and 2024-Q4 contains the November month alert, so it is not independent evidence.
+Quarterly: **two alerts in 8 quarters**, 2024-Q1 and 2024-Q4, both on words. At most 0.4 per signal are expected by chance, and two or more on one signal happens up to 5.7% of the time with no drift; with two signals that is up to 11.4%. That is weak evidence at most. 2024-Q1 (0.0277) barely clears a threshold (0.026) set by a single 2022 quarter, and 2024-Q4 contains the November month alert, so it is not independent evidence.
 
-The words that moved most in 2024-Q4 were "report" and "accounts" (up) and "told" and "sent" (down). More credit-report language would fit the real growth of credit reporting below. It is a story worth checking with more data, not a finding.
+The words that moved most in 2024-Q4 were "report", "accounts" and "chase" (up) and "told" and "sent" (down). More credit-report language would fit the real growth of credit reporting below. It is a story worth checking with more data, not a finding.
 
-The predicted-category mix never alerted, monthly or quarterly. In this sample it is indistinguishable from noise.
+The predicted-category mix alerted in two months and in no quarter: the quarters holding January and June 2024 reach 0.019 and 0.044 against a 0.053 threshold. Two monthly alerts on one signal are what chance gives up to a third of the time, so in this sample the predicted mix is still indistinguishable from noise.
 
 ### What the sample hides
 
@@ -100,7 +106,7 @@ The chart shows both signals for every stream month against the 2022 reference. 
 
 <DriftChart />
 
-Against 2022, no point reaches the 0.2 line. The in-sample overlay crosses it again and again on the predictions chart: the naive reference's nine false alarms. The single monthly alert sits on the words chart in November 2024, and the chance reading calls it within what chance gives. The quarterly view's two alerts get "weak evidence at most", with the reasons. The class-share panel shows the real stream's credit reporting share climbing to 80% while the sample's barely moves.
+Against 2022, no point reaches the 0.2 line. The in-sample overlay crosses it again and again on the predictions chart: the naive reference's nine false alarms. The monthly alerts sit on the predictions chart in January and June 2024, just over the calibrated line and under 0.2, and on the words chart in November 2024; the chance reading calls them within what chance gives. Under the table, a note sets the null drawn like the sample beside the random one. The quarterly view's two alerts get "weak evidence at most", with the reasons. The class-share panel shows the real stream's credit reporting share climbing to 80% while the sample's barely moves.
 
 ## The code
 
@@ -118,10 +124,12 @@ Section 3 builds the buckets and the no-drift null.
 
 - `top_words(train_rows, model_json, k=TOP_K)` picks the 50 most frequent training words that the model knows and that are not stop words; ties go alphabetically.
 - `featurize(rows, words, model_json, index)` turns complaints into two count matrices: a one-hot predicted category per complaint, from `train.score`, and token counts per word bucket.
-- `null_band(ref, dates, size, unit, draws=DRAWS, seed=train.SEED)` builds the null. `np.argsort(rng.random(...))[:, :size]` draws `size` rows without replacement, 5,000 times, from a generator seeded with 7.
+- `stratified_picks(categories, periods, size, draws, rng)` makes the draws. Each picks one 2022 period with `rng.integers`, then, for each category, ranks that category's rows by a random key and takes as many as the period has: without replacement, and with a real 2022 period's class mix. It returns one row of true/false per draw.
+- `null_band(ref, dates, categories, size, unit, draws=DRAWS, seed=train.SEED)` builds the null from 5,000 of those draws, from a generator seeded with 7.
 - `psi((total - c).tolist(), c.tolist())` compares each draw with the rows left over, not with all of 2022, because a stream month never overlaps the reference.
 - `within = {p: _psi_vs_rest(m, periods == p) ...}` is each 2022 period against the rest of 2022.
-- `"threshold": max(float(p95), max(within.values()))` is the calibrated alert level.
+- `"threshold": max(band["p95"], max(within.values()))` is the calibrated alert level.
+- `null_band_unstratified(ref, n_rows, size)` keeps the random draws, `np.argsort(rng.random(...))[:, :size]`, for the comparison in `drift.json`. Nothing alerts on it.
 
 Section 4 scores each period.
 
@@ -152,15 +160,17 @@ python monitor.py
 You should see two tables. The monthly one starts:
 
 ```text
-null threshold at n=50: predictions 0.3059, words 0.0619
+null threshold at n=50: predictions 0.1438, words 0.0619
 month       n  psi_pred  psi_words  conv  calib  top shifted words
 2023-01    50    0.1195     0.0293  -     -      these+, company-, pay-, days+, received-
 2023-02    50    0.0128     0.0275  -     -      payments-, loan-, mortgage-, told+, get-
 ```
 
-and one row has `YES` under `calib`:
+and three rows have `YES` under `calib`:
 
 ```text
+2024-01    50    0.1714     0.0380  -     YES    back-, report+, card-, s-, said-
+2024-06    50    0.1923     0.0424  -     YES    check+, call+, called+, debt-, told+
 2024-11    50    0.0643     0.0823  -     YES    accounts+, report+, these+, told-, balance+
 ```
 
@@ -197,10 +207,10 @@ You should see:
 
 ```text
 in-sample reference, PSI >= 0.2: 9 of 24 months
-2022 reference, months: PSI >= 0.2 in 0, calibrated alerts in 1 ['2024-11']
+2022 reference, months: PSI >= 0.2 in 0, calibrated alerts in 3 ['2024-01', '2024-06', '2024-11']
   expected by chance: {'per_signal': 1.2, 'either_signal_max': 2.4}
 2022 reference, quarters: PSI >= 0.2 in 0, calibrated alerts in 2 ['2024-Q1', '2024-Q4']
   expected by chance: {'per_signal': 0.4, 'either_signal_max': 0.8}
 ```
 
-Nine alarms with the naive reference, none with the fair one at 0.2, and calibrated alerts at about the rate chance predicts. Before you act on a drift alert, ask what the same monitor would have said with no drift at all.
+Nine alarms with the naive reference, none with the fair one at 0.2, and calibrated alerts no more often than chance allows. Before you act on a drift alert, ask what the same monitor would have said with no drift at all.

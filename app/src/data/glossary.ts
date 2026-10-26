@@ -123,7 +123,7 @@ export const glossary = {
   'experiment tracking':
     'Recording every training run’s settings, data version, code version, metrics and model file hash, so any result can be compared, explained and rebuilt later.',
   'model registry':
-    'The list of a model’s released versions, each with its file, hash and stage (staging, production or archived), plus a history of every move; servers load the version it names production.',
+    'The list of a model’s registered versions, each with its file, hash and stage (staging, production or archived), plus a history of every move; servers load the version it names production.',
   drift:
     'A change, after a model is deployed, in the data it receives or in what its labels mean, compared with the data it was built and tested on.',
   PSI:

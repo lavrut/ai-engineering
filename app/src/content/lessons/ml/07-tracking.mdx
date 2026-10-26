@@ -70,7 +70,7 @@ The three that matter are tied. Naive Bayes, C = 1 and C = 3 are within 0.007 ma
 
 ### Ids, times and replays
 
-A run's id is built from what makes it different: `logreg-C1-2019-2021` is the model, its knob and its training years. Rebuild the same experiment and you get the same id and, if nothing changed, the same file. If a rerun would change a record, `log_run` refuses unless you pass `--replace`, so a result cannot be overwritten by accident. MLflow does it the other way: every run gets a fresh random id, and nothing is ever replaced.
+A run's id is built from what makes it different: `logreg-C1-2019-2021` is the model, its knob and its training years. Rebuild the same experiment and you get the same id and, if nothing changed, the same file. If a rerun would change a record, `log_run` refuses unless you pass `--replace`, so a result cannot be overwritten by accident. MLflow does it the other way: every run gets a fresh random id, so a rerun creates a new run rather than replacing one.
 
 A run's `time` is not the clock. It is midnight after the last complaint it used: 2023-01-01 for the four runs scored on 2022, 2023-07-01 for the retrain. That keeps the committed files byte-identical when they are rebuilt.
 
