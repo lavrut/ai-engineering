@@ -285,3 +285,47 @@ def test_ungraded_samples_left_out_of_means(tmp_path):
     assert sum(m["graded"] for m in by_id.values()) == 2
     for rid in lab.RUBRIC_IDS:       # 2 graded, both pass: 1.0, not 2/4
         assert metric(log, rid, "graded_mean") == 1.0
+
+
+# ── Task 4: summarize.py ────────────────────────────────────────────────────
+import summarize  # noqa: E402
+
+
+@pytest.fixture(scope="module")
+def summary_logs(tmp_path_factory):
+    d = tmp_path_factory.mktemp("logs")
+    return d, summarize.run_evals(d)
+
+
+def test_summary_rows_match(summary_logs):
+    log_dir, logs = summary_logs
+    s = summarize.build_summary(log_dir, logs=logs)
+    assert [r["id"] for r in s["runs"]] == ["v1_basic", "v2_rules", "v3_examples", "judge"]
+    assert all(row["match"] for r in s["runs"] for row in r["rows"])
+    v2 = next(r for r in s["runs"] if r["id"] == "v2_rules")
+    cat = next(row for row in v2["rows"] if row["metric"] == "category")
+    assert cat["lab"] == cat["inspect"] == 1.0 and cat["n"] == 60 and v2["epochs"] == 3
+    judge = next(r for r in s["runs"] if r["id"] == "judge")
+    assert [row["metric"] for row in judge["rows"]] == list(lab.RUBRIC_IDS)
+    assert [row["inspect"] for row in judge["rows"]] == [0.7, 0.95, 0.95] and all(row["n"] == 20 for row in judge["rows"])
+    assert len(s["framework_gives"]) == 4 and len(s["we_still_own"]) == 4
+    assert s["inspect_version"] == ti.INSPECT_VERSION and s["split"] == "all"
+
+
+def test_summarize_from_other_cwd(tmp_path, monkeypatch, summary_logs):
+    _, logs = summary_logs
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(summarize, "run_evals", lambda log_dir: logs)
+    out = tmp_path / "summary.json"
+    assert summarize.main(["--out", str(out), "--log-dir", str(tmp_path / "logs")]) == 0
+    assert json.loads(out.read_text())["runs"][0]["id"] == "v1_basic"
+
+
+def test_mismatch_exits_1(tmp_path, monkeypatch, summary_logs, capsys):
+    _, logs = summary_logs
+    bad = {k: v.model_copy(deep=True) for k, v in logs.items()}
+    next(s for s in bad["v1_basic"].results.scores if s.name == "category_match").metrics["accuracy"].value = 0.5
+    monkeypatch.setattr(summarize, "run_evals", lambda log_dir: bad)
+    out = tmp_path / "summary.json"
+    assert summarize.main(["--out", str(out), "--log-dir", str(tmp_path / "logs")]) == 1
+    assert "match" in capsys.readouterr().out and not out.exists()
