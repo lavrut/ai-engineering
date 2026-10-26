@@ -139,4 +139,8 @@ The app reads only this file.
 
 ## 10. Open items
 
-- The plan confirms Inspect 0.3.285's mechanisms for: passing the repeat number to a custom model API, structured output, and naming the grader model. If one is missing, the plan rules on a fallback (for example, the solver puts the repeat number in the request) without changing the lab.
+- Resolved 2026-10-26 by a free probe with Inspect 0.3.285 (a dummy provider, `--epochs 3`, no API calls):
+  - The solver calls `generate(state, extra_headers={"x-replay-rep": str(state.epoch - 1)}, response_schema=...)`. The custom provider receives both unchanged in `config`.
+  - `state.epoch` counts from 1, so the lab's rep is `epoch - 1`.
+  - The judge scorer uses `get_model(role="grader")`, set with `model_roles={"grader": "replay/claude-opus-5-5"}` (CLI `--model-role grader=...`).
+  - The public header is the documented path. The internal `sample_state()` also works, but it is not public API, so it is not used.
