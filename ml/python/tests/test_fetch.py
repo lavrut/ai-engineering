@@ -1,5 +1,6 @@
 """Tests for ml/data/fetch_sample.py. No network: they use fixtures/archive_rows.csv,
-a few rows copied as published from a real CCDB archive export."""
+13 real rows from the CCDB archive exports, as published but trimmed
+to the five columns the parser reads (published header names kept)."""
 import csv
 import random
 from collections import Counter
