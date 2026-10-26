@@ -77,3 +77,13 @@ describe('FrameworkCompare', () => {
     expect(screen.queryByRole('table')).toBeNull();
   });
 });
+
+describe('NoRecordedRun', () => {
+  it('keeps its default text and command', async () => {
+    const { default: NoRecordedRun } = await import('../src/components/llms/NoRecordedRun');
+    const { RECORD_COMMAND } = await import('../src/lib/llmsAids');
+    render(<NoRecordedRun />);
+    expect(screen.getByText(/This calls the API and costs money/)).toBeTruthy();
+    expect(screen.getByText(RECORD_COMMAND)).toBeTruthy();
+  });
+});

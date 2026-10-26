@@ -33,7 +33,7 @@ export const inspectPipeline: Diagram = {
       n: 2,
       highlight: ['dataset', 'e-dataset-solver', 'solver', 'e-solver-replay'],
       caption:
-        'The solver builds the request: the chosen system prompt plus the ticket, and the repeat number in a header. It is the same prompt the lab sends. In the lab: section 3.',
+        'The solver builds the request: the chosen system prompt plus the ticket, and the repeat number in a header. It is the same prompt the lab sends. In the lab: sections 3 and 4 (the schema in 3, the request in 4).',
       code: { file: 'python', section: 4, source: 'llms-inspect' },
     },
     {
@@ -54,7 +54,7 @@ export const inspectPipeline: Diagram = {
       n: 5,
       highlight: ['scorers', 'e-scorers-log', 'log'],
       caption:
-        'A task ties the dataset, solver and scorers together. Running it writes a log with accuracy and its standard error, which inspect view can open. In the lab: section 10.',
+        'A task ties the dataset, solver and scorers together. Running it writes a log with accuracy and its standard error, which inspect view can open. In the lab: sections 8 and 9.',
       code: { file: 'python', section: 7, source: 'llms-inspect' },
     },
   ],

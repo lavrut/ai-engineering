@@ -94,6 +94,15 @@ describe('diagram data', () => {
     expect(inspectPipeline.nodes.map((n) => n.id)).toEqual(['dataset', 'solver', 'replay', 'scorers', 'log']);
   });
 
+  it('inspect-pipeline captions name the right lab sections', () => {
+    const lab = inspectPipeline.steps.map((s) => {
+      const m = /In the lab: sections? (\d+)(?: and (\d+))?/.exec(s.caption);
+      return m ? [Number(m[1]), ...(m[2] ? [Number(m[2])] : [])] : null;
+    });
+    expect(lab).toEqual([[2], [3, 4], [4], [5], [8, 9]]);
+    expect(inspectPipeline.steps[3].caption).toContain('section 6');
+  });
+
   it.each(all)('%s: every highlighted node is reached by a highlighted edge', (_name, d) => {
     const problems: string[] = [];
     for (const s of d.steps) {

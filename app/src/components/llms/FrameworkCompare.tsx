@@ -1,10 +1,11 @@
-import { useState } from 'preact/hooks';
+import { useId, useState } from 'preact/hooks';
 import { allMatch, compareRows, runOptions, type InspectSummary } from '../../lib/frameworkCompare';
 import NoRecordedRun from './NoRecordedRun';
 
 export const SUMMARIZE_COMMAND = 'python llms/inspect/summarize.py';
 
 export default function FrameworkCompare({ summary }: { summary: InspectSummary | null }) {
+  const groupName = useId();
   const [runId, setRunId] = useState(summary?.runs[0]?.id ?? '');
 
   if (!summary) {
@@ -34,7 +35,7 @@ export default function FrameworkCompare({ summary }: { summary: InspectSummary 
       <div role="radiogroup" aria-label="Run to compare" class="fc-runs">
         {options.map((o) => (
           <label key={o.id} class={`fc-run${o.id === runId ? ' is-on' : ''}`}>
-            <input type="radio" name="fc-run" value={o.id} checked={o.id === runId} onChange={() => setRunId(o.id)} />
+            <input type="radio" name={groupName} value={o.id} checked={o.id === runId} onChange={() => setRunId(o.id)} />
             <span>{o.label}</span>
           </label>
         ))}
