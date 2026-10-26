@@ -127,7 +127,7 @@ Section 7 sets `fail_on_error=0.5` on both tasks. A few saved error lines are le
 </Callout>
 
 <Callout kind="warning" title="Replay is not the live path">
-  Everything here is free. The live path swaps `replay/` for `anthropic/` in `--model`, and Inspect then calls the API itself. That costs money, and Inspect has none of the lab's cost estimate or spend cap. Check the estimate from the lab first, as the next section shows.
+  Everything here is free. The live path swaps `replay/` for `anthropic/` in `--model`, and Inspect then calls the API itself. That costs money, and Inspect has none of the lab's cost estimate, approval prompt or run-wide spend cap. Check the estimate from the lab first, as the next section shows.
 </Callout>
 
 ## Try it
@@ -139,9 +139,10 @@ Install Inspect in its own virtual environment, never in your base Python. From 
 ```bash
 python3 -m venv .venv-inspect
 .venv-inspect/bin/pip install -r llms/inspect/requirements.txt
+.venv-inspect/bin/pip install -e llms/inspect
 ```
 
-This installs `inspect-ai==0.3.285` and the lab's requirements. It is free, and `.venv-inspect/` is git-ignored.
+The first line of pip installs `inspect-ai==0.3.285` and the lab's requirements. The second installs a tiny package, `llms/inspect/pyproject.toml`, that tells Inspect about the `replay` provider. The command line needs it: Inspect resolves `--model replay/...` before it opens the task file, so without it you get `Model API replay ... not recognized`. Both steps are free, and `.venv-inspect/` is git-ignored.
 
 ### Run the evals
 
@@ -176,7 +177,13 @@ This is free. Copy the data, then edit one prompt in the copy:
 cp -r llms/data ~/lumen-inspect
 ```
 
-Open `~/lumen-inspect/prompts.json`, add a word to the `v1_basic` text under `triage`, and run the first command with `-M root=$HOME/lumen-inspect`. Most samples now miss, so the eval fails and shows an error that names the case and the lab's record command. It never calls the API.
+Add a few words to the end of the `v1_basic` text under `triage` in `~/lumen-inspect/prompts.json`, then point the provider at the copy with `-M root`:
+
+```bash
+.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v1_basic -M root=$HOME/lumen-inspect
+```
+
+Every sample misses, so the eval stops with `ReplayMiss: no saved response for claude-haiku-5-5: unknown system prompt ... Record it: python triage_lab.py record ...`. It names the case and the lab's record command, and it never calls the API.
 
 ### The live path (costs money)
 
@@ -193,7 +200,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model anthropic/claude-haiku-5-5 -T variant=v2_rules --epochs 3
 ```
 
-This calls the API and costs money. Inspect will not stop at the lab's `--max-cost` cap, so the number the lab printed is the one to hold yourself to.
+This calls the API and costs money. Inspect has no estimate and no `y/N` prompt. It does have `--cost-limit`, a dollar limit on each sample, and `--token-limit`, but neither is the lab's `--max-cost` cap on the whole run, so hold yourself to the number the lab printed.
 
 <Callout kind="note" title="When to reach for a framework">
   A framework earns its place when you run many evals, share them with a team, or want logs and a viewer for free. The hand-built lab earns its place when you need to know exactly why a number is what it is. Here you used both: the lab as the check, Inspect as the tool.

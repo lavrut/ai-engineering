@@ -329,3 +329,41 @@ def test_mismatch_exits_1(tmp_path, monkeypatch, summary_logs, capsys):
     out = tmp_path / "summary.json"
     assert summarize.main(["--out", str(out), "--log-dir", str(tmp_path / "logs")]) == 1
     assert "match" in capsys.readouterr().out and not out.exists()
+
+
+# ── the real command line ───────────────────────────────────────────────────
+# The learner runs `inspect eval ... --model replay/...` from the repo root. Inspect resolves --model before it
+# imports the task file, so this only works once `pip install -e llms/inspect` has registered the provider.
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from inspect_ai.log import read_eval_log  # noqa: E402
+
+REPO = Path(__file__).resolve().parents[3]
+
+
+def run_cli(args, log_dir):
+    inspect_bin = Path(sys.executable).parent / "inspect"
+    proc = subprocess.run([str(inspect_bin), "eval", *args, "--log-dir", str(log_dir), "--display", "none"],
+                          cwd=REPO, capture_output=True, text=True, timeout=300)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    return read_eval_log(str(next(Path(log_dir).glob("*.eval"))))
+
+
+def score(log, scorer, metric):
+    return next(s for s in log.results.scores if s.name == scorer).metrics[metric].value
+
+
+def test_cli_triage_command(tmp_path):
+    log = run_cli(["llms/inspect/triage_inspect.py@triage", "--model", "replay/claude-haiku-5-5",
+                   "-T", "variant=v1_basic"], tmp_path)
+    assert log.status == "success"
+    assert score(log, "category_match", "accuracy") == pytest.approx(0.9)
+
+
+def test_cli_judge_command(tmp_path):
+    log = run_cli(["llms/inspect/triage_inspect.py@triage_judged", "--model", "replay/claude-haiku-5-5",
+                   "--model-role", "grader=replay/claude-opus-5-5"], tmp_path)
+    assert log.status == "success"
+    assert score(log, "addresses_issue", "graded_mean") == pytest.approx(0.7)

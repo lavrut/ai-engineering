@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "triage-inspect"
+version = "0.1.0"
+description = "Registers the lab's replay model provider with Inspect, so `--model replay/...` works from the CLI."
+requires-python = ">=3.10"
+dependencies = ["inspect-ai==0.3.285"]
+
+[tool.setuptools]
+py-modules = ["inspect_registry"]
+
+[project.entry-points.inspect_ai]
+triage_inspect = "inspect_registry"

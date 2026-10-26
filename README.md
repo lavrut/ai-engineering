@@ -88,6 +88,7 @@ Lesson 11 re-runs the triage eval through [Inspect AI](https://inspect.aisi.org.
 ```sh
 python3 -m venv .venv-inspect
 .venv-inspect/bin/pip install -r llms/inspect/requirements.txt    # inspect-ai==0.3.285
+.venv-inspect/bin/pip install -e llms/inspect                     # registers the replay provider, which the CLI needs
 
 .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v1_basic
 .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v2_rules --epochs 3
