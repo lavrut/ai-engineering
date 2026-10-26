@@ -50,6 +50,30 @@ export const glossary = {
     'A cap on how many requests or tokens an account may use per minute. A request over it gets HTTP 429 and should be retried after a short wait.',
   'JSON Lines':
     'A text format with one complete JSON object per line. Each line can be appended and read on its own, which suits logs.',
+  eval:
+    'A repeatable test of a model feature: run it on a fixed set of inputs with known right answers, grade every output, and report the share right.',
+  grader:
+    'The code or model that turns one output into a grade, such as right or wrong, by checking it against the label or a rubric.',
+  'dev set':
+    'The part of an eval set you tune on: read its mistakes, change the prompt and rerun as often as you like.',
+  'test set':
+    'The part of an eval set held back from tuning and read only to report a final score, so that score stays honest.',
+  'edge case':
+    'An input that is unusual or hard on purpose, such as a sarcastic, very short or non-English ticket; tagging them lets you score them on their own.',
+  'labelling guide':
+    'Written rules, applied in order, that decide each input’s right answer, so two labellers working alone reach the same label.',
+  baseline:
+    'The score a trivial method gets, such as always answering the most common label; a real score is judged by how far it beats this.',
+  'structured output':
+    'An API feature that makes the model’s reply follow a JSON Schema you send, so the answer always parses and only uses allowed values.',
+  accuracy:
+    'The share of graded cases a model got right, from 0 to 1, usually shown as a percentage.',
+  'confusion matrix':
+    'A table that counts each pair of right answer and model answer; the diagonal holds the right answers and every other cell is one kind of mistake.',
+  'cache key':
+    'A hash of everything that shapes a model call (model, prompt text, input, repeat), used to find its saved answer; change any part and the key changes.',
+  'noise band':
+    'How far a score can move by luck alone, roughly 1/√m for m scored cases; a difference smaller than the band is not evidence.',
 } as const satisfies Record<string, string>;
 
 export type GlossaryKey = keyof typeof glossary;

@@ -1,0 +1,166 @@
+---
+track: llms
+order: 3
+slug: graders
+title: Code graders
+goal: Grade the model's category and priority with exact-match code, compute accuracy, read a confusion matrix, and handle refusals, cut-off replies and errors correctly.
+minutes: 16
+quiz:
+  - question: A run of 40 tickets has 2 API errors and 1 refusal. The model got 30 of the others right. What does accuracy() report?
+    options:
+      - 30 / 40 = 75.0%
+      - 30 / 38 = 78.9%, because errors are left out and the refusal counts as wrong
+      - 30 / 37 = 81.1%, because errors and refusals are both left out
+      - 30 / 39 = 76.9%, because only the refusal is left out
+    answer: 1
+    explanation: An error means no answer came back, so it says nothing about the model and is left out of the count. A refusal is an answer, just not a usable one; a customer would get nothing, so it counts as wrong. That leaves 38 scored lines, 30 of them right.
+  - question: Why does the lab ask for structured output instead of reading the category out of free text?
+    options:
+      - Structured output makes the model more accurate
+      - The schema's enum limits the answer to the six allowed categories, so an exact string match is a fair grader
+      - Free text costs more tokens
+      - The judge cannot read free text
+    answer: 1
+    explanation: Without a schema, the model might answer "Billing", "billing issue" or a sentence, and an equality check would mark a right answer wrong. With the enum, the category is always one of the six exact strings, so comparing it with the label grades meaning, not formatting.
+  - question: The category accuracy is 92.5%. What does the confusion matrix add?
+    options:
+      - Nothing; it is the same number in a table
+      - Which mistakes the model makes, for example account tickets answered as how_to, so you know which definition to fix
+      - The cost of each mistake
+      - The noise band of the accuracy
+    answer: 1
+    explanation: Accuracy says how many answers were wrong; the matrix says which way. Off-diagonal cells name the confusion and list its tickets. Here every v1_basic category mistake lands in how_to, at exactly the boundaries the labelling guide's tie-breakers settle.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import ConfusionMatrix from '../../../components/llms/ConfusionMatrix.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+A category and a priority each have one right answer per ticket: the label. So a grader for them is one line of code: is the model's answer equal to the label? That grader is exact, free, instant and gives the same grade every time. Use code wherever code can decide, and save the LLM judge (lesson 5) for what it cannot, such as tone.
+
+### Make the answer gradable
+
+An equality check only works if right answers look the same. Asked in free text, a model might write `Billing`, `billing issue`, or "This looks like a billing question." Each is right, and each fails `== "billing"`.
+
+The lab removes the problem with <Term t="structured output" />. The request carries a JSON Schema, and the API makes the reply follow it. The schema gives `category` an `enum` of the six allowed values and `priority` an `enum` of the four. When the model finishes normally, its answer is valid JSON, and both fields are exact strings from those lists.
+
+### Accuracy, three ways
+
+<Term t="accuracy" /> is the share of graded tickets that are right. The lab reports three:
+
+- `category`: the category matches the label.
+- `priority`: the priority matches.
+- `both`: both match. This is the headline score, because a ticket with the right category and the wrong priority is still handled wrongly.
+
+### When there is no usable answer
+
+Every saved line gets an outcome before it is graded:
+
+| Outcome | What happened | In accuracy |
+|---|---|---|
+| `ok` | The model finished normally with a JSON answer. | Graded against the label. |
+| `refusal` | `stop_reason` is `refusal`: the model declined. | Counted as wrong. |
+| `max_tokens` | The reply hit `max_tokens` and the JSON is cut off. | Counted as wrong. |
+| `error` | The call failed: a network error, an overloaded API, or no parseable JSON. | Left out. |
+
+A refusal or a cut-off reply is something the model did. A customer would get no triage, so it counts against the model. An error is different: the model never produced an answer, because the request failed. Counting it as wrong would make your accuracy partly a measure of your network. So errors are left out of the share, and the report prints how many there were, so a run full of errors cannot hide.
+
+The recorded run had none of these. Every call ended with `stop_reason` `end_turn`, and the longest reply used 659 of its 2,000 output tokens. The Try it below fakes one of each, so you can watch the arithmetic.
+
+### The confusion matrix
+
+One accuracy hides which mistakes the model makes. A <Term t="confusion matrix" /> counts every pair of (expected, answered). Rows are the label, columns the model's answer. The diagonal holds the right answers; every other cell is one kind of mistake.
+
+Here is the priority matrix for Haiku with `v1_basic` on the 40 dev tickets:
+
+```text
+expected      low  normal    high  urgent
+low            14       2       0       0
+normal          0       6       3       0
+high            1       2       6       0
+urgent          0       0       1       5
+```
+
+The diagonal adds up to 31 of 40, the 77.5% priority accuracy. The other nine are not random. Eight are one step off, and only one `high` ticket fell two steps, to `low`. Five answers are too high, such as three `normal` tickets raised to `high`, and four are too low. The matrix tells you to look at how the prompt separates neighbouring priorities. The accuracy alone could not.
+
+## See it
+
+This is the category matrix for the same run, Haiku with `v1_basic` on dev. Find the cells off the diagonal and click each one to read its tickets.
+
+<ConfusionMatrix />
+
+37 of 40 are right, and all three mistakes land in the `how_to` column. `t015` asks how to change a display name and `t039` asks about two accounts on one phone; the labelling guide puts both under C3 `account`. `t028` is an Evernote import with broken images, which the guide makes a `bug` because the content is broken. These are exactly the boundaries the guide's tie-breakers settle, and `v1_basic` does not state them.
+
+Switch the run to `Haiku 5.5 · v2_rules`, which states the rules: every ticket sits on the diagonal. Then try `Opus 5.5 · v1_basic · high effort`. The bigger model makes the same `account` to `how_to` mistakes on `t015` and `t039`, because the prompt, not the model, leaves the boundary undefined.
+
+## The code
+
+Section 3 is the shape of the answer. Section 5 grades it.
+
+<CodeTabs source="llms" section={3} goNote="The same schemas as nested map[string]any values. The enums are built from the categories and priorities slices in section 1, so the lists live in one place." />
+
+- `TRIAGE_SCHEMA` is a JSON Schema for one object with three string fields, `category`, `priority` and `reply`.
+- `"enum": CATEGORIES` and `"enum": PRIORITIES` allow only the values from section 1. This is what makes an exact match a fair grader.
+- `"required"` lists all three fields, so none can be missing.
+- `"additionalProperties": False` forbids extra fields, so the answer has exactly this shape.
+- `triage()` in section 4 sends the schema as `output_config={"format": {"type": "json_schema", "schema": TRIAGE_SCHEMA}}`.
+- `RUBRIC_IDS`, `_VERDICT` and `JUDGE_SCHEMA` do the same for the judge: a pass or fail and a reason for each rubric item. Lesson 5 uses them.
+
+<CodeTabs source="llms" section={5} goNote="grade returns a Grade struct whose Outcome is ok, refusal, max_tokens or error. accuracy picks the field by name from a small map, and confusionMatrix takes [][2]string pairs, writing an empty answer as (none)." />
+
+- `grade(ticket, line)` takes one saved line and its ticket and returns a dict of booleans plus the `outcome`.
+- `if line.get("error")` comes first: a failed call is `"error"`, whatever else the line holds.
+- `elif line.get("stop_reason") in ("refusal", "max_tokens")` sets the outcome to that stop reason. `call_model` saves `output` as `null` for these, because there is no usable JSON.
+- `output = line.get("output") or {}` turns a missing answer into an empty dict, so `output.get("category")` returns `None` instead of raising.
+- `category_ok = outcome == "ok" and ...` means a line with no usable answer is never correct, even by accident.
+- `both_ok` is `category_ok and priority_ok`.
+- `accuracy(grades, field)` drops the `"error"` grades, then divides the right ones by the rest. Refusals and cut-offs stay in the count as wrong.
+- `confusion_matrix(pairs)` counts `(expected, predicted)` pairs into `matrix[expected][predicted]`. A missing answer becomes `"(none)"`, its own column.
+
+<Callout kind="note" title="Bad JSON is recorded as an error">
+  `call_model` saves invalid JSON as an `error` line, so it is left out of accuracy. With structured output a normal finish should always parse; if `errors` is ever above 0 in a report, read those lines before you trust the score.
+</Callout>
+
+## Try it
+
+Print the priority matrix above, then fake a refusal and an error to see how each moves the score. Save this as `llms/python/graders_demo.py`:
+
+```python
+import triage_lab as L
+
+dev = L.split(L.load_tickets(), "dev")
+lines = {t["id"]: L.triage(t, "v1_basic") for t in dev}   # replay: saved responses, free
+
+pairs = [(t["priority"], (lines[t["id"]]["output"] or {}).get("priority")) for t in dev]
+m = L.confusion_matrix(pairs)
+print("expected " + "".join(f"{p:>8}" for p in L.PRIORITIES))
+for e in L.PRIORITIES:
+    print(f"{e:<9}" + "".join(f"{m.get(e, {}).get(p, 0):>8}" for p in L.PRIORITIES))
+
+grades = {t["id"]: L.grade(t, lines[t["id"]]) for t in dev}
+print(f"both {L.accuracy(list(grades.values()), 'both_ok'):.1%}")
+
+t002 = next(t for t in dev if t["id"] == "t002")         # a ticket v1_basic gets right
+for change in ({"stop_reason": "refusal", "output": None}, {"error": "overloaded", "output": None}):
+    g = {**grades, "t002": L.grade(t002, {**lines["t002"], **change})}
+    print(f"{g['t002']['outcome']:<8} both {L.accuracy(list(g.values()), 'both_ok'):.1%}")
+```
+
+```bash
+cd llms/python
+python graders_demo.py
+```
+
+You should see the matrix from the Concept, then:
+
+```text
+both 70.0%
+refusal  both 67.5%
+error    both 69.2%
+```
+
+The refusal turns a right answer into a wrong one: 27 of 40. The error removes the ticket from the count: 27 of 39. Change `"v1_basic"` to `"v2_rules"` and run it again: the matrix is all diagonal except one `high` ticket answered `normal`.
+
+This script only replays. Getting fresh answers for these 40 tickets with `--mode live` would cost an estimated `$0.02` with Haiku, worst case `$0.04`.

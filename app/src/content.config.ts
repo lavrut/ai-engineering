@@ -8,7 +8,8 @@ const tracks = defineCollection({
 });
 
 const lessons = defineCollection({
-  loader: glob({ pattern: '**/*.mdx', base: 'src/content/lessons' }),
+  // Id by path (harness/01-what), not by the slug field: slugs repeat across tracks.
+  loader: glob({ pattern: '**/*.mdx', base: 'src/content/lessons', generateId: ({ entry }) => entry.replace(/\.mdx$/, '') }),
   schema: lessonSchema,
 });
 
