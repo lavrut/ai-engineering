@@ -32,6 +32,8 @@ PATHS = {
     "reports": ML_DIR / "reports",
 }
 
+DATE_FORMAT = re.compile(r"\d{4}-\d{2}-\d{2}")   # text comparison only works on this exact shape
+
 # Splits by `date` (ISO strings compare correctly as text). Inclusive on both ends.
 SPLITS = {
     "train": ("2019-01-01", "2021-12-31"),
@@ -66,6 +68,8 @@ def split_by_time(rows: list[dict]) -> dict[str, list[dict]]:
     A random split would let the model peek at the future; this one cannot."""
     out: dict[str, list[dict]] = {name: [] for name in SPLITS}
     for r in rows:
+        if not DATE_FORMAT.fullmatch(str(r["date"])):
+            raise ValueError(f"complaint {r['id']}: date {r['date']!r} is not YYYY-MM-DD")
         for name, (first, last) in SPLITS.items():
             if first <= r["date"] <= last:
                 out[name].append(r)
@@ -115,11 +119,10 @@ def fit_tfidf(docs: list[str], cfg: dict = FEATURES) -> tuple[list[str], np.ndar
     terms = sorted(t for t in df if df[t] >= cfg["min_df"])   # alphabetical, like scikit-learn
     limit = cfg["max_features"]
     if limit is not None and len(terms) > limit:
-        # Keep the `limit` terms with the highest total count. scikit-learn does exactly this
-        # call on the alphabetical column order, so ties break the same way.
-        counts_arr = np.array([tf[t] for t in terms])
-        keep = (-counts_arr).argsort()[:limit]
-        terms = sorted(terms[i] for i in keep)
+        # Keep the `limit` terms with the highest total count; ties go to the alphabetically
+        # first term. scikit-learn uses an unstable sort here, so its choice among tied terms
+        # can vary by machine; ours cannot. The two agree whenever the cutoff has no ties.
+        terms = sorted(sorted(terms, key=lambda t: (-tf[t], t))[:limit])
     n = len(docs)
     idf = np.array([math.log((1 + n) / (1 + df[t])) + 1 for t in terms])
     return terms, idf

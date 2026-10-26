@@ -49,18 +49,43 @@ def test_fixture_has_enough_cases():
 def test_tfidf_matches_sklearn():
     rows = train.load_complaints(train.PATHS["complaints"])
     docs = [r["narrative"] for r in train.split_by_time(rows)["train"]]
-    # A small cap forces max_features to cut through many tied counts.
-    for cfg in (train.FEATURES, {**train.FEATURES, "min_df": 3, "max_features": 500}):
-        sk = TfidfVectorizer(
-            analyzer=lambda t: train.tokenize(t, cfg), smooth_idf=True, sublinear_tf=False,
-            norm="l2", min_df=cfg["min_df"], max_features=cfg["max_features"])
-        expected = sk.fit_transform(docs)
-        vocabulary, idf = train.fit_tfidf(docs, cfg)
-        assert vocabulary == list(sk.get_feature_names_out())
-        assert np.allclose(idf, sk.idf_, rtol=0, atol=1e-12)
-        got = train.transform(docs, vocabulary, idf)
-        assert got.shape == expected.shape
-        assert abs(got - expected).max() < 1e-12
+    cfg = train.FEATURES      # uncapped: the cap is not reached, so no tie-breaking is involved
+    sk = TfidfVectorizer(
+        analyzer=lambda t: train.tokenize(t, cfg), smooth_idf=True, sublinear_tf=False,
+        norm="l2", min_df=cfg["min_df"], max_features=cfg["max_features"])
+    expected = sk.fit_transform(docs)
+    vocabulary, idf = train.fit_tfidf(docs, cfg)
+    assert vocabulary == list(sk.get_feature_names_out())
+    assert np.allclose(idf, sk.idf_, rtol=0, atol=1e-12)
+    got = train.transform(docs, vocabulary, idf)
+    assert got.shape == expected.shape
+    assert abs(got - expected).max() < 1e-12
+
+
+def test_max_features_invariants():
+    rows = train.load_complaints(train.PATHS["complaints"])
+    docs = [r["narrative"] for r in train.split_by_time(rows)["train"]]
+    cfg = {**train.FEATURES, "max_features": 500}
+    vocabulary, _ = train.fit_tfidf(docs, cfg)
+    total = {}
+    for d in docs:
+        for tok in train.tokenize(d, cfg):
+            total[tok] = total.get(tok, 0) + 1
+    assert len(vocabulary) == 500 and vocabulary == sorted(vocabulary)
+    dropped = [c for t, c in total.items() if t not in set(vocabulary)]
+    assert min(total[t] for t in vocabulary) >= max(dropped)
+
+
+def test_max_features_ties_break_alphabetically():
+    # counts: a=3, b=2, c=2, d=2, e=2 (each in 2+ docs). Cap 3 keeps a, then b and c.
+    docs = ["a a b c d e", "a b c d e"]
+    vocabulary, _ = train.fit_tfidf(docs, {**train.FEATURES, "max_features": 3})
+    assert vocabulary == ["a", "b", "c"]
+
+
+def test_bad_date_format_is_rejected():
+    with pytest.raises(ValueError, match="YYYY-MM-DD"):
+        train.split_by_time([row("2021-12-31T10:00")])
 
 
 def test_transform_unknown_tokens_give_a_zero_row():
