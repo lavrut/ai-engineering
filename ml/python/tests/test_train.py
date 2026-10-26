@@ -168,7 +168,7 @@ def test_predictions_fixture_matches_v1():
 @pytest.mark.parametrize("name", ["dataset", "metrics", "training_log"])
 def test_reports_have_generated_by(name):
     report = json.loads((REPORTS / f"{name}.json").read_text(encoding="utf-8"))
-    assert report["generated_by"] == "python train.py --model logreg --version v1"
+    assert report["generated_by"] == "python train.py --model logreg --version v1 --write-reports"
 
 
 def test_dataset_snippets_are_short():
@@ -197,3 +197,33 @@ def test_training_log_objective_goes_down():
     objective = [p["loss"] + p["penalty"] for p in points]
     assert all(b <= a + 1e-12 for a, b in zip(objective, objective[1:]))
     assert any("top_words" in p for p in points)
+
+
+def test_tokenize_refuses_settings_it_does_not_implement():
+    with pytest.raises(ValueError, match="ascii"):
+        train.tokenize("Hi", {**train.FEATURES, "lowercase": "unicode"})
+
+
+def test_canonical_build_is_byte_identical(tmp_path, monkeypatch):
+    """The committed v1.json and reports are exactly what the canonical command writes,
+    on any day: nothing in them depends on the clock."""
+    monkeypatch.setitem(train.PATHS, "models", tmp_path / "models")
+    monkeypatch.setitem(train.PATHS, "reports", tmp_path / "reports")
+    train.main(["--model", "logreg", "--version", "v1", "--write-reports"])
+    assert (tmp_path / "models" / "v1.json").read_bytes() == V1.read_bytes()
+    for name in ("dataset", "metrics", "training_log"):
+        assert (tmp_path / "reports" / f"{name}.json").read_bytes() == \
+            (REPORTS / f"{name}.json").read_bytes(), name
+
+
+def test_run_without_flag_leaves_reports_untouched(tmp_path, monkeypatch):
+    reports = tmp_path / "reports"
+    reports.mkdir()
+    for name in ("dataset", "metrics", "training_log"):
+        (reports / f"{name}.json").write_bytes((REPORTS / f"{name}.json").read_bytes())
+    before = {p.name: p.read_bytes() for p in reports.iterdir()}
+    monkeypatch.setitem(train.PATHS, "models", tmp_path / "models")
+    monkeypatch.setitem(train.PATHS, "reports", reports)
+    train.main(["--model", "nb", "--version", "nb1"])
+    assert (tmp_path / "models" / "nb1.json").exists()
+    assert {p.name: p.read_bytes() for p in reports.iterdir()} == before

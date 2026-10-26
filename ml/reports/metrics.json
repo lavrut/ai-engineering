@@ -1,5 +1,6 @@
 {
- "generated_by": "python train.py --model logreg --version v1",
+ "generated_by": "python train.py --model logreg --version v1 --write-reports",
+ "note": "v1 is logistic regression although Naive Bayes leads by 0.005 test macro-F1: that is inside the +/-0.041 band, and logistic regression's per-word weights are easy to read and drive the training-log aid.",
  "classes": [
   "Checking or savings account",
   "Credit card",

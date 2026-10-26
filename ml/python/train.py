@@ -8,8 +8,8 @@ exported model: splits by time, our own tokenizer and TF-IDF, three models,
 metrics, and a JSON export that Go and the browser can read.
 
 Run (from ml/python):
-    python train.py --model logreg --version v1     # writes ml/models/v1.json and ml/reports/*.json
-    python train.py --model nb --C 1.0 --version nb1
+    python train.py --model logreg --version v1 --write-reports   # v1.json and ml/reports/*.json
+    python train.py --model nb --version nb1     # only ml/models/nb1.json; the reports stay put
 """
 from __future__ import annotations
 
@@ -125,6 +125,8 @@ def tokenize(text: str, cfg: dict = FEATURES) -> list[str]:
        scrubs personal details to XX or XXXX. A single "x" is kept.
     5. No stemming. Stop words are removed only if cfg["stop_words"] lists them.
     """
+    if cfg["lowercase"] != "ascii":
+        raise ValueError(f"tokenize implements lowercase='ascii' only, not {cfg['lowercase']!r}")
     text = text.translate(_UPPER_TO_LOWER)
     stop = set(cfg["stop_words"])
     tokens = []
@@ -323,6 +325,8 @@ def export_model(model, vocabulary: list[str], idf, meta: dict, cfg: dict = FEAT
         "data_version": meta["data_version"],
         "trained_on": {"from": SPLITS["train"][0], "to": SPLITS["train"][1]},
         "tokenizer": dict(cfg),
+        "tokenizer_note": "The rules are fixed and documented in train.tokenize; these values "
+                          "are their parameters.",
         "vocabulary": list(vocabulary), "idf": [float(v) for v in idf],
         "classes": [str(k) for k in model.classes_],
         "coef": coef.tolist(), "intercept": intercept.tolist(),
@@ -398,6 +402,8 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--model", choices=["logreg", "nb"], default="logreg")
     ap.add_argument("--C", type=float, default=C, help="logistic regression: inverse L2 strength")
     ap.add_argument("--version", default="v1")
+    ap.add_argument("--write-reports", action="store_true",
+                    help="also rewrite ml/reports/*.json (the committed ones come from v1)")
     args = ap.parse_args(argv)
     generated_by = " ".join(["python train.py", *argv])
 
@@ -409,23 +415,31 @@ def main(argv: list[str] | None = None) -> None:
     summary = {"split": "test", "n": test["n"], "accuracy": test["accuracy"], "band": test["band"],
                "macro_f1": test["macro"]["f1"], "weighted_f1": test["weighted"]["f1"],
                "per_class_f1": {k: v["f1"] for k, v in test["per_class"].items()}}
-    meta = {"version": args.version, "created": date.today().isoformat(),
+    # `created` is the last complaint date the model saw, not the clock: the same data and
+    # settings give a byte-identical file (and so the same SHA-256 in the run tracker).
+    created = max(r["date"] for r in run["splits"]["train"])
+    meta = {"version": args.version, "created": created,
             "data_version": data_version(PATHS["complaints"]),
             "majority_class": fitted["majority_class"], "metrics": summary}
     model_json = export_model(fitted["models"][args.model], fitted["vocabulary"], fitted["idf"], meta)
     model_path = PATHS["models"] / f"{args.version}.json"
     _write(model_path, model_json, compact=True)
 
-    reports = {
-        "dataset": dataset_report(rows, run["splits"], fitted["classes"]),
-        "metrics": {"classes": fitted["classes"], "C": args.C, "nb_alpha": NB_ALPHA,
-                    "models": metrics},
-        "training_log": training_log(fitted),
-    }
-    for name, report in reports.items():
-        _write(PATHS["reports"] / f"{name}.json", {"generated_by": generated_by, **report})
-
-    print(f"wrote {model_path} ({model_path.stat().st_size:,} bytes) and {len(reports)} reports")
+    print(f"wrote {model_path} ({model_path.stat().st_size:,} bytes)")
+    if args.write_reports:
+        gap = metrics["nb"]["test"]["macro"]["f1"] - metrics["logreg"]["test"]["macro"]["f1"]
+        why = (f"v1 is logistic regression although Naive Bayes leads by {gap:.3f} test macro-F1: "
+               f"that is inside the +/-{test['band']:.3f} band, and logistic regression's "
+               "per-word weights are easy to read and drive the training-log aid.")
+        reports = {
+            "dataset": dataset_report(rows, run["splits"], fitted["classes"]),
+            "metrics": {"note": why, "classes": fitted["classes"], "C": args.C,
+                        "nb_alpha": NB_ALPHA, "models": metrics},
+            "training_log": training_log(fitted),
+        }
+        for name, report in reports.items():
+            _write(PATHS["reports"] / f"{name}.json", {"generated_by": generated_by, **report})
+        print(f"wrote {len(reports)} reports to {PATHS['reports']}")
     print(f"{'model':<10}{'split':<7}{'accuracy':>9}{'macro F1':>10}{'band':>7}")
     for name, by_split in metrics.items():
         for split, m in by_split.items():

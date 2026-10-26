@@ -1,5 +1,5 @@
 {
- "generated_by": "python train.py --model logreg --version v1",
+ "generated_by": "python train.py --model logreg --version v1 --write-reports",
  "n": 3600,
  "years": [
   "2019",

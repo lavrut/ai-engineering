@@ -1,5 +1,5 @@
 {
- "generated_by": "python train.py --model logreg --version v1",
+ "generated_by": "python train.py --model logreg --version v1 --write-reports",
  "classes": [
   "Checking or savings account",
   "Credit card",
