@@ -1,0 +1,202 @@
+---
+track: ml
+order: 3
+slug: features
+title: Turning text into numbers
+goal: Turn a complaint into a TF-IDF vector by hand, explain why the tokenizer is ASCII-only, and prove the vocabulary was fitted without leaking the test years.
+minutes: 20
+quiz:
+  - question: Why does the tokenizer lowercase only the letters A–Z, instead of calling Python's str.lower()?
+    options:
+      - str.lower() is too slow for 3,600 complaints
+      - Python, Go and the browser must produce exactly the same tokens, and full Unicode case folding differs between languages (Python turns "İ" into two characters)
+      - Complaints never contain non-English letters
+      - Uppercase letters carry no meaning
+    answer: 1
+    explanation: One token that differs changes the vector, and so the scores. Rules that each language implements identically, with no library behaviour underneath, are the only way to guarantee the same answer everywhere. The cost is that a word like "café" becomes "caf", which an English-language complaint classifier can afford.
+  - question: You compute the vocabulary and idf from all 3,600 complaints, then split by year and train on 2019–2021. What is wrong?
+    options:
+      - Nothing; vocabulary is not part of the model
+      - Data leakage; the test and stream years shaped the vocabulary and the idf weights, so the test no longer measures unseen data
+      - The vocabulary will be too small
+      - idf cannot be computed on more than 1,800 complaints
+    answer: 1
+    explanation: The vocabulary and idf are learned from data, so they are part of training. Fit on every year and words that appear only in 2022–2024 enter the vocabulary (7,273 words instead of 5,539 in Try it). The rule is to fit everything on train and only transform the rest.
+  - question: In the training years, "escrow" has idf 4.353 and "the" has idf 1.135. Why?
+    options:
+      - The word "escrow" is longer
+      - The word "escrow" appears in 62 of the 1,800 training complaints and "the" in 1,573, and idf is larger for words that fewer complaints contain
+      - The word "escrow" appears more times in total
+      - idf is set by hand for important words
+    answer: 1
+    explanation: idf = ln((1 + n) / (1 + df)) + 1 depends only on df, the number of training complaints containing the word. A word in almost every complaint says little about which category it is, so it is weighted down; a rarer word is weighted up.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FeatureExplorer from '../../../components/ml/FeatureExplorer.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+A classic model does arithmetic, so it needs every complaint as the same-length list of numbers. Each number is a <Term t="feature" />. Here there is one feature per vocabulary word, 5,539 in all, and most of them are 0 for any one complaint. Three steps get there: split the text into words, count them, and weight the counts.
+
+### Step 1: tokenize
+
+A <Term t="tokenizer" /> turns text into a list of tokens. This one follows five rules, written in `train.tokenize` and repeated exactly in Go and in the browser:
+
+1. Lowercase the letters A–Z only.
+2. A token is a maximal run of `a`–`z`, `0`–`9` and the apostrophe. Every other character is a separator, including every non-ASCII letter.
+3. Strip apostrophes from the ends of each token: `'hi'` gives `hi`, but `don't` stays.
+4. Drop empty tokens, and tokens made only of the letter x with length 2 or more. That removes the CFPB's `XX` and `XXXX` scrubbing marks; a single `x` is kept.
+5. No stemming, and no stop words unless the settings list some. They list none.
+
+So `On XX/XX/2022 I paid {$250.00} to İstanbul Café. Don't!` gives `on`, `2022`, `i`, `paid`, `250`, `00`, `to`, `stanbul`, `caf`, `don't`.
+
+`stanbul` and `caf` look broken, and that is the deliberate cost of rule 1. Python, Go and the browser must produce exactly the same tokens, because one different token changes the vector and the scores. Full Unicode lowercasing does not agree between languages: Python's `str.lower()` turns the Turkish "İ" into two characters, and Go and JavaScript handle such cases differently. ASCII-only rules have no library behaviour underneath, so all three implement them identically. A shared file of 26 pinned cases, `ml/data/fixtures/tokenize.json`, checks that in every language's tests. For English complaints, losing accents costs little.
+
+### Step 2: count the words
+
+Count how often each vocabulary word appears. This is a bag of words: the counts survive and the order does not, so "paid, not late" and "late, not paid" give the same counts. It still works well here, because the category is mostly in which words appear: "escrow" or "Coinbase" settles a lot on its own.
+
+The vocabulary is learned from the training complaints. The 1,800 contain 9,467 distinct tokens. Words seen in only one complaint are dropped (`min_df = 2`): they are typos, names and scrubbing leftovers that cannot generalise. That leaves 5,539, kept in alphabetical order.
+
+The settings also cap the vocabulary at `max_features = 20000`, keeping the words with the highest total count. With 5,539 words the cap does not bite here, but its tie-break matters when it does: words tied at the cutoff go alphabetically. scikit-learn uses an unstable sort at that point, so its choice among tied words can vary by machine; this one cannot. A test pins it: with a cap of 3 and counts `a` 3, `b` to `e` 2 each, the vocabulary is `a`, `b`, `c`.
+
+### Step 3: weight the counts
+
+Raw counts favour words that are everywhere. <Term t="TF-IDF" /> weights each count by how rare the word is across training complaints:
+
+`idf = ln((1 + n) / (1 + df)) + 1`
+
+where `n` is 1,800 complaints and `df` is the number of them containing the word. The `+ 1` inside is the smooth part: it behaves as if one extra complaint contained every word, so no division by zero. The `+ 1` outside means a word in every complaint still weighs 1, not 0. In the training years:
+
+- `the` is in 1,573 complaints: idf 1.135.
+- `credit` is in 1,005: idf 1.582.
+- `mortgage` is in 202: idf 3.183.
+- `escrow` is in 62: idf 4.353.
+
+idf runs from 1.094 (`to`) up to 7.397, for a word in exactly two complaints.
+
+Each feature is count × idf. Then the whole row is scaled so its squared weights add up to 1, the L2 norm. Without that, a 23,091-character complaint would have far larger numbers than a 10-character one. For "My mortgage escrow went up. The escrow is wrong.", `escrow` appears twice with idf 4.353 and ends up at 0.786; `the` and `my` end up at 0.102.
+
+### Fit on train only
+
+The vocabulary and the idf weights are learned from data, so they are part of training. Fit them on every year and the test years leak in: words that only appear in 2022–2024 join the vocabulary, and their complaints change every idf. The rule is to fit on train and only transform test and stream.
+
+The test suite proves it with a poison word. `test_no_leakage` puts `leakword` 50 times at the start of every complaint after 2021, and reverses the rest of their text, then refits. If anything fitted had seen those years, `leakword` would be in the vocabulary. The test asserts it is not, and that the vocabulary, the idf and every model weight are identical to an unpoisoned fit.
+
+### Unknown words
+
+At prediction time, a token not in the vocabulary is skipped. Language moves: the 2023–2024 stream holds 2,947 distinct words the vocabulary does not have. They add nothing to a prediction, which is one way a model ages. A complaint with no known word at all is an all-zero vector, which lesson 1 showed gets the majority class, flagged low confidence.
+
+## See it
+
+Pick a 2022 test complaint, then type your own. Watch three things: which tokens are struck through as unknown, which words carry the largest TF-IDF weight, and which words push each category up. Read the yellow note first: it says exactly what this page holds and how close it is to the real model.
+
+<FeatureExplorer />
+
+The first preset, checking complaint `5147718`, is a miss: the page predicts credit reporting at 26.1%, flagged low confidence. Its heaviest word is `trustee`, 5 times at idf 7.397, the largest idf there is: a word in just two training complaints. Common words like `the` get small weights however often they appear.
+
+The note is the page being honest about its size. It ships class weights only for the 1,200 most influential of the 5,539 words, so `trustee` shows "no class weights kept". Its tokens and TF-IDF are exact, and its label matches the full model on 98.7% of 1,800 complaints from 2022–2024, but its scores are close, not equal: the full model gives the same complaint 25.7% (`train.score` in Python).
+
+## The code
+
+Section 3 is the tokenizer and TF-IDF.
+
+<CodeTabs source="ml-train" section={3} />
+
+- `_UPPER_TO_LOWER` maps the code points of `A`–`Z` to `a`–`z`, and nothing else. `text.translate(...)` applies it.
+- `if cfg["lowercase"] != "ascii": raise ValueError(...)` refuses settings the function does not implement, so a model file asking for something else fails loudly.
+- `re.findall(cfg["pattern"], text)` with `[a-z0-9']+` finds the maximal runs. Any character outside the class, including every non-ASCII letter, ends a token.
+- `tok.strip("'")` removes end apostrophes, then `if not tok or tok in stop` skips empties and stop words.
+- `len(tok) >= cfg["drop_x_runs_from"] and tok.strip("x") == ""` drops `xx`, `xxxx` and longer runs of x.
+- `fit_tfidf(docs, cfg)` counts per document: `df` is how many documents contain a term and `tf` its total count.
+- `terms = sorted(t for t in df if df[t] >= cfg["min_df"])` keeps words in at least two documents, alphabetically, like scikit-learn.
+- `sorted(terms, key=lambda t: (-tf[t], t))[:limit]` applies the cap: highest total count first, ties to the alphabetically first word.
+- `idf = np.array([math.log((1 + n) / (1 + df[t])) + 1 for t in terms])` is the smooth idf.
+- `transform(docs, vocabulary, idf, cfg)` builds a sparse matrix: one row per document, storing only the non-zero entries. `if t in index` skips unknown words.
+- `norms[norms == 0] = 1.0` leaves a row with no known words as all zeros instead of dividing by zero.
+- `sp.diags(1.0 / norms) @ X` scales every row to length 1.
+
+<Callout kind="note" title="Proved against scikit-learn">
+  `test_tfidf_matches_sklearn` builds scikit-learn's `TfidfVectorizer` with the same settings and checks that the two matrices agree to within 1e-12. The code is our own so that Go and the browser can repeat every step; the test shows it is still the standard TF-IDF.
+</Callout>
+
+## Try it
+
+Tokenize, weight and look for unknown words. Save this as `ml/python/features.py`:
+
+```python
+import train
+
+print(train.tokenize("On XX/XX/2022 I paid {$250.00} to İstanbul Café. Don't!"))
+
+rows = train.load_complaints(train.PATHS["complaints"])
+splits = train.split_by_time(rows)
+docs = [r["narrative"] for r in splits["train"]]
+vocabulary, idf = train.fit_tfidf(docs)
+print(len(vocabulary), "words kept")
+for word in ("the", "credit", "mortgage", "escrow"):
+    print(f"  idf({word}) = {idf[vocabulary.index(word)]:.3f}")
+
+X = train.transform(["My mortgage escrow went up. The escrow is wrong."], vocabulary, idf)
+for j, w in sorted(zip(X.indices, X.data), key=lambda p: -p[1]):
+    print(f"  {vocabulary[j]:<9}{w:.3f}")
+
+later = {t for r in splits["stream"] for t in train.tokenize(r["narrative"])}
+new = sorted(later - set(vocabulary))
+print(len(new), "distinct words in 2023-2024 are not in the vocabulary")
+```
+
+```bash
+cd ml/python
+python features.py
+```
+
+You should see:
+
+```text
+['on', '2022', 'i', 'paid', '250', '00', 'to', 'stanbul', 'caf', "don't"]
+5539 words kept
+  idf(the) = 1.135
+  idf(credit) = 1.582
+  idf(mortgage) = 3.183
+  idf(escrow) = 4.353
+  escrow   0.786
+  wrong    0.343
+  went     0.294
+  mortgage 0.287
+  up       0.239
+  is       0.131
+  the      0.102
+  my       0.102
+2947 distinct words in 2023-2024 are not in the vocabulary
+```
+
+Square the eight weights and add them up: you get 1, give or take the rounding to three places. Now run the poison-word check yourself, the right way and the wrong way. Save this as `ml/python/leak.py`:
+
+```python
+import train
+
+rows = train.load_complaints(train.PATHS["complaints"])
+poisoned = [r if r["date"] <= "2021-12-31"
+            else {**r, "narrative": "leakword " * 50 + r["narrative"]} for r in rows]
+
+right, _ = train.fit_tfidf([r["narrative"] for r in train.split_by_time(poisoned)["train"]])
+wrong, _ = train.fit_tfidf([r["narrative"] for r in poisoned])     # the mistake: every year
+print("fit on train only:", len(right), "words, leakword" , "in" if "leakword" in right else "not in", "it")
+print("fit on all years: ", len(wrong), "words, leakword", "in" if "leakword" in wrong else "not in", "it")
+```
+
+```bash
+python leak.py
+```
+
+You should see:
+
+```text
+fit on train only: 5539 words, leakword not in it
+fit on all years:  7273 words, leakword in it
+```
+
+Fitting on every year adds 1,734 words that the training years never had, `leakword` among them. The full test runs with `python -m pytest tests/test_train.py -k leakage` and prints `1 passed`. All of this is local and free.

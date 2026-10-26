@@ -409,7 +409,8 @@ describe('drift chart data', () => {
     expect(chanceReading(p, 'quarter')).toBe(
       'By chance alone, expect on average at most about 0.4 calibrated alerts per signal over 8 quarters (0.8 on either). ' +
         'Seen: predictions 0, words 2. With no drift, 2 or more on a given signal happens up to 5.7% of the time ' +
-        "(binomial, at the null's upper-bound rate of 5% per quarter): weak evidence at most, because 2024-Q1 (0.028) " +
+        "(binomial, at the null's upper-bound rate of 5% per quarter), and on either of the two signals up to 11.4% " +
+        '(two signals, two chances): weak evidence at most, because 2024-Q1 (0.028) ' +
         'barely clears a threshold (0.026) set by a single 2022 quarter, and 2024-Q4 overlaps the 2024-11 month alert, ' +
         'so it is not independent evidence.',
     );

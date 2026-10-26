@@ -96,6 +96,30 @@ export const glossary = {
     'Low-rank adaptation: fine-tuning that freezes the model and trains two thin matrices A (d × r) and B (r × d) beside a weight matrix, whose product is added to it.',
   'eval gate':
     'A check that runs an eval on a change and fails, with a non-zero exit code, when the score falls below a minimum or further below a baseline than the noise band.',
+  feature:
+    'One number a model reads about an input; here, the TF-IDF weight of one vocabulary word in a complaint.',
+  'time split':
+    'Dividing data by date, training on earlier records and testing on later ones, so the test imitates scoring the future.',
+  'data leakage':
+    'Information from the test data, or from the future, reaching training, so the test score is better than the model will do on new data.',
+  tokenizer:
+    'The fixed rules that split text into tokens (here, lowercase words); training, serving and the browser must apply the same rules.',
+  'TF-IDF':
+    'Term frequency times inverse document frequency: a word’s count in a text, weighted up when few training texts contain it.',
+  'Naive Bayes':
+    'A classifier that scores each category by its prior plus the log probability of every word given that category, treating words as independent.',
+  'logistic regression':
+    'A classifier that learns one weight per category and feature plus an intercept, and turns the weighted sums into probabilities with softmax.',
+  overfitting:
+    'Fitting the training data’s details instead of the general pattern, seen as a score that is clearly higher on training data than on new data.',
+  precision:
+    'Of the items a model assigned to a category, the share that really belong to it.',
+  recall:
+    'Of the items that really belong to a category, the share the model assigned to it.',
+  F1:
+    'The harmonic mean of precision and recall, 2PR / (P + R): high only when both are high.',
+  'macro average':
+    'The plain mean of a metric over categories, so a small category counts as much as a large one.',
 } as const satisfies Record<string, string>;
 
 export type GlossaryKey = keyof typeof glossary;

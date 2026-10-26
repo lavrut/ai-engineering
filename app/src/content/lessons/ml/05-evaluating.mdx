@@ -1,0 +1,157 @@
+---
+track: ml
+order: 5
+slug: evaluating
+title: Evaluating fairly
+goal: Read per-category precision, recall and F1, choose between macro and weighted averages, compare a model with the baseline inside the noise band, and find where it confuses categories.
+minutes: 20
+quiz:
+  - question: The majority baseline scores 43.3% accuracy on 2022 but only 0.101 macro-F1. Why are the two so different?
+    options:
+      - Macro-F1 is always about a quarter of accuracy
+      - Macro-F1 averages the six categories equally, and the baseline scores F1 0 on the five it never predicts
+      - The baseline was evaluated on the wrong split
+      - Accuracy counts the band and F1 does not
+    answer: 1
+    explanation: Accuracy counts complaints, so the 260 credit reporting complaints carry the baseline to 43.3%. Macro-F1 gives each category one sixth of the vote. Credit reporting's F1 is about 0.605 and the other five are 0, so the mean is 0.101. Macro shows the model is useless for five categories out of six.
+  - question: On 2022, debt collection has precision 0.854 and recall 0.539. What does that mean?
+    options:
+      - The model finds most debt collection complaints, but many of its debt collection answers are wrong
+      - When the model says debt collection it is usually right, but it misses nearly half of the debt collection complaints
+      - Debt collection is the model's best category
+      - The test set has too few debt collection complaints to say anything
+    answer: 1
+    explanation: Precision is about the model's answers and recall about the true complaints. 41 of 76 debt collection complaints were found (recall 0.539), and 41 of the 48 debt collection answers were right (precision 0.854). The confusion matrix shows where the misses went; 31 were called credit reporting.
+  - question: Logistic regression scores 90.2% on the training years and 80.8% on 2022, with a test band of ±4.1 points. What can you conclude?
+    options:
+      - Nothing; the difference is noise
+      - The drop of 9.3 points is larger than the band, so it is real; the model fits the complaints it learned from better than new ones, and 2022 is also a different year
+      - The test set is mislabelled
+      - The model should be trained on the test year too
+    answer: 1
+    explanation: A gap bigger than the band is evidence. Part of it is overfitting and part is that a later year's complaints differ from the training years'. The time split cannot separate the two, but it measures their sum honestly, which is what deployment will see.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import MetricsView from '../../../components/ml/MetricsView.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+v1 is right on 80.8% of the 600 complaints from 2022. That one number hides which categories it handles and which it fails. This lesson splits it open, per category, and puts it next to a baseline and a noise band so you know what it is worth.
+
+### Precision and recall
+
+Pick one category, say debt collection. Two different questions can go wrong:
+
+- <Term t="precision" />: of the complaints the model called debt collection, how many were? The model gave that answer 48 times and was right 41 times: 0.854.
+- <Term t="recall" />: of the complaints that were debt collection, how many did it find? There were 76, and it found 41: 0.539.
+
+So when v1 says debt collection, it is usually right, but it misses nearly half of them. Which matters more depends on the job. A team routing complaints to a debt collection desk would care that 35 never arrive.
+
+<Term t="F1" /> combines the two as their harmonic mean, `2PR / (P + R)`. It is high only when both are: debt collection's is 0.661. Credit reporting is the other way round: recall 0.973, precision 0.793, F1 0.874. The model finds nearly all of them, but it also calls many other complaints credit reporting.
+
+### Two kinds of average
+
+Six F1 scores need one summary, and there are two ways to average them:
+
+- The <Term t="macro average" /> is the plain mean of the six. Every category counts the same, so money transfer, with 60 test complaints, weighs as much as credit reporting, with 260. v1's macro-F1 is 0.769.
+- The weighted average weights each category by its support, the number of true complaints. Credit reporting dominates it. v1's weighted F1 is 0.800.
+
+Weighted is higher because the big category is one the model handles well. Macro tells you how the model does on the categories you have fewer of, which is usually what you worry about. The promotion gate in lesson 11 uses macro-F1 for that reason.
+
+### The baseline
+
+Always answering credit reporting scores 43.3% accuracy on 2022: a number that sounds respectable. Its macro-F1 is 0.101. It gets F1 0 on five of the six categories, and macro gives each of them a sixth of the vote. Accuracy flattered it; macro did not.
+
+v1's 80.8% beats the baseline's 43.3% by 37.5 points, far outside the noise band. On 2022 the baseline is also 6.2 points better than on the training years, 37.1%, because credit reporting is a larger share of 2022.
+
+### The noise band
+
+As in the LLMs track, `1/√n` is a rough band on an accuracy over `n` cases: ±4.1 points for the 600 test complaints and ±2.4 for the 1,800 training ones. A difference smaller than the band is not evidence. Per-category numbers rest on fewer complaints, so they are noisier: a category with 60 test complaints has a band of about ±12.9 points (1/√60).
+
+### Train against test
+
+Score the model on the complaints it learned from and it does better: logistic regression gets 90.2% on the training years and 80.8% on 2022. The drop, 9.3 points, is well outside the ±4.1 band, so it is real. Part of it is overfitting, from lesson 4: the model fits its own training complaints more closely than new ones. Part is that 2022 is a different year, with different complaints. The time split measures both together, which is what deployment will meet. Naive Bayes shows the same pattern, 92.7% against 81.8%.
+
+A training score alone says little. A test score near the training score is reassuring; a test score far below it says the model learned its examples rather than the task.
+
+### Where it goes wrong
+
+The confusion matrix, which you used in the LLMs track, has a row for each true category and a column for each predicted one. The diagonal is right; everything else is a mistake, and the big off-diagonal cells say where to look:
+
+- 31 of 76 debt collection complaints were called credit reporting. Many are about a collection account showing on someone's credit report, which is genuinely both. Try it below prints some.
+- 14 of 71 credit card complaints were called credit reporting.
+- Checking and money transfer swap: 8 checking complaints called money transfer, 9 money transfer complaints called checking. Both are about moving money out of an account.
+
+The credit reporting column collects 66 wrong answers on top of its 253 right ones. The largest category pulls in uncertain complaints, which is why its recall is high and its precision lower.
+
+## See it
+
+The view opens on logistic regression and the 2022 test year. Read the per-category table, then switch to **Train (2019–2021)** to see the gap, and to **Majority** to see the baseline. Back on logistic regression and test, pick the cell in the debt collection row and the credit reporting column.
+
+<MetricsView />
+
+The cell reads 31 of 76 debt collection complaints, 40.8% of the row, and 9.7% of the 319 complaints predicted credit reporting. The diagonal cell of a row is that category's recall, read across; down a column, it is its precision. The model comparison table shows the tie from lesson 4: Naive Bayes 0.774 and logistic regression 0.769 macro-F1.
+
+## The code
+
+Section 5 computes every metric in this lesson.
+
+<CodeTabs source="ml-train" section={5} />
+
+- `noise_band(n)` returns `1 / math.sqrt(n)`, the same rule as the LLMs track, and refuses `n <= 0`.
+- `confusion[pos[t]][pos[p]] += 1` fills the matrix: row by true category, column by prediction. `zip(..., strict=True)` stops if the two lists differ in length.
+- `tp = confusion[i][i]` is the category's correct answers; `predicted` sums its column and `support` its row.
+- `precision = tp / predicted if predicted else 0.0` counts 0/0 as 0, so a category the model never predicts scores 0, as the baseline's five do.
+- `f1 = 2 * precision * recall / (precision + recall)` is the harmonic mean, again 0 when both are 0.
+- `macro` divides the sum over categories by `len(classes)`; `weighted` multiplies each by its `support` and divides by `n`.
+- `accuracy` is the diagonal's sum over `n`.
+- `fit_and_evaluate(rows, c)` splits by time, fits on train only, and scores every model on both train and test with the training vocabulary and idf.
+
+<Callout kind="note" title="Tested against hand-worked numbers">
+  `test_metrics_match_hand_fixture` checks `per_class_metrics` against small cases worked out by hand in `ml/data/fixtures/metrics_cases.json`, including a category that is never predicted. When the metric code is what you trust most, test it against numbers you computed without it.
+</Callout>
+
+## Try it
+
+Read precision and recall straight from the confusion matrix, then look at the mistakes. Save this as `ml/python/evaluate.py`:
+
+```python
+import json
+import train
+
+metrics = json.loads((train.PATHS["reports"] / "metrics.json").read_text())
+test = metrics["models"]["logreg"]["test"]
+classes = test["classes"]
+dc, cr = classes.index("Debt collection"), classes.index(
+    "Credit reporting or other personal consumer reports")
+
+row = test["confusion"][dc]
+col = [r[cr] for r in test["confusion"]]
+print("debt collection row:", row, "recall", f"{row[dc] / sum(row):.3f}")
+print("credit reporting column:", col, "precision", f"{col[cr] / sum(col):.3f}")
+
+v1 = json.loads((train.PATHS["models"] / "v1.json").read_text())
+rows = train.split_by_time(train.load_complaints(train.PATHS["complaints"]))["test"]
+missed = [r for r in rows if r["product"] == "Debt collection"
+          and train.score(v1, r["narrative"])["label"] == classes[cr]]
+print(len(missed), "debt collection complaints called credit reporting; the first:")
+print(" ", missed[0]["id"], missed[0]["narrative"][:160])
+```
+
+```bash
+cd ml/python
+python evaluate.py
+```
+
+You should see:
+
+```text
+debt collection row: [1, 1, 31, 41, 1, 1] recall 0.539
+credit reporting column: [8, 14, 253, 31, 6, 7] precision 0.793
+31 debt collection complaints called credit reporting; the first:
+  5117873 XXXX A VICTIM OF IDENTITY THEFT, XXXX XXXX, XXXX EQUITY AND WELLSFARGO BANK
+```
+
+The row and the column are the same matrix the view draws, and scoring `v1.json` directly finds the same 31 complaints. Print a few more of `missed`: complaint `5148158` reads "I CHECKED MY REPORT AND THIS CREDIT LOAN IS ON IT, WHICH I HAVE NO KNOWLEDGE OF." Its label is debt collection, but the words are a credit report's. Some of these mistakes are the model's; some are complaints that fit both categories. It all runs locally and costs nothing.

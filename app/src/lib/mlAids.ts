@@ -817,7 +817,8 @@ const quarterMonths = (q: string) => {
  *  maximum makes it rarer), so the binomial tail at that rate is an upper bound on how often a
  *  count this high happens with no drift. Above the expectation, the reading names why the
  *  evidence stays weak: alerts that barely clear a threshold set by a single 2022 period, and
- *  quarterly alerts that overlap a month alert (not independent evidence). */
+ *  quarterly alerts that overlap a month alert (not independent evidence). It also gives the
+ *  either-signal chance, up to twice the per-signal one, since the reader watches two signals. */
 export function chanceReading(p: DriftChartProps, u: DriftUnit): string {
   const v = p.units[u];
   const c = alertCounts(v.periods);
@@ -833,6 +834,8 @@ export function chanceReading(p: DriftChartProps, u: DriftUnit): string {
     ` With no drift, ${seen} or more on a given signal happens up to ${pct(binomialTail(n, rate, seen))} of the time ` +
     `(binomial, at the null's upper-bound rate of ${pct(rate, 0)} per ${u})`;
   if (seen <= v.expected.per_signal) return `${head}${tail}: within what chance gives.`;
+  // Two signals are two chances: by the union bound, the either-signal figure is up to twice the per-signal one.
+  const either = `, and on either of the two signals up to ${pct(Math.min(1, 2 * binomialTail(n, rate, seen)))} (two signals, two chances)`;
   const nul = v.null[s];
   const alerts = v.periods.filter((q) => q[`${s}_calibrated`]);
   const reasons: string[] = [];
@@ -848,7 +851,7 @@ export function chanceReading(p: DriftChartProps, u: DriftUnit): string {
       if (m) reasons.push(`${q.label} overlaps the ${m.label} month alert, so it is not independent evidence`);
     }
   }
-  return `${head}${tail}: weak evidence at most${reasons.length ? `, because ${reasons.join(', and ')}` : ''}.`;
+  return `${head}${tail}${either}: weak evidence at most${reasons.length ? `, because ${reasons.join(', and ')}` : ''}.`;
 }
 
 /** x and y in SVG units for one drift chart (periods evenly spaced, 0 at the bottom). */

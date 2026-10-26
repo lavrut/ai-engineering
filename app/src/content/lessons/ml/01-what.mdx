@@ -1,0 +1,189 @@
+---
+track: ml
+order: 1
+slug: what
+title: What a trained model is
+goal: Explain what training produces, open the exported model file, and follow one complaint from text to label using nothing but the numbers in that file.
+minutes: 15
+quiz:
+  - question: You copy v1.json to a server that has no Python and no scikit-learn. What else does the server need to label complaints?
+    options:
+      - Nothing; the JSON file runs on its own
+      - A copy of the 1,800 training complaints, to retrain on start
+      - Code that applies the same tokenizer rules and the scoring formula, softmax(coef · x + intercept), to the numbers in the file
+      - An API key, because the weights are checked online
+    answer: 2
+    explanation: The file holds the numbers training learned, plus the tokenizer's settings, but numbers do nothing on their own. Any language that splits text by the same rules and does the same arithmetic gets the same label. That is how the Go server in lesson 9 scores the same file.
+  - question: A complaint contains only words that are not in the model's vocabulary. What does score() return?
+    options:
+      - An error, because the vector is empty
+      - The training majority class, flagged low_confidence, with scores equal to softmax of the intercepts
+      - A random category
+      - The category whose name appears in the text
+    answer: 1
+    explanation: Unknown words are skipped, so every feature is 0 and each category's score is just its intercept. score() then returns majority_class, credit reporting, and sets low_confidence to true, so a caller knows the answer rests on no evidence.
+  - question: Why does the export set `created` to the last complaint date the model saw (2021-12-31) instead of the time you ran it?
+    options:
+      - The clock on a laptop is unreliable
+      - So the same data and settings give a byte-identical file, and so the same SHA-256, every time
+      - Because JSON cannot store a time of day
+      - So the model expires at the end of 2021
+    answer: 1
+    explanation: Training here is deterministic, with seed 7 and the same solver steps. With no clock in the file, retraining from the same sample reproduces v1.json byte for byte. Lesson 7's run tracker records that hash, so an identical hash means an identical model.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+In the LLMs track the model was fixed. You changed its behaviour with prompts, and its weights never moved. This track goes one level down: you choose the weights yourself, by training a small model on labelled examples.
+
+### The task
+
+Each example is a real complaint that a consumer sent to the US Consumer Financial Protection Bureau (CFPB), in their own words. The model reads the text and names the product it is about, one of six CFPB categories:
+
+- Credit reporting or other personal consumer reports
+- Debt collection
+- Credit card
+- Checking or savings account
+- Mortgage
+- Money transfer, virtual currency, or money service
+
+This is the same shape of job as triage in the LLMs track: text in, one label out. Lesson 6 gives Claude the same job and compares the two.
+
+### What training produces
+
+Training reads 1,800 labelled complaints from 2019–2021 and picks numbers that make the model's answers match their labels. The result is one file, `ml/models/v1.json`, 853,279 bytes of JSON. It holds:
+
+- `vocabulary`: the 5,539 words the model knows, in alphabetical order.
+- `idf`: one number per word, larger for rarer words (lesson 3).
+- `coef`: one weight per category and word, 6 × 5,539 = 33,234 numbers. A positive weight pushes the complaint towards that category.
+- `intercept`: one number per category, its starting score before any word counts.
+- `tokenizer`: the settings for splitting text into words.
+- `classes`, `majority_class`, `data_version` (the SHA-256 of the sample it learned from) and `trained_on` (2019-01-01 to 2021-12-31).
+
+That is the whole model. A trained model is a file of numbers plus the rules for using them. There is no hidden state and no code inside it.
+
+### Using the numbers
+
+Labelling a complaint takes four steps. Split the text into words. Turn the words into a list of 5,539 numbers, one per vocabulary word. For each category, multiply those numbers by its weights, add them up and add its intercept. Softmax turns the six totals into probabilities, and the label is the largest.
+
+Every step is arithmetic on the file's contents. So any language can do it: the browser does it in lesson 3, and in lesson 9 a Go server scores the same file and gets the same answers as Python.
+
+### How good is it?
+
+On 600 complaints from 2022, a year it never saw, v1 is right 80.8% of the time, with a <Term t="noise band" /> of ±4.1 points (1/√600). Always answering the most common category, credit reporting, scores 43.3% on the same 600. Lesson 5 shows where the other 19.2% go.
+
+Training takes about 2 seconds on a laptop CPU (`time python train.py` on the machine this course was built on). Scoring one complaint takes well under a millisecond. Nothing costs money.
+
+### The plan
+
+Lessons 2 to 5 build the pieces in order: the data and its time split, turning text into numbers, training, and evaluating. Lesson 6 puts the result next to Claude. The second half, from lesson 7, runs the model the way a team does in production.
+
+## See it
+
+Step through one complaint's path to a label. Watch the model file: it feeds the pipeline twice, once with its vocabulary and idf, once with its weights.
+
+<FlowDiagram diagram="ml-pipeline" />
+
+Only the model file changes when you retrain. The tokenizer, the TF-IDF arithmetic and softmax are fixed code, the same in Python, Go and the browser. Step 6 also shows what the model does with no evidence: it flags the answer instead of guessing quietly.
+
+## The code
+
+Everything from the data to the exported file lives in `ml/python/train.py`, in seven numbered sections. Section 1 holds every setting in one place.
+
+<CodeTabs source="ml-train" section={1} />
+
+- `SEED = 7` seeds every random choice in this file, such as the solver and the report's snippets. The sample and lesson 6's Claude sample use 7 as well. The same seed gives the same model.
+- `ML_DIR = Path(__file__).resolve().parent.parent` finds `ml/` from the file's own location, so the script works from any directory.
+- `PATHS` names the three places it reads and writes: the committed `complaints.jsonl`, `models/` and `reports/`.
+- `SPLITS` divides the data by date: train 2019–2021, test 2022, and a `stream` of 2023–2024 that plays production later. Lesson 2 explains why by date.
+- `FEATURES` is the tokenizer and TF-IDF settings. They are copied into the model file, so `"lowercase": "ascii"` and `"pattern": "[a-z0-9']+"` are part of the contract with Go and the browser.
+- `"stop_words": []` keeps every word, because "not" and "no" carry meaning in a complaint.
+- `"min_df": 2` drops words seen in only one training complaint: typos, names and scrubbing leftovers that cannot generalise.
+- `"max_features": 20000` caps the vocabulary. The training years give 5,539 words, so the cap does not bite here.
+- `C = 1.0` sets how strongly logistic regression is held back from large weights (lesson 4).
+- `NB_ALPHA = 0.1` is Naive Bayes' smoothing. The comment records how it was chosen: cross-validation on the training years only, 0.40 accuracy at the default 1 against 0.76 at 0.1. The test year was not used.
+- `LOW_CONFIDENCE = 0.5` flags any prediction whose top probability is below one half.
+
+Section 6 writes the file and scores text from it.
+
+<CodeTabs source="ml-train" section={6} />
+
+- `data_version(path)` is `"sha256:"` plus the hash of `complaints.jsonl`. A model records exactly which data made it.
+- `export_model(...)` accepts either model. For Naive Bayes, `coef` is the log probability of each word given the category and `intercept` the log prior; for logistic regression they are the learned weights. Both then score the same way, so one scorer serves both.
+- The returned dict is the file: `tokenizer`, `vocabulary`, `idf`, `classes`, `coef`, `intercept`, `majority_class` and the test `metrics`. Floats keep full precision, so Go and the browser can match Python to 1e-9.
+- `score(model_json, text, index=None)` labels text from the JSON alone, the way the servers do. It never touches scikit-learn.
+- `Counter(index[t] for t in tokenize(...) if t in index)` counts known words. An unknown word is skipped.
+- `norm = math.sqrt(...) or 1.0` scales the vector to length 1, and leaves an all-zero vector alone.
+- `logits = [b + sum(row[j] * (w / norm) ...)]` is weights · vector + intercept, once per category. Softmax follows, after subtracting the largest logit so `math.exp` cannot overflow.
+- `if not weights:` handles a text with no known word: it returns `majority_class` with `low_confidence: True`.
+- `max(range(len(classes)), key=probs.__getitem__)` picks the top category; on a tie, the first in class order wins, the same rule Go uses.
+- `dataset_report(...)` writes the counts and snippets that lesson 2's explorer shows.
+
+<Callout kind="note" title="Rules in code, settings in the file">
+  The model file stores the tokenizer's settings, not its rules. `tokenizer_note` says so: the rules are fixed in `train.tokenize`, and Go and the browser implement the same rules. Change a rule and every exported model needs new code everywhere it is scored. Lesson 3 shows why the rules are kept deliberately simple.
+</Callout>
+
+## Try it
+
+Install the dependencies (scikit-learn, NumPy, SciPy and the server packages), then train. Everything here is free and runs offline.
+
+```bash
+cd ml/python
+pip install -r requirements.txt
+python train.py
+```
+
+You should see:
+
+```text
+wrote .../ml/models/v1.json (853,279 bytes)
+model     split   accuracy  macro F1   band
+majority  train      0.371     0.090  0.024
+majority  test       0.433     0.101  0.041
+nb        train      0.927     0.929  0.024
+nb        test       0.818     0.774  0.041
+logreg    train      0.902     0.899  0.024
+logreg    test       0.808     0.769  0.041
+```
+
+That rewrote `ml/models/v1.json`. Run `git status`: nothing changed, because the same data and settings give a byte-identical file. Without `--write-reports`, the files in `ml/reports/` are left alone.
+
+Now open the file. Save this as `ml/python/peek.py`:
+
+```python
+import json
+import train
+
+model = json.loads((train.PATHS["models"] / "v1.json").read_text())
+print(sorted(model))
+print(model["model"], model["version"], "trained on", model["trained_on"])
+print(len(model["vocabulary"]), "words,", len(model["classes"]), "classes")
+print("coef", len(model["coef"]), "x", len(model["coef"][0]))
+print("intercept", [round(b, 3) for b in model["intercept"]])
+
+result = train.score(model, "The collector keeps calling me about a debt I already paid.")
+print(result["label"], round(result["scores"][result["label"]], 3), result["low_confidence"])
+print(train.score(model, "Zorblax quux!")["label"], train.score(model, "Zorblax quux!")["low_confidence"])
+```
+
+```bash
+python peek.py
+```
+
+You should see:
+
+```text
+['classes', 'coef', 'created', 'data_version', 'idf', 'intercept', 'majority_class', 'metrics', 'model', 'tokenizer', 'tokenizer_note', 'trained_on', 'version', 'vocabulary']
+logreg v1 trained on {'from': '2019-01-01', 'to': '2021-12-31'}
+5539 words, 6 classes
+coef 6 x 5539
+intercept [-0.641, -0.296, 1.235, 0.103, -0.017, -0.382]
+Debt collection 0.873 False
+Credit reporting or other personal consumer reports True
+```
+
+The third intercept, 1.235, is credit reporting's: the most common category starts ahead. A sentence about a collector and a debt overcomes that start, at 87.3%. Two made-up words give the model nothing, so it falls back to the majority class and says so with `True`.

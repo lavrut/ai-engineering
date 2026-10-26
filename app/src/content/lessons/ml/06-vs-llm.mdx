@@ -1,0 +1,194 @@
+---
+track: ml
+order: 6
+slug: vs-llm
+title: Classic ML vs. an LLM
+goal: Compare the trained model with Claude on the same complaints for accuracy, latency and cost, say what the noise band allows you to conclude, and decide when each one is the right tool.
+minutes: 20
+quiz:
+  - question: On the same 200 test complaints, Claude Haiku 5.5 scores 86.5% and v1 81.0%. The noise band is ±7.1 points. What can you conclude about accuracy?
+    options:
+      - Claude is 5.5 points more accurate
+      - This sample cannot tell them apart; a 5.5-point gap is inside the ±7.1 band
+      - v1 is more accurate, because the band favours the lower score
+      - Claude is better on every category
+    answer: 1
+    explanation: With 200 complaints, an accuracy can move by about 1/√200, 7.1 points, from which complaints happen to be in the sample. A smaller gap is not evidence. Claude may well be better; showing it would need more complaints, and the sample was kept at 200 to keep the recording cheap.
+  - question: v1's median latency is 0.252 ms on the Python server and Claude's is 1,151.5 ms. Why does the lesson call this comparison not like for like?
+    options:
+      - The two were measured on different complaints
+      - v1's number is arithmetic on a local CPU with the model in memory; Claude's is a network round trip to a remote API, recorded with 8 calls in flight at once
+      - Claude's number is an estimate, not a measurement
+      - The Python server was measured in seconds
+    answer: 1
+    explanation: The two numbers measure different things. One is local inference over localhost, the other includes the network, the API's queue and the recorder's own concurrency. The gap is real and large, but its exact size depends on your network and setup, so read it as orders of magnitude, not as a ratio to quote.
+  - question: You must label 50,000 complaints a day, on a machine whose data may not leave your network, and the six categories have not changed in years. Which fits better?
+    options:
+      - The LLM, because it scored higher on the sample
+      - The trained model; it runs locally for free in well under a millisecond, the data never leaves the machine, and the stable categories mean labelled data and retraining are not a burden
+      - Neither; classification needs a human
+      - The LLM with thinking turned on, for accuracy
+    answer: 1
+    explanation: Volume, latency, cost and privacy all favour a small local model, and its accuracy is not distinguishable from the LLM's on this sample. The LLM's strengths, needing no labelled data and adapting to new categories by editing a prompt, matter less when the categories are stable and labels already exist.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import ModelVsLlm from '../../../components/ml/ModelVsLlm.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+You could have skipped lessons 2 to 5: Claude can read a complaint and name its category with no training at all. This lesson puts the two side by side, on the same complaints, and asks what each costs.
+
+### The same job, two ways
+
+v1 learned from 1,800 labelled complaints and is a 853,279-byte file of numbers. Claude Haiku 5.5 learned nothing from this data. It gets a system prompt that lists the six categories, each with a one-line definition, and returns <Term t="structured output" />: a JSON object whose `category` must be one of the six. Thinking is turned off and each reply is capped at 300 tokens; the answer itself is about 20.
+
+Both read the same 200 complaints: a sample of the 2022 test year, stratified by category with seed 7, saved in `ml/data/llm_sample.json`. Claude's answers were recorded once, with approval, and are replayed for free. The recording made 200 calls, all of which finished normally, and cost $0.0204. Before it ran, the script estimated $0.025, with a worst case of $0.090.
+
+### Accuracy
+
+On those 200 complaints Claude is right 86.5% of the time and v1 81.0%. The gap is 5.5 points. The <Term t="noise band" /> for 200 complaints is ±7.1 points (1/√200), so the gap is inside it: **this sample cannot tell them apart on accuracy.** Claude may well be better; showing it would take more complaints.
+
+v1 scores 81.0% here and 80.8% on all 600 test complaints: the 200 are a sample, and its number moves a little with which complaints are in it.
+
+Macro-F1 is 0.835 for Claude and 0.765 for v1. Per category, Claude is ahead on checking (0.809 against 0.636), credit card (0.783 against 0.651) and mortgage (0.976 against 0.900), and the two tie on debt collection at 0.773. Read those with care: the sample has 87 credit reporting complaints, and between 20 and 25 in each other category, so every per-category number is far noisier than the ±7.1 points on accuracy.
+
+The two also make different mistakes. Both are right on 151 complaints and both wrong on 16. Of the 33 where they disagree, Claude is right on 22 and v1 on 11 (Try it below).
+
+### Latency
+
+v1 is served by the Python and Go servers you build in lesson 9. Measured over localhost on one machine, one request at a time, the median request took 0.252 ms on the Python server and 0.120 ms on the Go one. Claude's recorded calls took a median of 1,151.5 ms each.
+
+That is not like for like. v1's number is arithmetic on a local CPU with a small model already in memory. Claude's is a round trip over the network to a much larger model, recorded with 8 calls in flight at once, so it includes the network, the API's queue and SDK retries. Your numbers for both will differ. The gap is still thousands of times, and it decides some designs on its own: a model that answers in a quarter of a millisecond can sit inside a web request; one that answers in about a second needs the caller to wait.
+
+### Cost
+
+v1 costs nothing to run beyond the machine it runs on. Claude cost $0.102 per 1,000 complaints in the recording, at $0.10 per million input tokens and $0.50 per million output tokens. Almost all of that is input: each call sends a whole narrative plus the prompt.
+
+That sounds small, and for 200 complaints it is two cents. It scales with volume: in 2024 the CFPB received 788,345 narratives in these six categories, which at the recorded rate would cost about $80 to label once. v1 would label them all for free.
+
+v1's costs are elsewhere: 1,800 labelled complaints to learn from, and retraining when the language or the categories move, which is the rest of this track.
+
+### When to choose which
+
+Choose the trained model when:
+
+- volume is high, or each answer must come back in milliseconds;
+- the data may not leave your machines: v1 runs offline, and even in a browser;
+- you have labelled examples and the categories are stable;
+- you need the same answer every time: the same file and the same text always give the same scores.
+
+Choose the LLM when:
+
+- you have few or no labels: six one-line definitions were enough here;
+- the categories change often: editing a prompt is faster than relabelling and retraining;
+- volume is modest and a second of waiting is fine;
+- accuracy matters more than cost, and you can measure the difference on enough examples to see it.
+
+They also combine. v1 flags its own uncertain answers as `low_confidence`, so a system could answer the confident ones locally and send only the rest to the LLM. Try it below measures that idea on these 200 complaints.
+
+## See it
+
+The aid replays the recorded comparison; this page makes no calls. Read the summary line first: it says whether the gap is inside the band. Then compare the per-category table and the latency table, and read what each latency measures.
+
+<ModelVsLlm />
+
+The summary puts the 5.5-point gap inside the ±7.1-point band, so the sample cannot rank the two on accuracy. The cost row shows $0.000 against $0.102 per 1,000 complaints. The latency table puts both local servers' medians below a third of a millisecond and Claude's above a second, and the notes under it say why Claude's number cannot be set against the servers' as a ratio.
+
+## The code
+
+`ml/python/compare_llm.py` reuses the saved-response pattern from the LLMs track: replay by default, `record` and `live` only after a printed estimate and a yes. Section 1 sets up the request.
+
+<CodeTabs source="ml-llm" section={1} />
+
+- `MODEL = "claude-haiku-5-5"` and `PRICES` give the model and its price per million tokens, input and output.
+- `MAX_TOKENS = 300` caps each reply. The worst-case estimate assumes every reply uses all of it.
+- `THINKING = {"type": "disabled"}` turns thinking off. Haiku 5.5 thinks by default, thinking is billed as output and counts towards `max_tokens`, and a 300-token cap with thinking on would often stop before the answer.
+- `EST_TOKENS = (1100, 25)` is the rough tokens per call for the estimate: about a 600-word narrative plus the prompt in, about 20 tokens out.
+- `CLASSES` comes from `v1.json`, so both models choose from exactly the same six names.
+- `DEFINITIONS` holds one line per category. That and the list of names are all the LLM is told.
+- `SCHEMA` is a JSON Schema whose `category` is an `enum` of the six, so a reply can only be one of them.
+
+Section 3 builds the request.
+
+<CodeTabs source="ml-llm" section={3} />
+
+- `build_request(narrative, model)` returns the arguments for `messages.create`: the model, `max_tokens`, `thinking`, the system prompt and the narrative as the user message.
+- `"output_config": {"format": {"type": "json_schema", "schema": SCHEMA}}` asks for structured output, so the reply is `{"category": ...}` every time.
+- It sends no `temperature`, `top_p` or `top_k`: the newest models reject them, as in the LLMs track.
+
+Section 5 scores both models on the same complaints.
+
+<CodeTabs source="ml-llm" section={5} />
+
+- `compare(ml, model)` has no client and no mode, so it cannot call the API. It replays saved answers only.
+- `classify(row, mode="replay", ...)` reads each saved answer; a complaint with none is skipped, and if none are saved the function returns `None` and the CLI prints "No recorded run yet".
+- `guess = [... else NO_ANSWER ...]` turns a refused, cut-off or errored reply into a seventh answer, "no answer", that is never right. A failure counts against Claude instead of quietly leaving the sample. All 200 recorded replies were usable.
+- `mine = train.per_class_metrics(..., [train.score(v1, r["narrative"])["label"] ...])` scores v1 from `v1.json` on exactly the same rows, with the metric code from lesson 5.
+- `cost = sum(call_cost(...) for x in lines)` adds up the real tokens of every saved line, errors included; `cost_per_1000` scales it.
+- `latency_p50_ms` comes from `reports/latency.json` for v1 and from the saved lines for Claude, each with a `latency_note` saying what it measured.
+
+<Callout kind="warning" title="Recording costs money">
+  `python compare_llm.py record` and `live` call the API with your `ANTHROPIC_API_KEY`. For the full 200 they print an estimate of $0.025, a worst case of $0.090 and the $10 cap, then ask `Make these paid calls? [y/N]`. Without a `y`, or `--yes`, nothing is called. `record` skips complaints already saved, so with the committed file it has nothing to do.
+</Callout>
+
+## Try it
+
+Replay the comparison. It reads the saved answers and costs nothing:
+
+```bash
+cd ml/python
+python compare_llm.py compare
+```
+
+You should see:
+
+```text
+200 complaints: v1 accuracy 0.810, claude-haiku-5-5 0.865 (noise band ±0.071); 0 Claude replies had no usable answer, counted wrong.
+```
+
+It also rewrites `ml/reports/llm_compare.json` with the same content, so `git status` shows no change.
+
+Now see where the two disagree, and test the combined design. Save this as `ml/python/disagree.py`:
+
+```python
+import collections
+import json
+import compare_llm as C
+import train
+
+v1 = json.loads((C.ML_DIR / "models" / "v1.json").read_text())
+tally, unsure = collections.Counter(), collections.Counter()
+for row in C.load_sample_rows():
+    mine = train.score(v1, row["narrative"])
+    theirs = C.classify(row)["output"]["category"]      # replay: reads the saved answer, free
+    tally[(mine["label"] == row["product"], theirs == row["product"])] += 1
+    if mine["low_confidence"]:
+        unsure["n"] += 1
+        unsure["v1"] += mine["label"] == row["product"]
+        unsure["claude"] += theirs == row["product"]
+print("both right  ", tally[(True, True)])
+print("only v1     ", tally[(True, False)])
+print("only Claude ", tally[(False, True)])
+print("both wrong  ", tally[(False, False)])
+print(f"v1 low confidence on {unsure['n']}: v1 right {unsure['v1']}, Claude right {unsure['claude']}")
+```
+
+```bash
+python disagree.py
+```
+
+You should see:
+
+```text
+both right   151
+only v1      11
+only Claude  22
+both wrong   16
+v1 low confidence on 72: v1 right 43, Claude right 56
+```
+
+v1 is right on 162 complaints, 43 of them among the 72 it flagged. So on the 128 it was confident about, it is right 119 times, 93.0%. Send only the 72 flagged complaints to Claude and the combination gets 119 + 56 = 175 right, 87.5%, with 36% of the API calls. That is inside the band of both models, so treat it as an idea to test on more complaints, not a result.
+
+Everything above replays. A live run of all 200 complaints, `python compare_llm.py live`, would cost about $0.02 and ask before calling; nothing in the track needs it.
