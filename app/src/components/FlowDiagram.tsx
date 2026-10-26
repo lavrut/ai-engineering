@@ -9,11 +9,12 @@ import {
   type Diagram,
   type Role,
 } from '../lib/diagram';
+import { fileName } from '../lib/codeSources';
 import { LANG_EVENT, pickLang, readLang, type Lang } from '../lib/lang';
 
 type Props = {
   diagram: Diagram;
-  /** Source sections keyed by codeKey ("6" for the harness, "llms:6" for the lab; only those the steps use). */
+  /** Source sections keyed by codeKey ("6" for the harness, "llms:6" for the lab, "ml-serve:4:go5" with a goSection; only those the steps use). */
   codePython: Record<string, string>;
   codeGo: Record<string, string>;
   /** "replay": the code panel starts open (capstone). */
@@ -30,12 +31,6 @@ const ROLE_LABEL: Record<Role, string> = {
   logs: 'Logs',
   dataset: 'Dataset',
   grader: 'Grader',
-};
-/** The file each source shows per language; LoRA is Python only. */
-const FILE_NAME: Record<CodeSource, Partial<Record<Lang, string>>> = {
-  harness: { python: 'harness.py', go: 'main.go' },
-  llms: { python: 'triage_lab.py', go: 'main.go' },
-  lora: { python: 'lora.py' },
 };
 
 export default function FlowDiagram({ diagram, codePython, codeGo, mode }: Props) {
@@ -89,12 +84,13 @@ export default function FlowDiagram({ diagram, codePython, codeGo, mode }: Props
   const on = new Set(step.highlight);
   const routes = routeEdges(diagram);
   const roles = Array.from(new Set(diagram.nodes.map((n) => n.role)));
-  const section = step.code?.section;
-  const source = step.code?.source ?? 'harness';
+  const source: CodeSource = step.code?.source ?? 'harness';
   const key = step.code ? codeKey(step.code) : undefined;
   // A Python-only source (or a missing Go section) shows the Python code even when Go is chosen.
   const codeLang: Lang = lang === 'go' && key !== undefined && codeGo[key] === undefined ? 'python' : lang;
   const code = key === undefined ? undefined : (codeLang === 'go' ? codeGo : codePython)[key];
+  // The Go file may number its own sections (goSection); the label shows the one on screen.
+  const section = codeLang === 'go' ? (step.code?.goSection ?? step.code?.section) : step.code?.section;
   const codeId = `${diagram.id}-code`;
   const arrow = `${diagram.id}-arrow`;
 
@@ -201,7 +197,7 @@ export default function FlowDiagram({ diagram, codePython, codeGo, mode }: Props
           </button>
           {showCode && code !== undefined && (
             <div class="fd-code" id={codeId}>
-              <p class="fd-code-label">{`${FILE_NAME[source][codeLang]} · section ${section}`}</p>
+              <p class="fd-code-label">{`${fileName(source, codeLang)} · section ${section}`}</p>
               <pre tabIndex={0}>{code}</pre>
             </div>
           )}

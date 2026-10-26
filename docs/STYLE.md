@@ -54,7 +54,7 @@ Use these instead of hand-built HTML, so every lesson looks the same:
 
 | Need | Component |
 |---|---|
-| Real code with Python/Go tabs | `<CodeTabs section={N} goNote="..." />` (N must be a numbered section of the source **(tested)**) or `<CodeTabs whole />`. `source="harness"` (default), `"llms"` (the eval lab) or `"lora"` (Python only); `pythonOnly` hides the Go tab |
+| Real code with Python/Go tabs | `<CodeTabs section={N} goNote="..." />` (N must be a numbered section of the source **(tested)**) or `<CodeTabs whole />`. `source` names an entry in `app/src/lib/codeSources.ts`: `"harness"` (default), `"llms"` (the eval lab), `"lora"`, or the ML files `"ml-train"`, `"ml-mlops"`, `"ml-mlflow"`, `"ml-serve"`, `"ml-monitor"`, `"ml-fetch"`, `"ml-llm"`. A source with no Go file shows only Python; `pythonOnly` hides the Go tab. `ml-serve` and `ml-monitor` number their Go sections differently, so they need `goSection={M}` too **(tested)** |
 | A caveat or gotcha | `<Callout kind="note" \| "warning" \| "go" title="...">` |
 | A glossary term | `<Term t="..." />` |
 | A numbered flow | `<FlowDiagram diagram="..." />` (the name must exist in `src/data/diagrams/` **(tested)**) |

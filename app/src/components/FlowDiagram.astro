@@ -1,32 +1,26 @@
 ---
 // Build-time wrapper for the FlowDiagram island: picks the diagram by key and
 // passes along only the source sections that its steps link to. A step's
-// `code.source` (default 'harness') says which files the section comes from.
+// `code.source` (default 'harness') names a source in lib/codeSources.ts, and
+// `code.goSection` the Go section where the Go file numbers its own.
 import FlowDiagramIsland from './FlowDiagram.tsx';
-import { extractSection } from '../lib/regions';
-import { codeKey, type CodeSource } from '../lib/diagram';
+import { resolveCode } from '../lib/codeSourceText';
+import { codeKey } from '../lib/diagram';
 import { evalPipeline } from '../data/diagrams/eval-pipeline';
 import { harnessFlow } from '../data/diagrams/harness-flow';
+import { mlLoop } from '../data/diagrams/ml-loop';
+import { mlPipeline } from '../data/diagrams/ml-pipeline';
 import { requestResponse } from '../data/diagrams/request-response';
 import { toolRoundtrip } from '../data/diagrams/tool-roundtrip';
-import harnessPython from '../../../harness/python/harness.py?raw';
-import harnessGo from '../../../harness/go/main.go?raw';
-import llmsPython from '../../../llms/python/triage_lab.py?raw';
-import llmsGo from '../../../llms/go/main.go?raw';
-import loraPython from '../../../llms/finetune/lora.py?raw';
 
 const diagrams = {
   'eval-pipeline': evalPipeline,
   'harness-flow': harnessFlow,
+  'ml-loop': mlLoop,
+  'ml-pipeline': mlPipeline,
   'request-response': requestResponse,
   'tool-roundtrip': toolRoundtrip,
 } as const;
-
-const sources: Record<CodeSource, { python: string; go?: string }> = {
-  harness: { python: harnessPython, go: harnessGo },
-  llms: { python: llmsPython, go: llmsGo },
-  lora: { python: loraPython },
-};
 
 interface Props {
   diagram: keyof typeof diagrams;
@@ -41,10 +35,10 @@ const codePython: Record<string, string> = {};
 const codeGo: Record<string, string> = {};
 for (const step of diagram.steps) {
   if (!step.code) continue;
-  const src = sources[step.code.source ?? 'harness'];
   const k = codeKey(step.code);
-  codePython[k] = extractSection(src.python, step.code.section);
-  if (src.go) codeGo[k] = extractSection(src.go, step.code.section);
+  const code = resolveCode(step.code);
+  codePython[k] = code.python;
+  if (code.go !== undefined) codeGo[k] = code.go;
 }
 ---
 

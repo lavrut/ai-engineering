@@ -15,7 +15,8 @@ const lessonsDir = join(app, 'src/content/lessons');
 function files(dir: string, ext: RegExp): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
     const p = join(dir, e.name);
-    if (e.isDirectory()) return files(p, ext);
+    // Skip tool caches (.pytest_cache, __pycache__): they are not source.
+    if (e.isDirectory()) return e.name.startsWith('.') || e.name === '__pycache__' ? [] : files(p, ext);
     return ext.test(e.name) ? [p] : [];
   });
 }
@@ -177,12 +178,29 @@ describe('text integrity', () => {
     'llms/go',
     'llms/finetune',
     'llms/data',
+    'ml/python',
+    'ml/go',
+    'ml/serve',
+    'ml/data',
+    'ml/reports',
   ];
   const sources = roots.flatMap((r) => files(join(repo, r), /\.(astro|tsx?|mjs|css|mdx?|ya?ml|jsonl?|py|go)$/));
 
   it('finds source files to check', () => {
     expect(sources.length).toBeGreaterThan(50);
-    for (const r of ['llms/python', 'llms/go', 'llms/finetune', 'llms/data', 'llms/data/fixtures']) {
+    for (const r of [
+      'llms/python',
+      'llms/go',
+      'llms/finetune',
+      'llms/data',
+      'llms/data/fixtures',
+      'ml/python',
+      'ml/go',
+      'ml/serve',
+      'ml/data',
+      'ml/data/fixtures',
+      'ml/reports',
+    ]) {
       expect(sources.some((f) => relative(repo, f).startsWith(`${r}/`)), r).toBe(true);
     }
   });

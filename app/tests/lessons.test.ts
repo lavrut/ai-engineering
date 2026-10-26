@@ -5,43 +5,20 @@ import matter from 'gray-matter';
 import { describe, expect, it } from 'vitest';
 import { lessonSchema } from '../src/content/schemas';
 import { glossary } from '../src/data/glossary';
-import { listSections } from '../src/lib/regions';
+import { parseCodeTabsTag } from '../src/lib/codeSources';
+import { codeProblems } from '../src/lib/codeSourceText';
 import { viewId } from '../src/lib/router';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const lessonsDir = join(here, '../src/content/lessons');
 const diagramsDir = join(here, '../src/data/diagrams');
-const repo = join(here, '../..');
 
-// The code a lesson can quote, by CodeTabs `source` (see CodeTabs.astro).
-const SOURCES: Record<string, { python: string; go?: string }> = {
-  harness: { python: 'harness/python/harness.py', go: 'harness/go/main.go' },
-  llms: { python: 'llms/python/triage_lab.py', go: 'llms/go/main.go' },
-  lora: { python: 'llms/finetune/lora.py' },
-};
-const sectionsOf = (file: string) => new Set(listSections(readFileSync(join(repo, file), 'utf8')).map((s) => s.n));
-const SECTIONS = Object.fromEntries(
-  Object.entries(SOURCES).map(([k, f]) => [k, { python: sectionsOf(f.python), go: f.go ? sectionsOf(f.go) : undefined }]),
-);
-
-/** Problems with the CodeTabs tags in a lesson: an unknown source, or a section missing from a file it shows. */
+/** Problems with the CodeTabs tags in a lesson: an unknown source, a section missing from a file
+ *  it shows, or a missing goSection where the Go file numbers its own sections (codeSources.ts). */
 function codeTabsProblems(content: string): string[] {
-  const problems: string[] = [];
-  for (const [tag] of content.matchAll(/<CodeTabs\b[^>]*>/g)) {
-    const section = /\bsection=\{(\d+)\}/.exec(tag)?.[1];
-    if (section === undefined) continue;
-    const source = /\bsource="([^"]*)"/.exec(tag)?.[1] ?? 'harness';
-    const secs = SECTIONS[source];
-    if (!secs) {
-      problems.push(`${tag}: unknown source "${source}"`);
-      continue;
-    }
-    const n = Number(section);
-    const pythonOnly = /\bpythonOnly\b/.test(tag) || !secs.go;
-    if (!secs.python.has(n)) problems.push(`${tag}: no section ${n} in ${SOURCES[source].python}`);
-    if (!pythonOnly && !secs.go!.has(n)) problems.push(`${tag}: no section ${n} in ${SOURCES[source].go}`);
-  }
-  return problems;
+  return [...content.matchAll(/<CodeTabs\b[\s\S]*?\/>/g)].flatMap(([tag]) =>
+    codeProblems(parseCodeTabsTag(tag)).map((p) => `${tag.slice(0, 80)}: ${p}`),
+  );
 }
 
 function mdxFiles(dir: string): string[] {
@@ -109,6 +86,13 @@ describe('lesson content', () => {
     expect(codeTabsProblems('<CodeTabs source="lora" section={6} />')).toHaveLength(1);
     expect(codeTabsProblems('<CodeTabs source="nope" section={1} />')).toHaveLength(1);
     expect(codeTabsProblems('<CodeTabs whole source="llms" />')).toEqual([]);
+    expect(codeTabsProblems('<CodeTabs source="ml-train" section={3} />')).toEqual([]);
+    expect(codeTabsProblems('<CodeTabs source="ml-train" section={8} />')).toHaveLength(1);
+    expect(codeTabsProblems('<CodeTabs source="ml-serve" section={4} goSection={5} />')).toEqual([]);
+    expect(codeTabsProblems('<CodeTabs source="ml-serve" section={4} />')).toHaveLength(1);
+    expect(codeTabsProblems('<CodeTabs source="ml-serve" section={4} goSection={6} />')).toHaveLength(1);
+    expect(codeTabsProblems('<CodeTabs source="ml-monitor" section={2} goSection={6} />')).toEqual([]);
+    expect(codeTabsProblems('<CodeTabs source="ml-monitor" section={7} goSection={6} />')).toHaveLength(1);
   });
 
   it.each(lessons.map((l) => [l.name, l] as const))('%s: every FlowDiagram names an existing diagram', (_n, l) => {

@@ -33,9 +33,9 @@ each signal also gets a null (what PSI looks like with no drift), two ways:
     month-to-month variation that i.i.d. sampling misses.
 The calibrated alert asks for PSI above max(leave-out p95, largest within-2022 value), per signal
 and period length. Expected chance alerts: the p95 is exceeded 5% of the time by construction, so
-24 months x 5% = 1.2 per signal (up to ~2.3 for either of the two); 8 quarters x 5% = 0.4 per
-signal (up to ~0.8). The within-2022 maximum makes the real rate lower. A handful of alerts above
-that count is the signal; one or two are not.
+24 months x 5% = 1.2 per signal (at most 2.4 for either of the two: the union bound, whatever
+their correlation); 8 quarters x 5% = 0.4 per signal (at most 0.8). The within-2022 maximum makes
+the real rate lower. A handful of alerts above that count is the signal; one or two are not.
 
 Run (from ml/python):
     python monitor.py                   # print the table, write nothing
@@ -269,10 +269,11 @@ def build_report(rows: list[dict], generated_by: str) -> dict:
                                   "within-2022 maximum",
                      "expected_chance_alerts": {
                          "note": "p95 is exceeded 5% of the time by construction; the within-2022 "
-                                 "maximum makes the real rate lower. A few alerts above this count "
-                                 "is the signal.",
-                         "month": {"per_signal": 24 * 0.05, "either_signal_max": 24 * (1 - 0.95 ** 2)},
-                         "quarter": {"per_signal": 8 * 0.05, "either_signal_max": 8 * (1 - 0.95 ** 2)}},
+                                 "maximum makes the real rate lower. either_signal_max is the union "
+                                 "bound (twice per_signal), true however the two signals correlate. "
+                                 "A few alerts above this count is the signal.",
+                         "month": {"per_signal": round(24 * 0.05, 9), "either_signal_max": round(2 * 24 * 0.05, 9)},
+                         "quarter": {"per_signal": round(8 * 0.05, 9), "either_signal_max": round(2 * 8 * 0.05, 9)}},
                      "month": nulls[("month", 50)], "quarter": nulls[("quarter", 150)]},
             "months": monthly_drift(splits["stream"], model, nulls=nulls, **kw),
             "quarters": quarterly_drift(splits["stream"], model, nulls=nulls, **kw),

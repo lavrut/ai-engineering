@@ -10,9 +10,11 @@
 //   from the source's side facing the first waypoint, through each waypoint,
 //   into the target's side facing the last one. Keep waypoints axis-aligned.
 
+import type { CodeSourceId } from './codeSources';
+
 export type Role = 'user' | 'harness' | 'model' | 'tool' | 'memory' | 'logs' | 'dataset' | 'grader';
-/** The code a step can link to: the harness, the LLMs lab, or the LoRA script (Python only). */
-export type CodeSource = 'harness' | 'llms' | 'lora';
+/** The code a step can link to: a name from CODE_SOURCES in codeSources.ts (type only, so the island bundles no code). */
+export type CodeSource = CodeSourceId;
 export type DNode = { id: string; label: string; role: Role; x: number; y: number; w?: number; h?: number };
 export type DEdge = {
   id: string;
@@ -26,8 +28,9 @@ export type DStep = {
   n: number;
   highlight: string[];
   caption: string;
-  /** `source` defaults to 'harness'. The section must exist in that source (tested in diagrams.test.ts). */
-  code?: { file: 'python' | 'go'; section: number; source?: CodeSource };
+  /** `source` defaults to 'harness'. The section must exist in that source (tested in diagrams.test.ts).
+   *  `goSection` is the Go section where the Go file numbers its own (ml-serve, ml-monitor), as in CodeTabs. */
+  code?: { file: 'python' | 'go'; section: number; source?: CodeSource; goSection?: number };
 };
 export type Diagram = {
   id: string;
@@ -39,10 +42,12 @@ export type Diagram = {
   steps: DStep[];
 };
 
-/** Key for a step's code in the FlowDiagram island's code maps: "6" for the harness, "llms:6" otherwise. */
-export function codeKey(code: { section: number; source?: CodeSource }): string {
+/** Key for a step's code in the FlowDiagram island's code maps: "6" for the harness, "llms:6"
+ *  otherwise, and "ml-serve:4:go5" when the step names its own Go section. */
+export function codeKey(code: { section: number; source?: CodeSource; goSection?: number }): string {
   const source = code.source ?? 'harness';
-  return source === 'harness' ? String(code.section) : `${source}:${code.section}`;
+  const key = source === 'harness' ? String(code.section) : `${source}:${code.section}`;
+  return code.goSection === undefined ? key : `${key}:go${code.goSection}`;
 }
 
 export const DEFAULT_NODE_W = 150;
@@ -79,8 +84,8 @@ export function validateDiagram(d: Diagram): string[] {
       if (!ids.has(h)) errors.push(`step ${s.n}: highlight ${h} is not a node or edge id`);
     }
     // Whether the section exists in its source file is checked against the file in diagrams.test.ts.
-    if (s.code && !(Number.isInteger(s.code.section) && s.code.section >= 1)) {
-      errors.push(`step ${s.n}: code section ${s.code.section} is not a section number`);
+    for (const n of s.code ? [s.code.section, s.code.goSection ?? 1] : []) {
+      if (!(Number.isInteger(n) && n >= 1)) errors.push(`step ${s.n}: code section ${n} is not a section number`);
     }
   });
 

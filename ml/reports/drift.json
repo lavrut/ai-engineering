@@ -81,14 +81,14 @@
  "null": {
   "reference": "2022 test split. leave-out: n complaints drawn without replacement vs the remaining rows; within_2022: each 2022 period vs the rest of 2022. threshold = max of p95 and the within-2022 maximum",
   "expected_chance_alerts": {
-   "note": "p95 is exceeded 5% of the time by construction; the within-2022 maximum makes the real rate lower. A few alerts above this count is the signal.",
+   "note": "p95 is exceeded 5% of the time by construction; the within-2022 maximum makes the real rate lower. either_signal_max is the union bound (twice per_signal), true however the two signals correlate. A few alerts above this count is the signal.",
    "month": {
-    "per_signal": 1.2000000000000002,
-    "either_signal_max": 2.3400000000000007
+    "per_signal": 1.2,
+    "either_signal_max": 2.4
    },
    "quarter": {
     "per_signal": 0.4,
-    "either_signal_max": 0.7800000000000002
+    "either_signal_max": 0.8
    }
   },
   "month": {

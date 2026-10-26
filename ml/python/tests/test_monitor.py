@@ -81,7 +81,11 @@ def test_drift_report_months_and_fields():
         (0.2, 1e-4, 30, monitor.TOP_K, "v1")
     assert report["null"]["month"]["n"] == 50 and report["null"]["quarter"]["n"] == 150
     assert report["null"]["month"]["draws"] >= 5000 and report["null"]["month"]["seed"] == 7
-    assert report["null"]["expected_chance_alerts"]["month"]["per_signal"] == pytest.approx(1.2)
+    chance = report["null"]["expected_chance_alerts"]
+    assert chance["month"]["per_signal"] == pytest.approx(1.2)
+    # Either of two signals: at most the sum (union bound), whatever their correlation.
+    assert chance["month"]["either_signal_max"] == pytest.approx(2.4)
+    assert chance["quarter"]["either_signal_max"] == pytest.approx(0.8)
     fields = {"n", "psi_predictions", "psi_words", "alert_convention", "alert_calibrated",
               "top_shifted_words"}
     months, quarters = report["months"], report["quarters"]

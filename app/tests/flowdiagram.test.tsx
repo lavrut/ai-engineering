@@ -6,6 +6,8 @@ import { DEFAULT_NODE_H, DEFAULT_NODE_W, type Diagram } from '../src/lib/diagram
 import { LANG_EVENT } from '../src/lib/lang';
 import { evalPipeline } from '../src/data/diagrams/eval-pipeline';
 import { harnessFlow } from '../src/data/diagrams/harness-flow';
+import { mlLoop } from '../src/data/diagrams/ml-loop';
+import { mlPipeline } from '../src/data/diagrams/ml-pipeline';
 import { requestResponse } from '../src/data/diagrams/request-response';
 import { toolRoundtrip } from '../src/data/diagrams/tool-roundtrip';
 
@@ -165,6 +167,31 @@ describe('FlowDiagram code panel', () => {
     expect(view.container.querySelector('.fd-legend')?.textContent).toContain('Grader');
   });
 
+  it('shows the Go file and its own section number where goSection is set', () => {
+    const d: Diagram = {
+      id: 'drift-test',
+      title: 'Drift',
+      width: 400,
+      height: 200,
+      nodes: [
+        { id: 'a', label: 'A', role: 'logs', x: 10, y: 10 },
+        { id: 'b', label: 'B', role: 'grader', x: 200, y: 10 },
+      ],
+      edges: [{ id: 'e', from: 'a', to: 'b' }],
+      steps: [
+        { n: 1, highlight: ['a', 'e', 'b'], caption: 'x', code: { file: 'python', section: 2, source: 'ml-monitor', goSection: 6 } },
+      ],
+    };
+    const key = 'ml-monitor:2:go6';
+    const view = render(<FlowDiagram diagram={d} codePython={{ [key]: 'PSI-PY' }} codeGo={{ [key]: 'DRIFT-GO' }} mode="replay" />);
+    expect(view.container.querySelector('.fd-code-label')?.textContent).toBe('monitor.py · section 2');
+    act(() => {
+      window.dispatchEvent(new CustomEvent(LANG_EVENT, { detail: 'go' }));
+    });
+    expect(view.container.querySelector('.fd-code-label')?.textContent).toBe('drift.go · section 6');
+    expect(view.container.querySelector('.fd-code pre')?.textContent).toBe('DRIFT-GO');
+  });
+
   it('disables Show code on a step with no linked section', () => {
     setup();
     expect((screen.getByRole('button', { name: 'Show code' }) as HTMLButtonElement).disabled).toBe(true);
@@ -201,6 +228,8 @@ describe.each([
   ['request-response', requestResponse],
   ['tool-roundtrip', toolRoundtrip],
   ['eval-pipeline', evalPipeline],
+  ['ml-pipeline', mlPipeline],
+  ['ml-loop', mlLoop],
 ])('routeEdges(%s)', (_name, d) => {
   const routes = routeEdges(d);
 

@@ -1,0 +1,281 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`existing lessons > show the same CodeTabs code as before the source registry 1`] = `
+{
+  "harness/02-model.mdx #1": {
+    "go": {
+      "lines": 19,
+      "sha256": "a86aa98d1c0d62e10d42fe12b9f03b1619853f5a69c8bbef467f16ffb922e626",
+    },
+    "python": {
+      "lines": 13,
+      "sha256": "171853dcd56d3f0c453a9c6d86992d51735143fbf32ff5bd6d4ecc36d1c31700",
+    },
+  },
+  "harness/02-model.mdx #2": {
+    "go": {
+      "lines": 41,
+      "sha256": "1ab198c73def41b82a6136356d04ad551499233cf871333f3e77e6f08d3c293b",
+    },
+    "python": {
+      "lines": 16,
+      "sha256": "c577a72f36d0b734994b77db7dc000468515d28ba09c6cbbb242b3327e389eb6",
+    },
+  },
+  "harness/03-tools.mdx #1": {
+    "go": {
+      "lines": 158,
+      "sha256": "d0326e57ffaf2d467f50ee2919d0825727722394e5f74eaeec7d5d5b40c47e7f",
+    },
+    "python": {
+      "lines": 61,
+      "sha256": "4e1faac7833b618c4d7b625e2383d063c937267a1fc34c04b098e17900a09b0a",
+    },
+  },
+  "harness/04-loop.mdx #1": {
+    "go": {
+      "lines": 41,
+      "sha256": "97c8bf48dcf1d8b5fc8a6d053e93773d7a593e85d2f9857b87138636a2bcdaff",
+    },
+    "python": {
+      "lines": 28,
+      "sha256": "f1e9160b873b85fbbd82ec32dce977cbf8bd74b27f73aaac5597ab1268c3d832",
+    },
+  },
+  "harness/05-permissions.mdx #1": {
+    "go": {
+      "lines": 11,
+      "sha256": "a030077ae27fee0e65ee8ca0a650c8f5c9bcb1deb584ccc0f21c6beda8fa89c5",
+    },
+    "python": {
+      "lines": 6,
+      "sha256": "bc9a638e22c740b1267bce9c25f77dc4dab75badc77df4a954b952131b60097d",
+    },
+  },
+  "harness/06-executor.mdx #1": {
+    "go": {
+      "lines": 66,
+      "sha256": "8c3c1b88eb53070007a975ac54abac3ac2ea3c4e2df3e82fe58c66eff3af1434",
+    },
+    "python": {
+      "lines": 30,
+      "sha256": "c3e4b16e7235f68a9b589042a76bcbb2c736712099384a0ba252a9a6487fff13",
+    },
+  },
+  "harness/07-context.mdx #1": {
+    "go": {
+      "lines": 18,
+      "sha256": "298770a84529f7a5b75d9a5b6b80d10ec318fbb1af594ace5002b5702ede546b",
+    },
+    "python": {
+      "lines": 10,
+      "sha256": "746a24ddc5ad87fe3c24e5518637afffe7b1e89cad3f5658a3a1a3b2ba724225",
+    },
+  },
+  "harness/08-reliability.mdx #1": {
+    "go": {
+      "lines": 17,
+      "sha256": "aec47bb20b5fbc33e907cc5bdff94c2c0a4118cde6cbdd53dec279238875eb06",
+    },
+    "python": {
+      "lines": 5,
+      "sha256": "8322bf31fbc0c5aac55117a7d1a3b2f67ad6034c6d3e6b0e5ca45e019b8dc9af",
+    },
+  },
+  "harness/08-reliability.mdx #2": {
+    "go": {
+      "lines": 31,
+      "sha256": "bef521bd482719af81f3768ced4cf5115befcdcb6c6e5eb4d3c31df9c6ae6fec",
+    },
+    "python": {
+      "lines": 25,
+      "sha256": "c56e5e89044dab4287709cc39a48aadcf17aa8e7e94552db4ca0b7e262427835",
+    },
+  },
+  "harness/09-capstone.mdx #1": {
+    "go": {
+      "lines": 437,
+      "sha256": "ee59c051f319fcf897f5603b77346ed72a4bb186c48c58209cc2c372f383a05b",
+    },
+    "python": {
+      "lines": 235,
+      "sha256": "be66bd457c29913b49f21f6e5a7342360883dccf19ffed4594584e3b2c7ede67",
+    },
+  },
+  "llms/01-what.mdx #1": {
+    "go": {
+      "lines": 27,
+      "sha256": "f932afe77be81947dda4b0cf55a9c462ed5d3ff29f0768cc42375745d63e81c9",
+    },
+    "python": {
+      "lines": 18,
+      "sha256": "82e5437bfbd91545c81e2d000b808c1540e41f25b415aaf89e7ab4971f8b60fc",
+    },
+  },
+  "llms/02-dataset.mdx #1": {
+    "go": {
+      "lines": 72,
+      "sha256": "50c764363706535edbd9def95fbdb5c172fd5571265e9ad9fdf030b3d919208a",
+    },
+    "python": {
+      "lines": 32,
+      "sha256": "8d8a75afd8c50cdb4ce1785df9ac088eb37fcb389ba62c790e6dca55a3c169a6",
+    },
+  },
+  "llms/03-graders.mdx #1": {
+    "go": {
+      "lines": 30,
+      "sha256": "3c2b86597e775c88e835b2b37f459a0d2eb5644c3a153b9cd849a02fe088d20e",
+    },
+    "python": {
+      "lines": 28,
+      "sha256": "0febcc37c21563749eb281d73183ba07426373c241d2b2edce564944ee855635",
+    },
+  },
+  "llms/03-graders.mdx #2": {
+    "go": {
+      "lines": 68,
+      "sha256": "2aaee238f5d7674b936c88ba1f21d87830653b8cda3d82bd5848f3ef581691cf",
+    },
+    "python": {
+      "lines": 33,
+      "sha256": "9f2d2301c3b5e4ca458759e176f6b53755d64659df97bca3c3ff03ed760b0e9a",
+    },
+  },
+  "llms/04-runner.mdx #1": {
+    "go": {
+      "lines": 288,
+      "sha256": "c3451ee6bfb809f8ab370fa85f94a8e9ab22641d24a766e79ca5b6442d186849",
+    },
+    "python": {
+      "lines": 105,
+      "sha256": "2083c355cb22d5375f73530f399415e77e18b69908f565e713d477e51b11471f",
+    },
+  },
+  "llms/04-runner.mdx #2": {
+    "go": {
+      "lines": 113,
+      "sha256": "0169e5b47060ee3e7181585fbcbed0dcef87b58869e1a29ab70339a75fce8da8",
+    },
+    "python": {
+      "lines": 163,
+      "sha256": "15a370914dec2fcda6048e3f8fe1ee42f22e7465ff33cca0406dd7b21b8cc8ad",
+    },
+  },
+  "llms/05-judge.mdx #1": {
+    "go": {
+      "lines": 60,
+      "sha256": "6bb422f6f029249cdada0baba61d901db935f9242b90c6bd71c345ed8dfac3f2",
+    },
+    "python": {
+      "lines": 42,
+      "sha256": "d7773c1f194e607e437f6f23f39cedca4aae1bd08b35b59497ac62c4b9bf5617",
+    },
+  },
+  "llms/06-judge-check.mdx #1": {
+    "go": {
+      "lines": 75,
+      "sha256": "851668545e50e1704311a0fd09099012b28fb85c8a3e6a65ca6793b14ca76cb4",
+    },
+    "python": {
+      "lines": 30,
+      "sha256": "c21cd25d339f18ad92c32e7ae960c592a31fa3a302e916bf0e434f3525d5c8af",
+    },
+  },
+  "llms/07-prompt.mdx #1": {
+    "go": {
+      "lines": 30,
+      "sha256": "3c2b86597e775c88e835b2b37f459a0d2eb5644c3a153b9cd849a02fe088d20e",
+    },
+    "python": {
+      "lines": 28,
+      "sha256": "0febcc37c21563749eb281d73183ba07426373c241d2b2edce564944ee855635",
+    },
+  },
+  "llms/07-prompt.mdx #2": {
+    "go": {
+      "lines": 124,
+      "sha256": "2b3157ebe0673b5baf0da2ea2b8c43d33dd7e6714ee33b3361bcfbabf11fa82a",
+    },
+    "python": {
+      "lines": 56,
+      "sha256": "ba0cf25053b1328d328945a95370276bc8c026e1b85bf7ab4b53ec4cfcd47652",
+    },
+  },
+  "llms/08-model.mdx #1": {
+    "go": {
+      "lines": 27,
+      "sha256": "f932afe77be81947dda4b0cf55a9c462ed5d3ff29f0768cc42375745d63e81c9",
+    },
+    "python": {
+      "lines": 18,
+      "sha256": "82e5437bfbd91545c81e2d000b808c1540e41f25b415aaf89e7ab4971f8b60fc",
+    },
+  },
+  "llms/08-model.mdx #2": {
+    "go": {
+      "lines": 30,
+      "sha256": "3c2b86597e775c88e835b2b37f459a0d2eb5644c3a153b9cd849a02fe088d20e",
+    },
+    "python": {
+      "lines": 28,
+      "sha256": "0febcc37c21563749eb281d73183ba07426373c241d2b2edce564944ee855635",
+    },
+  },
+  "llms/09-lora.mdx #1": {
+    "go": null,
+    "python": {
+      "lines": 14,
+      "sha256": "7d609cec58f52146a4f13e643fe7e21514f71812203652bc836f297a684745de",
+    },
+  },
+  "llms/09-lora.mdx #2": {
+    "go": null,
+    "python": {
+      "lines": 44,
+      "sha256": "3002792e3c9b3acbd109030e12775ce0f0d4d4db3e07f381df0e0c8517b1c69d",
+    },
+  },
+  "llms/09-lora.mdx #3": {
+    "go": null,
+    "python": {
+      "lines": 15,
+      "sha256": "09b7c96980892cb1c3821f6137953470a804ab2875b6fc0b4e82715a9378e44a",
+    },
+  },
+  "llms/09-lora.mdx #4": {
+    "go": null,
+    "python": {
+      "lines": 26,
+      "sha256": "9129a1eeca64223e8151ba532eaecde9d656fa79d4dd9206d5cc55fdbbd8a819",
+    },
+  },
+  "llms/09-lora.mdx #5": {
+    "go": null,
+    "python": {
+      "lines": 56,
+      "sha256": "cd5d28de7bae02e47edaf2539ee2eef3de3fcf31e54a21143a63e864543ccf5b",
+    },
+  },
+  "llms/10-capstone.mdx #1": {
+    "go": {
+      "lines": 124,
+      "sha256": "2b3157ebe0673b5baf0da2ea2b8c43d33dd7e6714ee33b3361bcfbabf11fa82a",
+    },
+    "python": {
+      "lines": 56,
+      "sha256": "ba0cf25053b1328d328945a95370276bc8c026e1b85bf7ab4b53ec4cfcd47652",
+    },
+  },
+  "llms/10-capstone.mdx #2": {
+    "go": {
+      "lines": 1407,
+      "sha256": "b2523ff5846d7c1a4ab5a83349928f61f4caecb1d93d1d847f6c99f8a40c678b",
+    },
+    "python": {
+      "lines": 861,
+      "sha256": "4372ed418f503ab1952c5bbfe073a6294716151853830b5804937e161b0a7324",
+    },
+  },
+}
+`;
