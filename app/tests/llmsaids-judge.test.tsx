@@ -17,6 +17,7 @@ import {
 } from '../src/lib/llmsData';
 import { judgeKey } from '../src/lib/llmsKey';
 import {
+  DEFAULT_JUDGE_GROUPS,
   JUDGE_MODEL,
   LABELS_EVENT,
   LABELS_KEY,
@@ -515,7 +516,11 @@ describe('real recorded judge data', () => {
     expect(v1.reply).not.toBe(v2.reply);
     // Everything: 70 cases, 49 tickets, 300 reasons (84,238 characters measured).
     expect(JSON.stringify(p).length).toBeLessThan(90_000);
-    expect(JSON.stringify(judgeCardProps(real, key, { groups: ['labelled'] })).length).toBeLessThan(50_000);
+    // JudgeCard.astro's default is DEFAULT_JUDGE_GROUPS: the labelled replies only, under 50 KB (R30).
+    expect(DEFAULT_JUDGE_GROUPS).toEqual(['labelled']);
+    const dflt = judgeCardProps(real, key, { groups: DEFAULT_JUDGE_GROUPS });
+    expect(dflt.cases).toHaveLength(30);
+    expect(JSON.stringify(dflt).length).toBeLessThan(50_000);
   });
 
   // Pinned from the Python lab (replay mode, no API calls), run from the repo root:

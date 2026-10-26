@@ -262,6 +262,8 @@ export type Verdict = { pass: boolean; reason: string };
 export type CaseVerdicts = Verdict[] | { notGraded: string };
 export type JudgeCaseGroup = 'labelled' | (typeof JUDGED_PROMPTS)[number];
 export const JUDGE_CASE_GROUPS: readonly JudgeCaseGroup[] = ['labelled', ...JUDGED_PROMPTS];
+/** What JudgeCard.astro offers unless a lesson opts in to more: the 30 labelled replies (keeps the island small, R30). */
+export const DEFAULT_JUDGE_GROUPS: readonly JudgeCaseGroup[] = ['labelled'];
 export type JudgeCase = {
   /** Picker value: the label id (r001) or prompt:ticket (v2_rules:t041). */
   value: string;
