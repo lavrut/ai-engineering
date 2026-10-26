@@ -38,8 +38,8 @@ a null (what PSI looks like with no drift), two ways:
 The calibrated alert asks for PSI above max(leave-out p95, largest within-2022 value), per signal
 and period length. The unstratified draws (simple random samples of n) are kept in drift.json as
 `null_unstratified`, for comparison only: that is the noise an unstratified production stream of
-50 complaints would see, and it pushes the predictions PSI past 0.2 in about 13% of months, while
-the stratified draws do in about 1%. Expected chance alerts: the p95 is exceeded 5% of the time by
+50 complaints would see, and it pushes the predictions PSI past 0.2 in about 15% of months, while
+the stratified draws do in about 1.4%. Expected chance alerts: the p95 is exceeded 5% of the time by
 construction, so 24 months x 5% = at most 1.2 per signal (at most 2.4 for either of the two: the
 union bound, whatever their correlation); 8 quarters x 5% = at most 0.4 per signal (at most 0.8).
 The within-2022 maximum makes the real rate lower. A count above that is something to
