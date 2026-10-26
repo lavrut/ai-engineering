@@ -335,15 +335,19 @@ def export_model(model, vocabulary: list[str], idf, meta: dict, cfg: dict = FEAT
     }
 
 
-def score(model_json: dict, text: str) -> dict:
+def score(model_json: dict, text: str, index: dict | None = None) -> dict:
     """Score one text from the model JSON alone, the way Go and the browser do it.
 
     TF counts over the vocabulary -> x idf -> L2 normalise -> coef . x + intercept per category
     -> softmax. Sums run in vocabulary order. The label is the first category with the top
     probability. With no known word, x is all zeros: the scores are softmax(intercept), and the
     label is the training majority class, flagged low_confidence. Otherwise low_confidence is
-    true when the top probability is below 0.5. There is no length limit here."""
-    index = {t: i for i, t in enumerate(model_json["vocabulary"])}
+    true when the top probability is below 0.5. There is no length limit here.
+
+    `index` is the term -> position table. Leave it out and it is built from the vocabulary on
+    every call; a server builds it once and passes it in, with the same result."""
+    if index is None:
+        index = {t: i for i, t in enumerate(model_json["vocabulary"])}
     counts = Counter(index[t] for t in tokenize(text, model_json["tokenizer"]) if t in index)
     idf = model_json["idf"]
     weights = [(j, counts[j] * idf[j]) for j in sorted(counts)]
