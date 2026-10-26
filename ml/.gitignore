@@ -13,3 +13,4 @@ python/leak.py
 python/sweep.py
 python/evaluate.py
 python/disagree.py
+python/alerts.py

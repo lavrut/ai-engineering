@@ -1,0 +1,179 @@
+---
+track: ml
+order: 8
+slug: registry
+title: A model registry
+goal: Register model versions, move them between staging, production and archived with an append-only history, write the registry safely, and roll production back to the previous version.
+minutes: 20
+quiz:
+  - question: Why does the registry store each version's SHA-256 next to its path?
+    options:
+      - To make the file smaller
+      - So a server can check at startup that the file on disk is exactly the one that was registered, and refuse to start if it was swapped or edited
+      - Git needs it to track the file
+      - It is the version's name
+    answer: 1
+    explanation: A path says where a file is, not what is in it. The hash pins the contents. Both servers recompute it before loading production, so a changed file stops the server instead of serving numbers nobody registered.
+  - question: "`write_json_atomic` writes a temporary file, flushes it to disk, then calls `os.replace`. What does that protect against?"
+    options:
+      - Two people promoting at the same moment
+      - A crash or power cut halfway through a write leaving a half-written registry.json that no server can read
+      - A wrong version being promoted
+      - The file growing too large
+    answer: 1
+    explanation: "`os.replace` swaps the new file in with one rename, which is atomic on one filesystem: a reader sees the whole old file or the whole new one, never half. It does not stop two writers racing; each would read, change and replace, and the later write would win."
+  - question: v1 is production. You promote v2, then run `rollback` twice. What is production afterwards?
+    options:
+      - v1, because rollback always goes back to the first version
+      - v2, because the first rollback restores v1 and the second finds v2 as the last other version ever in production
+      - Nothing; the second rollback fails
+      - v1 and v2 together
+    answer: 1
+    explanation: Rollback is not an undo stack. It looks through the history for the last version, other than the current one, that was ever promoted to production. After the first rollback that is v2, so a second rollback swaps them back.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import RegistryTimeline from '../../../components/ml/RegistryTimeline.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+Lesson 7 records every run. Most runs are experiments and go nowhere. A few produce a model you might put in front of users. Those need a different kind of record: not "what happened when we trained" but "which file is live now, which was live before, and who moved what when".
+
+### What a registry holds
+
+A <Term t="model registry" /> is that record. Ours is one file, `ml/registry.json`. For each version it keeps:
+
+- `path` and `sha256`: where the model file is, and the hash of its contents. v1 is `models/v1.json` with hash `a804df41…`; v2 is `models/v2.json` with `d44c626d…`.
+- `model`, `trained_on` and `metrics`: what kind of model it is, the dates it learned from, and its scores, copied from the file.
+- `run`: the run record that produced it, so you can go from a version to its settings, data version and commit.
+- `stage`: one of `staging`, `production` or `archived`.
+
+The stages are the point. A new version lands in **staging**: registered, but serving nobody. Exactly one version is in **production**, and both servers in lesson 9 load whichever version that is. A version that production has moved past is **archived**: kept, with its file and hash, so you can go back to it.
+
+### An append-only history
+
+Every change of stage adds one event to `history`: the time, the action, the version, the stage it left and the stage it entered, and a note. Events are only ever appended, never edited. The committed history has four:
+
+1. 2023-01-01, `register` v1: into staging.
+2. 2023-01-01, `promote` v1: staging to production.
+3. 2023-07-01, `register` v2: into staging, "retrained on 2019-2022 with v1's settings".
+4. 2023-07-01, `gate` v2: staging to staging, with the note `failed vs v1: macro-F1 0.764 vs 0.759: gain +0.005 <= band 0.058 (n=300); every category's F1 is at or above the floor 0.50`.
+
+The fourth event changed nothing, and it is still recorded. A decision not to promote is a decision; lesson 11 is about it.
+
+Promoting a version to production when another one is already there writes two events: the old production version is archived first, then the new one is promoted. The registry never has two production versions, even for a moment.
+
+### Rollback
+
+A <Term t="rollback" /> puts the previous production version back. It writes two events, like a promotion: the current version goes to archived, the previous one to production.
+
+"Previous" comes from the history: the last version, other than the current one, that was ever promoted to production. After v1 → v2, a rollback restores v1. Roll back again and it restores v2, since v2 is now the last other version that was in production. Rollback is a recorded move between known versions, not an undo button.
+
+Rollback does not delete anything. The bad version stays registered, archived, with its file and hash, so you can study what went wrong.
+
+### Writing the file safely
+
+Every command rewrites the whole of `registry.json`. If the process died halfway through, the file would be half a JSON document, and no server could start. So each write goes to a temporary file in the same folder, is flushed to disk with `fsync`, and is then swapped in with `os.replace`. On one filesystem a rename is atomic: anyone reading sees the whole old file or the whole new one. Last, the folder itself is flushed, so the rename survives a power cut.
+
+That protects against crashes, not against two people promoting at once: each would read the file, change it and replace it, and the later write would win. A shared registry needs a lock or a database; that is one of the things MLflow's registry adds.
+
+### Working on a copy
+
+Every `mlops.py` command takes `--root`, the `ml/` folder to work in. The lessons use it to try promotions and rollbacks on a copy, so the committed registry never changes.
+
+### MLflow's registry
+
+MLflow has the same idea at a larger scale: registered models, numbered versions linked to their runs, and **aliases**. An alias is a name, such as `production`, that you point at a version with one call; a server then loads `models:/complaints-classifier@production`. Aliases replaced MLflow's old fixed stages, which it has deprecated. Ours keeps three fixed stages because they are easy to see and test.
+
+## See it
+
+The timeline shows the committed registry: the two versions with their stages and hashes, and the four events. Find the gate event and read its numbers. Then use the simulation to promote v2 anyway and roll back, and watch which events each step appends.
+
+<RegistryTimeline />
+
+The real history ends with v2 in staging, because the gate's gain of 0.005 was inside the 0.058 band. The simulation runs in your browser on a copy and is labelled as one. Promoting v2 adds an archive event for v1 and a promote event for v2; rolling back adds two rollback events and makes v1 production again. Nothing in the committed file changes.
+
+## The code
+
+Section 2 of `ml/python/mlops.py` is the registry.
+
+<CodeTabs source="ml-mlops" section={2} />
+
+- `load_registry(registry)` reads the file, or starts an empty one with `versions` and `history`.
+- `production_version(data)` returns the one version whose stage is `production`, or `None`.
+- `_move(data, version, stage, action, time, note)` is the only code that changes a stage. It appends the event first, then sets the stage. Every move goes through it, so none can skip the history.
+- `register(model_path, ...)` reads the version name from the file itself (`model["version"]`), refuses a name that is already registered, and records the path relative to the registry, the file's `sha256_file` hash and its metrics. The new version enters staging.
+- `promote(version, stage, ...)` checks the stage name and the version, refuses a move to the stage it is already in, and when the target is production archives the current production version first.
+- `rollback(...)` finds the previous production version in `history` and makes two moves. With no production version, or none before it, it raises a `ValueError` with a clear message instead of guessing.
+- `write_json_atomic(registry, data)` ends every command. It is defined above section 1: `tempfile.mkstemp` in the same folder, `f.flush()` and `os.fsync`, `os.replace`, then `os.fsync` on the folder.
+
+`ml/python/with_mlflow.py` section 3 registers the same model in MLflow and points an alias at it.
+
+<CodeTabs source="ml-mlflow" section={3} />
+
+- `client.create_registered_model(name)` creates the model name once; `search_registered_models` checks whether it exists.
+- `client.create_model_version(name, source=source, run_id=run_id)` adds a numbered version that points at the run's `model` artifact folder and remembers the run.
+- `client.set_registered_model_alias(name, alias, version)` points `production` at that version. Moving production is this one call with another version number.
+- `read_back(...)` follows the alias the way a server would: alias to version, version to run, run to file. It then hashes the downloaded file, so section 4 can check it is byte for byte the file our run record and registry name.
+
+<Callout kind="warning" title="A registry does not decide">
+  `promote` moves whatever you name. Nothing in section 2 asks whether v2 is better than v1: that is the promotion gate's job, in lesson 11. Keeping the two apart means the gate's decision and any human override both show up in the history.
+</Callout>
+
+## Try it
+
+Build a registry from scratch on a copy of `ml/`, then break it on purpose. Everything here is free and leaves the repository alone:
+
+```bash
+cd ml/python
+ML="$(mktemp -d)/ml"
+cp -R .. "$ML"
+rm "$ML/registry.json"
+python mlops.py --root "$ML" register models/v1.json
+python mlops.py --root "$ML" rollback
+```
+
+You should see `registered v1`, then a traceback ending in:
+
+```text
+ValueError: no production version to roll back from
+```
+
+Promote v1, register v2 and try again:
+
+```bash
+python mlops.py --root "$ML" promote v1 production
+python mlops.py --root "$ML" register models/v2.json
+python mlops.py --root "$ML" rollback
+```
+
+```text
+v1 -> production
+registered v2
+ValueError: no previous production version before v1
+```
+
+Now promote v2, ask the Go server which model it would load from the copy, and roll back. `predict` scores one text from the command line without starting the server; `ML_ROOT` points it at the copy:
+
+```bash
+python mlops.py --root "$ML" promote v2 production
+ML_ROOT="$ML" go -C ../go run . predict "my mortgage payment was misapplied"
+python mlops.py --root "$ML" rollback
+ML_ROOT="$ML" go -C ../go run . predict "my mortgage payment was misapplied"
+```
+
+The first prediction ends with `"model_version": "v2"`, then you see `production is now v1`, and the second ends with `"model_version": "v1"`. Open `$ML/registry.json` and read the history: register, promote, register, archive, promote, rollback, rollback.
+
+Last, change one byte of the production model file in the copy and ask again:
+
+```bash
+printf ' ' >> "$ML/models/v1.json"
+ML_ROOT="$ML" go -C ../go run . predict "hello"
+```
+
+```text
+startup failed: SHA-256 mismatch for v1: registry says a804df411869ed9f7416419f63c13f262c912e3f19c5669d2176d89bfd6806b3, file is 95b43f4e5c8d543a0bca6481ad021e0109eb2e0114e2b20a0925cf2996240890
+```
+
+One trailing space is still valid JSON and would score the same, but it is not the file that was registered, so the server refuses to start. Run `git status` in the repository: nothing changed.

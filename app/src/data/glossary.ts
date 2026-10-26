@@ -120,6 +120,18 @@ export const glossary = {
     'The harmonic mean of precision and recall, 2PR / (P + R): high only when both are high.',
   'macro average':
     'The plain mean of a metric over categories, so a small category counts as much as a large one.',
+  'experiment tracking':
+    'Recording every training run’s settings, data version, code version, metrics and model file hash, so any result can be compared, explained and rebuilt later.',
+  'model registry':
+    'The list of a model’s released versions, each with its file, hash and stage (staging, production or archived), plus a history of every move; servers load the version it names production.',
+  drift:
+    'A change, after a model is deployed, in the data it receives or in what its labels mean, compared with the data it was built and tested on.',
+  PSI:
+    'Population Stability Index: the sum over buckets of (a − e) × ln(a / e), where e and a are a reference period’s and a new period’s proportions; 0 when they match, larger as they move apart.',
+  'promotion gate':
+    'The check a candidate model must pass before it replaces production; here, beat production’s macro-F1 by more than the noise band on data neither model trained on, with no category’s F1 below a floor.',
+  rollback:
+    'Making the previous production version production again, as a recorded registry move, when a promoted model turns out worse.',
 } as const satisfies Record<string, string>;
 
 export type GlossaryKey = keyof typeof glossary;

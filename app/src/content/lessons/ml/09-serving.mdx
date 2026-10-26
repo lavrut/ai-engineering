@@ -1,0 +1,201 @@
+---
+track: ml
+order: 9
+slug: serving
+title: Serving a model
+goal: Serve the production model over HTTP from Python and Go, pin down the request contract both must follow, verify the model at startup, and read a latency measurement for what it can and cannot tell you.
+minutes: 25
+quiz:
+  - question: The registry says production is v1 with hash a804df41…, but the file on disk hashes differently. What do both servers do?
+    options:
+      - Serve the file anyway and log a warning
+      - Fall back to the majority class
+      - Refuse to start, with an error naming both hashes
+      - Re-register the file under a new hash
+    answer: 2
+    explanation: A server that starts with a file nobody registered would serve numbers nobody evaluated. Failing at startup is loud and cheap; a quietly wrong model is neither.
+  - question: A client sends 20,000 copies of "é". That is 40,000 bytes of UTF-8. What does the server reply?
+    options:
+      - 400, because the text is over 20,000 bytes
+      - 200, because the limit counts code points, not bytes, and this is exactly 20,000
+      - 400, because "é" is not ASCII
+      - 413, because the body is too large
+    answer: 1
+    explanation: The contract counts characters as Python's len does, in code points. Go counts runes with utf8.RuneCountInString to match. The body, about 40 KB, is well under the 131,072-byte cap. Since the tokenizer only keeps ASCII letters and digits, no known word remains, so the reply is the majority class with low_confidence true.
+  - question: The recorded medians are 0.252 ms for the Python server and 0.120 ms for the Go server. What can you say from them?
+    options:
+      - Go answers in 0.120 ms on any machine
+      - On the one machine measured, with sequential requests over localhost, Go took about half as long per request; the absolute numbers will differ elsewhere
+      - Python is too slow to use in production
+      - The Go server is more accurate
+    answer: 1
+    explanation: The report says so itself. Only the ratio between two servers measured side by side on the same machine is meaningful. Both are far below a millisecond, which for most uses makes either one fast enough.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+A model file on disk helps nobody. Serving means a program loads it once and answers requests: text in, label out. This lesson builds two such programs, one in Python with FastAPI and one in Go with only the standard library, and makes them agree to the last detail.
+
+### Load once, check first
+
+Each server starts by asking the registry from lesson 8 which version is production. Before loading that file it checks, in order:
+
+1. `registry.json` exists and can be read.
+2. A version is in stage `production`; if the file somehow named two, the first wins in both languages.
+3. Its model file exists.
+4. The file's SHA-256 matches the hash the registry recorded.
+5. The file is valid JSON, and its own `version` field matches the version the registry named.
+
+Any failure stops the server with a message that says which check failed. The Go server also checks that the file asks for the tokenizer rules Go implements and that the arrays have matching sizes. Then each server builds its word-to-position table once and keeps the model in memory. A request does arithmetic only; it never touches the disk.
+
+To change models you change the registry and restart. Neither server reloads by itself, so a promotion only takes effect at a restart you chose.
+
+### The contract
+
+Two servers that should give the same answers need one written contract. It lives in `server.py`'s docstring, and tests in both languages check it:
+
+| Request | Reply |
+|---|---|
+| `GET /health` | 200 `{"status": "ok", "model_version": "v1"}` |
+| `POST /predict` with `{"text": "..."}`, 1 to 20,000 characters | 200 `{"label", "scores", "low_confidence", "model_version"}`, with all six scores |
+| `text` is `""` or over 20,000 characters | 400 `{"error": "text must be 1 to 20000 characters"}` |
+| body over 131,072 bytes | the same 400, decided on the bytes read, before any parsing |
+| body not strict UTF-8 JSON (a byte-order mark counts), not an object, or no string `text` | 400 `{"error": "body must be a JSON object with a string field \"text\""}` |
+| `NaN`, `Infinity` or `-Infinity` anywhere in the body, or nesting too deep to parse | the same 400, never a 500 |
+
+And the rules that are easy to get wrong:
+
+- **Characters are code points.** 20,000 means Python's `len`, not bytes. "é" is one character and two bytes.
+- **The byte cap comes first.** 131,072 bytes (128 KiB) fits 20,000 characters written as six-byte `\uXXXX` escapes, plus room for the rest. The server stops reading once a body passes it; it does not trust the `Content-Length` header.
+- **Content-Type is not checked.** No header, or `text/plain`, works.
+- **Extra fields are ignored.** `{"text": "...", "lang": "en"}` is fine.
+- **Duplicate keys: the last one wins.** `{"text": 5, "text": "credit card"}` is a valid request.
+- **Field names are exact.** `{"TEXT": "..."}` has no `text` field.
+- **Text of only spaces is valid.** It has no known word, so the reply is the majority class with `low_confidence: true`, as in lesson 1.
+- **Unknown routes and wrong methods are outside the contract.** FastAPI replies `{"detail":"Not Found"}`, Go `404 page not found`; clients should not depend on either.
+
+The 422 reply FastAPI gives by default for a bad body never appears: every bad `/predict` request is a 400 with one of the two bodies.
+
+### Same file, same numbers
+
+The Go server does not call Python. It reads the same `v1.json` and repeats the scoring from lesson 1 in its own code: tokenize, TF-IDF, weights, softmax. On the 28 valid texts in `ml/data/fixtures/predictions.json`, both servers give the same label and the same `low_confidence` every time. Their scores are bit-for-bit identical on 13 texts and differ by at most 5.6 × 10⁻¹⁷ on the rest, the last bit of a 64-bit float. The tests require 10⁻⁹.
+
+### How fast?
+
+`ml/python/bench.py` sent 500 requests to each server, one at a time over localhost, alternating between them, after 20 warm-up requests each. On the one machine measured, an Apple M5:
+
+| Server | Median | 95th percentile |
+|---|---|---|
+| Python (FastAPI, uvicorn, 1 worker) | 0.252 ms | 0.400 ms |
+| Go (`net/http`) | 0.120 ms | 0.203 ms |
+
+The report says it plainly: absolute milliseconds will differ elsewhere, and only the ratio between the two is meaningful. Go took about half as long per request, 2.1 times faster at the median. Both are far below a millisecond, and a real network between a client and either server would usually add more than that.
+
+## See it
+
+The diagram is the loop the rest of the track builds. Step 1 is this lesson: watch which box reads the registry and when. Open each step's code link to see where it lives.
+
+<FlowDiagram diagram="ml-loop" />
+
+The server only answers requests. The monitor (lesson 10) reads what it labels, the gate (lesson 11) decides what goes into the registry, and the server picks up a new production version only when it restarts.
+
+## The code
+
+`ml/serve/server.py` has five numbered sections; `ml/go/main.go` numbers its own seven. Section 1 in both holds the limits and the two error bodies.
+
+<CodeTabs source="ml-serve" section={1} goSection={1} />
+
+- `MAX_CHARS = 20_000` and `MAX_BODY = 131_072` are the two limits. Go's comments say the same: `maxChars` is in runes, `maxBody` in bytes.
+- `LENGTH_ERROR` and `BODY_ERROR` are the only two error bodies. Go keeps the same strings in `lengthError` and `bodyError`.
+- `ml_root()` reads `ML_ROOT`, defaulting to `ml/`. Lesson 8's Try it used it to point a server at a copy.
+
+Section 2 loads production.
+
+<CodeTabs source="ml-serve" section={2} goSection={2} />
+
+- `class StartupError(RuntimeError)` is the one way loading fails. Raised inside `lifespan`, it stops uvicorn before it accepts a request.
+- `version = mlops.production_version(registry)` reuses the registry code from lesson 8.
+- `actual = mlops.sha256_file(model_path)` hashes the file on disk; `if actual != entry["sha256"]` refuses a file that is not the registered one.
+- `if model.get("version") != version` catches a file copied under the wrong name.
+- `model["index"] = {t: i for i, t in enumerate(model["vocabulary"])}` builds the word-to-position table once, instead of once per request.
+- `async def lifespan(app)` runs `load_production` when the server starts, and keeps the model on `app.state.model`.
+
+Section 3 reads the request body by hand, so no framework default leaks into the contract. Go does the same inside its section 5.
+
+<CodeTabs source="ml-serve" section={3} goSection={5} />
+
+- `read_body(request)` reads the stream in chunks and raises `TooLarge` as soon as it passes `MAX_BODY` bytes, whatever the `Content-Length` header claims.
+- `body.decode("utf-8")` is strict: invalid UTF-8, UTF-16 or a byte-order mark raises, and the request is malformed.
+- `json.loads(..., parse_constant=_not_json)` rejects `NaN`, `Infinity` and `-Infinity`, which Python's `json` accepts by default but JSON does not allow.
+- `except (ValueError, RecursionError)` turns very deep nesting into the malformed-body 400 instead of a 500.
+- `data.get("text") if isinstance(data, dict) else None` and `isinstance(text, str)` reject arrays, numbers and missing fields alike.
+
+Section 4 is the endpoints. Go's section 4 is its own copy of the scorer.
+
+<CodeTabs source="ml-serve" section={4} goSection={4} goNote="Python's /predict hands the text to train.score, the scorer from lesson 1. Go has no Python to call, so its section 4 is the same steps written again: count known words in vocabulary order, multiply by idf, L2-normalise, take the dot product with each class's weights plus the intercept, and softmax with the largest logit subtracted. The label is the first class with the top probability, and a text with no known word gets majority_class with low_confidence true." />
+
+- `health` returns the status and the loaded version, so a deploy script can check which model is live.
+- `predict` reads the body; `TooLarge` gives the length error, `None` the body error.
+- `if not 1 <= len(text) <= MAX_CHARS` checks the length in code points.
+- `train.score(model, text, model["index"])` scores with the same function every lesson has used, and the reply adds `model_version`.
+
+## How Go does it
+
+Go reaches the same contract with different tools, and a few Go defaults would break it if left alone.
+
+- **Routing.** `http.NewServeMux()` with patterns `"GET /health"` and `"POST /predict"` matches the method and the path. Anything else gets Go's default 404 or 405, outside the contract.
+- **The byte cap.** `http.MaxBytesReader(w, r.Body, maxBody)` stops reading at 131,072 bytes and returns an `*http.MaxBytesError`, which `errors.As` turns into the length 400. Like Python, it decides on the bytes it read, not on `Content-Length`.
+- **Decoding into a map, not a struct.** The natural Go code would decode into `struct{ Text string }`, but `encoding/json` matches struct fields without regard to case, so `{"TEXT": "..."}` would pass. Decoding into `map[string]json.RawMessage` keeps keys exact, makes the last duplicate win as in Python, and never converts the fields it ignores. `raw[0] != '"'` then requires `text` to be a string.
+- **Strict input.** `utf8.Valid(body)` and a check for the byte-order mark reject what Python's strict decode rejects. `encoding/json` already refuses `NaN` and `Infinity` and caps nesting depth, so those are malformed without extra code.
+- **Counting characters.** `len(text)` in Go counts bytes, so the length check uses `utf8.RuneCountInString(text)`. A rune is a code point, Python's unit.
+- **Writing replies.** `enc.SetEscapeHTML(false)` keeps `<` as `<`, as Python's `json` does, and `/health` replies with a struct, not a map, so its keys come out in Python's order rather than sorted.
+- **Scoring.** Go's section 3 tokenizes byte by byte with no Unicode-aware functions, exactly Python's ASCII-only rules. Its `pyAcc` adds floats the way Python 3.12's `sum` does, with a compensation term, so sums round alike. That is why the scores agree to the last bit or close to it.
+- **Finding the registry.** `productionEntry` reads `versions` token by token, so the first production entry wins in file order, as in Python; a Go map would visit them in random order.
+
+## Try it
+
+Run both servers on your machine; nothing here costs money. From the repository root, in two terminals:
+
+```bash
+uvicorn server:app --app-dir ml/serve --port 8000
+```
+
+```bash
+go -C ml/go run . serve -port 8001
+```
+
+The Go one prints `serving v1 on http://127.0.0.1:8001`. In a third terminal, ask both the same question:
+
+```bash
+curl -s localhost:8000/predict -d '{"text": "my mortgage payment was misapplied"}'
+curl -s localhost:8001/predict -d '{"text": "my mortgage payment was misapplied"}'
+```
+
+Both print the same line:
+
+```text
+{"label":"Mortgage","scores":{"Checking or savings account":0.017186219581501665,"Credit card":0.03293329800264083,"Credit reporting or other personal consumer reports":0.11563879516578116,"Debt collection":0.03614424530457278,"Money transfer, virtual currency, or money service":0.03653419921335517,"Mortgage":0.7615632427321485},"low_confidence":false,"model_version":"v1"}
+```
+
+Now test the contract. Send each of these to both ports by changing `8000` to `8001`:
+
+```bash
+curl -s -w ' %{http_code}\n' localhost:8000/predict -d '{"TEXT": "my mortgage"}'
+curl -s -w ' %{http_code}\n' localhost:8000/predict -d '{"text": "a", "x": NaN}'
+curl -s -w ' %{http_code}\n' localhost:8000/predict -d '{"text": ""}'
+python3 -c 'print("{\"text\": \"" + "é" * 20001 + "\"}")' | curl -s -w ' %{http_code}\n' localhost:8000/predict --data-binary @-
+```
+
+You should see the body error twice, then the length error twice, each with ` 400`:
+
+```text
+{"error":"body must be a JSON object with a string field \"text\""} 400
+{"error":"body must be a JSON object with a string field \"text\""} 400
+{"error":"text must be 1 to 20000 characters"} 400
+{"error":"text must be 1 to 20000 characters"} 400
+```
+
+Change `20001` to `20000` in the last command and both servers reply 200, with `"low_confidence":true`: exactly 20,000 characters is allowed, even at 40,000 bytes. Stop both servers with Ctrl+C when you are done.

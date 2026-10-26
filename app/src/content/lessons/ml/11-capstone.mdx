@@ -1,0 +1,175 @@
+---
+track: ml
+order: 11
+slug: capstone
+title: "Capstone: retrain, gate, promote"
+goal: Retrain the model on newer data, let a promotion gate decide on evidence, read why it said no, and practise promoting anyway and rolling back without touching the committed registry.
+minutes: 30
+quiz:
+  - question: On the 300 complaints of 2023 H1, v2 scores 0.764 macro-F1 and v1 0.759. The band is ±0.058. Why does the gate keep v1?
+    options:
+      - v2 has a category below the floor
+      - The gain, +0.005, is far inside the band, so the holdout cannot tell the two apart; replacing production needs evidence, not a higher number
+      - v2 was trained on less data
+      - The gate always keeps the current version
+    answer: 1
+    explanation: Both were scored on the same 300 complaints, and they differ by about one complaint's worth of accuracy (244 right against 243). A difference that size is what you would expect from two equally good models.
+  - question: Why does the gate also require every category's F1 to be at least 0.5?
+    options:
+      - To make the gate slower
+      - Because a better average can hide a category the new model has broken; macro-F1 can rise while one class collapses
+      - Because F1 below 0.5 is impossible
+      - To match MLflow's default
+    answer: 1
+    explanation: Macro-F1 is a mean over six categories. A candidate that gains a little on five and fails the sixth could still raise it. The floor makes a broken category a reason to stop on its own.
+  - question: Retraining on 2019–2022 did not measurably beat v1. What is the right next step?
+    options:
+      - Promote v2 anyway, because newer data must be better
+      - Lower the band so v2 passes
+      - Keep v1, record the decision, and if a real improvement matters, get far more labelled complaints to measure it, since a 0.005 gain needs tens of thousands to detect
+      - Delete v2
+    answer: 2
+    explanation: The gate did its job. Changing the rule to get the answer you wanted turns the gate into decoration. v2 stays registered in staging, its run and the gate's reasons are recorded, and the honest finding is that more of the same data did not help measurably.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+Every piece is now built: a tracked run (lesson 7), a registry (lesson 8), two servers that load its production version (lesson 9) and a monitor (lesson 10). The capstone closes the loop. Train a new candidate on newer data, let a rule decide whether it replaces production, and keep a way back.
+
+### The candidate
+
+v2 uses v1's settings exactly: logistic regression with `C = 1`, `min_df = 2`, seed 7. The only change is the data. v1 learned from 2019–2021; v2 learns from 2019–2022, 2,400 complaints instead of 1,800. Its vocabulary grows from 5,539 words to 6,189, and its file, `ml/models/v2.json`, is 952,999 bytes.
+
+A newer model is not automatically a better one. It needs a fair test.
+
+### The holdout
+
+v1 was tested on 2022, but v2 trained on 2022, so that year cannot judge between them. The gate uses the first half of 2023 instead: 300 complaints from January to June that neither model trained on. Both are scored on exactly the same 300, from their JSON files alone, the way the servers score.
+
+### The rule
+
+A <Term t="promotion gate" /> is the check a candidate must pass before it replaces production. Ours has two parts:
+
+1. **Beat production by more than the noise band.** Compare macro-F1, which lesson 5 chose for this because each category counts equally. The candidate must gain more than 1/√n. With 300 complaints that is 0.058.
+2. **Break nothing.** No category's F1 may be below 0.5, so a better average cannot hide a broken category.
+
+It borrows the LLMs track's noise band and its habit: a change has to show, by more than noise, that it helped before it ships.
+
+### The result
+
+| | v1 (production) | v2 (candidate) |
+|---|---|---|
+| Macro-F1 on 2023 H1 | 0.759 | 0.764 |
+| Accuracy | 0.810 | 0.813 |
+| Lowest category F1 | 0.596, money transfer | 0.583, money transfer |
+
+The gain is +0.005 macro-F1, inside the ±0.058 band. In accuracy, v2 gets 244 of the 300 right and v1 gets 243: one complaint. Every category is above the floor; the lowest, money transfer at 0.583, is above 0.5. The gate's answer: **FAILED**. v2 stays in staging and v1 stays in production.
+
+Per category, v2 is ahead on checking (0.693 against 0.649) and credit card (0.696 against 0.646) and behind on debt collection (0.754 against 0.788) and mortgage (0.968 against 0.984). With 300 complaints split six ways, each of those is far noisier than the overall number; they cancel out.
+
+### The honest lesson
+
+Retraining on a third more data of the same kind did not measurably help. Nothing pointed to a need for it either: lesson 10's monitor found no drift it could tell apart from chance, so there was no clear sign that v1 had gone stale.
+
+It is also a limit of the test. To detect a real gain of 0.005, the band would have to be smaller than 0.005, which needs about 37,000 holdout complaints (1/0.0052²). With 300, the gate can only see large improvements. That is the right default for replacing a model people rely on: when the evidence cannot tell, keep what you have.
+
+Nothing is thrown away. v2 is registered with its file and hash, its run records the gate's numbers, and the registry's history holds the decision with its reasons. If someone overrides the gate later, that is a separate, visible event.
+
+### Promote anyway, then roll back
+
+Sometimes a team promotes a candidate the gate did not pass, for a reason the gate does not see. The registry allows it: `promote` moves whatever you name, and the history records it. If the model then does worse in production, a rollback makes the previous version production again in one atomic write, and the servers pick it up when they restart. Try it below does both, on a copy.
+
+## See it
+
+Step through the loop with the code beside each step. Watch where the decision is made: the retrain step only produces a candidate, and only the gate decides what reaches the registry.
+
+<FlowDiagram diagram="ml-loop" mode="replay" />
+
+Steps 1 and 2 are the server and the monitor from lessons 9 and 10. Step 3 trains the candidate, step 4 is the gate that stopped v2, and steps 5 and 6 are the two ways production changes: a promotion after a passing gate, or a rollback. Each step's code panel is the section this lesson and the earlier ones walked through.
+
+## The code
+
+Section 3 of `ml/python/mlops.py` is the gate.
+
+<CodeTabs source="ml-mlops" section={3} />
+
+- `gate(candidate_metrics, production_metrics, *, floor=FLOOR)` takes two metric summaries and decides. It raises if they were scored on different numbers of cases: a gate needs both models on the same cases.
+- `band = train.noise_band(n)` is 1/√n, the same function as every band in the track.
+- `beats = gain > band` is the first rule; `low = {... if f < floor}` collects any category below the floor for the second.
+- `reasons` spells out the decision in words, including the numbers, so the history can say why.
+- `evaluate(model, rows, split)` scores rows from the model JSON with `train.score`, exactly as the servers do, then computes the metrics with lesson 5's code.
+- `holdout_rows(window=HOLDOUT)` returns the complaints dated 2023-01-01 to 2023-06-30.
+- `run_gate(version, root, ...)` scores the candidate and production on the holdout, calls `gate`, and appends a `gate` event to the history whether it passed or not.
+
+Section 4 is the retrain.
+
+<CodeTabs source="ml-mlops" section={4} />
+
+- `experiments(root)` rebuilds the four runs behind v1 (lesson 7). The run with v1's settings must reproduce `models/v1.json` byte for byte, or it raises.
+- `retrain(root, ...)` refuses if v2 is already registered: it writes v2 once.
+- `fitted = train.train_models(splits["train"] + splits["test"])` trains on 2019–2022 with the same settings as v1.
+- `model["trained_on"] = window` corrects the window `export_model` assumes, so the file says 2019–2022.
+- `model["metrics"] = evaluate(model, holdout_rows(), split)` stores the holdout metrics in the file itself.
+- `register(path, ..., note="retrained on 2019-2022 with v1's settings")` puts v2 in staging, then `run_gate("v2", root, ...)` decides.
+- `log_run(params, metrics, path, ...)` records the run with the holdout metrics, production's metrics on the same holdout and the gate's verdict.
+- `if result["passed"]: promote(...)` is the only place a retrain can change production.
+
+<Callout kind="note" title="A failing gate exits non-zero">
+  `python mlops.py retrain` and `gate` exit with code 1 when the gate fails, like the eval gate in the LLMs track. A scheduled job or a CI step can stop on that without reading the output.
+</Callout>
+
+## Try it
+
+Run the whole MLOps history again on a copy of `ml/`: the experiments, v1's registration and promotion, and the retrain with its gate. Then promote v2 anyway and roll back. Everything runs on your CPU for free, takes well under a minute, and leaves the repository unchanged.
+
+```bash
+cd ml/python
+ML="$(mktemp -d)/ml"
+cp -R .. "$ML"
+rm -r "$ML/runs" "$ML/registry.json" "$ML/models/v2.json"
+python mlops.py --root "$ML" experiments
+python mlops.py --root "$ML" register models/v1.json --run logreg-C1-2019-2021 --time 2023-01-01T00:00:00Z
+python mlops.py --root "$ML" promote v1 production --time 2023-01-01T00:00:00Z
+python mlops.py --root "$ML" retrain; echo "exit code $?"
+```
+
+After four `logged` lines, `registered v1` and `v1 -> production`, the retrain prints the gate's decision:
+
+```text
+FAILED vs v1
+  macro-F1 0.764 vs 0.759: gain +0.005 <= band 0.058 (n=300)
+  every category's F1 is at or above the floor 0.50
+exit code 1
+```
+
+The `--time` values are the ones the committed history used, so the copy's registry and v2 should match the repository's byte for byte:
+
+```bash
+cmp ../registry.json "$ML/registry.json" && cmp ../models/v2.json "$ML/models/v2.json" && echo identical
+```
+
+You should see `identical`. Same data, same settings, same decision.
+
+Now overrule the gate and see what the Go server would load from the copy:
+
+```bash
+python mlops.py --root "$ML" promote v2 production
+ML_ROOT="$ML" go -C ../go run . predict "my mortgage payment was misapplied"
+```
+
+You should see `v2 -> production`, and the prediction ends with `"model_version": "v2"`. Suppose v2 then misbehaves in production. Roll back:
+
+```bash
+python mlops.py --root "$ML" rollback
+ML_ROOT="$ML" go -C ../go run . predict "my mortgage payment was misapplied"
+```
+
+You should see `production is now v1`, and the prediction ends with `"model_version": "v1"`. The copy's history now ends with the override and the way back: v1 archived and v2 promoted at today's time, then two rollback events. The gate's failed decision is still above them, so anyone reading the history can see that v2 went live against the gate's advice.
+
+Last, run `git status` in the repository. Nothing changed: every command worked on the copy.
+
+You have now done what a team does with a model in production: trained it, recorded how, registered it, served it from two languages, watched it for drift without crying wolf, and let evidence decide whether a new version replaces it.
