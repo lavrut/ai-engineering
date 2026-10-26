@@ -12,3 +12,5 @@ harness/python/one_call.py
 harness/python/loop_demo.py
 harness/python/timing_demo.py
 harness/python/compact_demo.py
+.venv-inspect/
+llms/inspect/logs/
