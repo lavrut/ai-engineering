@@ -79,7 +79,7 @@
   ]
  },
  "null": {
-  "reference": "2022 test split. leave-out: n complaints drawn without replacement vs the remaining rows; within_2022: each 2022 period vs the rest of 2022. threshold = max of p95 and the within-2022 maximum",
+  "reference": "2022 test split. leave-out, stratified like the sample: each draw picks one 2022 period at random and draws, without replacement, as many complaints of each category as that period has, vs the remaining rows; within_2022: each 2022 period vs the rest of 2022. threshold = max of p95 and the within-2022 maximum",
   "expected_chance_alerts": {
    "note": "p95 is exceeded 5% of the time by construction; the within-2022 maximum makes the real rate lower. either_signal_max is the union bound (twice per_signal), true however the two signals correlate. These are averages under the null (upper bounds); a count above them is something to investigate, not proof of drift.",
    "month": {
@@ -96,8 +96,9 @@
    "draws": 5000,
    "seed": 7,
    "predictions": {
-    "p50": 0.10205551213725927,
-    "p95": 0.30591644660012135,
+    "p50": 0.04593698279391163,
+    "p95": 0.14378139194826842,
+    "share_at_or_above_alert_at": 0.0138,
     "within_2022": {
      "2022-01": 0.02376622282086638,
      "2022-02": 0.07324318353248385,
@@ -113,11 +114,12 @@
      "2022-12": 0.08036381402053798
     },
     "within_2022_max": 0.13375242653863112,
-    "threshold": 0.30591644660012135
+    "threshold": 0.14378139194826842
    },
    "words": {
-    "p50": 0.03291267620588037,
-    "p95": 0.05233369145978416,
+    "p50": 0.03025932569991475,
+    "p95": 0.0465611079920913,
+    "share_at_or_above_alert_at": 0.0,
     "within_2022": {
      "2022-01": 0.03454212869346123,
      "2022-02": 0.033475896336235884,
@@ -141,8 +143,9 @@
    "draws": 5000,
    "seed": 7,
    "predictions": {
-    "p50": 0.039778217408715344,
-    "p95": 0.10334731791812309,
+    "p50": 0.019707209815950488,
+    "p95": 0.0525626069404134,
+    "share_at_or_above_alert_at": 0.0,
     "within_2022": {
      "2022-Q1": 0.012464340555156498,
      "2022-Q2": 0.008631231536358685,
@@ -150,11 +153,12 @@
      "2022-Q4": 0.021835487702529296
     },
     "within_2022_max": 0.021835487702529296,
-    "threshold": 0.10334731791812309
+    "threshold": 0.0525626069404134
    },
    "words": {
-    "p50": 0.013449025468341803,
-    "p95": 0.020848865545238068,
+    "p50": 0.012565321607080493,
+    "p95": 0.01875184816994465,
+    "share_at_or_above_alert_at": 0.0,
     "within_2022": {
      "2022-Q1": 0.026035835494326982,
      "2022-Q2": 0.015824377078952095,
@@ -163,6 +167,39 @@
     },
     "within_2022_max": 0.026035835494326982,
     "threshold": 0.026035835494326982
+   }
+  }
+ },
+ "null_unstratified": {
+  "note": "For comparison only, not used for alerts: simple random samples of n from the 2022 reference, with no regard to category, vs the remaining rows. This is the noise an unstratified production stream would see; the sample's periods are quota-stratified by category, so it overstates this sample's noise.",
+  "month": {
+   "n": 50,
+   "draws": 5000,
+   "seed": 7,
+   "predictions": {
+    "p50": 0.10205551213725927,
+    "p95": 0.30591644660012135,
+    "share_at_or_above_alert_at": 0.1496
+   },
+   "words": {
+    "p50": 0.03291267620588037,
+    "p95": 0.05233369145978416,
+    "share_at_or_above_alert_at": 0.0
+   }
+  },
+  "quarter": {
+   "n": 150,
+   "draws": 5000,
+   "seed": 7,
+   "predictions": {
+    "p50": 0.039778217408715344,
+    "p95": 0.10334731791812309,
+    "share_at_or_above_alert_at": 0.0004
+   },
+   "words": {
+    "p50": 0.013449025468341803,
+    "p95": 0.020848865545238068,
+    "share_at_or_above_alert_at": 0.0
    }
   }
  },
@@ -593,7 +630,7 @@
    "psi_predictions": 0.171358685432715,
    "psi_words": 0.03799828893037112,
    "alert_convention": false,
-   "alert_calibrated": false,
+   "alert_calibrated": true,
    "top_shifted_words": [
     {
      "word": "back",
@@ -768,7 +805,7 @@
    "psi_predictions": 0.1922772786111885,
    "psi_words": 0.042382260160171846,
    "alert_convention": false,
-   "alert_calibrated": false,
+   "alert_calibrated": true,
    "top_shifted_words": [
     {
      "word": "check",
