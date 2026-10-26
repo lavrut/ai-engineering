@@ -348,6 +348,8 @@ def score(model_json: dict, text: str, index: dict | None = None) -> dict:
     every call; a server builds it once and passes it in, with the same result."""
     if index is None:
         index = {t: i for i, t in enumerate(model_json["vocabulary"])}
+    elif len(index) != len(model_json["vocabulary"]):
+        raise ValueError("index does not belong to this model's vocabulary")
     counts = Counter(index[t] for t in tokenize(text, model_json["tokenizer"]) if t in index)
     idf = model_json["idf"]
     weights = [(j, counts[j] * idf[j]) for j in sorted(counts)]

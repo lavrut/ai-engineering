@@ -126,3 +126,62 @@ def test_app_refuses_to_start_on_bad_root(root, monkeypatch):
     with pytest.raises(server.StartupError):
         with TestClient(server.app):
             pass
+
+
+# ── contract details (fix round 1) ──────────────────────────────────────────
+def post(client, body, **headers):
+    return client.post("/predict", content=body, headers=headers)
+
+
+@pytest.mark.parametrize("body", [
+    b"\xef\xbb\xbf" + b'{"text": "hi"}',                  # UTF-8 BOM
+    '{"text": "hi"}'.encode("utf-16"),
+    '{"text": "hi"}'.encode("utf-32"),
+])
+def test_bom_and_utf16_are_malformed(client, body):
+    r = post(client, body)
+    assert (r.status_code, r.json()) == (400, BODY_ERROR)
+
+
+def test_body_size_cap(client):
+    base = b'{"text":"hi"}'
+    ok = post(client, base + b" " * (server.MAX_BODY - len(base)))
+    assert server.MAX_BODY == 131072 and ok.status_code == 200
+    big = post(client, base + b" " * (server.MAX_BODY - len(base) + 1))
+    assert (big.status_code, big.json()) == (400, LENGTH_ERROR)
+
+
+def test_content_type_and_extras_and_duplicates(client):
+    assert post(client, b'{"text":"hi"}').status_code == 200
+    assert post(client, b'{"text":"hi"}', **{"content-type": "text/plain"}).status_code == 200
+    assert post(client, b'{"text":"hi","x":1}').status_code == 200
+    dup = post(client, b'{"text":"first","text":""}')           # last wins: empty
+    assert (dup.status_code, dup.json()) == (400, LENGTH_ERROR)
+    dup = post(client, b'{"text":"","text":"mortgage"}')
+    assert dup.status_code == 200
+
+
+def test_four_byte_emoji_boundary(client):
+    def body(n):
+        return json.dumps({"text": "\U0001F600" * n}, ensure_ascii=False).encode("utf-8")
+    assert post(client, body(20000)).status_code == 200
+    r = post(client, body(20001))
+    assert (r.status_code, r.json()) == (400, LENGTH_ERROR)
+
+
+def test_score_rejects_a_foreign_index():
+    model = json.loads((ML / "models" / "v1.json").read_text("utf-8"))
+    with pytest.raises(ValueError, match="index"):
+        train.score(model, "mortgage", {"mortgage": 0})
+
+
+def test_startup_version_mismatch(root):
+    p = root / "models" / "v1.json"
+    m = json.loads(p.read_text("utf-8"))
+    m["version"] = "v9"
+    p.write_text(json.dumps(m), encoding="utf-8")
+    reg = json.loads((root / "registry.json").read_text())
+    reg["versions"]["v1"]["sha256"] = server.mlops.sha256_file(p)
+    (root / "registry.json").write_text(json.dumps(reg))
+    with pytest.raises(server.StartupError, match="v9"):
+        server.load_production(root)
