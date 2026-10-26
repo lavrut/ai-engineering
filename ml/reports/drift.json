@@ -1,0 +1,928 @@
+{
+ "generated_by": "python monitor.py --write-reports",
+ "settings": {
+  "alert_at": 0.2,
+  "epsilon": 0.0001,
+  "min_n": 30,
+  "top_k": 50,
+  "model_version": "v1"
+ },
+ "months": [
+  {
+   "month": "2023-01",
+   "n": 50,
+   "psi_predictions": 0.19127822553392154,
+   "psi_words": 0.011773125300700092,
+   "alert": false,
+   "top_shifted_words": [
+    {
+     "word": "we",
+     "contribution": 0.0014707366952518503,
+     "direction": "up"
+    },
+    {
+     "word": "you",
+     "contribution": 0.0014566449576553933,
+     "direction": "up"
+    },
+    {
+     "word": "received",
+     "contribution": 0.0007445869180874778,
+     "direction": "down"
+    },
+    {
+     "word": "i",
+     "contribution": 0.0007298252285659777,
+     "direction": "down"
+    },
+    {
+     "word": "been",
+     "contribution": 0.0006510997668827148,
+     "direction": "down"
+    }
+   ]
+  },
+  {
+   "month": "2023-02",
+   "n": 50,
+   "psi_predictions": 0.04552865675600518,
+   "psi_words": 0.012996036872193422,
+   "alert": false,
+   "top_shifted_words": [
+    {
+     "word": "and",
+     "contribution": 0.0022360716448501083,
+     "direction": "down"
+    },
+    {
+     "word": "but",
+     "contribution": 0.0011337969791624506,
+     "direction": "down"
+    },
+    {
+     "word": "account",
+     "contribution": 0.0009116178039740751,
+     "direction": "up"
+    },
+    {
+     "word": "by",
+     "contribution": 0.000652606556414386,
+     "direction": "up"
+    },
+    {
+     "word": "at",
+     "contribution": 0.0006190484020415555,
+     "direction": "up"
+    }
+   ]
+  },
+  {
+   "month": "2023-03",
+   "n": 50,
+   "psi_predictions": 0.07794577175818425,
+   "psi_words": 0.026062780698410285,
+   "alert": false,
+   "top_shifted_words": [
+    {
+     "word": "any",
+     "contribution": 0.0039098525407869076,
+     "direction": "up"
+    },
+    {
+     "word": "or",
+     "contribution": 0.002334964706599463,
+     "direction": "up"
+    },
+    {
+     "word": "i",
+     "contribution": 0.002088989579548952,
+     "direction": "down"
+    },
+    {
+     "word": "and",
+     "contribution": 0.0013705795329698326,
+     "direction": "down"
+    },
+    {
+     "word": "you",
+     "contribution": 0.0013613480761413776,
+     "direction": "down"
+    }
+   ]
+  },
+  {
+   "month": "2023-04",
+   "n": 50,
+   "psi_predictions": 0.1300499427468907,
+   "psi_words": 0.015705775437986843,
+   "alert": false,
+   "top_shifted_words": [
+    {
+     "word": "as",
+     "contribution": 0.002152599866197639,
+     "direction": "down"
+    },
+    {
+     "word": "information",
+     "contribution": 0.0015250431249968922,
+     "direction": "up"
+    },
+    {
+     "word": "any",
+     "contribution": 0.0013354705619472414,
+     "direction": "up"
+    },
+    {
+     "word": "would",
+     "contribution": 0.0008385761627132242,
+     "direction": "down"
+    },
+    {
+     "word": "bank",
+     "contribution": 0.0008074725482219352,
+     "direction": "up"
+    }
+   ]
+  },
+  {
+   "month": "2023-05",
+   "n": 50,
+   "psi_predictions": 0.08478166169713311,
+   "psi_words": 0.020116963318044075,
+   "alert": false,
+   "top_shifted_words": [
+    {
+     "word": "any",
+     "contribution": 0.004437338986916332,
+     "direction": "up"
+    },
+    {
+     "word": "00",
+     "contribution": 0.0037547274996650947,
+     "direction": "down"
+    },
+    {
+     "word": "we",
+     "contribution": 0.0019118169474573797,
+     "direction": "down"
+    },
+    {
+     "word": "had",
+     "contribution": 0.0014113331606156355,
+     "direction": "down"
+    },
+    {
+     "word": "credit",
+     "contribution": 0.0011388131927409246,
+     "direction": "down"
+    }
+   ]
+  },
+  {
+   "month": "2023-06",
+   "n": 50,
+   "psi_predictions": 0.036277189661652505,
+   "psi_words": 0.02137591028578186,
+   "alert": false,
+   "top_shifted_words": [
+    {
+     "word": "payment",
+     "contribution": 0.0031894926203038035,
+     "direction": "down"
+    },
+    {
+     "word": "bank",
+     "contribution": 0.0023320414564165204,
+     "direction": "down"
+    },
+    {
+     "word": "you",
+     "contribution": 0.0019083580365929428,
+     "direction": "down"
+    },
+    {
+     "word": "a",
+     "contribution": 0.0017595226570372145,
+     "direction": "up"
+    },
+    {
+     "word": "any",
+     "contribution": 0.0015469379827122106,
+     "direction": "up"
+    }
+   ]
+  },
+  {
+   "month": "2023-07",
+   "n": 50,
+   "psi_predictions": 0.07854813423115156,
+   "psi_words": 0.020280975601154782,
+   "alert": false,
+   "top_shifted_words": [
+    {
+     "word": "credit",
+     "contribution": 0.0017033238766091465,
+     "direction": "up"
+    },
+    {
+     "word": "they",
+     "contribution": 0.0016098924408892395,
+     "direction": "down"
+    },
+    {
+     "word": "all",
+     "contribution": 0.0013316291703664265,
+     "direction": "down"
+    },
+    {
+     "word": "the",
+     "contribution": 0.0012856129525705311,
+     "direction": "up"
+    },
+    {
+     "word": "a",
+     "contribution": 0.0012214692564049253,
+     "direction": "up"
+    }
+   ]
+  },
+  {
+   "month": "2023-08",
+   "n": 50,
+   "psi_predictions": 0.11807051041858933,
+   "psi_words": 0.021941533784548457,
+   "alert": false,
+   "top_shifted_words": [
+    {
+     "word": "we",
+     "contribution": 0.0041550951525916825,
+     "direction": "up"
+    },
+    {
+     "word": "would",
+     "contribution": 0.0020238109191109918,
+     "direction": "down"
+    },
+    {
+     "word": "was",
+     "contribution": 0.001999918976752644,
+     "direction": "down"
+    },
+    {
+     "word": "this",
+     "contribution": 0.0014080684049743355,
+     "direction": "up"
+    },
+    {
+     "word": "i",
+     "contribution": 0.0013075642775172175,
+     "direction": "down"
+    }
+   ]
+  },
+  {
+   "month": "2023-09",
+   "n": 50,
+   "psi_predictions": 0.20836510391078378,
+   "psi_words": 0.013384098755492724,
+   "alert": true,
+   "top_shifted_words": [
+    {
+     "word": "account",
+     "contribution": 0.0032494401850071165,
+     "direction": "down"
+    },
+    {
+     "word": "by",
+     "contribution": 0.0007838840077010012,
+     "direction": "up"
+    },
+    {
+     "word": "on",
+     "contribution": 0.0007266018859424544,
+     "direction": "down"
+    },
+    {
+     "word": "in",
+     "contribution": 0.0005606813494526677,
+     "direction": "down"
+    },
+    {
+     "word": "you",
+     "contribution": 0.0005566397722284573,
+     "direction": "down"
+    }
+   ]
+  },
+  {
+   "month": "2023-10",
+   "n": 50,
+   "psi_predictions": 0.10140174195383081,
+   "psi_words": 0.021096663999982827,
+   "alert": false,
+   "top_shifted_words": [
+    {
+     "word": "we",
+     "contribution": 0.003231608308925534,
+     "direction": "down"
+    },
+    {
+     "word": "any",
+     "contribution": 0.002071571495999577,
+     "direction": "up"
+    },
+    {
+     "word": "payment",
+     "contribution": 0.00171502392956248,
+     "direction": "down"
+    },
+    {
+     "word": "me",
+     "contribution": 0.001614014212799623,
+     "direction": "up"
+    },
+    {
+     "word": "be",
+     "contribution": 0.0015152873078149735,
+     "direction": "down"
+    }
+   ]
+  },
+  {
+   "month": "2023-11",
+   "n": 50,
+   "psi_predictions": 0.07497140020260683,
+   "psi_words": 0.010570374809619544,
+   "alert": false,
+   "top_shifted_words": [
+    {
+     "word": "or",
+     "contribution": 0.001672503117529983,
+     "direction": "down"
+    },
+    {
+     "word": "as",
+     "contribution": 0.0009819551009394487,
+     "direction": "down"
+    },
+    {
+     "word": "payment",
+     "contribution": 0.0009460795781576909,
+     "direction": "down"
+    },
+    {
+     "word": "any",
+     "contribution": 0.0007755141720086121,
+     "direction": "up"
+    },
+    {
+     "word": "has",
+     "contribution": 0.0006117845237049893,
+     "direction": "up"
+    }
+   ]
+  },
+  {
+   "month": "2023-12",
+   "n": 50,
+   "psi_predictions": 0.11134765688570045,
+   "psi_words": 0.02435745587780823,
+   "alert": false,
+   "top_shifted_words": [
+    {
+     "word": "00",
+     "contribution": 0.0026070995723267236,
+     "direction": "down"
+    },
+    {
+     "word": "was",
+     "contribution": 0.0023227670415338344,
+     "direction": "down"
+    },
+    {
+     "word": "information",
+     "contribution": 0.002015978882597133,
+     "direction": "up"
+    },
+    {
+     "word": "had",
+     "contribution": 0.0019336284203032095,
+     "direction": "down"
+    },
+    {
+     "word": "is",
+     "contribution": 0.0018149913207418206,
+     "direction": "up"
+    }
+   ]
+  },
+  {
+   "month": "2024-01",
+   "n": 50,
+   "psi_predictions": 0.2720667510357387,
+   "psi_words": 0.021520700075321194,
+   "alert": true,
+   "top_shifted_words": [
+    {
+     "word": "report",
+     "contribution": 0.0020547147480217774,
+     "direction": "up"
+    },
+    {
+     "word": "would",
+     "contribution": 0.0019679864200720237,
+     "direction": "down"
+    },
+    {
+     "word": "information",
+     "contribution": 0.0018113651159821257,
+     "direction": "up"
+    },
+    {
+     "word": "my",
+     "contribution": 0.00147254278062932,
+     "direction": "up"
+    },
+    {
+     "word": "reporting",
+     "contribution": 0.0014411302918813898,
+     "direction": "up"
+    }
+   ]
+  },
+  {
+   "month": "2024-02",
+   "n": 50,
+   "psi_predictions": 0.2206460091536705,
+   "psi_words": 0.027112229384588803,
+   "alert": true,
+   "top_shifted_words": [
+    {
+     "word": "was",
+     "contribution": 0.0032386641634413217,
+     "direction": "down"
+    },
+    {
+     "word": "information",
+     "contribution": 0.0027189925566685528,
+     "direction": "up"
+    },
+    {
+     "word": "on",
+     "contribution": 0.0021072158542893094,
+     "direction": "down"
+    },
+    {
+     "word": "bank",
+     "contribution": 0.0019010262343399761,
+     "direction": "down"
+    },
+    {
+     "word": "would",
+     "contribution": 0.0017874899745236794,
+     "direction": "down"
+    }
+   ]
+  },
+  {
+   "month": "2024-03",
+   "n": 50,
+   "psi_predictions": 0.15446461240023182,
+   "psi_words": 0.020574588704383327,
+   "alert": false,
+   "top_shifted_words": [
+    {
+     "word": "report",
+     "contribution": 0.0021593696812050468,
+     "direction": "up"
+    },
+    {
+     "word": "at",
+     "contribution": 0.0019149837848464577,
+     "direction": "down"
+    },
+    {
+     "word": "had",
+     "contribution": 0.0015797220905469135,
+     "direction": "down"
+    },
+    {
+     "word": "bank",
+     "contribution": 0.0012542809551866522,
+     "direction": "up"
+    },
+    {
+     "word": "of",
+     "contribution": 0.001162913674968856,
+     "direction": "up"
+    }
+   ]
+  },
+  {
+   "month": "2024-04",
+   "n": 50,
+   "psi_predictions": 0.1543771356079945,
+   "psi_words": 0.02893314329783308,
+   "alert": false,
+   "top_shifted_words": [
+    {
+     "word": "00",
+     "contribution": 0.0039880807957817935,
+     "direction": "down"
+    },
+    {
+     "word": "is",
+     "contribution": 0.0025506310890740613,
+     "direction": "up"
+    },
+    {
+     "word": "as",
+     "contribution": 0.0025498162528969867,
+     "direction": "up"
+    },
+    {
+     "word": "reporting",
+     "contribution": 0.0020931963156160588,
+     "direction": "up"
+    },
+    {
+     "word": "account",
+     "contribution": 0.0018727882306951238,
+     "direction": "up"
+    }
+   ]
+  },
+  {
+   "month": "2024-05",
+   "n": 50,
+   "psi_predictions": 0.18101437320941463,
+   "psi_words": 0.03317019924094964,
+   "alert": false,
+   "top_shifted_words": [
+    {
+     "word": "we",
+     "contribution": 0.00855265714799258,
+     "direction": "down"
+    },
+    {
+     "word": "bank",
+     "contribution": 0.004231790455870998,
+     "direction": "down"
+    },
+    {
+     "word": "the",
+     "contribution": 0.0029842978714263967,
+     "direction": "up"
+    },
+    {
+     "word": "report",
+     "contribution": 0.0013979960017886442,
+     "direction": "up"
+    },
+    {
+     "word": "of",
+     "contribution": 0.0012623731966844736,
+     "direction": "up"
+    }
+   ]
+  },
+  {
+   "month": "2024-06",
+   "n": 50,
+   "psi_predictions": 0.3451476783146245,
+   "psi_words": 0.013377163283637108,
+   "alert": true,
+   "top_shifted_words": [
+    {
+     "word": "the",
+     "contribution": 0.0016557308679972212,
+     "direction": "up"
+    },
+    {
+     "word": "we",
+     "contribution": 0.0012889010222532395,
+     "direction": "down"
+    },
+    {
+     "word": "from",
+     "contribution": 0.0008247549025790997,
+     "direction": "up"
+    },
+    {
+     "word": "you",
+     "contribution": 0.0008182511253211753,
+     "direction": "down"
+    },
+    {
+     "word": "to",
+     "contribution": 0.0006921934911904962,
+     "direction": "up"
+    }
+   ]
+  },
+  {
+   "month": "2024-07",
+   "n": 50,
+   "psi_predictions": 0.2043458534932723,
+   "psi_words": 0.019409218435417954,
+   "alert": true,
+   "top_shifted_words": [
+    {
+     "word": "account",
+     "contribution": 0.0034549502458051415,
+     "direction": "down"
+    },
+    {
+     "word": "you",
+     "contribution": 0.0018831542850984402,
+     "direction": "up"
+    },
+    {
+     "word": "would",
+     "contribution": 0.001384786111473118,
+     "direction": "down"
+    },
+    {
+     "word": "all",
+     "contribution": 0.0012494709128006698,
+     "direction": "down"
+    },
+    {
+     "word": "information",
+     "contribution": 0.0012472911031468116,
+     "direction": "up"
+    }
+   ]
+  },
+  {
+   "month": "2024-08",
+   "n": 50,
+   "psi_predictions": 0.07019206837514189,
+   "psi_words": 0.027313870986450942,
+   "alert": false,
+   "top_shifted_words": [
+    {
+     "word": "but",
+     "contribution": 0.0026073652561356244,
+     "direction": "down"
+    },
+    {
+     "word": "information",
+     "contribution": 0.0019648327223317358,
+     "direction": "up"
+    },
+    {
+     "word": "of",
+     "contribution": 0.0019621948577753672,
+     "direction": "up"
+    },
+    {
+     "word": "had",
+     "contribution": 0.0016166951612571856,
+     "direction": "down"
+    },
+    {
+     "word": "a",
+     "contribution": 0.0015475889418118097,
+     "direction": "up"
+    }
+   ]
+  },
+  {
+   "month": "2024-09",
+   "n": 50,
+   "psi_predictions": 0.22880517614068993,
+   "psi_words": 0.02306571214728258,
+   "alert": true,
+   "top_shifted_words": [
+    {
+     "word": "00",
+     "contribution": 0.00408394365039067,
+     "direction": "up"
+    },
+    {
+     "word": "payment",
+     "contribution": 0.0026339262730072782,
+     "direction": "down"
+    },
+    {
+     "word": "had",
+     "contribution": 0.002335626864251285,
+     "direction": "down"
+    },
+    {
+     "word": "report",
+     "contribution": 0.0015021201501959388,
+     "direction": "up"
+    },
+    {
+     "word": "they",
+     "contribution": 0.0011955203214366983,
+     "direction": "up"
+    }
+   ]
+  },
+  {
+   "month": "2024-10",
+   "n": 50,
+   "psi_predictions": 0.2420854276383808,
+   "psi_words": 0.027071476207248656,
+   "alert": true,
+   "top_shifted_words": [
+    {
+     "word": "information",
+     "contribution": 0.0026235982438544973,
+     "direction": "up"
+    },
+    {
+     "word": "had",
+     "contribution": 0.00212284104392402,
+     "direction": "down"
+    },
+    {
+     "word": "all",
+     "contribution": 0.0020711753582082896,
+     "direction": "down"
+    },
+    {
+     "word": "would",
+     "contribution": 0.0019125440348409092,
+     "direction": "down"
+    },
+    {
+     "word": "report",
+     "contribution": 0.0017984465058691532,
+     "direction": "up"
+    }
+   ]
+  },
+  {
+   "month": "2024-11",
+   "n": 50,
+   "psi_predictions": 0.2656487397150152,
+   "psi_words": 0.05025667663531415,
+   "alert": true,
+   "top_shifted_words": [
+    {
+     "word": "they",
+     "contribution": 0.006300395701814584,
+     "direction": "down"
+    },
+    {
+     "word": "i",
+     "contribution": 0.00581698888129517,
+     "direction": "down"
+    },
+    {
+     "word": "report",
+     "contribution": 0.00464985838899103,
+     "direction": "up"
+    },
+    {
+     "word": "reporting",
+     "contribution": 0.0031525824564780664,
+     "direction": "up"
+    },
+    {
+     "word": "information",
+     "contribution": 0.0030397710226785233,
+     "direction": "up"
+    }
+   ]
+  },
+  {
+   "month": "2024-12",
+   "n": 50,
+   "psi_predictions": 0.2342745354423068,
+   "psi_words": 0.02072047285393914,
+   "alert": true,
+   "top_shifted_words": [
+    {
+     "word": "they",
+     "contribution": 0.002289857961350886,
+     "direction": "down"
+    },
+    {
+     "word": "report",
+     "contribution": 0.00151073767505922,
+     "direction": "up"
+    },
+    {
+     "word": "on",
+     "contribution": 0.0014437935170934768,
+     "direction": "down"
+    },
+    {
+     "word": "information",
+     "contribution": 0.0013104650460421322,
+     "direction": "up"
+    },
+    {
+     "word": "i",
+     "contribution": 0.0012855878081172343,
+     "direction": "down"
+    }
+   ]
+  }
+ ],
+ "real_class_shares": {
+  "2019": {
+   "Credit reporting or other personal consumer reports": 0.5103591039068119,
+   "Debt collection": 0.2100328052909496,
+   "Credit card": 0.10294195042366192,
+   "Checking or savings account": 0.06447906250548217,
+   "Mortgage": 0.08802168306931214,
+   "Money transfer, virtual currency, or money service": 0.024165394803782256
+  },
+  "2020": {
+   "Credit reporting or other personal consumer reports": 0.5863915123267509,
+   "Debt collection": 0.1584140807064884,
+   "Credit card": 0.09141420336072612,
+   "Checking or savings account": 0.05844474426591439,
+   "Mortgage": 0.07645651907273396,
+   "Money transfer, virtual currency, or money service": 0.028878940267386237
+  },
+  "2021": {
+   "Credit reporting or other personal consumer reports": 0.5659565613213682,
+   "Debt collection": 0.17936272597216804,
+   "Credit card": 0.07625959162439849,
+   "Checking or savings account": 0.0645129405644427,
+   "Mortgage": 0.07323188971257641,
+   "Money transfer, virtual currency, or money service": 0.04067629080504617
+  },
+  "2022": {
+   "Credit reporting or other personal consumer reports": 0.7237025472626316,
+   "Debt collection": 0.09739624878565066,
+   "Credit card": 0.060867999838604046,
+   "Checking or savings account": 0.055967149716470765,
+   "Mortgage": 0.03814220845528556,
+   "Money transfer, virtual currency, or money service": 0.0239238459413574
+  },
+  "2023": {
+   "Credit reporting or other personal consumer reports": 0.7479363346897734,
+   "Debt collection": 0.0765027909435065,
+   "Credit card": 0.06992183639355956,
+   "Checking or savings account": 0.06019543050142448,
+   "Mortgage": 0.027679542104788218,
+   "Money transfer, virtual currency, or money service": 0.01776406536694784
+  },
+  "2024": {
+   "Credit reporting or other personal consumer reports": 0.7999923891189771,
+   "Debt collection": 0.08916273966347221,
+   "Credit card": 0.04496889052381889,
+   "Checking or savings account": 0.03740113782671292,
+   "Mortgage": 0.01548687440143592,
+   "Money transfer, virtual currency, or money service": 0.012987968465582962
+  }
+ },
+ "sample_class_shares": {
+  "2019": {
+   "Credit reporting or other personal consumer reports": 0.3516666666666667,
+   "Debt collection": 0.175,
+   "Credit card": 0.13166666666666665,
+   "Checking or savings account": 0.12,
+   "Mortgage": 0.12166666666666667,
+   "Money transfer, virtual currency, or money service": 0.1
+  },
+  "2020": {
+   "Credit reporting or other personal consumer reports": 0.385,
+   "Debt collection": 0.15333333333333332,
+   "Credit card": 0.12333333333333334,
+   "Checking or savings account": 0.11833333333333333,
+   "Mortgage": 0.12,
+   "Money transfer, virtual currency, or money service": 0.1
+  },
+  "2021": {
+   "Credit reporting or other personal consumer reports": 0.375,
+   "Debt collection": 0.16,
+   "Credit card": 0.12,
+   "Checking or savings account": 0.12,
+   "Mortgage": 0.12,
+   "Money transfer, virtual currency, or money service": 0.105
+  },
+  "2022": {
+   "Credit reporting or other personal consumer reports": 0.43333333333333335,
+   "Debt collection": 0.12666666666666668,
+   "Credit card": 0.11833333333333333,
+   "Checking or savings account": 0.11666666666666667,
+   "Mortgage": 0.105,
+   "Money transfer, virtual currency, or money service": 0.1
+  },
+  "2023": {
+   "Credit reporting or other personal consumer reports": 0.44,
+   "Debt collection": 0.12,
+   "Credit card": 0.12,
+   "Checking or savings account": 0.12,
+   "Mortgage": 0.1,
+   "Money transfer, virtual currency, or money service": 0.1
+  },
+  "2024": {
+   "Credit reporting or other personal consumer reports": 0.4666666666666667,
+   "Debt collection": 0.12333333333333334,
+   "Credit card": 0.10833333333333334,
+   "Checking or savings account": 0.10166666666666667,
+   "Mortgage": 0.1,
+   "Money transfer, virtual currency, or money service": 0.1
+  }
+ }
+}

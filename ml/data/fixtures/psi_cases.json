@@ -1,0 +1,80 @@
+{
+ "epsilon": 0.0001,
+ "formula": "PSI = sum_i (a_i - e_i) * ln(a_i / e_i), e_i = expected_i / sum(expected) + epsilon, a_i = actual_i / sum(actual) + epsilon (epsilon added after dividing, no renormalising)",
+ "cases": [
+  {
+   "name": "identical",
+   "expected": [
+    10,
+    20,
+    30
+   ],
+   "actual": [
+    10,
+    20,
+    30
+   ],
+   "psi": 0.0
+  },
+  {
+   "name": "disjoint",
+   "expected": [
+    1,
+    0
+   ],
+   "actual": [
+    0,
+    1
+   ],
+   "psi": 18.420880733953034
+  },
+  {
+   "name": "zero_bucket",
+   "expected": [
+    50,
+    50,
+    0
+   ],
+   "actual": [
+    40,
+    40,
+    20
+   ],
+   "psi": 1.5648991794290805
+  },
+  {
+   "name": "different_totals",
+   "expected": [
+    100,
+    300,
+    600
+   ],
+   "actual": [
+    30,
+    30,
+    40
+   ],
+   "psi": 0.3006655716514849
+  },
+  {
+   "name": "realistic_six",
+   "expected": [
+    600,
+    150,
+    100,
+    70,
+    50,
+    30
+   ],
+   "actual": [
+    880,
+    60,
+    50,
+    40,
+    20,
+    10
+   ],
+   "psi": 0.27907090757756514
+  }
+ ]
+}
