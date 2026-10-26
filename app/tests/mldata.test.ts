@@ -3,13 +3,17 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  AGREEMENT_WINDOW,
+  COEF_SLICE_SIZE,
+  explorerModel,
+  forExplorer,
+  labelAgreement,
   loadMlData,
+  roundSig,
   productionVersion,
   scoreText,
   tfidf,
   tokenize,
-  VOCAB_SLICE_SIZE,
-  vocabSlice,
   type ModelJson,
   type Registry,
 } from '../src/lib/mlData';
@@ -75,25 +79,58 @@ describe('tfidf', () => {
   });
 });
 
-describe('vocabSlice', () => {
-  it('keeps the most common words (lowest idf), in vocabulary order, with their idf and weights', () => {
-    const s = vocabSlice(V1, 3);
-    const byIdf = V1.vocabulary.map((t, j) => [V1.idf[j], j] as const).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-    const keep = byIdf.slice(0, 3).map(([, j]) => j).sort((a, b) => a - b);
-    expect(s.vocabulary).toEqual(keep.map((j) => V1.vocabulary[j]));
-    expect(s.idf).toEqual(keep.map((j) => V1.idf[j]));
-    expect(s.coef).toEqual(V1.coef.map((row) => keep.map((j) => row[j])));
-    expect(s).toMatchObject({ version: 'v1', size: 3, full_size: V1.vocabulary.length, classes: V1.classes });
-    expect(s.intercept).toEqual(V1.intercept);
+describe('explorerModel', () => {
+  const influence = (j: number) => Math.max(...V1.coef.map((row) => Math.abs(row[j])));
+
+  it('keeps the full vocabulary and idf, and the weights of the most influential words', () => {
+    const e = explorerModel(V1, 3);
+    const top = V1.vocabulary
+      .map((_, j) => j)
+      .sort((a, b) => influence(b) - influence(a) || a - b)
+      .slice(0, 3)
+      .sort((a, b) => a - b);
+    expect(e.vocabulary).toBe(V1.vocabulary);
+    expect(e.idf).toBe(V1.idf);
+    expect(e.coef_terms).toEqual(top);
+    expect(e.coef).toEqual(V1.coef.map((row) => top.map((j) => row[j])));
+    expect(e).toMatchObject({ version: 'v1', slice_size: 3, full_size: V1.vocabulary.length, classes: V1.classes });
   });
 
-  it('breaks idf ties by vocabulary order', () => {
-    const m: ModelJson = { ...V1, vocabulary: ['a', 'b', 'c'], idf: [2, 1, 1], coef: V1.coef.map(() => [0, 0, 0]) };
-    expect(vocabSlice(m, 1).vocabulary).toEqual(['b']);
+  it('breaks ties by vocabulary order', () => {
+    const m: ModelJson = { ...V1, vocabulary: ['a', 'b', 'c'], idf: [1, 1, 1], coef: V1.coef.map(() => [0.5, 1, -1]) };
+    expect(explorerModel(m, 1).coef_terms).toEqual([1]);
   });
 
-  it('keeps the whole vocabulary when it is smaller than the slice', () => {
-    expect(vocabSlice(V1, 1e6).vocabulary).toEqual(V1.vocabulary);
+  it('scores exactly like the full model when it keeps every word', () => {
+    const e = explorerModel(V1, V1.vocabulary.length);
+    for (const c of PREDICTIONS.cases) expect(scoreText(e, c.input)).toEqual(scoreText(V1, c.input));
+  });
+
+  it('gives a word with no kept weight nothing, but keeps it in the vector', () => {
+    const e = explorerModel(V1, 10);
+    const f = tfidf(e, 'the bank');
+    expect(f.terms.map((t) => t.term)).toEqual(['bank', 'the']);
+    expect(f).toEqual(tfidf(V1, 'the bank'));
+  });
+});
+
+describe('forExplorer', () => {
+  it('rounds idf, weights and intercepts to 4 significant figures, and nothing else', () => {
+    const e = explorerModel(V1, 50);
+    const r = forExplorer(e);
+    expect(r.vocabulary).toBe(e.vocabulary);
+    expect(r.coef_terms).toBe(e.coef_terms);
+    expect(r.idf).toEqual(e.idf.map((x) => roundSig(x, 4)));
+    expect(r.coef).toEqual(e.coef.map((row) => row.map((x) => roundSig(x, 4))));
+    expect(r.intercept).toEqual(e.intercept.map((x) => roundSig(x, 4)));
+    expect(forExplorer(e, 2).idf[0]).toBe(roundSig(e.idf[0], 2));
+  });
+
+  it('roundSig keeps significant figures, not decimals', () => {
+    expect(roundSig(3.14159, 4)).toBe(3.142);
+    expect(roundSig(-0.000123456, 4)).toBe(-0.0001235);
+    expect(roundSig(12345.6, 4)).toBe(12350);
+    expect(roundSig(0, 4)).toBe(0);
   });
 });
 
@@ -147,20 +184,63 @@ describe('loadMlData (the real ml/ folder, at build time)', () => {
     expect(data.production).toBe(productionVersion(registry));
   });
 
-  it(`slices the top ${VOCAB_SLICE_SIZE} words from the production model, never the whole model`, () => {
-    expect(VOCAB_SLICE_SIZE).toBe(2000);
+  // The feature explorer's data, as an island receives it (forExplorer), against the full model.
+  const complaints: { date: string; narrative: string }[] = readFileSync(join(ml, 'data/complaints.jsonl'), 'utf8')
+    .split('\n')
+    .filter((l) => l.trim())
+    .map((l) => JSON.parse(l));
+  const unseen = complaints
+    .filter((r) => r.date >= AGREEMENT_WINDOW.from && r.date <= AGREEMENT_WINDOW.to)
+    .map((r) => r.narrative);
+  const shipped = forExplorer(data.explorer);
+
+  it('builds the explorer from the production model: every word and idf, weights for 1,200', () => {
     const prod: ModelJson = readJson(registry.versions[data.production].path);
-    expect(data.vocab).toEqual(vocabSlice(prod, 2000));
-    expect(data.vocab.vocabulary).toHaveLength(2000);
-    expect(data.vocab.full_size).toBe(prod.vocabulary.length);
-    expect(data.vocab.full_size).toBeGreaterThan(2000);
-    // Nothing else in MlData carries the model's vocabulary or weights.
-    const { vocab: _vocab, ...rest } = data;
+    expect(COEF_SLICE_SIZE).toBe(1200);
+    expect(data.explorer.vocabulary).toEqual(prod.vocabulary);
+    expect(data.explorer.idf).toEqual(prod.idf);
+    const { agreement, note, ...rest } = data.explorer;
+    const { agreement: _a, note: _n, ...expected } = explorerModel(prod, 1200);
+    expect(rest).toEqual(expected);
+    expect(data.explorer.slice_size).toBe(1200);
+    expect(data.explorer.full_size).toBe(5539);
+    expect(agreement.n).toBe(1800);
+    expect(note).toBe(
+      `Weights for the 1,200 most influential of v1's 5,539 words; the label matches the full model on ${(agreement.share * 100).toFixed(1)}% of 1,800 complaints from 2022–2024.`,
+    );
+  });
+
+  it('gives the shipped explorer the server\'s exact tokens, unknown words and TF-IDF weights', () => {
+    expect(unseen).toHaveLength(1800);
+    let worst = 0;
+    for (const text of unseen) {
+      const got = tfidf(shipped, text);
+      const want = tfidf(V1, text); // exact: scoreText(V1) matches train.score to 1e-9 above
+      expect(got.tokens).toEqual(want.tokens);
+      expect(got.unknown).toEqual(want.unknown);
+      expect(got.terms.map((t) => [t.index, t.count])).toEqual(want.terms.map((t) => [t.index, t.count]));
+      got.terms.forEach((t, i) => (worst = Math.max(worst, Math.abs(t.weight - want.terms[i].weight))));
+    }
+    expect(worst).toBeLessThan(5e-4); // idf at 4 significant figures
+  });
+
+  it('labels at least 95% of unseen complaints like the full model, and records the share', () => {
+    const share = labelAgreement(shipped, V1, unseen);
+    expect(data.explorer.agreement).toEqual({ share, n: 1800, on: 'complaints sent 2022-01-01 to 2024-12-31' });
+    expect(share).toBeGreaterThanOrEqual(0.95);
+  });
+
+  it('keeps the island prop small, and the model weights out of the rest of MlData', () => {
+    expect(JSON.stringify(shipped).length).toBeLessThanOrEqual(155_000);
+    const { explorer: _e, ...rest } = data;
     expect(JSON.stringify(rest)).not.toContain('"coef"');
   });
 
-  it('scores with the slice like the full model on most pinned cases', () => {
-    const agree = PREDICTIONS.cases.filter((c) => scoreText(data.vocab, c.input).label === c.expected.label).length;
-    expect(agree / PREDICTIONS.cases.length).toBeGreaterThanOrEqual(0.8);
+});
+
+describe('mlExplore.ts', () => {
+  it('imports nothing, so an island that imports it bundles no data', () => {
+    const src = readFileSync(join(here, '../src/lib/mlExplore.ts'), 'utf8');
+    expect(src).not.toMatch(/^\s*import\b|import\.meta|\brequire\(/m);
   });
 });

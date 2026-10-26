@@ -1,35 +1,22 @@
-// The ML track's data, and the tokenizer and scorer the browser needs, mirroring
-// ml/python/train.py (tokenize and score) and ml/go/main.go section 3-4. Pinned by
-// ml/data/fixtures/tokenize.json and predictions.json in tests/mldata.test.ts.
+// The ML track's data, read at build time from ml/: the reports, the run logs, the
+// registry, and the production model cut down for the feature explorer.
 //
-// Everything here is pure and browser-safe except loadMlData, which reads ml/ at build
-// time. Call it from an .astro wrapper and pass the island only what it needs. The full
-// model never leaves the build: MlData carries a slice of the production model's
-// vocabulary (VOCAB_SLICE_SIZE words), not the model file.
+// Build time only: loadMlData's eager globs read every model and report, and Vite turns
+// them into top-level imports, so an island must never import this module. The
+// tokenizer, TF-IDF and scorer live in mlExplore.ts (pure, browser-safe, re-exported
+// here for tests); pass an island `forExplorer(data.explorer)` and other small props.
+import {
+  COEF_SLICE_SIZE,
+  explorerModel,
+  forExplorer,
+  labelAgreement,
+  type ExplorerModel,
+  type ScoringModel,
+} from './mlExplore';
 
-// ── Model and scoring types ─────────────────────────────────────────────────
-/** train.FEATURES as exported in the model JSON. */
-export type Tokenizer = {
-  lowercase: 'ascii';
-  pattern: string;
-  drop_x_runs_from: number;
-  stop_words: string[];
-  min_df: number;
-  max_features: number | null;
-};
+export * from './mlExplore';
 
-/** What scoring needs: a full model JSON and a VocabSlice both fit. */
-export type ScoringModel = {
-  vocabulary: string[];
-  idf: number[];
-  classes: string[];
-  /** One row per class, one column per vocabulary term. */
-  coef: number[][];
-  intercept: number[];
-  majority_class: string;
-  tokenizer: Tokenizer;
-};
-
+// ── Types ───────────────────────────────────────────────────────────────────
 /** ml/models/<version>.json (only tests and loadMlData read one). */
 export type ModelJson = ScoringModel & {
   version: string;
@@ -39,32 +26,6 @@ export type ModelJson = ScoringModel & {
   trained_on: { from: string; to: string };
   tokenizer_note: string;
   metrics: Record<string, unknown>;
-};
-
-/** The production model cut down to its most common words; scores like a model (scoreText). */
-export type VocabSlice = ScoringModel & {
-  version: string;
-  /** Words kept (VOCAB_SLICE_SIZE, or fewer if the model has fewer). */
-  size: number;
-  /** Words in the full model. */
-  full_size: number;
-  note: string;
-};
-
-export type Prediction = { label: string; scores: Record<string, number>; low_confidence: boolean };
-
-/** One known word of a text: its count, idf, count x idf, and that value after L2 scaling. */
-export type TermWeight = { term: string; index: number; count: number; idf: number; raw: number; weight: number };
-
-export type Features = {
-  /** Every token, in text order (repeats kept). */
-  tokens: string[];
-  /** Known words, in vocabulary order. */
-  terms: TermWeight[];
-  /** The L2 length of the raw row; 1 when no word is known (the row stays all zeros). */
-  norm: number;
-  /** Distinct tokens the vocabulary lacks, in first-seen order. */
-  unknown: string[];
 };
 
 // ── Report types (ml/reports/*.json, ml/runs/*.json, ml/registry.json) ─────
@@ -287,133 +248,12 @@ export type MlData = {
   registry: Registry;
   /** The version the registry names production. */
   production: string;
-  /** The production model's VOCAB_SLICE_SIZE most common words. */
-  vocab: VocabSlice;
+  /** The production model for the feature explorer, exact (full vocabulary and idf, weights for
+   *  the COEF_SLICE_SIZE most influential words). Give an island forExplorer(explorer). */
+  explorer: ExplorerModel;
 };
 
-// ── Tokenizer (train.py section 3; rules R12) ─────────────────────────────────
-/** Split text into tokens exactly as train.tokenize and Go's tokenize do:
- *  1. lowercase A-Z only (no Unicode case folding);
- *  2. a token is a maximal run of [a-z0-9'] (every other character, any non-ASCII one too, separates);
- *  3. strip leading and trailing apostrophes;
- *  4. drop empty tokens, stop words, and tokens made only of x with length >= drop_x_runs_from (XX, XXXX);
- *  5. no stemming. */
-export function tokenize(text: string, cfg: Tokenizer): string[] {
-  if (cfg.lowercase !== 'ascii') throw new Error(`tokenize implements lowercase='ascii' only, not ${cfg.lowercase}`);
-  const lowered = text.replace(/[A-Z]+/g, (s) => s.toLowerCase()); // the matched run is ASCII, so this is exact
-  const stop = new Set(cfg.stop_words);
-  const out: string[] = [];
-  // Without the u flag the class matches UTF-16 code units; it holds only ASCII, so every
-  // other code unit (surrogate halves included) is a separator, as in Python and Go.
-  for (const [match] of lowered.matchAll(new RegExp(cfg.pattern, 'g'))) {
-    const tok = match.replace(/^'+|'+$/g, '');
-    if (!tok || stop.has(tok)) continue;
-    if (tok.length >= cfg.drop_x_runs_from && /^x+$/.test(tok)) continue;
-    out.push(tok);
-  }
-  return out;
-}
-
-// ── TF-IDF and scoring (train.py section 6, score) ──────────────────────────
-/** Sums the way Python 3.12+ sum() does (Neumaier compensation), as Go's pySum does. */
-function pySum(xs: number[]): number {
-  let s = 0;
-  let c = 0;
-  for (const x of xs) {
-    const t = s + x;
-    c += Math.abs(s) >= Math.abs(x) ? s - t + x : x - t + s;
-    s = t;
-  }
-  return c !== 0 && Number.isFinite(c) ? s + c : s;
-}
-
-const indexes = new WeakMap<string[], Map<string, number>>();
-function indexOf(vocabulary: string[]): Map<string, number> {
-  let index = indexes.get(vocabulary);
-  if (!index) {
-    index = new Map(vocabulary.map((t, i) => [t, i]));
-    indexes.set(vocabulary, index);
-  }
-  return index;
-}
-
-/** A text's TF-IDF row: counts of known words x idf, scaled to length 1 (L2). */
-export function tfidf(model: Pick<ScoringModel, 'vocabulary' | 'idf' | 'tokenizer'>, text: string): Features {
-  const index = indexOf(model.vocabulary);
-  const tokens = tokenize(text, model.tokenizer);
-  const counts = new Map<number, number>();
-  const unknown: string[] = [];
-  for (const t of tokens) {
-    const j = index.get(t);
-    if (j === undefined) {
-      if (!unknown.includes(t)) unknown.push(t);
-    } else counts.set(j, (counts.get(j) ?? 0) + 1);
-  }
-  const cols = [...counts.keys()].sort((a, b) => a - b);
-  const raws = cols.map((j) => counts.get(j)! * model.idf[j]);
-  const norm = Math.sqrt(pySum(raws.map((w) => w * w))) || 1;
-  const terms = cols.map((j, i) => ({
-    term: model.vocabulary[j],
-    index: j,
-    count: counts.get(j)!,
-    idf: model.idf[j],
-    raw: raws[i],
-    weight: raws[i] / norm,
-  }));
-  return { tokens, terms, norm, unknown };
-}
-
-/** Score a text like train.score: softmax(coef . x + intercept), sums in vocabulary order.
- *  The label is the first class with the top probability. With no known word the scores are
- *  softmax(intercept) and the label is the majority class, flagged low_confidence; otherwise
- *  low_confidence means the top probability is below 0.5. */
-export function scoreText(model: ScoringModel, text: string): Prediction {
-  const { terms } = tfidf(model, text);
-  const logits = model.coef.map((row, k) => model.intercept[k] + pySum(terms.map((t) => row[t.index] * t.weight)));
-  const top = Math.max(...logits);
-  const exps = logits.map((z) => Math.exp(z - top));
-  const total = pySum(exps);
-  const probs = exps.map((e) => e / total);
-  const scores = Object.fromEntries(model.classes.map((c, k) => [c, probs[k]]));
-  if (!terms.length) return { label: model.majority_class, scores, low_confidence: true };
-  let best = 0;
-  probs.forEach((p, k) => {
-    if (p > probs[best]) best = k;
-  });
-  return { label: model.classes[best], scores, low_confidence: probs[best] < LOW_CONFIDENCE };
-}
-
-export const LOW_CONFIDENCE = 0.5;
-
-// ── Vocabulary slice and registry ───────────────────────────────────────────
-export const VOCAB_SLICE_SIZE = 2000;
-
-/** The model's `size` most common words (lowest idf = in the most training complaints; ties by
- *  vocabulary order), kept in vocabulary order with their idf and weight columns. Scoring with
- *  the slice ignores the other words, so it approximates the full model. */
-export function vocabSlice(model: ModelJson, size: number = VOCAB_SLICE_SIZE): VocabSlice {
-  const keep = model.vocabulary
-    .map((_, j) => j)
-    .sort((a, b) => model.idf[a] - model.idf[b] || a - b)
-    .slice(0, size)
-    .sort((a, b) => a - b);
-  return {
-    version: model.version,
-    size: keep.length,
-    full_size: model.vocabulary.length,
-    note:
-      `The ${keep.length} most common of ${model.version}'s ${model.vocabulary.length} words (lowest idf). ` +
-      'Scores from the slice ignore the other words, so they can differ a little from the full model.',
-    vocabulary: keep.map((j) => model.vocabulary[j]),
-    idf: keep.map((j) => model.idf[j]),
-    classes: model.classes,
-    coef: model.coef.map((row) => keep.map((j) => row[j])),
-    intercept: model.intercept,
-    majority_class: model.majority_class,
-    tokenizer: model.tokenizer,
-  };
-}
-
+// ── Registry ────────────────────────────────────────────────────────────────
 /** The one version the registry names production. */
 export function productionVersion(registry: Registry): string {
   const found = Object.entries(registry.versions)
@@ -455,7 +295,33 @@ export function buildMlData(files: MlFiles): MlData {
     runs,
     registry,
     production,
-    vocab: vocabSlice(json<ModelJson>(registry.versions[production].path)),
+    explorer: buildExplorer(json<ModelJson>(registry.versions[production].path), files['data/complaints.jsonl']),
+  };
+}
+
+/** Complaints sent in 2022-2024 (test and stream splits): unseen by v1, where agreement is measured. */
+export const AGREEMENT_WINDOW = { from: '2022-01-01', to: '2024-12-31' };
+
+/** explorerModel plus its measured agreement: how often the rounded explorer (what an island
+ *  gets) labels a complaint the way the full model does, over AGREEMENT_WINDOW. */
+export function buildExplorer(model: ModelJson, complaintsJsonl: string | undefined): ExplorerModel {
+  if (complaintsJsonl === undefined) throw new Error('ml/data/complaints.jsonl is missing');
+  const texts = complaintsJsonl
+    .split('\n')
+    .filter((l) => l.trim())
+    .map((l) => JSON.parse(l) as { date: string; narrative: string })
+    .filter((r) => r.date >= AGREEMENT_WINDOW.from && r.date <= AGREEMENT_WINDOW.to)
+    .map((r) => r.narrative);
+  const exact = explorerModel(model, COEF_SLICE_SIZE);
+  const share = labelAgreement(forExplorer(exact), model, texts);
+  const pct = (share * 100).toFixed(1);
+  return {
+    ...exact,
+    agreement: { share, n: texts.length, on: `complaints sent ${AGREEMENT_WINDOW.from} to ${AGREEMENT_WINDOW.to}` },
+    note:
+      `Weights for the ${exact.slice_size.toLocaleString('en-US')} most influential of ${model.version}'s ` +
+      `${exact.full_size.toLocaleString('en-US')} words; the label matches the full model on ${pct}% of ` +
+      `${texts.length.toLocaleString('en-US')} complaints from 2022–2024.`,
   };
 }
 
@@ -471,6 +337,7 @@ export function loadMlData(): MlData {
       '../../../ml/runs/*.json',
       '../../../ml/registry.json',
       '../../../ml/models/*.json',
+      '../../../ml/data/complaints.jsonl',
     ],
     { query: '?raw', import: 'default', eager: true },
   ) as Record<string, string>;
