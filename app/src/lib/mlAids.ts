@@ -649,8 +649,8 @@ export function simPromote(s: SimState, version: string): SimResult {
   if (s.stages[version] === 'production') return { state: s, error: `${version} is already in production` };
   const current = simProduction(s);
   let next = current ? simMove(s, current, 'archived', 'archive', `replaced by ${version}`) : s;
-  const lastGate = [...s.history].reverse().find((h) => h.action === 'gate' && h.version === version);
-  next = simMove(next, version, 'production', 'promote', lastGate?.note.startsWith('failed') ? 'promoted although the gate failed' : '');
+  // mlops.py promote without --note writes an empty note; the simulation invents none.
+  next = simMove(next, version, 'production', 'promote', '');
   return { state: next };
 }
 
@@ -795,16 +795,60 @@ export function alertCounts(periods: DriftPoint[]): Record<Signal, { calibrated:
   return { predictions: count('predictions'), words: count('words') };
 }
 
-/** The calibrated alerts seen against what chance alone gives (the report's upper bounds). */
+/** P(X >= k) for X ~ Binomial(n, p). */
+export function binomialTail(n: number, p: number, k: number): number {
+  let total = 0;
+  let c = 1; // C(n, i)
+  for (let i = 0; i <= n; i++) {
+    if (i >= k) total += c * p ** i * (1 - p) ** (n - i);
+    c = (c * (n - i)) / (i + 1);
+  }
+  return Math.min(1, total);
+}
+
+/** The months ("2024-10") a quarter ("2024-Q4") covers. */
+const quarterMonths = (q: string) => {
+  const [y, n] = q.split('-Q');
+  return [1, 2, 3].map((k) => `${y}-${String((Number(n) - 1) * 3 + k).padStart(2, '0')}`);
+};
+
+/** The calibrated alerts seen against what chance alone gives: the report's expected counts are
+ *  averages under the null at an upper-bound rate (p95 is exceeded 5% of the time; the within-2022
+ *  maximum makes it rarer), so the binomial tail at that rate is an upper bound on how often a
+ *  count this high happens with no drift. Above the expectation, the reading names why the
+ *  evidence stays weak: alerts that barely clear a threshold set by a single 2022 period, and
+ *  quarterly alerts that overlap a month alert (not independent evidence). */
 export function chanceReading(p: DriftChartProps, u: DriftUnit): string {
   const v = p.units[u];
   const c = alertCounts(v.periods);
-  const seen = Math.max(...SIGNALS.map((s) => c[s].calibrated));
-  return (
-    `By chance alone, expect at most about ${v.expected.per_signal} calibrated alerts per signal over ${v.periods.length} ${u}s ` +
-    `(${v.expected.either_signal_max} on either). Seen: predictions ${c.predictions.calibrated}, words ${c.words.calibrated}: ` +
-    (seen > v.expected.per_signal ? 'more than chance gives, weak but real evidence.' : 'within what chance gives.')
-  );
+  const s = SIGNALS.reduce((a, b) => (c[b].calibrated > c[a].calibrated ? b : a));
+  const seen = c[s].calibrated;
+  const n = v.periods.length;
+  const rate = v.expected.per_signal / n;
+  const head =
+    `By chance alone, expect on average at most about ${v.expected.per_signal} calibrated alerts per signal over ${n} ${u}s ` +
+    `(${v.expected.either_signal_max} on either). Seen: predictions ${c.predictions.calibrated}, words ${c.words.calibrated}.`;
+  if (seen === 0) return `${head} No calibrated alert: nothing to investigate.`;
+  const tail =
+    ` With no drift, ${seen} or more on a given signal happens up to ${pct(binomialTail(n, rate, seen))} of the time ` +
+    `(binomial, at the null's upper-bound rate of ${pct(rate, 0)} per ${u})`;
+  if (seen <= v.expected.per_signal) return `${head}${tail}: within what chance gives.`;
+  const nul = v.null[s];
+  const alerts = v.periods.filter((q) => q[`${s}_calibrated`]);
+  const reasons: string[] = [];
+  const oneSet = nul.threshold === nul.within_2022_max && nul.within_2022_max > nul.p95;
+  for (const q of alerts) {
+    if (oneSet && q[s] < nul.threshold * 1.1) {
+      reasons.push(`${q.label} (${q[s].toFixed(3)}) barely clears a threshold (${nul.threshold.toFixed(3)}) set by a single 2022 ${u}`);
+    }
+  }
+  if (u === 'quarter') {
+    for (const q of alerts) {
+      const m = p.units.month.periods.find((x) => quarterMonths(q.label).includes(x.label) && x[`${s}_calibrated`]);
+      if (m) reasons.push(`${q.label} overlaps the ${m.label} month alert, so it is not independent evidence`);
+    }
+  }
+  return `${head}${tail}: weak evidence at most${reasons.length ? `, because ${reasons.join(', and ')}` : ''}.`;
 }
 
 /** x and y in SVG units for one drift chart (periods evenly spaced, 0 at the bottom). */

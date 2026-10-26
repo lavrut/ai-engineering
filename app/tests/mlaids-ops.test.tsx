@@ -8,6 +8,7 @@ import { loadMlData } from '../src/lib/mlData';
 import {
   LLM_COMMANDS,
   alertCounts,
+  binomialTail,
   chanceReading,
   diffRuns,
   driftChartProps,
@@ -125,6 +126,13 @@ describe('ModelVsLlm', () => {
     expect(t.getByRole('row', { name: /^Debt collection/ }).textContent).toContain('0.000');
   });
 
+  it('calls a gap outside the band more than this rough noise band, not proof', () => {
+    const c = p.compare!;
+    const wide = { ...c, v1: { ...c.v1, accuracy: 0.7 } };
+    const { container } = render(<ModelVsLlm {...p} compare={wide} />);
+    expect(container.textContent).toContain('outside the ±7.1-point band (1/√200), so the difference is more than this rough noise band.');
+  });
+
   it('says "No recorded run yet" and how to record one when the report is missing', () => {
     const { container } = render(<ModelVsLlm {...modelVsLlmProps({ ...data, llmCompare: null })} />);
     expect(container.textContent).toContain('No recorded run yet');
@@ -235,6 +243,12 @@ describe('RunTable', () => {
     expect(table.getAllByRole('row')).toHaveLength(6); // header + 5
   });
 
+  it('says how big a difference stays within noise on each split', () => {
+    const { container } = render(<RunTable {...p} />);
+    // test: 1/√600 = 0.0408; holdout (2023 H1): 1/√300 = 0.0577.
+    expect(container.textContent).toContain('±0.041 on test (1/√600), ±0.058 on holdout (1/√300)');
+  });
+
   it('sorts by a metric from a toggle, and says so', () => {
     render(<RunTable {...p} />);
     fireEvent.click(button('Macro F1'));
@@ -291,7 +305,7 @@ describe('registry timeline data', () => {
     expect(r.state.stages).toEqual({ v1: 'archived', v2: 'production' });
     expect(r.state.history.slice(4).map((h) => [h.action, h.version, h.from_stage, h.to_stage, h.note, h.simulated])).toEqual([
       ['archive', 'v1', 'production', 'archived', 'replaced by v2', true],
-      ['promote', 'v2', 'staging', 'production', 'promoted although the gate failed', true],
+      ['promote', 'v2', 'staging', 'production', '', true], // mlops.py promote writes no note without --note
     ]);
     // The real history is untouched.
     expect(p.history).toHaveLength(4);
@@ -376,14 +390,28 @@ describe('drift chart data', () => {
     expect(p.units.quarter.periods.filter((q) => q.words_calibrated).map((q) => q.label)).toEqual(['2024-Q1', '2024-Q4']);
   });
 
-  it('reads the alert counts against the chance expectation', () => {
+  it('reads the alert counts against the chance expectation, with the binomial tail', () => {
     expect(p.units.month.expected).toEqual({ per_signal: 1.2, either_signal_max: 2.4 });
     expect(p.units.quarter.expected).toEqual({ per_signal: 0.4, either_signal_max: 0.8 });
+    // The report's own note (shown verbatim) makes no "this is the signal" claim.
+    expect(p.expectedNote).toContain('a count above them is something to investigate, not proof of drift.');
+    expect(p.expectedNote).not.toMatch(/is the signal/);
+    // P(X >= 1), X ~ Binomial(24, 0.05) = 1 - 0.95^24; P(X >= 2), X ~ Binomial(8, 0.05).
+    expect(binomialTail(24, 0.05, 1)).toBeCloseTo(1 - 0.95 ** 24, 12);
+    expect(binomialTail(8, 0.05, 2)).toBeCloseTo(1 - 0.95 ** 8 - 8 * 0.05 * 0.95 ** 7, 12);
+    expect(binomialTail(8, 0.05, 0)).toBeCloseTo(1, 12);
     expect(chanceReading(p, 'month')).toBe(
-      'By chance alone, expect at most about 1.2 calibrated alerts per signal over 24 months (2.4 on either). Seen: predictions 0, words 1: within what chance gives.',
+      'By chance alone, expect on average at most about 1.2 calibrated alerts per signal over 24 months (2.4 on either). ' +
+        'Seen: predictions 0, words 1. With no drift, 1 or more on a given signal happens up to 70.8% of the time ' +
+        "(binomial, at the null's upper-bound rate of 5% per month): within what chance gives.",
     );
+    // Two quarterly word alerts: unusual under the null (5.7%), but weak evidence at most.
     expect(chanceReading(p, 'quarter')).toBe(
-      'By chance alone, expect at most about 0.4 calibrated alerts per signal over 8 quarters (0.8 on either). Seen: predictions 0, words 2: more than chance gives, weak but real evidence.',
+      'By chance alone, expect on average at most about 0.4 calibrated alerts per signal over 8 quarters (0.8 on either). ' +
+        'Seen: predictions 0, words 2. With no drift, 2 or more on a given signal happens up to 5.7% of the time ' +
+        "(binomial, at the null's upper-bound rate of 5% per quarter): weak evidence at most, because 2024-Q1 (0.028) " +
+        'barely clears a threshold (0.026) set by a single 2022 quarter, and 2024-Q4 overlaps the 2024-11 month alert, ' +
+        'so it is not independent evidence.',
     );
   });
 
@@ -452,7 +480,7 @@ describe('DriftChart', () => {
     fireEvent.click(button('Quarterly'));
     expect(button('Quarterly').getAttribute('aria-pressed')).toBe('true');
     expect(within(screen.getByRole('table', { name: /PSI by quarter/ })).getAllByRole('row')).toHaveLength(10);
-    expect(screen.getByText(/more than chance gives/)).toBeTruthy();
+    expect(screen.getByText(/weak evidence at most/)).toBeTruthy();
     expect(button(/in-sample/).hasAttribute('disabled')).toBe(true);
   });
 
@@ -472,6 +500,7 @@ describe('DriftChart', () => {
     expect(detail.textContent).toContain('2024-11');
     expect(detail.textContent).toContain('accounts');
     expect(detail.textContent).toContain('more often');
+    expect(detail.textContent).toContain('their part of the words PSI (total 0.082)');
     expect(detail.textContent).toContain('▲ calibrated alert');
   });
 
@@ -482,6 +511,7 @@ describe('DriftChart', () => {
     const row = shares.getByRole('row', { name: /^Credit reporting/ });
     expect(row.textContent).toContain('80.0%');
     expect(row.textContent).toContain('46.7%');
+    expect(screen.getByText(/the predictions signal could, against a null sized for that volume/)).toBeTruthy();
   });
 });
 

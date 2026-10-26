@@ -25,6 +25,10 @@ export default function RunTable({ runs }: RunTableProps) {
   const rb = runs.find((r) => r.id === b)!;
   const d = diffRuns(ra, rb);
   const sortInfo = SORTS.find((s) => s.key === sort)!;
+  // One noise band per eval split (1/√n), in the order the splits first appear.
+  const noise = runs
+    .map((r) => ({ name: r.eval.name, n: r.metrics.n, band: r.metrics.band }))
+    .filter((x, i, all) => all.findIndex((y) => y.name === x.name && y.n === x.n) === i);
 
   return (
     <section class="rt" aria-label="Run table">
@@ -108,6 +112,10 @@ export default function RunTable({ runs }: RunTableProps) {
           </tbody>
         </table>
       </div>
+      <p class="rt-noise">
+        On the same split, differences smaller than the noise band are within noise:{' '}
+        {noise.map((x) => `±${x.band.toFixed(3)} on ${x.name} (1/√${x.n})`).join(', ')}.
+      </p>
       <p class="rt-hint">
         Hashes are prefixes (hover for the full SHA-256). Same data hash: the same complaints file. A registered version&apos;s
         model hash must equal the registry&apos;s, or the file was swapped.
@@ -241,7 +249,7 @@ const css = `
 }
 .rt-toggle[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
 .rt-toggle:focus-visible, .rt-scroll:focus-visible, .rt-pick select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.rt-status { margin: 0; font-size: var(--text-small); color: var(--ink); }
+.rt-status, .rt-noise { margin: 0; font-size: var(--text-small); color: var(--ink); }
 .rt-hint { margin: 0; font-size: var(--text-small); color: var(--muted); }
 .rt-scroll { min-width: 0; max-width: 100%; overflow-x: auto; }
 .rt-table { width: 100%; border-collapse: collapse; font-size: var(--text-small); font-variant-numeric: tabular-nums; background: var(--surface); border: 1px solid var(--line); }

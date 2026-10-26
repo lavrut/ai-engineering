@@ -24,7 +24,7 @@ export default function ModelVsLlm({ compare: c, servers, commands }: ModelVsLlm
             {pct(c.v1.accuracy)}: a {points(Math.abs(g.gap))}-point gap,{' '}
             {g.inside
               ? `inside the ±${points(g.band)}-point band (1/√${c.n}). A sample this size can't tell the two apart on accuracy.`
-              : `outside the ±${points(g.band)}-point band (1/√${c.n}), so the difference is more than noise.`}
+              : `outside the ±${points(g.band)}-point band (1/√${c.n}), so the difference is more than this rough noise band.`}
           </p>
           <p class="ml-hint">
             Headline over all {c.n}, a reply with no usable answer counted as wrong (no answer: {c.no_answer}

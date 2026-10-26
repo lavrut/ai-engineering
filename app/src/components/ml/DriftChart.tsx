@@ -466,7 +466,8 @@ export default function DriftChart(p: DriftChartProps) {
           })}
         </ul>
         <p class="dc-hint">
-          Words that moved the word mix most (their share of the words PSI):
+          Words that moved the word mix most, with their part of the words PSI
+          (total {f3(point.words)}):
         </p>
         <ol class="dc-words">
           {point.top.map((w) => (
@@ -606,7 +607,7 @@ export default function DriftChart(p: DriftChartProps) {
           The sample is stratified by design, so it mutes the real shift in
           class mix (bars run from 0 to 100%). Drift measured on the sample
           cannot see that shift; on the full stream the predictions signal
-          would.
+          could, against a null sized for that volume.
         </p>
       </div>
       <style>{css}</style>
