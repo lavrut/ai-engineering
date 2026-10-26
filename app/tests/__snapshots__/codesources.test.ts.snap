@@ -277,5 +277,26 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
       "sha256": "4372ed418f503ab1952c5bbfe073a6294716151853830b5804937e161b0a7324",
     },
   },
+  "llms/11-framework.mdx #1": {
+    "go": null,
+    "python": {
+      "lines": 93,
+      "sha256": "6f03eb1ba0c087d8b13f6db37ecd31c5a8418934463350fec04ad49dc3bc66ff",
+    },
+  },
+  "llms/11-framework.mdx #2": {
+    "go": null,
+    "python": {
+      "lines": 28,
+      "sha256": "55260a6a19010641d3828f7bdc1806f11873a9392f9a4b4066da0c5d5ff8fcdc",
+    },
+  },
+  "llms/11-framework.mdx #3": {
+    "go": null,
+    "python": {
+      "lines": 50,
+      "sha256": "9170437aa14cadb4a11593bd9e1a6d44a7c25bbe351571f2e033cf67c8c67411",
+    },
+  },
 }
 `;

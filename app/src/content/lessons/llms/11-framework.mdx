@@ -1,0 +1,200 @@
+---
+track: llms
+order: 11
+slug: framework
+title: The same eval with a framework
+goal: Run the triage eval through Inspect from the saved responses, match the lab's scores, and say which parts a framework standardises and which parts you still own.
+minutes: 25
+quiz:
+  - question: The replay provider receives a request whose system prompt is not in prompts.json, because you edited a prompt. What should happen, and why?
+    options:
+      - It sends the request to the API so the run still finishes
+      - It returns the closest saved answer, so the score stays close
+      - It raises an error that names the lab's record command, because a quiet fallback would either spend money or score an answer the prompt never produced
+      - It scores the sample as incorrect and carries on
+    answer: 2
+    explanation: Replay is only worth trusting if a changed input cannot return an old answer. The key is rebuilt from the request, so changed text is a miss. With fail_on_error=0.5, a few missing samples are left out of the score, but an edited prompt misses on most samples, so the eval fails and shows the hint.
+  - question: With --epochs 3, the second epoch must replay the lab's rep 1 answer, not rep 0. How does the replay provider know which epoch it is in?
+    options:
+      - The provider reads the epoch from Inspect's internal state
+      - The solver sends the repeat number in the x-replay-rep request header, because a model provider can't see which epoch it is in
+      - The provider picks a random saved answer for the ticket
+      - Each epoch uses a different model name
+    answer: 1
+    explanation: A model API only sees the messages and the config it is handed. The solver knows state.epoch, which counts from 1, so it sends str(state.epoch - 1) in the header and the provider rebuilds the lab's key with that rep. A missing header means rep 0.
+  - question: Inspect reports the same priority score as the lab, 0.9611 for v2_rules on all 60 tickets. Which of these does Inspect not give you, so the lab's code still has to provide it?
+    options:
+      - The standard error of the score
+      - The log you can browse with inspect view
+      - The cost estimate and the spend cap before a paid run
+      - Repeating each sample and combining the repeats
+    answer: 2
+    explanation: Inspect gives you the sample format, epochs, scorers with metrics and standard error, and logs. The replay keys, the cost estimate and cap, the judge's position check, and the choice of which numbers matter stay ours.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import FrameworkCompare from '../../../components/llms/FrameworkCompare.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+You built the triage eval by hand: a dataset, a runner, code graders and a judge. Every part was yours. That is the right way to learn it, and it has a cost. Each new project would need the same parts again.
+
+An <Term t="eval framework" /> is a library that supplies those parts. This lesson runs the same eval through one, Inspect AI, version 0.3.285. Inspect is Python only. The aim is not new numbers. The aim is the same numbers, so you can see what the framework does for you and what it does not.
+
+Here is the lab, section by section, and the piece of Inspect that does the same job:
+
+| Lab section | Inspect |
+|---|---|
+| 2. Dataset | A dataset of samples: `input` is the ticket, `target` the category, and the priority rides in metadata |
+| 3. The task and 4. Model call | A <Term t="solver" /> builds the request. A model API answers it. Here the model API is a replay provider we write |
+| 5. Code graders | A <Term t="scorer" /> with `accuracy()` and `stderr()` as its metrics |
+| 6. LLM judge | A model-graded scorer that calls the `grader` model role |
+| 8. Runner | Epochs repeat each sample (an <Term t="epoch" /> is one pass), and every run is written to a log |
+
+Inspect gives you:
+
+- the dataset and sample format;
+- epochs and reducers, which combine the repeats into one score;
+- scorers with metrics and standard error;
+- logs, and `inspect view` to browse them.
+
+We still own:
+
+- the replay keys, which decide when a saved answer matches a request;
+- the cost estimate and the spend cap before any paid run;
+- the judge's position check, which asks whether a verdict changes when the rubric moves;
+- deciding which numbers matter: which metric, which split, how big a gap counts.
+
+### Replay, again
+
+Inspect knows how to call the Anthropic API. The lab's saved responses are not an Inspect feature, so we write a model API named `replay`. You run it as `--model replay/claude-haiku-5-5`.
+
+It rebuilds the lab's own cache key from the request and reads the saved line. It never makes a paid call. A request with no saved answer is an error that names the lab's record command, as in lesson 4.
+
+## See it
+
+Press **Next** to step through one run. Watch where the lab's saved responses come in: step 3, the replay provider, is the only place the model is replaced. Every other step is Inspect's own.
+
+<FlowDiagram diagram="inspect-pipeline" />
+
+Each ticket became a sample, the solver built the lab's request, the replay provider answered from the saved lines, the scorers graded the answer, and the log kept the result. The code panel at each step shows the part of `triage_inspect.py` that does it.
+
+Now the numbers. Each row is one run and one metric. Look at the match mark: it should be a tick with the word "match" on every row, and the two values should be the same.
+
+<FrameworkCompare />
+
+All nine rows match. For example, `v2_rules` with 3 epochs on all 60 tickets scores 0.9611 on priority in both the lab and Inspect, with a standard error of 0.0239. The judge run passes `addresses_issue` on 0.7 of 20 replies, 14 of 20, in both. Inspect's standard error is the usual one for a pass rate, which is not the lab's noise band, so the two are not the same number even where the scores are.
+
+## The code
+
+Three sections hold the parts that are not a straight translation. Section 3 is the replay provider.
+
+<CodeTabs source="llms-inspect" section={3} />
+
+- `saved_line(kind, model, prompt_version, effort, key, root)` reads the response file and returns the latest line with that key, as the lab does. No line means `ReplayMiss`, with the record command in the message.
+- `parse_judge_message(text, rubric)` recovers the ticket and the reply from the judge message. It finds the known rubric text first, then splits at the first `"\n\nReply:\n"`, because a reply may contain blank lines or the word `Reply:`.
+- `@modelapi(name="replay")` registers the class, so `replay/<model>` works on the command line.
+- `rep = int((config.extra_headers or {}).get(REP_HEADER, 0))` reads the repeat number. The solver sends it in the `x-replay-rep` header, because a model provider can't see which epoch it is in. No header means rep 0.
+- `variant = next((v for v, text in self.prompts["triage"].items() if system == text), None)` finds the prompt version by matching the system message. An edited prompt matches nothing and falls through to the miss.
+- `key = triage_key(user, variant, self.model_name, None, rep, self.prompts)` is the lab's own function. The key has one definition.
+- `if line.get("error"): raise RuntimeError(...)` turns a saved error line into a sample error. Inspect leaves it out of the score, as the lab does.
+
+Section 5 holds the code scorers.
+
+<CodeTabs source="llms-inspect" section={5} />
+
+- `_field_scorer(field)` builds one scorer per field. Category and priority have one right answer, so plain code compares them.
+- `parsed = json.loads(completion) if completion else None` parses the reply. A refusal, a cut-off or invalid JSON scores as incorrect, and the reason goes in the score metadata.
+- `expected = target.text if field == "category" else state.metadata["priority"]` is where the sample format pays off: the target and the metadata are already there.
+- `@scorer(metrics=[accuracy(), stderr()])` is the part Inspect supplies. It computes the mean and its standard error over all samples, and over epochs.
+
+Section 6 holds the judge scorer.
+
+<CodeTabs source="llms-inspect" section={6} />
+
+- `grader = get_model(role="grader")` gets the judge from a model role. The run sets it with `--model-role grader=replay/claude-opus-5-5`, so the same task can point at a live judge with no code change.
+- `judge_message(ticket, reply, rubric)` builds the lab's "after" order: ticket, reply, then the rubric.
+- `if not reply:` skips a ticket with no triage reply, as the lab does. It returns `graded: False` in the metadata.
+- `@metric def graded_mean()` averages only the graded samples. A plain `mean()` would count the skipped ones as fails, and the pass rates would drop below the lab's.
+- `@scorer(metrics={rid: [graded_mean()] for rid in RUBRIC_IDS})` gives one pass rate per criterion: `addresses_issue`, `tone` and `no_false_promises`.
+
+Section 7 sets `fail_on_error=0.5` on both tasks. A few saved error lines are left out of the score, as in the lab. An edited prompt makes most samples miss, so more than half error, and the eval fails loudly with the record hint. Inspect's default would stop on the first error, and `False` would hide a total miss behind a "success".
+
+<Callout kind="go" title="No Go version">
+  Inspect is a Python library, and there is no Go equivalent. The lab's Go version in `llms/go/main.go` is unchanged, and it remains the parity check: it gives the same scores from the same saved responses, which Inspect now matches too. So this lesson has no "How Go does it" section.
+</Callout>
+
+<Callout kind="warning" title="Replay is not the live path">
+  Everything here is free. The live path swaps `replay/` for `anthropic/` in `--model`, and Inspect then calls the API itself. That costs money, and Inspect has none of the lab's cost estimate or spend cap. Check the estimate from the lab first, as the next section shows.
+</Callout>
+
+## Try it
+
+### Set up the venv
+
+Install Inspect in its own virtual environment, never in your base Python. From the repo root:
+
+```bash
+python3 -m venv .venv-inspect
+.venv-inspect/bin/pip install -r llms/inspect/requirements.txt
+```
+
+This installs `inspect-ai==0.3.285` and the lab's requirements. It is free, and `.venv-inspect/` is git-ignored.
+
+### Run the evals
+
+Each command replays saved answers. It costs nothing and needs no API key. The log goes to `llms/inspect/logs/`.
+
+```bash
+.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v1_basic
+.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v2_rules --epochs 3
+.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v3_examples
+.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage_judged --model replay/claude-haiku-5-5 --model-role grader=replay/claude-opus-5-5
+```
+
+Look for these scores on all 60 tickets: `v1_basic` 0.9 category and 0.7333 priority, `v2_rules` 1.0 and 0.9611, `v3_examples` 1.0 and 0.9667. The judged run should show `addresses_issue` 0.7, `tone` 0.95 and `no_false_promises` 0.95.
+
+Open the logs in the browser viewer:
+
+```bash
+.venv-inspect/bin/inspect view --log-dir llms/inspect/logs
+```
+
+To rebuild the table the aid above shows, run all four and write the summary. It exits non-zero if any row stops matching the lab:
+
+```bash
+.venv-inspect/bin/python llms/inspect/summarize.py
+```
+
+### See a replay miss
+
+This is free. Copy the data, then edit one prompt in the copy:
+
+```bash
+cp -r llms/data ~/lumen-inspect
+```
+
+Open `~/lumen-inspect/prompts.json`, add a word to the `v1_basic` text under `triage`, and run the first command with `-M root=$HOME/lumen-inspect`. Most samples now miss, so the eval fails and shows an error that names the case and the lab's record command. It never calls the API.
+
+### The live path (costs money)
+
+Do not run this without checking the cost. The lab prints the estimate for the same run and asks first. From `llms/python`, answering `N` spends nothing:
+
+```bash
+python triage_lab.py run --prompt v2_rules --split all --reps 3 --mode live
+```
+
+It prints the estimate and the worst case, then `Make these paid calls? [y/N]`. If you accept the cost, the same run in Inspect is:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model anthropic/claude-haiku-5-5 -T variant=v2_rules --epochs 3
+```
+
+This calls the API and costs money. Inspect will not stop at the lab's `--max-cost` cap, so the number the lab printed is the one to hold yourself to.
+
+<Callout kind="note" title="When to reach for a framework">
+  A framework earns its place when you run many evals, share them with a team, or want logs and a viewer for free. The hand-built lab earns its place when you need to know exactly why a number is what it is. Here you used both: the lab as the check, Inspect as the tool.
+</Callout>

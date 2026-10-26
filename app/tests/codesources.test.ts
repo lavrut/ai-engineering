@@ -37,7 +37,7 @@ describe('existing lessons', () => {
         shown[`${name} #${i + 1}`] = { python: digest(r.python), go: digest(r.go) };
       });
     }
-    expect(Object.keys(shown).length).toBe(29);
+    expect(Object.keys(shown).length).toBe(32);
     expect(shown).toMatchSnapshot();
   });
 });
