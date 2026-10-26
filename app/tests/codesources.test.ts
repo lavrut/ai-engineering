@@ -47,11 +47,11 @@ describe('code source registry', () => {
 
   it('registers the harness, the LLMs lab and the ML files', () => {
     expect([...ids].sort()).toEqual(
-      ['harness', 'llms', 'lora', 'ml-fetch', 'ml-llm', 'ml-mlflow', 'ml-mlops', 'ml-monitor', 'ml-serve', 'ml-train'].sort(),
+      ['harness', 'llms', 'llms-inspect', 'lora', 'ml-fetch', 'ml-llm', 'ml-mlflow', 'ml-mlops', 'ml-monitor', 'ml-serve', 'ml-train'].sort(),
     );
     expect(CODE_SOURCES['ml-serve']).toMatchObject({ python: 'ml/serve/server.py', go: 'ml/go/main.go' });
     expect(CODE_SOURCES['ml-monitor']).toMatchObject({ python: 'ml/python/monitor.py', go: 'ml/go/drift.go' });
-    for (const id of ['lora', 'ml-train', 'ml-mlops', 'ml-mlflow', 'ml-fetch', 'ml-llm'] as const) {
+    for (const id of ['llms-inspect', 'lora', 'ml-train', 'ml-mlops', 'ml-mlflow', 'ml-fetch', 'ml-llm'] as const) {
       expect(CODE_SOURCES[id].go, id).toBeUndefined();
     }
   });

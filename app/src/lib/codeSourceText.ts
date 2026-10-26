@@ -19,6 +19,7 @@ export function sourceTexts(id: CodeSourceId): { python: string; go?: string } {
         '../../../llms/python/triage_lab.py',
         '../../../llms/go/main.go',
         '../../../llms/finetune/lora.py',
+        '../../../llms/inspect/triage_inspect.py',
         '../../../ml/python/train.py',
         '../../../ml/python/mlops.py',
         '../../../ml/python/with_mlflow.py',

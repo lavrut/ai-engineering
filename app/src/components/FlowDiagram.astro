@@ -7,6 +7,7 @@ import FlowDiagramIsland from './FlowDiagram.tsx';
 import { resolveCode } from '../lib/codeSourceText';
 import { codeKey } from '../lib/diagram';
 import { evalPipeline } from '../data/diagrams/eval-pipeline';
+import { inspectPipeline } from '../data/diagrams/inspect-pipeline';
 import { harnessFlow } from '../data/diagrams/harness-flow';
 import { mlLoop } from '../data/diagrams/ml-loop';
 import { mlPipeline } from '../data/diagrams/ml-pipeline';
@@ -16,6 +17,7 @@ import { toolRoundtrip } from '../data/diagrams/tool-roundtrip';
 const diagrams = {
   'eval-pipeline': evalPipeline,
   'harness-flow': harnessFlow,
+  'inspect-pipeline': inspectPipeline,
   'ml-loop': mlLoop,
   'ml-pipeline': mlPipeline,
   'request-response': requestResponse,

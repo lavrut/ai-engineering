@@ -15,6 +15,7 @@
 export type CodeSourceId =
   | 'harness'
   | 'llms'
+  | 'llms-inspect'
   | 'lora'
   | 'ml-train'
   | 'ml-mlops'
@@ -36,6 +37,7 @@ export type CodeSourceInfo = {
 export const CODE_SOURCES: Record<CodeSourceId, CodeSourceInfo> = {
   harness: { python: 'harness/python/harness.py', go: 'harness/go/main.go' }, // the reference harness
   llms: { python: 'llms/python/triage_lab.py', go: 'llms/go/main.go' }, // the eval lab
+  'llms-inspect': { python: 'llms/inspect/triage_inspect.py' }, // the lab rebuilt in Inspect
   lora: { python: 'llms/finetune/lora.py' }, // the LoRA script
   'ml-train': { python: 'ml/python/train.py' }, // data, features, models, metrics, export
   'ml-mlops': { python: 'ml/python/mlops.py' }, // run tracker, registry, gate, retrain

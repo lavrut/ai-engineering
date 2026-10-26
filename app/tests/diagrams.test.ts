@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { codeProblems } from '../src/lib/codeSourceText';
 import { codeKey, validateDiagram, type Diagram } from '../src/lib/diagram';
 import { evalPipeline } from '../src/data/diagrams/eval-pipeline';
+import { inspectPipeline } from '../src/data/diagrams/inspect-pipeline';
 import { harnessFlow } from '../src/data/diagrams/harness-flow';
 import { mlLoop } from '../src/data/diagrams/ml-loop';
 import { mlPipeline } from '../src/data/diagrams/ml-pipeline';
@@ -13,6 +14,7 @@ const all: [string, Diagram][] = [
   ['request-response', requestResponse],
   ['tool-roundtrip', toolRoundtrip],
   ['eval-pipeline', evalPipeline],
+  ['inspect-pipeline', inspectPipeline],
   ['ml-pipeline', mlPipeline],
   ['ml-loop', mlLoop],
 ];
@@ -81,6 +83,15 @@ describe('diagram data', () => {
     const roles = new Set(evalPipeline.nodes.map((n) => n.role));
     expect(roles.has('dataset')).toBe(true);
     expect(roles.has('grader')).toBe(true);
+  });
+
+  it('inspect-pipeline has 5 steps linked to llms-inspect sections', () => {
+    expect(inspectPipeline.steps).toHaveLength(5);
+    for (const s of inspectPipeline.steps) expect(s.code?.source).toBe('llms-inspect');
+    const sec = Object.fromEntries(inspectPipeline.steps.map((s) => [s.n, s.code?.section]));
+    expect(sec).toEqual({ 1: 2, 2: 4, 3: 3, 4: 5, 5: 7 });
+    expect(inspectPipeline.nodes.find((n) => n.id === 'replay')?.label).toBe('Model (replay provider)');
+    expect(inspectPipeline.nodes.map((n) => n.id)).toEqual(['dataset', 'solver', 'replay', 'scorers', 'log']);
   });
 
   it.each(all)('%s: every highlighted node is reached by a highlighted edge', (_name, d) => {

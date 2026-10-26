@@ -1,16 +1,20 @@
 import { RECORD_COMMAND } from '../../lib/llmsAids';
 
 /** The empty state for an aid that shows recorded runs, when llms/data/responses/ has none. */
-export default function NoRecordedRun() {
+export default function NoRecordedRun({ command, text }: { command?: string; text?: string } = {}) {
   return (
     <div class="nrr" role="note">
       <p class="nrr-title">No recorded run yet</p>
       <p class="nrr-text">
-        Record the runs once from <code>llms/python</code>, then rebuild the app. This calls the API and costs money; the
-        command prints an estimate and asks before it spends anything.
+        {text ?? (
+          <>
+            Record the runs once from <code>llms/python</code>, then rebuild the app. This calls the API and costs money;
+            the command prints an estimate and asks before it spends anything.
+          </>
+        )}
       </p>
       <pre class="nrr-cmd">
-        <code>{RECORD_COMMAND}</code>
+        <code>{command ?? RECORD_COMMAND}</code>
       </pre>
       <style>{css}</style>
     </div>

@@ -1,0 +1,9 @@
+---
+// Build-time wrapper: loads llms/data/inspect_summary.json (or null) and passes it to the island.
+import FrameworkCompareIsland from './FrameworkCompare.tsx';
+import { loadInspectSummary } from '../../lib/inspectData';
+
+const summary = loadInspectSummary();
+---
+
+<FrameworkCompareIsland client:visible summary={summary} />
