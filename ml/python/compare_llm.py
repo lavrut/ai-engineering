@@ -304,7 +304,7 @@ def _confirm(n_calls: int, cap: float, yes: bool) -> bool:
     """Print the estimate, the worst case and the cap. True only after --yes or an interactive y."""
     typical, worst = estimate_cost(n_calls), worst_case_cost(n_calls)
     print(f"{n_calls} calls to {MODEL} (${PRICES[MODEL][0]:.2f} / ${PRICES[MODEL][1]:.2f} per million tokens in / out).")
-    print(f"Estimated cost ${typical:.2f} (worst case ${worst:.2f} if every reply uses max_tokens={MAX_TOKENS}). "
+    print(f"Estimated cost ${typical:.3f} (worst case ${worst:.3f} if every reply uses max_tokens={MAX_TOKENS}). "
           f"Cap: ${cap:.2f}.")
     if worst > cap:
         print(f"The worst case is over the cap; the run stops at ${cap:.2f} and keeps what finished.")
