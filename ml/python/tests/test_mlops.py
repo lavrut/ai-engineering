@@ -53,6 +53,18 @@ def test_log_run_without_kept_model_records_only_the_hash(tmp_path):
     assert run["model"]["sha256"] == hashlib.sha256(model.read_bytes()).hexdigest()
 
 
+def test_log_run_refuses_to_overwrite_a_changed_run(tmp_path):
+    model, runs = fake_model(tmp_path, "m1"), tmp_path / "runs"
+    params = {"model": "logreg", "C": 1.0}
+    run_id = mlops.log_run(params, {"f1": 0.7}, model, "d", runs_dir=runs, time=T0)
+    assert mlops.log_run(params, {"f1": 0.7}, model, "d", runs_dir=runs, time=T0) == run_id
+    with pytest.raises(FileExistsError, match="replace"):
+        mlops.log_run(params, {"f1": 0.8}, model, "d", runs_dir=runs, time=T0)
+    assert mlops.load_run(run_id, runs)["metrics"] == {"f1": 0.7}
+    mlops.log_run(params, {"f1": 0.8}, model, "d", runs_dir=runs, time=T0, replace=True)
+    assert mlops.load_run(run_id, runs)["metrics"] == {"f1": 0.8}
+
+
 def test_compare_runs_shows_param_and_metric_differences(tmp_path):
     model = fake_model(tmp_path, "m1")
     runs = tmp_path / "runs"
@@ -205,12 +217,23 @@ def test_committed_runs_cover_the_experiment_set():
     runs = {r["run_id"]: r for r in mlops.list_runs(ML / "runs")}
     assert {"nb-alpha0.1-2019-2021", "logreg-C0.3-2019-2021", "logreg-C1-2019-2021",
             "logreg-C3-2019-2021", "logreg-C1-2019-2022"} <= set(runs)
+    for r in runs.values():                  # built from committed code: commit, run, commit
+        assert r["git_commit"] and r["git_dirty"] is False, r["run_id"]
     v2 = runs["logreg-C1-2019-2022"]
     assert v2["model"]["path"] == "models/v2.json"
     assert v2["metrics"]["gate"]["passed"] in (True, False)
     # the run that matches v1's settings reproduces v1's recorded test metrics
     v1 = json.loads((ML / "models" / "v1.json").read_text(encoding="utf-8"))
     assert runs["logreg-C1-2019-2021"]["metrics"]["test"]["macro_f1"] == v1["metrics"]["macro_f1"]
+
+
+def test_runs_name_the_registered_model_files():
+    """Provenance: a registered version's run points at the same bytes the registry hashes."""
+    reg = mlops.load_registry(ML / "registry.json")
+    for version, entry in reg["versions"].items():
+        run = mlops.load_run(entry["run"], ML / "runs")
+        assert run["model"]["path"] == entry["path"], version
+        assert run["model"]["sha256"] == entry["sha256"], version
 
 
 def test_canonical_commands_reproduce_committed_files(tmp_path, monkeypatch):
@@ -222,7 +245,7 @@ def test_canonical_commands_reproduce_committed_files(tmp_path, monkeypatch):
     (tmp_path / "models").mkdir()
     shutil.copy(ML / "models" / "v1.json", tmp_path / "models" / "v1.json")
     for argv in mlops.CANONICAL:
-        mlops.main(argv, root=tmp_path)
+        mlops.main(["--root", str(tmp_path), *argv])
     for rel in ["registry.json", "models/v2.json",
                 *[f"runs/{p.name}" for p in sorted((ML / "runs").glob("*.json"))]]:
         assert (tmp_path / rel).read_bytes() == (ML / rel).read_bytes(), rel

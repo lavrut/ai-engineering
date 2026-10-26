@@ -9,6 +9,7 @@ is visible.
 
 Run (from ml/python):
     python mlops.py runs                          # the run table
+    python mlops.py --root /tmp/ml-copy rollback  # any command, on a copy of ml/
     python mlops.py compare RUN_A RUN_B           # what changed between two runs
     python mlops.py register models/v1.json       # path relative to ml/; lands in staging
     python mlops.py promote v1 production         # the old production version is archived
@@ -56,18 +57,23 @@ def sha256_file(path: str | Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def dump_json(data, compact: bool = False) -> str:
+    """The one text format: indented for runs and the registry, compact for model files."""
+    return (json.dumps(data, ensure_ascii=False, separators=(",", ":")) if compact
+            else json.dumps(data, ensure_ascii=False, indent=1)) + "\n"
+
+
 def write_json_atomic(path: str | Path, data, compact: bool = False) -> None:
     """Write the whole file or nothing. A crash mid-write would leave half a JSON file, so we
     write a temp file in the same directory, flush it to disk, then swap it in with
-    os.replace, which is atomic on one filesystem: a reader sees the old file or the new one."""
+    os.replace, which is atomic on one filesystem: a reader sees the old file or the new one.
+    Last, fsync the directory so the rename itself survives a power cut (POSIX only)."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    text = json.dumps(data, ensure_ascii=False, separators=(",", ":")) if compact \
-        else json.dumps(data, ensure_ascii=False, indent=1)
     fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(text + "\n")
+            f.write(dump_json(data, compact))
             f.flush()
             os.fsync(f.fileno())
         os.chmod(tmp, 0o644)                         # mkstemp makes it private (0600)
@@ -75,17 +81,30 @@ def write_json_atomic(path: str | Path, data, compact: bool = False) -> None:
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise
+    try:
+        dir_fd = os.open(path.parent, os.O_RDONLY)
+    except OSError:                                  # e.g. Windows cannot open a directory
+        return
+    try:
+        os.fsync(dir_fd)
+    except OSError:
+        pass
+    finally:
+        os.close(dir_fd)
 
 
 # ── 1. Run tracker ──────────────────────────────────────────────────────────
 def git_state() -> tuple[str | None, bool | None]:
-    """The commit the code came from, and whether ml/python had uncommitted changes.
-    Outside a git checkout (or without git) both are None: a run is still worth logging."""
+    """The commit the code came from, and whether the code (ml/python) or the data (ml/data)
+    differ from it, counting new untracked files there: an unsaved new script is uncommitted
+    code. Files outside them (ml/runs, the registry, models, the rest of the repo) are not
+    counted: they are what runs write. Without git both are None: still worth logging.
+    The habit this supports: commit the code, then run, then commit the artefacts."""
     try:
         def git(*args):
             return subprocess.run(["git", *args], cwd=ML_DIR, capture_output=True,
                                   text=True, check=True).stdout.strip()
-        return git("rev-parse", "HEAD"), bool(git("status", "--porcelain", "--", "python"))
+        return git("rev-parse", "HEAD"), bool(git("status", "--porcelain", "--", "python", "data"))
     except (OSError, subprocess.CalledProcessError):
         return None, None
 
@@ -97,8 +116,10 @@ def settings(**knobs) -> dict:
 
 
 def run_id_for(params: dict, train_window: dict) -> str:
-    """A readable id from what makes the run different: logreg-C0.3-2019-2021. The same
-    settings and window give the same id, so re-running them replaces that record."""
+    """A readable id from what makes the run different: logreg-C0.3-2019-2021. Keyed by the
+    settings, so rebuilding the committed set gives the same files. Real trackers (MLflow)
+    append every run under a fresh id instead; here a rerun that changes a record is refused
+    unless asked to replace it."""
     knob = {"logreg": "C", "nb": "alpha"}.get(params.get("model"), "")
     value = f"{params[knob]:g}" if knob in params else ""
     return f"{params.get('model', 'run')}-{knob}{value}-{train_window['from'][:4]}-{train_window['to'][:4]}"
@@ -106,10 +127,11 @@ def run_id_for(params: dict, train_window: dict) -> str:
 
 def log_run(params: dict, metrics: dict, model_path: str | Path, data_version: str, *,
             windows: dict | None = None, runs_dir: str | Path = ML_DIR / "runs",
-            time: str | None = None, keep_path: bool = True) -> str:
+            time: str | None = None, keep_path: bool = True, replace: bool = False) -> str:
     """Save one run: what we set (params), what we got (metrics), which data (its hash),
     which model file (its hash), which code (git commit) and which time windows.
-    keep_path=False is for models we throw away: the hash still says what was built."""
+    keep_path=False is for models we throw away: the hash still says what was built.
+    An existing run file with different bytes is kept unless replace=True."""
     windows = windows or {"train": {"from": train.SPLITS["train"][0], "to": train.SPLITS["train"][1]}}
     runs_dir = Path(runs_dir)
     run_id = run_id_for(params, windows["train"])
@@ -120,7 +142,11 @@ def log_run(params: dict, metrics: dict, model_path: str | Path, data_version: s
     run = {"run_id": run_id, "time": time or now(), "params": params, "windows": windows,
            "data_version": data_version, "model": {"path": path, "sha256": sha256_file(model_path)},
            "metrics": metrics, "git_commit": commit, "git_dirty": dirty}
-    write_json_atomic(runs_dir / f"{run_id}.json", run)
+    target = runs_dir / f"{run_id}.json"
+    if target.exists() and not replace and target.read_text(encoding="utf-8") != dump_json(run):
+        raise FileExistsError(f"run {run_id} exists with different contents; pass replace=True "
+                              "(CLI: --replace) to overwrite it")
+    write_json_atomic(target, run)
     return run_id
 
 
@@ -292,14 +318,18 @@ def run_gate(version: str, root: Path, *, window=HOLDOUT, floor: float = FLOOR,
 
 
 # ── 4. Retrain ──────────────────────────────────────────────────────────────
-def experiments(root: Path) -> list[str]:
+def experiments(root: Path, *, replace: bool = False) -> list[str]:
     """The experiment set behind v1: Naive Bayes and logistic regression with three values
-    of C, all trained on 2019-2021 and scored on 2022. Their model files go to a temp dir;
-    the runs keep each file's hash."""
+    of C, all trained on 2019-2021 and scored on 2022. Model files go to a temp dir and the
+    runs keep each file's hash, except the run with v1's settings: it is exported exactly as
+    train.py exported v1, must reproduce models/v1.json byte for byte, and is logged against
+    that file, so the run and the registry name the same SHA-256."""
     rows = train.load_complaints(train.PATHS["complaints"])
     dv, ids = train.data_version(train.PATHS["complaints"]), []
     windows = {"train": dict(zip(("from", "to"), train.SPLITS["train"])),
                "eval": {"name": "test", **dict(zip(("from", "to"), train.SPLITS["test"]))}}
+    created = max(r["date"] for r in train.split_by_time(rows)["train"])   # as train.py
+    v1 = root / "models" / "v1.json"
     with tempfile.TemporaryDirectory() as tmp:
         for c in (0.3, 1.0, 3.0):
             run = train.fit_and_evaluate(rows, c=c)
@@ -311,20 +341,29 @@ def experiments(root: Path) -> list[str]:
                 params = settings(model=kind, **knobs)
                 run_id = run_id_for(params, windows["train"])
                 m = run["metrics"][kind]
-                meta = {"version": run_id, "created": windows["train"]["to"], "data_version": dv,
+                is_v1 = kind == "logreg" and c == train.C
+                meta = {"version": "v1" if is_v1 else run_id, "created": created, "data_version": dv,
                         "majority_class": fitted["majority_class"], "metrics": summarize(m["test"], "test")}
                 path = Path(tmp) / f"{run_id}.json"
                 write_json_atomic(path, train.export_model(fitted["models"][kind], fitted["vocabulary"],
                                                            fitted["idf"], meta), compact=True)
+                if is_v1:
+                    if not v1.exists() or v1.read_bytes() != path.read_bytes():
+                        raise ValueError(f"{run_id} does not reproduce {v1}")
+                    path = v1
                 metrics = {"test": meta["metrics"], "train": summarize(m["train"], "train")}
                 ids.append(log_run(params, metrics, path, dv, windows=windows, runs_dir=root / "runs",
-                                   time=day_after(windows["eval"]["to"]), keep_path=False))
+                                   time=day_after(windows["eval"]["to"]), keep_path=is_v1,
+                                   replace=replace))
     return ids
 
 
-def retrain(root: Path, *, floor: float = FLOOR, time: str | None = None) -> dict:
+def retrain(root: Path, *, floor: float = FLOOR, time: str | None = None,
+            replace: bool = False) -> dict:
     """The loop the capstone walks through: train v2 on 2019-2022 with v1's settings, register
-    it in staging, gate it against production on 2023 H1, and promote only if it passed."""
+    it in staging, gate it against production on 2023 H1, and promote only if it passed.
+    models/v2.json is kept (and committed) even when the gate fails: a registered version is
+    an artefact, and the gate, rollback and "promote anyway" exercises need the file."""
     time = time or day_after(HOLDOUT[1])
     if "v2" in load_registry(root / "registry.json")["versions"]:
         raise ValueError("v2 is already registered; retrain writes it once")
@@ -351,7 +390,8 @@ def retrain(root: Path, *, floor: float = FLOOR, time: str | None = None) -> dic
     metrics = {"holdout": result["candidate"], "production_holdout": result["production"],
                "gate": {k: result[k] for k in ("passed", "gain", "band", "floor", "reasons",
                                                "production_version")}}
-    log_run(params, metrics, path, dv, windows=windows, runs_dir=root / "runs", time=time)
+    log_run(params, metrics, path, dv, windows=windows, runs_dir=root / "runs", time=time,
+            replace=replace)
     if result["passed"]:
         promote("v2", "production", registry=root / "registry.json", time=time, note="gate passed")
     return result
@@ -368,11 +408,14 @@ CANONICAL = [
 ]
 
 
-def main(argv: list[str] | None = None, root: Path = ML_DIR) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Run tracker, model registry and promotion gate.")
+    ap.add_argument("--root", type=Path, default=ML_DIR,
+                    help="the ml/ directory to work in (default: the repo's); try things on a copy")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("runs", help="list the tracked runs")
-    sub.add_parser("experiments", help="log the NB / logreg experiment set")
+    sub.add_parser("experiments", help="log the NB / logreg experiment set").add_argument(
+        "--replace", action="store_true", help="overwrite run files whose contents changed")
     p = sub.add_parser("compare", help="show what differs between two runs")
     p.add_argument("a"), p.add_argument("b")
     p = sub.add_parser("register", help="register a model file (path relative to ml/) in staging")
@@ -383,11 +426,13 @@ def main(argv: list[str] | None = None, root: Path = ML_DIR) -> int:
     p = sub.add_parser("gate", help="gate a candidate against production on a holdout window")
     p.add_argument("version"), p.add_argument("--from", dest="start", default=HOLDOUT[0])
     p.add_argument("--to", dest="end", default=HOLDOUT[1])
-    sub.add_parser("retrain", help="train v2, register, gate, promote if it passed")
+    sub.add_parser("retrain", help="train v2, register, gate, promote if it passed").add_argument(
+        "--replace", action="store_true", help="overwrite its run file if the contents changed")
     for p in sub.choices.values():
         p.add_argument("--time", help="event time (default: now; retrain: the data's date)")
         p.add_argument("--floor", type=float, default=FLOOR)
     args = ap.parse_args(sys.argv[1:] if argv is None else argv)
+    root = args.root.resolve()
     reg, runs_dir = root / "registry.json", root / "runs"
 
     if args.cmd == "runs":
@@ -397,7 +442,7 @@ def main(argv: list[str] | None = None, root: Path = ML_DIR) -> int:
             print(f"{r['run_id']:<26}{r['time']:<22}{r['windows']['eval']['name']:<9}"
                   f"{m['macro_f1']:>9.3f}{m['accuracy']:>10.3f}")
     elif args.cmd == "experiments":
-        print("\n".join(f"logged {i}" for i in experiments(root)))
+        print("\n".join(f"logged {i}" for i in experiments(root, replace=args.replace)))
     elif args.cmd == "compare":
         print(json.dumps(compare_runs(args.a, args.b, runs_dir=runs_dir), indent=1))
     elif args.cmd == "register":
@@ -411,7 +456,7 @@ def main(argv: list[str] | None = None, root: Path = ML_DIR) -> int:
     elif args.cmd in ("gate", "retrain"):
         result = (run_gate(args.version, root, window=(args.start, args.end), floor=args.floor,
                            time=args.time) if args.cmd == "gate"
-                  else retrain(root, floor=args.floor, time=args.time))
+                  else retrain(root, floor=args.floor, time=args.time, replace=args.replace))
         print(("PASSED" if result["passed"] else "FAILED") + " vs " + result["production_version"])
         print("\n".join(f"  {r}" for r in result["reasons"]))
         return 0 if result["passed"] else 1
