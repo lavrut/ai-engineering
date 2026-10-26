@@ -53,3 +53,14 @@ def test_unparseable_prediction_is_an_error_line():
     ok = triage_lab.grade(TICKET, lora.prediction_line(TICKET, '{"category":"billing","priority":"high"}'))
     r = triage_lab.report([g, ok])
     assert r["errors"] == 1 and r["both"] == 1.0
+
+
+def test_summarize_reports_all_tickets_and_warns(capsys):
+    test = [dict(TICKET, id="a"), dict(TICKET, id="b")]
+    good = lora.prediction_line(test[0], '{"category":"billing","priority":"high"}')
+    bad = lora.prediction_line(test[1], "junk")
+    lora.summarize([good, bad], test)
+    out = capsys.readouterr().out
+    assert "1/2 = 50%" in out and "WARNING: 1 of 2" in out
+    lora.summarize([lora.prediction_line(test[0], "junk")], test)   # nothing parsed: no traceback
+    assert "No output could be parsed" in capsys.readouterr().out

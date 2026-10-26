@@ -1,6 +1,5 @@
-torch
+# Colab already has torch (with CUDA); installing it again is noise. Locally: pip install torch pytest
 transformers>=4.45
 peft>=0.13
 datasets
 accelerate
-pytest>=8

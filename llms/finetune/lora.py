@@ -7,13 +7,23 @@ LoRA freezes the base model and trains two small matrices (rank r) beside select
 layers. Here: Qwen/Qwen2.5-0.5B-Instruct learns to answer a ticket with
 {"category": ..., "priority": ...}. It trains on the dev split and is graded on test.
 
+Limits: 3 epochs on 40 dev tickets is only about 15 optimizer steps. This demonstrates
+the mechanics; it is not a tuned model. With 20 test tickets the noise band is about
++-22%, so any comparison with the API models is within noise.
+
 Run in Google Colab (Runtime > Change runtime type > T4 GPU), about 10 minutes:
-    !git clone <your copy of this repo> masterclass     # or upload the llms/ folder
-    %cd masterclass
-    !pip install -q -r llms/finetune/requirements.txt
-    !python llms/finetune/lora.py
-It writes predictions.jsonl (saved-response lines that triage_lab.grade scores)
-and prints the report. Format tests need no GPU: python -m pytest llms/finetune -q
+    1. On your machine, zip the repo's llms/ folder (the course repo is private, so
+       don't paste a GitHub token into a notebook).
+    2. In Colab, upload llms.zip in the file panel, then:
+         !unzip -q llms.zip
+         !pip install -q -r llms/finetune/requirements.txt
+         !python llms/finetune/lora.py
+    The first run downloads about 1 GB of model weights from Hugging Face.
+    predictions.jsonl is written to the current directory: download it from the file
+    panel (or copy it to Drive), because Colab deletes it when the session ends.
+It prints accuracy over the parsed outputs and over all test tickets. Re-score a saved file later:
+    python llms/finetune/lora.py --score predictions.jsonl
+Format tests need no GPU: python -m pytest llms/finetune -q
 """
 from __future__ import annotations
 
@@ -31,6 +41,7 @@ LORA_R = 8                             # rank: how many numbers each adapter may
 LORA_ALPHA = 16                        # scale; alpha / r = 2 is a common default
 TARGET_MODULES = ["q_proj", "k_proj", "v_proj", "o_proj"]   # attention projections
 EPOCHS = 3
+SEED = 0                              # fixed so runs are comparable
 LEARNING_RATE = 2e-4                   # LoRA tolerates a higher rate than full fine-tuning
 MAX_NEW_TOKENS = 32                    # the answer is a short JSON object
 OUT_PATH = Path("predictions.jsonl")
@@ -113,15 +124,19 @@ def tokenize(example: dict, tokenizer) -> dict:
 
 
 def train(model, tokenizer, tickets: list[dict]):
+    """40 tickets / batch 4 / accumulate 2 = 5 steps per epoch, so about 15 steps in all:
+    enough to see the format and some signal, far too little to call the model tuned."""
     from datasets import Dataset
-    from transformers import DataCollatorForSeq2Seq, Trainer, TrainingArguments
+    from transformers import DataCollatorForSeq2Seq, Trainer, TrainingArguments, set_seed
+
+    set_seed(SEED)
 
     rows = [to_example(t) for t in tickets]
     data = Dataset.from_list(rows).map(lambda e: tokenize(e, tokenizer), remove_columns=["prompt", "completion"])
     args = TrainingArguments(output_dir="lora-out", num_train_epochs=EPOCHS,
                              per_device_train_batch_size=4, gradient_accumulation_steps=2,
                              learning_rate=LEARNING_RATE, logging_steps=10,
-                             save_strategy="no", report_to="none")
+                             save_strategy="no", report_to="none", seed=SEED)
     # The collator pads input_ids and labels to the same length in each batch.
     Trainer(model=model, args=args, train_dataset=data,
             data_collator=DataCollatorForSeq2Seq(tokenizer, padding=True)).train()
@@ -144,19 +159,38 @@ def predict(model, tokenizer, tickets: list[dict]) -> list[dict]:
     return lines
 
 
-def main() -> int:
-    tickets = triage_lab.load_tickets()
-    dev, test = triage_lab.split(tickets, "dev"), triage_lab.split(tickets, "test")
+def summarize(lines: list[dict], test: list[dict]) -> None:
+    """Print scores. triage_lab's accuracy skips error lines, so also count every test ticket."""
+    by_id = {t["id"]: t for t in test}
+    grades = [triage_lab.grade(by_id[l["case_id"]], l) for l in lines]
+    bad = sum(g["outcome"] != "ok" for g in grades)
+    right = sum(g["both_ok"] for g in grades)
+    print(f"correct on all {len(test)} test tickets: {right}/{len(test)} = {right / len(test):.0%}")
+    if bad:
+        print(f"WARNING: {bad} of {len(lines)} outputs were unparseable; they count as wrong above.")
+    try:
+        r = triage_lab.report(grades)
+    except ValueError:
+        print("No output could be parsed, so there is no accuracy over parsed outputs. "
+              "Check predictions.jsonl for what the model wrote.")
+        return
+    print(f"over the {r['scored']} parsed outputs only: category {r['category']:.0%}, "
+          f"priority {r['priority']:.0%}, both {r['both']:.0%} (noise band +-{r['band']:.0%})")
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    test = triage_lab.split(triage_lab.load_tickets(), "test")
+    if argv[:1] == ["--score"]:                  # re-score a saved file, no GPU needed
+        summarize(triage_lab.load_jsonl(argv[1]), test)
+        return 0
+    dev = triage_lab.split(triage_lab.load_tickets(), "dev")
     model, tokenizer = load_model()
     train(model, tokenizer, dev)
     lines = predict(model, tokenizer, test)
     OUT_PATH.write_text("".join(json.dumps(l, ensure_ascii=False) + "\n" for l in lines), encoding="utf-8")
-    by_id = {t["id"]: t for t in test}
-    r = triage_lab.report([triage_lab.grade(by_id[l["case_id"]], l) for l in lines])
     print(f"wrote {OUT_PATH} ({len(lines)} lines)")
-    print(f"LoRA {MODEL_NAME} on {r['n']} test tickets ({r['errors']} unparseable): "
-          f"category {r['category']:.0%}, priority {r['priority']:.0%}, both {r['both']:.0%} "
-          f"(noise band ±{r['band']:.0%})")
+    summarize(lines, test)
     return 0
 
 
