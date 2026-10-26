@@ -22,14 +22,14 @@ quiz:
       - It trains W but skips the backward pass
     answer: 1
     explanation: A·B is a full 896 × 896 matrix, so it can be added to W, but its rank is at most 8. Training learns only A and B, 1.79% of W's size. The bet is that the change a task needs is small in this sense, which holds well enough for many tasks.
-  - question: Suppose your Colab run gets 17 of the 20 test tickets right, where v2_rules with Haiku gets 19. What can you conclude?
+  - question: Suppose your Colab run scores a little below Haiku's 19 of 20 with v2_rules on the same test tickets. What can you conclude?
     options:
-      - Haiku is better by 10 points
+      - Haiku is better, by the size of the gap
       - The LoRA model is nearly as good, so fine-tune instead
       - Nothing about which is better; with 20 tickets the band is about ±22%, and 15 optimizer steps on 40 examples is a demonstration, not a tuned model
       - The LoRA run failed
     answer: 2
-    explanation: Two or three tickets on 20 is well inside ±22.4%. The training run is also tiny on purpose, so a weak score says little about what fine-tuning could reach with more data. What the run does show is the mechanics, end to end, graded by the same code as every other configuration.
+    explanation: A gap of a ticket or two on 20 is well inside ±22.4%. The training run is also tiny on purpose, so a weak score says little about what fine-tuning could reach with more data. What the run does show is the mechanics, end to end, graded by the same code as every other configuration.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
 import LoraDiagram from '../../../components/llms/LoraDiagram.astro';
@@ -56,7 +56,7 @@ Take one weight matrix `W`, `d × d`. LoRA adds two thin matrices: `A`, `d × r`
 
 The count is simple. `A` and `B` hold `2 · d · r` numbers; `W` holds `d²`. In this model `d = 896`. With `r = 8`, that is 14,336 trained numbers against 802,816 in `W`: 1.79%.
 
-`lora.py` puts adapters on four attention matrices in every layer: `q_proj`, `k_proj`, `v_proj` and `o_proj`. `q_proj` and `o_proj` are 896 × 896. In this model `k_proj` and `v_proj` are 896 × 128, so their adapters are smaller. Across the whole model the trained share is well under 1%, and `print_trainable_parameters()` prints the exact count when the script runs.
+`lora.py` puts adapters on four attention matrices in every layer: `q_proj`, `k_proj`, `v_proj` and `o_proj`. `q_proj` and `o_proj` are 896 × 896. In this model `k_proj` and `v_proj` are 896 × 128, so their adapters are smaller. The 128 comes from the model's `config.json` on Hugging Face: 2 key-value heads of size 64. Across the whole model the trained share is well under 1%, and `print_trainable_parameters()` prints the exact count when the script runs.
 
 The bet behind LoRA is that the change a narrow task needs is small in this sense. It often holds well enough, and it makes training fit on one small GPU.
 
@@ -181,9 +181,9 @@ Here is what to look for, in order:
 - the `trainable params` line from `print_trainable_parameters()`, well under 1% of all params;
 - the training loss, logged once at step 10, and a summary with `train_loss` when training ends;
 - `wrote predictions.jsonl (20 lines)`;
-- `correct on all 20 test tickets: N/20`, counting every ticket;
+- `correct on all 20 test tickets: N/20 = P%`, counting every ticket;
 - a `WARNING: ... outputs were unparseable` line, if any answer was not valid JSON with allowed values;
-- `over the N parsed outputs only: category ..., priority ..., both ... (noise band +-...)`.
+- `over the N parsed outputs only: category ..., priority ..., both ... (noise band +-...)`. If no output parsed at all, this line is replaced by `No output could be parsed, so there is no accuracy over parsed outputs.`, followed by a pointer to `predictions.jsonl`.
 
 Then read the result against what you know. Haiku with `v2_rules` gets 19 of the 20 (95.0%) and `v1_basic` gets 11 (55.0%), on the same tickets. Any gap smaller than ±22.4% is not evidence either way. If many outputs were unparseable, the model has not yet learned the format, which 15 steps may not be enough for.
 

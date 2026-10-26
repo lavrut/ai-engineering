@@ -117,7 +117,7 @@ Here is each file in full. Read it top to bottom once: you have met every part.
 
 <CodeTabs source="llms" whole goNote="The Go file has the same ten sections with the same titles. The main differences, all covered in earlier lessons: canonicalJSON writes the cache key's JSON byte for byte as Python does, and run is generic over its cases, with goroutines, a semaphore channel and a WaitGroup (lesson 4). Verdicts are *bool, so nil means not graded (lesson 6). Errors are returned as values where Python raises. The recording plan lives only in the Python file." />
 
-The Python file is about 850 lines and needs one package, the `anthropic` SDK. The Go file is about 1,400 lines, mostly because Go spells out types, JSON decoding and error checks. Both read the same data files and give the same scores, and neither calls the API in replay mode.
+The Python file is about 850 lines and needs one runtime package, the `anthropic` SDK; `requirements.txt` also lists `brotli`, which its comment says API calls need, and `pytest` for the tests. The Go file is about 1,400 lines, mostly because Go spells out types, JSON decoding and error checks. Both read the same data files and give the same scores, and neither calls the API in replay mode.
 
 <Callout kind="note" title="What the gate's pass means">
   A pass says the candidate is not measurably worse on these 40 tickets' category and priority. It does not say the change is better, that the replies are as good, or that real tickets behave like these synthetic ones. Read the fixed and broken lists from `compare` before you ship, as you did in lesson 7.
@@ -195,7 +195,7 @@ Work in a copy of the data, so the lab's files stay as they are. Each exercise i
   python triage_lab.py --data ~/lumen-gate gate --prompt v1_basic --baseline v2_rules
   ```
 
-  The gate stops with `error: no saved response for triage / claude-haiku-5-5 / v1_basic / case t061 (rep 0)` and exits with 1. A new ticket has no answers in either version. Before you record, check the label against `labeling_guide.md`: one customer on two devices is one user, so it is not an outage. Recording costs money: `python triage_lab.py --data ~/lumen-gate run --prompt v1_basic --mode record` prints the estimate and asks first. It counts all 41 tickets, `$0.02`, worst case `$0.04`, but record mode skips the 40 already saved, so only `t061` is paid for, about `$0.0004`. Do the same for `v2_rules`, then rerun the gate. The band is now `1/√41`, ±15.6%.
+  The gate stops with `error: no saved response for triage / claude-haiku-5-5 / v1_basic / case t061 (rep 0). Record it: python triage_lab.py record ...` and exits with 1. A new ticket has no answers in either version. Before you record, check the label against `labeling_guide.md`: one customer on two devices is one user, so it is not an outage. Recording costs money: `python triage_lab.py --data ~/lumen-gate run --prompt v1_basic --mode record` prints the estimate and asks first. It counts all 41 tickets, `$0.02`, worst case `$0.04`, but record mode skips the 40 already saved, so only `t061` is paid for, about `$0.0004`. Do the same for `v2_rules`, then rerun the gate. The band is now `1/√41`, ±15.6%.
 
 - [ ] **Gate a deliberately worse prompt.** Save this as `llms/python/worse_version.py`. It writes `v5_no_priority`, a copy of `v2_rules` without its priority rules:
 
@@ -218,9 +218,9 @@ Work in a copy of the data, so the lab's files stay as they are. Each exercise i
   python triage_lab.py --data ~/lumen-gate gate --prompt v5_no_priority --baseline v2_rules
   ```
 
-  Replay misses on `t001`: a new version is new text. Recording it costs money: adding `--mode record` to `python triage_lab.py --data ~/lumen-gate run --prompt v5_no_priority` prints the estimate first: 41 Haiku calls with the ticket from the first exercise, `$0.02`, worst case `$0.04`. Then rerun the gate. Before you look, write down whether you expect it to fail, and on which condition.
+  Replay stops with `error: no saved response for triage / claude-haiku-5-5 / v5_no_priority / case t001 (rep 0). Record it: python triage_lab.py record ...`: a new version is new text. Recording it costs money: adding `--mode record` to `python triage_lab.py --data ~/lumen-gate run --prompt v5_no_priority` prints the estimate first: 41 Haiku calls with the ticket from the first exercise, `$0.02`, worst case `$0.04`. Then rerun the gate. Before you look, write down whether you expect it to fail, and on which condition.
 
-- [ ] **Wire it into CI.** A minimal GitHub Actions job for a repository that keeps this lab: it installs the SDK and runs the gate in replay mode, so it needs no key and costs nothing. Set `--prompt` to the version the pull request ships and `--baseline` to the one in production:
+- [ ] **Wire it into CI.** This course repo has no CI configured; here is a minimal GitHub Actions job for a repository that keeps this lab: it installs the SDK and runs the gate in replay mode, so it needs no key and costs nothing. Set `--prompt` to the version the pull request ships and `--baseline` to the one in production:
 
   ```yaml
   name: eval gate

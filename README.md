@@ -58,6 +58,8 @@ cd llms/go && go run . run --prompt v2_rules     # same scores in Go
 
 A request with no saved answer (a new prompt version, ticket, model or effort) stops with a replay-miss error; it never falls back to a paid call.
 
+The data files (tickets, prompts, reply labels, saved responses), how the labels were made and what the recordings cost are described in [llms/data/README.md](llms/data/README.md).
+
 ### Test the lab
 
 The tests use fixtures and fake models and never call the API.
