@@ -50,4 +50,6 @@ def test_unparseable_prediction_is_an_error_line():
     assert line["output"] is None and line["error"]
     g = triage_lab.grade(TICKET, line)
     assert g["outcome"] == "error" and not g["both_ok"]
-    assert triage_lab.report([g])["errors"] == 1
+    ok = triage_lab.grade(TICKET, lora.prediction_line(TICKET, '{"category":"billing","priority":"high"}'))
+    r = triage_lab.report([g, ok])
+    assert r["errors"] == 1 and r["both"] == 1.0
