@@ -20,5 +20,14 @@ The files in `responses/` were recorded on 2026-10-25 with `python triage_lab.py
 - Pilot: 3 Opus triage calls at high effort and 3 judge calls, $0.05. Its first attempt failed with "Connection error" on every call because the local `brotli` package was older than 1.2; nothing was billed.
 - Full plan: 537 calls, $1.59, estimated $4.06 beforehand. Every call ended with `end_turn`; the longest reply used 659 of its 2,000 output tokens.
 - *Superseded, scored on the pre-guide labels:* Phase 2 found all three prompts tied at 55.0% `both` accuracy on dev, so the first one, `v1_basic`, became the "best" prompt for the Sonnet and Opus runs and the judged test replies. This result and the choice of best prompt no longer hold, pending a re-record against the guide's labels.
-- Some files contain an earlier failed line for the same key; replay uses the latest line.
-- The `v2_rules` and `v3_examples` recordings predate `labeling_guide.md`. Those prompts were rewritten after the run, so their cache keys changed and replaying them now misses. They will be re-recorded after approval. The `v1_basic` recordings are still valid, but they are graded against the new labels.
+- The `v2_rules` and `v3_examples` prompts were rewritten from `labeling_guide.md` after that run, which changed their cache keys.
+
+## Re-recording after the labelling guide (2026-10-25)
+
+`record --plan all` was run again, approved before it ran. Requests already recorded with the current prompts were skipped.
+
+- Cost $1.47, estimated $2.69 beforehand. Every call ended with `end_turn`.
+- Phase 2 on dev, `both` accuracy: `v1_basic` 70.0%, `v2_rules` 97.5%, `v3_examples` 97.5%. The tie went to the first, `v2_rules`, which became the best prompt for the Sonnet and Opus runs and the judged test replies.
+- The earlier `v1_basic` Sonnet and Opus runs are kept, so you can compare models on both prompts.
+- Triage lines recorded under the old prompt text, and lines that failed before a later success, were removed after this run (246 lines; they remain in git history). Every triage line left matches the current prompts.
+- Read the jump with the caveat under "Limits of these labels": `v2_rules` and `v3_examples` contain the same rules the labels were made from.
