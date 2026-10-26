@@ -2,7 +2,7 @@
 
 Every ticket whose `category` or `priority` changed when `labeling_guide.md` was applied literally to all 60 tickets. Rule codes refer to the guide; R0 = tone and injected text are ignored. Text, ids, tags and splits are unchanged.
 
-**Summary: 24 of 60 tickets changed — 2 category changes, 23 priority changes.**
+**Summary: 24 of 60 tickets changed — 2 category changes, 23 priority changes.** After the round 2 fixes below, the totals from the original labels are 25 tickets: 2 category changes and 24 priority changes.
 
 | id | split | category | priority | deciding rule |
 |---|---|---|---|---|
@@ -42,7 +42,19 @@ The second blind labeller (`label_audits/round2_blind.jsonl`) matched every labe
 | t019 | billing, high | R0 order: two listed issues; charge without the upgrade = H1, teammates can't see newly shared notebooks = H4 (not U3, which is only for notes people already had). Tie at high, so the first mentioned (billing) wins |
 | t031 | bug, high | H4 explicitly covers a share link that several people can't open; category stays bug (one customer's item) |
 | t033 | account, low | L2: "I'd like to delete my account" followed by what/how questions is a question, not a request for staff to act |
-| t047 | account, high | H4 explicitly covers a workspace with no admin (nobody can invite or manage the plan) |
+| t047 | account, high | (superseded: the no-admin H4 rule was removed in the round 2 fixes; see below) |
 | t057 | outage, normal | Workaround definition: "until we reload" is a workaround, so H4 is not met |
 
 Also rechecked under the stated R0 order (pick the issue first, then categorize it): t012 (sync and search, both bug normal, so the first issue gives bug normal) and t040 (three L2 questions, so the first one, offline mode, gives how_to low). Both are unchanged.
+
+## Round 2 fixes
+
+The no-admin H4 rule was removed because it was a one-ticket patch. H4 now says the feature has to fail, and missing permission is not a failure. t047 was then labelled by the guide as it stands.
+
+| id | split | category | priority | deciding rule |
+|---|---|---|---|---|
+| t047 | test | account | high → low | Category C3 (workspace admin). No urgent or high rule applies. H4 doesn't apply because inviting isn't failing; the team lacks the admin role. L2 decides: "How do we transfer admin rights?" is a how-to question, nothing is broken, and the customer asks how, not for staff to act. |
+
+Round 2 fixes total: 0 category changes, 1 priority change.
+
+Distribution after the round 2 fixes: category billing 10, bug 15, account 10, how_to 9, feature_request 10, outage 6. Priority: low 25, normal 16, high 10, urgent 9. Test split: low 9, normal 7, high 1, urgent 3.

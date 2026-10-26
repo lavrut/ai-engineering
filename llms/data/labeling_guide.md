@@ -13,17 +13,17 @@ This guide says how a Lumen support ticket gets its one right `category` and `pr
 
 | Rule | Category | When |
 |---|---|---|
-| C1 | `outage` | The service, or a whole feature, is unreachable or failing, **and** either (a) the ticket reports more than one affected user, team, office or site, or (b) Lumen itself says it is down: the status page, or an error from the service that says it is unavailable ("temporarily unavailable", HTTP 503). |
-| C2 | `billing` | Money, charges, refunds, invoices, plans, discounts or payment methods. This beats `how_to`: "how do I change my card" is billing. |
+| C1 | `outage` | The service, or a whole feature, is unreachable or failing, **and** either (a) the ticket reports more than one affected user, team, office or site, or (b) Lumen itself says it is down: the status page, or an error from the service that says it is unavailable ("service unavailable", an HTTP 503 page). |
+| C2 | `billing` | Money, charges, refunds, invoices, plans, discounts or payment methods. This beats `how_to`: "how do I update my billing address" is billing. |
 | C3 | `account` | Access to an account or its identity: sign-in, password, two-factor, the account email, the profile/display name, deleting, merging or adding accounts, workspace admin and membership. A "how do I change X" question is `account` when X is on this list and `how_to` otherwise (language, notifications, themes, sorting). |
-| C4 | `feature_request` | The customer asks for something and says or assumes the app can't do it yet ("please add", "would love", "any chance that gets added", "is it on your roadmap", "flat notebooks make it messy"). |
+| C4 | `feature_request` | The customer asks for something and says or assumes the app can't do it yet ("please build", "I wish it could", "will you ever support…", "is it planned", "it only lets me use one colour"). |
 | C5 | `bug` | Something behaves wrongly for this customer, or produces broken content (errors, crashes, wrong results, corrupted or broken imports, slowness), and C1 is not met. |
 | C6 | `how_to` | A question about how to do something, or whether it's possible, with nothing reported broken. |
 
 Tie-breakers:
 - **One report is not an outage.** One person on several of their own devices counts as one user. A problem with one customer's item (a note, a share link, a notebook) is a `bug`, even when several people try to open it.
-- **"Can I do X?" when X didn't work.** If the customer only says their attempt didn't work ("I pasted the link and it shows as text"), it's `how_to`. It's `bug` when the ticket says X used to work or shows broken output (an error, broken images, missing content).
-- **Content the customer deleted themselves** ("I deleted a notebook, can I get it back?") is `how_to`.
+- **"Can I do X?" when X didn't work.** If the customer only says their attempt didn't work ("I dragged a file onto the note and nothing happened"), it's `how_to`. It's `bug` when the ticket says X used to work or shows broken output (an error, broken images, missing content).
+- **Content the customer deleted themselves** ("I emptied the trash by mistake, can I undo that?") is `how_to`.
 
 ## Priority: check urgent, then high, then low; otherwise normal
 
@@ -36,14 +36,14 @@ Tie-breakers:
 **high**: any one of these:
 - **H1 Wrongful charge.** Money was taken wrongly at any amount: a duplicate charge, a charge after cancellation, the wrong amount, or a payment for something the customer didn't get.
 - **H2 One person blocked.** One customer can't sign in, or can't open their notes in an app they use, and the ticket gives no workaround.
-- **H3 Deadline within 24 hours.** The ticket states a deadline today or tomorrow ("by end of day", "in an hour") that the issue stands in the way of. Deadlines that have already passed don't count.
-- **H4 Feature down for a group.** More than one person can't use a feature at all, and the ticket gives no workaround. H4 includes sharing: a share link or shared notebook that several people can't open is H4, even though its category is `bug` (one customer's item). It also includes a workspace with no admin, where nobody can invite people or manage the plan. That counts as a feature down for the group, not a routine staff request.
+- **H3 Deadline within 24 hours.** The ticket states a deadline today or tomorrow ("before 5pm", "in two hours") that the issue stands in the way of. Deadlines that have already passed don't count.
+- **H4 Feature down for a group.** More than one person can't use a feature at all because it fails (errors, won't open, doesn't show up), and the ticket gives no workaround. Missing permission to use a feature is not a failure. H4 includes sharing: a share link or shared notebook that several people can't open is H4, even though its category is `bug` (one customer's item).
 
-**Workaround** (for H2 and H4): any way the ticket mentions to still get the result, even if it's slower or clumsier, such as reloading, opening the app, or using another device. "We don't see changes until we reload" means a workaround exists.
+**Workaround** (for H2 and H4): any way the ticket mentions to still get the result, even if it's slower or clumsier, such as reloading, opening the app, or using another device. "Export fails in the desktop app but works on the web" means a workaround exists.
 
 **low**: any one of these:
 - **L1 Cosmetic.** A visual glitch that doesn't change what the customer can do: a wrong count, a misplaced underline, an icon's size.
-- **L2 General question.** A question whose whole answer is general product information (how to do X, whether X is possible, what a plan includes, what happens when Y), with nothing broken and no request for staff to act on this customer's account. A request for staff to act means the customer asks support to do something ("please delete my account", "can you send me…", "merge my accounts for me"). Stating an intent and then asking how or what ("I'd like to delete my account. What gets removed?") is a question, so it's L2.
+- **L2 General question.** A question whose whole answer is general product information (how to do X, whether X is possible, what a plan includes, what happens when Y), with nothing broken and no request for staff to act on this customer's account. A request for staff to act means the customer asks support to do something ("please cancel my plan", "could you resend my receipt", "remove this member for me"). Stating an intent and then asking how or what ("I'm thinking of cancelling. Do I keep my notes?") is a question, so it's L2.
 - **L3 Personal wish.** A feature request that states no impact on a team, a purchase or a renewal.
 
 **normal**: everything else. That includes:
@@ -60,7 +60,7 @@ A `feature_request` is never above normal, because support can't fix a missing f
 | Ticket (invented) | Label | Rule |
 |---|---|---|
 | "Every note I opened this morning is blank, and yesterday's drafts are gone from history." | bug, urgent | U1 |
-| "Our design studio (6 people) all get 'Service temporarily unavailable' since 10am." | outage, urgent | C1, U3 |
+| "Our design studio (6 people) all get 'Service unavailable' since 10am." | outage, urgent | C1, U3 |
 | "My statement shows $29 for a Team seat I removed last month." | billing, high | H1 |
 | "I need my slides from Lumen for a 3pm talk today and the iPad app crashes on launch." | bug, high | H3 |
 | "Exported PDFs cut off the last line of every page." | bug, normal | N (malfunction) |
