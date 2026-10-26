@@ -1,10 +1,29 @@
-// Logic for the ML track's basics aids: ComplaintExplorer (lesson 2), FeatureExplorer (3),
-// TrainingStepper (4) and MetricsView (5). Pure and browser-safe: it imports values only
+// Logic for the ML track's aids: the basics, ComplaintExplorer (lesson 2), FeatureExplorer (3),
+// TrainingStepper (4) and MetricsView (5); and MLOps, ModelVsLlm (6), RunTable (7),
+// RegistryTimeline (8) and DriftChart (10). Pure and browser-safe: it imports values only
 // from mlExplore.ts, and only types from mlData.ts (whose globs must never reach an island).
 // The *Props builders run in the .astro wrappers at build time and keep only the small
 // derived data each island needs.
 import { forExplorer, roundSig, scoreText, tfidf, type ExplorerModel, type Prediction, type TermWeight } from './mlExplore';
-import type { ClassMetrics, Complaint, DatasetReport, DriftReport, MetricsReport, SplitMetrics, TrainingLog } from './mlData';
+import type {
+  ClassMetrics,
+  Complaint,
+  DatasetReport,
+  DriftPeriod,
+  DriftReport,
+  GateResult,
+  LatencyReport,
+  LlmCompareReport,
+  MetricsReport,
+  Registry,
+  RegistryEvent,
+  RunMetrics,
+  RunRecord,
+  ShiftedWord,
+  SplitMetrics,
+  Stage,
+  TrainingLog,
+} from './mlData';
 
 /** Short category names for tight spaces (matrix headers, chips); the full name is always nearby. */
 export const SHORT_NAMES: Record<string, string> = {
@@ -333,4 +352,469 @@ export function cellDetail(s: SplitMetrics, r: number, c: number) {
   const rowTotal = s.confusion[r].reduce((a, b) => a + b, 0);
   const colTotal = s.confusion.reduce((a, row) => a + row[c], 0);
   return { n, rowTotal, colTotal, correct: r === c };
+}
+
+// ── ModelVsLlm ──────────────────────────────────────────────────────────────
+/** What to run when reports/llm_compare.json is missing (compare_llm.py's own advice): record
+ *  the paid answers once (prints the cost and asks first), then replay them into the report. */
+export const LLM_COMMANDS = ['python compare_llm.py record', 'python compare_llm.py compare'];
+const MODEL_NAMES: Record<string, string> = { logreg: 'logistic regression', nb: 'naive Bayes' };
+
+export type LlmSide = {
+  name: string;
+  accuracy: number;
+  macro_f1: number;
+  /** In `classes` order. */
+  per_class_f1: number[];
+  /** US dollars per 1,000 complaints. */
+  cost_per_1000: number;
+  latency_p50_ms: number;
+  latency_note: string;
+};
+export type LlmCompareView = {
+  generated_by: string;
+  n: number;
+  no_answer: number;
+  /** 1/√n, unrounded: the gap sentence compares against it. */
+  band: number;
+  split: string;
+  scoring: string;
+  answered_only: LlmCompareReport['answered_only'];
+  classes: string[];
+  v1: LlmSide;
+  claude: LlmSide;
+  latency_caveat: string;
+};
+export type ServerLatency = { p50_ms: number; p95_ms: number; command: string };
+export type ModelVsLlmProps = {
+  /** null until the optional recording: the aid then shows "No recorded run yet" and `commands`. */
+  compare: LlmCompareView | null;
+  /** reports/latency.json: both local servers, same machine, same requests. */
+  servers: { python: ServerLatency; go: ServerLatency; ratio_p50: number; machine: string; requests: number; note: string };
+  commands: string[];
+};
+
+export function modelVsLlmProps(data: { llmCompare: LlmCompareReport | null; latency: LatencyReport; registry: Registry }): ModelVsLlmProps {
+  const { llmCompare: c, latency } = data;
+  const server = (s: LatencyReport['servers']['python']): ServerLatency => ({ p50_ms: sig(s.p50_ms), p95_ms: sig(s.p95_ms), command: s.command });
+  let compare: LlmCompareView | null = null;
+  if (c) {
+    const side = (name: string, x: LlmCompareReport['v1'] | LlmCompareReport['claude']): LlmSide => ({
+      name,
+      accuracy: sig(x.accuracy),
+      macro_f1: sig(x.macro_f1),
+      per_class_f1: c.classes.map((k) => {
+        const f = x.per_class_f1[k];
+        if (f === undefined) throw new Error(`llm_compare.json: no F1 for ${k} (${name})`);
+        return sig(f);
+      }),
+      cost_per_1000: x.cost_per_1000,
+      latency_p50_ms: sig(x.latency_p50_ms),
+      latency_note: x.latency_note,
+    });
+    const kind = data.registry.versions[c.v1.version]?.model;
+    compare = {
+      generated_by: c.generated_by,
+      n: c.n,
+      no_answer: c.no_answer,
+      band: c.band,
+      split: c.split,
+      scoring: c.scoring,
+      answered_only: c.answered_only,
+      classes: c.classes,
+      v1: side(kind ? `${c.v1.version} (${MODEL_NAMES[kind] ?? kind})` : c.v1.version, c.v1),
+      claude: side(c.claude.model, c.claude),
+      latency_caveat: c.latency_caveat,
+    };
+  }
+  return {
+    compare,
+    servers: {
+      python: server(latency.servers.python),
+      go: server(latency.servers.go),
+      ratio_p50: sig(latency.ratio_python_over_go.p50),
+      machine: String(latency.machine.cpu),
+      requests: latency.request_set.requests_per_server,
+      note: latency.note,
+    },
+    commands: LLM_COMMANDS,
+  };
+}
+
+/** Claude's accuracy minus v1's, against the 1/√n band of the comparison. */
+export function llmGap(c: LlmCompareView): { gap: number; band: number; inside: boolean; leader: 'claude' | 'v1' | 'tie' } {
+  const gap = c.claude.accuracy - c.v1.accuracy;
+  return { gap, band: c.band, inside: Math.abs(gap) <= c.band, leader: gap > 0 ? 'claude' : gap < 0 ? 'v1' : 'tie' };
+}
+
+// ── RunTable ────────────────────────────────────────────────────────────────
+export type FlatValue = number | string | boolean | null;
+export type RunRow = {
+  id: string;
+  /** YYYY-MM-DD (runs are dated by their data, not the clock). */
+  date: string;
+  time: string;
+  params: Record<string, number | string>;
+  train: { from: string; to: string };
+  eval: { name: string; from: string; to: string };
+  /** The eval split's headline numbers (6 s.f.). */
+  metrics: { n: number; accuracy: number; band: number; macro_f1: number; weighted_f1: number };
+  /** Every metric, flattened as mlops._flatten does ("test.per_class_f1.Mortgage"); lists joined with "; ". */
+  flat: Record<string, FlatValue>;
+  dataVersion: string;
+  modelHash: string;
+  gitCommit: string | null;
+  gitDirty: boolean | null;
+  /** The registry version logged from this run, if any. */
+  version: string | null;
+  stage: Stage | null;
+  /** The run's model hash equals the registry's (null: not registered). */
+  hashMatches: boolean | null;
+};
+export type RunTableProps = { runs: RunRow[] };
+
+function flatten(d: Record<string, unknown>, prefix = '', out: Record<string, FlatValue> = {}): Record<string, FlatValue> {
+  for (const [k, v] of Object.entries(d)) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) flatten(v as Record<string, unknown>, `${prefix}${k}.`, out);
+    else if (Array.isArray(v)) out[`${prefix}${k}`] = v.join('; ');
+    else out[`${prefix}${k}`] = typeof v === 'number' && !Number.isInteger(v) ? sig(v) : (v as FlatValue);
+  }
+  return out;
+}
+
+export function runTableProps(data: { runs: RunRecord[]; registry: Registry }): RunTableProps {
+  const byRun = new Map(Object.entries(data.registry.versions).map(([v, e]) => [e.run, { version: v, entry: e }]));
+  return {
+    runs: data.runs.map((r) => {
+      const m = r.metrics[r.windows.eval.name] as RunMetrics | undefined;
+      if (!m || !('macro_f1' in m)) throw new Error(`runs/${r.run_id}.json: no metrics for its eval split "${r.windows.eval.name}"`);
+      const reg = byRun.get(r.run_id);
+      return {
+        id: r.run_id,
+        date: r.time.slice(0, 10),
+        time: r.time,
+        params: r.params,
+        train: r.windows.train,
+        eval: r.windows.eval,
+        metrics: { n: m.n, accuracy: sig(m.accuracy), band: sig(m.band), macro_f1: sig(m.macro_f1), weighted_f1: sig(m.weighted_f1) },
+        flat: flatten(r.metrics),
+        dataVersion: r.data_version,
+        modelHash: r.model.sha256,
+        gitCommit: r.git_commit,
+        gitDirty: r.git_dirty,
+        version: reg?.version ?? null,
+        stage: reg?.entry.stage ?? null,
+        hashMatches: reg ? reg.entry.sha256 === r.model.sha256 : null,
+      };
+    }),
+  };
+}
+
+export type SortKey = 'time' | 'accuracy' | 'macro_f1' | 'weighted_f1';
+/** Newest first for time; highest first for a metric (ties by run id). */
+export function sortRuns(rows: RunRow[], key: SortKey): RunRow[] {
+  const byId = (a: RunRow, b: RunRow) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  return [...rows].sort((a, b) =>
+    key === 'time' ? (a.time < b.time ? 1 : a.time > b.time ? -1 : -byId(a, b)) : b.metrics[key] - a.metrics[key] || byId(a, b),
+  );
+}
+
+export type RunDiff = {
+  params: { key: string; a: FlatValue; b: FlatValue }[];
+  windows: { key: 'train' | 'eval'; a: string; b: string }[];
+  /** Changed metrics; a or b is null when only one run has the key; delta when both are numbers. */
+  metrics: { key: string; a: FlatValue; b: FlatValue; delta: number | null }[];
+  sameEval: boolean;
+  sameData: boolean;
+};
+
+/** Only what differs, as `python mlops.py compare A B` prints it, plus the windows and data version. */
+export function diffRuns(a: RunRow, b: RunRow): RunDiff {
+  const keys = (x: object, y: object) => [...new Set([...Object.keys(x), ...Object.keys(y)])].sort();
+  const params = keys(a.params, b.params)
+    .map((key) => ({ key, a: a.params[key] ?? null, b: b.params[key] ?? null }))
+    .filter((d) => d.a !== d.b);
+  const win = (w: { from: string; to: string }) => `${w.from} to ${w.to}`;
+  const windows = [
+    { key: 'train' as const, a: win(a.train), b: win(b.train) },
+    { key: 'eval' as const, a: `${a.eval.name} ${win(a.eval)}`, b: `${b.eval.name} ${win(b.eval)}` },
+  ].filter((d) => d.a !== d.b);
+  const metrics = keys(a.flat, b.flat)
+    .map((key) => {
+      const x = a.flat[key] ?? null;
+      const y = b.flat[key] ?? null;
+      const numeric = typeof x === 'number' && typeof y === 'number';
+      return { key, a: x, b: y, delta: numeric ? (y as number) - (x as number) : null };
+    })
+    .filter((d) => d.a !== d.b);
+  const sameEval = a.eval.name === b.eval.name && a.eval.from === b.eval.from && a.eval.to === b.eval.to;
+  return { params, windows, metrics, sameEval, sameData: a.dataVersion === b.dataVersion };
+}
+
+// ── RegistryTimeline ────────────────────────────────────────────────────────
+export type VersionView = {
+  version: string;
+  stage: Stage;
+  model: string;
+  trained_on: { from: string; to: string };
+  registered: string;
+  run: string;
+  sha256: string;
+  metrics: { split: string; n: number; accuracy: number; macro_f1: number };
+};
+export type GateView = {
+  version: string;
+  production_version: string;
+  passed: boolean;
+  gain: number;
+  band: number;
+  floor: number;
+  reasons: string[];
+  candidate_macro_f1: number;
+  production_macro_f1: number;
+  n: number;
+  split: string;
+};
+export type RegistryTimelineProps = { versions: VersionView[]; history: RegistryEvent[]; gate: GateView | null };
+
+export function registryTimelineProps(data: { registry: Registry; runs: RunRecord[] }): RegistryTimelineProps {
+  const { registry } = data;
+  const versions = Object.keys(registry.versions)
+    .sort()
+    .map((version) => {
+      const v = registry.versions[version];
+      return {
+        version,
+        stage: v.stage,
+        model: v.model,
+        trained_on: v.trained_on,
+        registered: v.registered,
+        run: v.run,
+        sha256: v.sha256,
+        metrics: { split: v.metrics.split, n: v.metrics.n, accuracy: sig(v.metrics.accuracy), macro_f1: sig(v.metrics.macro_f1) },
+      };
+    });
+  // The latest run that ran the gate, and the version registered from it.
+  const gated = data.runs.filter((r) => r.metrics.gate).at(-1);
+  let gate: GateView | null = null;
+  if (gated) {
+    const g = gated.metrics.gate as GateResult;
+    const name = gated.windows.eval.name;
+    const cand = gated.metrics[name] as RunMetrics;
+    const prod = gated.metrics[`production_${name}`] as RunMetrics | undefined;
+    const version = versions.find((v) => v.run === gated.run_id)?.version;
+    if (!version || !prod) throw new Error(`runs/${gated.run_id}.json: the gate needs a registered version and production_${name} metrics`);
+    gate = {
+      version,
+      production_version: g.production_version,
+      passed: g.passed,
+      gain: sig(g.gain),
+      band: sig(g.band),
+      floor: g.floor,
+      reasons: g.reasons,
+      candidate_macro_f1: sig(cand.macro_f1),
+      production_macro_f1: sig(prod.macro_f1),
+      n: cand.n,
+      split: cand.split,
+    };
+  }
+  return { versions, history: registry.history, gate };
+}
+
+/** A copy of the registry for the in-browser simulation; never written anywhere. */
+export type SimEvent = RegistryEvent & { simulated: boolean };
+export type SimState = { stages: Record<string, Stage>; history: SimEvent[] };
+export type SimResult = { state: SimState; error?: string; restored?: string };
+export const SIM_TIME = 'simulated';
+
+export function simStart(p: RegistryTimelineProps): SimState {
+  return {
+    stages: Object.fromEntries(p.versions.map((v) => [v.version, v.stage])),
+    history: p.history.map((h) => ({ ...h, simulated: false })),
+  };
+}
+
+/** mlops._move on a copy: change one stage, append the event. */
+function simMove(s: SimState, version: string, stage: Stage, action: string, note: string): SimState {
+  return {
+    stages: { ...s.stages, [version]: stage },
+    history: [...s.history, { time: SIM_TIME, action, version, from_stage: s.stages[version], to_stage: stage, note, simulated: true }],
+  };
+}
+const simProduction = (s: SimState) => Object.keys(s.stages).find((v) => s.stages[v] === 'production') ?? null;
+
+/** mlops.promote(version, "production"): the current production version is archived first. */
+export function simPromote(s: SimState, version: string): SimResult {
+  if (!(version in s.stages)) return { state: s, error: `unknown version ${version}` };
+  if (s.stages[version] === 'production') return { state: s, error: `${version} is already in production` };
+  const current = simProduction(s);
+  let next = current ? simMove(s, current, 'archived', 'archive', `replaced by ${version}`) : s;
+  const lastGate = [...s.history].reverse().find((h) => h.action === 'gate' && h.version === version);
+  next = simMove(next, version, 'production', 'promote', lastGate?.note.startsWith('failed') ? 'promoted although the gate failed' : '');
+  return { state: next };
+}
+
+/** mlops.rollback: the last version other than the current one ever promoted to production comes back. */
+export function simRollback(s: SimState): SimResult {
+  const current = simProduction(s);
+  if (!current) return { state: s, error: 'no production version to roll back from' };
+  const earlier = s.history.filter((h) => h.to_stage === 'production' && h.version !== current).map((h) => h.version);
+  if (!earlier.length) return { state: s, error: `no previous production version before ${current}` };
+  const previous = earlier[earlier.length - 1];
+  const next = simMove(simMove(s, current, 'archived', 'rollback', `rolled back to ${previous}`), previous, 'production', 'rollback', `replaces ${current}`);
+  return { state: next, restored: previous };
+}
+
+// ── DriftChart ──────────────────────────────────────────────────────────────
+export type Signal = 'predictions' | 'words';
+export type DriftUnit = 'month' | 'quarter';
+export type DriftPoint = {
+  label: string;
+  n: number;
+  predictions: number;
+  words: number;
+  /** Per signal: PSI >= alert_at (the convention) / above that signal's calibrated threshold; n >= min_n. */
+  predictions_convention: boolean;
+  predictions_calibrated: boolean;
+  words_convention: boolean;
+  words_calibrated: boolean;
+  top: ShiftedWord[];
+};
+export type InSamplePoint = { label: string; n: number; predictions: number; words: number; predictions_convention: boolean; words_convention: boolean };
+export type NullView = { p50: number; p95: number; within_2022_max: number; threshold: number };
+export type DriftUnitView = {
+  periods: DriftPoint[];
+  null: Record<Signal, NullView>;
+  /** Null sample size (complaints per draw). */
+  nullN: number;
+  expected: { per_signal: number; either_signal_max: number };
+  /** One fixed axis per signal, from 0, holding every value that can be shown (in-sample too) and 0.2. */
+  scale: Record<Signal, { max: number; ticks: number[] }>;
+};
+export type DriftChartProps = {
+  alertAt: number;
+  minN: number;
+  reference: string;
+  nullReference: string;
+  expectedNote: string;
+  inSampleNote: string;
+  units: Record<DriftUnit, DriftUnitView>;
+  /** The training-reference variant (months only): shown to explain why it misleads. */
+  inSample: InSamplePoint[];
+  classes: string[];
+  years: string[];
+  /** Shares per class per year (4 s.f.): real CFPB narratives and the committed sample. */
+  real: number[][];
+  sample: number[][];
+};
+
+const SIGNALS: Signal[] = ['predictions', 'words'];
+const TICK_STEPS = [0.01, 0.02, 0.025, 0.05, 0.1, 0.2, 0.25, 0.5, 1];
+const r6 = (x: number) => Number(x.toFixed(6));
+
+/** An axis from 0 with at most 5 steps that holds `max`. */
+export function driftScale(max: number): { max: number; ticks: number[] } {
+  const step = TICK_STEPS.find((s) => Math.ceil(max / s - 1e-9) <= 5) ?? 1;
+  const k = Math.max(1, Math.ceil(max / step - 1e-9));
+  return { max: r6(k * step), ticks: Array.from({ length: k + 1 }, (_, i) => r6(i * step)) };
+}
+
+export function driftChartProps(drift: DriftReport): DriftChartProps {
+  const { alert_at: alertAt, min_n: minN } = drift.settings;
+  const inSample: InSamplePoint[] = drift.reference_training_in_sample.months.map((m) => {
+    const big = m.n >= minN;
+    const p = { label: m.month, n: m.n, predictions: sig(m.psi_predictions), words: sig(m.psi_words), predictions_convention: big && m.psi_predictions >= alertAt, words_convention: big && m.psi_words >= alertAt };
+    if ((p.predictions_convention || p.words_convention) !== m.alert_convention) throw new Error(`drift.json: in-sample ${m.month} alert disagrees with its PSI`);
+    return p;
+  });
+  const unit = (u: DriftUnit, rows: (DriftPeriod & { label: string })[]): DriftUnitView => {
+    const nb = drift.null[u];
+    const nullView = (s: Signal): NullView => ({ p50: sig(nb[s].p50), p95: sig(nb[s].p95), within_2022_max: sig(nb[s].within_2022_max), threshold: sig(nb[s].threshold) });
+    const periods = rows.map((r) => {
+      const big = r.n >= minN;
+      const p: DriftPoint = {
+        label: r.label,
+        n: r.n,
+        predictions: sig(r.psi_predictions),
+        words: sig(r.psi_words),
+        predictions_convention: big && r.psi_predictions >= alertAt,
+        predictions_calibrated: big && r.psi_predictions > nb.predictions.threshold,
+        words_convention: big && r.psi_words >= alertAt,
+        words_calibrated: big && r.psi_words > nb.words.threshold,
+        top: r.top_shifted_words.map((w) => ({ word: w.word, contribution: roundSig(w.contribution, 4), direction: w.direction })),
+      };
+      if ((p.predictions_convention || p.words_convention) !== r.alert_convention || (p.predictions_calibrated || p.words_calibrated) !== r.alert_calibrated) {
+        throw new Error(`drift.json: ${r.label} alerts disagree with its PSI and thresholds`);
+      }
+      return p;
+    });
+    const scale = (s: Signal) =>
+      driftScale(Math.max(alertAt, nb[s].p95, nb[s].threshold, ...periods.map((p) => p[s]), ...(u === 'month' ? inSample.map((p) => p[s]) : [])));
+    return {
+      periods,
+      null: { predictions: nullView('predictions'), words: nullView('words') },
+      nullN: nb.n,
+      expected: drift.null.expected_chance_alerts[u],
+      scale: { predictions: scale('predictions'), words: scale('words') },
+    };
+  };
+  const years = Object.keys(drift.real_class_shares).sort();
+  const classes = Object.keys(drift.real_class_shares[years[0]] ?? {}).sort();
+  const shares = (t: Record<string, Record<string, number>>, what: string) =>
+    classes.map((c) =>
+      years.map((y) => {
+        const v = t[y]?.[c];
+        if (v === undefined) throw new Error(`drift.json: no ${what} share for ${c} in ${y}`);
+        return roundSig(v, 4);
+      }),
+    );
+  return {
+    alertAt,
+    minN,
+    reference: drift.settings.reference,
+    nullReference: drift.null.reference,
+    expectedNote: drift.null.expected_chance_alerts.note,
+    inSampleNote: drift.reference_training_in_sample.note,
+    units: {
+      month: unit('month', drift.months.map((m) => ({ ...m, label: m.month }))),
+      quarter: unit('quarter', drift.quarters.map((q) => ({ ...q, label: q.quarter }))),
+    },
+    inSample,
+    classes,
+    years,
+    real: shares(drift.real_class_shares, 'real'),
+    sample: shares(drift.sample_class_shares, 'sample'),
+  };
+}
+
+export function alertCounts(periods: DriftPoint[]): Record<Signal, { calibrated: number; convention: number }> {
+  const count = (s: Signal) => ({
+    calibrated: periods.filter((p) => p[`${s}_calibrated`]).length,
+    convention: periods.filter((p) => p[`${s}_convention`]).length,
+  });
+  return { predictions: count('predictions'), words: count('words') };
+}
+
+/** The calibrated alerts seen against what chance alone gives (the report's upper bounds). */
+export function chanceReading(p: DriftChartProps, u: DriftUnit): string {
+  const v = p.units[u];
+  const c = alertCounts(v.periods);
+  const seen = Math.max(...SIGNALS.map((s) => c[s].calibrated));
+  return (
+    `By chance alone, expect at most about ${v.expected.per_signal} calibrated alerts per signal over ${v.periods.length} ${u}s ` +
+    `(${v.expected.either_signal_max} on either). Seen: predictions ${c.predictions.calibrated}, words ${c.words.calibrated}: ` +
+    (seen > v.expected.per_signal ? 'more than chance gives, weak but real evidence.' : 'within what chance gives.')
+  );
+}
+
+/** x and y in SVG units for one drift chart (periods evenly spaced, 0 at the bottom). */
+export function driftGeometry(count: number, max: number, box: { width: number; height: number; left: number; right: number; top: number; bottom: number }) {
+  const w = box.width - box.left - box.right;
+  const h = box.height - box.top - box.bottom;
+  const step = count > 1 ? w / (count - 1) : 0;
+  return {
+    x: (i: number) => box.left + i * step,
+    y: (v: number) => box.top + h - (Math.min(v, max) / max) * h,
+    step,
+  };
 }

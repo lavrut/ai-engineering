@@ -1,0 +1,12 @@
+---
+// Build-time wrapper: passes drift.json's months and quarters (both signals, per-signal alerts,
+// top shifted words), the null bands and thresholds, the in-sample months and the class shares
+// per year (6 / 4 significant figures): 20.8 KB.
+import DriftChartIsland from './DriftChart.tsx';
+import { loadMlData } from '../../lib/mlData';
+import { driftChartProps } from '../../lib/mlAids';
+
+const props = driftChartProps(loadMlData().drift);
+---
+
+<DriftChartIsland client:visible {...props} />

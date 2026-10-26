@@ -239,6 +239,8 @@ describe('FeatureExplorer', () => {
   it('shows the slice disclosure up front', () => {
     render(<FeatureExplorer {...p} />);
     expect(screen.getByRole('note').textContent).toContain(p.model.note);
+    // idf is rounded to 4 significant figures, so "exact" is qualified.
+    expect(screen.getByRole('note').textContent).toContain('exact at the precision shown');
     expect(p.model.note).toMatch(/^Weights for the 1,200 most influential of v1's 5,539 words; the label matches the full model on \d+\.\d% of 1,800 complaints/);
   });
 

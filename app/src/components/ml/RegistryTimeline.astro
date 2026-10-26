@@ -1,0 +1,11 @@
+---
+// Build-time wrapper: passes registry.json's versions and append-only history, and the gate's
+// numbers from the run that ran it: 1.7 KB. The simulation runs in the browser on a copy.
+import RegistryTimelineIsland from './RegistryTimeline.tsx';
+import { loadMlData } from '../../lib/mlData';
+import { registryTimelineProps } from '../../lib/mlAids';
+
+const props = registryTimelineProps(loadMlData());
+---
+
+<RegistryTimelineIsland client:visible {...props} />

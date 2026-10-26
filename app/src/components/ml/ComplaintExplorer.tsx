@@ -119,19 +119,19 @@ export default function ComplaintExplorer(p: ComplaintExplorerProps) {
         </p>
         <p class="cx-hint">Three per category, from the training years, cut to 200 characters as dataset.json keeps them.</p>
         <div class="cx-list" role="region" aria-label="Snippets" tabIndex={0}>
-        <ul>
-          {shown.map((s) => (
-            <li key={s.id} class="cx-item">
-              <p class="cx-meta">
-                <span class="cx-id">{s.id}</span>
-                <span>{s.date}</span>
-                <span class="cx-cat">{s.category}</span>
-                {s.product_raw !== s.category && <span class="cx-raw">published as “{s.product_raw}”</span>}
-              </p>
-              <p class="cx-text">{s.text}</p>
-            </li>
-          ))}
-        </ul>
+          <ul>
+            {shown.map((s) => (
+              <li key={s.id} class="cx-item">
+                <p class="cx-meta">
+                  <span class="cx-id">{s.id}</span>
+                  <span>{s.date}</span>
+                  <span class="cx-cat">{s.category}</span>
+                  {s.product_raw !== s.category && <span class="cx-raw">published as “{s.product_raw}”</span>}
+                </p>
+                <p class="cx-text">{s.text}</p>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
       <style>{css}</style>

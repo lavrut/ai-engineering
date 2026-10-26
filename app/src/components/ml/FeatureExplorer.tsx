@@ -28,8 +28,9 @@ export default function FeatureExplorer({ model: packed, presets }: FeatureExplo
         <p class="fx-label">Runs in your browser; nothing is sent</p>
       </header>
       <p class="fx-note" role="note">
-        <strong>What this page holds:</strong> {model.note} Tokens, unknown words and TF-IDF weights are exact; the scores
-        are close to the server&apos;s, not equal.
+        <strong>What this page holds:</strong> {model.note} Tokens and unknown words are exact; TF-IDF weights are
+        exact at the precision shown (idf is rounded to 4 significant figures); the scores are close to the
+        server&apos;s, not equal.
       </p>
 
       <div class="fx-presets" role="group" aria-label="Test-split complaints (2022)">

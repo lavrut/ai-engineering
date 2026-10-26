@@ -1,0 +1,12 @@
+---
+// Build-time wrapper: passes llm_compare.json's two models on the same 200 test complaints
+// (accuracy, macro and per-class F1, cost, latency with its notes and caveat; null until the
+// optional recording) and latency.json's Python and Go servers: 1.8 KB.
+import ModelVsLlmIsland from './ModelVsLlm.tsx';
+import { loadMlData } from '../../lib/mlData';
+import { modelVsLlmProps } from '../../lib/mlAids';
+
+const props = modelVsLlmProps(loadMlData());
+---
+
+<ModelVsLlmIsland client:visible {...props} />
