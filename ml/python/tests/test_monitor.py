@@ -1,4 +1,5 @@
 import json
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -53,13 +54,32 @@ def test_null_band_is_deterministic_and_ordered(setup):
     index = {t: i for i, t in enumerate(model["vocabulary"])}
     ref = monitor.featurize(splits["test"], monitor.top_words(splits["train"], model), model, index)
     dates = [r["date"] for r in splits["test"]]
-    a = monitor.null_band(ref, dates, 50, "month", draws=500)
-    assert a == monitor.null_band(ref, dates, 50, "month", draws=500)
-    q = monitor.null_band(ref, dates, 150, "quarter", draws=500)
+    cats = [r["product"] for r in splits["test"]]
+    a = monitor.null_band(ref, dates, cats, 50, "month", draws=500)
+    assert a == monitor.null_band(ref, dates, cats, 50, "month", draws=500)
+    q = monitor.null_band(ref, dates, cats, 150, "quarter", draws=500)
     assert 0 < a["predictions"]["p50"] < a["predictions"]["p95"]
     assert q["predictions"]["p95"] < a["predictions"]["p95"]
     assert len(a["words"]["within_2022"]) == 12 and len(q["words"]["within_2022"]) == 4
     assert a["words"]["threshold"] == max(a["words"]["p95"], a["words"]["within_2022_max"])
+
+
+def test_stratified_draws_copy_one_periods_category_counts(setup):
+    splits, _ = setup
+    import numpy as np
+    cats = [r["product"] for r in splits["test"]]
+    for unit, size in (("month", 50), ("quarter", 150)):
+        periods = np.array([monitor._period(r["date"], unit) for r in splits["test"]])
+        mix = {tuple(sorted(Counter(c for c, p in zip(cats, periods) if p == k).items()))
+               for k in set(periods)}
+        picks = monitor.stratified_picks(cats, periods, size, 300, np.random.default_rng(1))
+        assert picks.shape == (300, len(cats)) and (picks.sum(axis=1) == size).all()
+        for row in picks:
+            drawn = tuple(sorted(Counter(c for c, take in zip(cats, row) if take).items()))
+            assert drawn in mix      # each draw has exactly some 2022 period's class mix
+    # Another size (a short month): the period's mix rescaled, still exactly `size` rows.
+    assert (monitor.stratified_picks(cats, periods, 30, 10, np.random.default_rng(1)).sum(axis=1) == 30).all()
+    assert monitor._scale_counts([20, 6, 6, 7, 5, 6], 30) == [12, 4, 4, 4, 3, 3]
 
 
 def test_reference_rows_is_keyword_only(setup):
@@ -81,6 +101,16 @@ def test_drift_report_months_and_fields():
         (0.2, 1e-4, 30, monitor.TOP_K, "v1")
     assert report["null"]["month"]["n"] == 50 and report["null"]["quarter"]["n"] == 150
     assert report["null"]["month"]["draws"] >= 5000 and report["null"]["month"]["seed"] == 7
+    # The stratified null (used for alerts) against the unstratified one (comparison only): matching
+    # the sample's design removes class-mix noise, so far fewer no-drift months cross 0.2.
+    strat, unstrat = report["null"]["month"]["predictions"], report["null_unstratified"]["month"]["predictions"]
+    assert strat["p95"] < unstrat["p95"]
+    assert strat["share_at_or_above_alert_at"] < 0.05 < 0.1 < unstrat["share_at_or_above_alert_at"]
+    for unit in ("month", "quarter"):
+        for s in ("predictions", "words"):
+            band = report["null"][unit][s]
+            assert band["threshold"] == max(band["p95"], band["within_2022_max"])
+            assert set(report["null_unstratified"][unit][s]) == {"p50", "p95", "share_at_or_above_alert_at"}
     chance = report["null"]["expected_chance_alerts"]
     assert chance["month"]["per_signal"] == pytest.approx(1.2)
     # Either of two signals: at most the sum (union bound), whatever their correlation.

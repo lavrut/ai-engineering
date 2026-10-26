@@ -411,7 +411,9 @@ CANONICAL = [
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Run tracker, model registry and promotion gate.")
     ap.add_argument("--root", type=Path, default=ML_DIR,
-                    help="the ml/ directory to work in (default: the repo's); try things on a copy")
+                    help="the ml/ directory to work in (default: the repo's); try things on a copy. "
+                         "Outputs (registry, runs, models) go under the root; the complaints are "
+                         "always read from the repo's ml/data, read-only")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("runs", help="list the tracked runs")
     sub.add_parser("experiments", help="log the NB / logreg experiment set").add_argument(

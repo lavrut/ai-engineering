@@ -24,18 +24,26 @@ Scoring the training rows themselves would be in-sample (v1 is 90% right there, 
 months), which makes every unseen month look drifted; that variant is kept in drift.json only as
 `reference_training_in_sample`, to show why it misleads.
 
-0.2 is an industry convention for coarse, decile-style bins, not a law. With 50 complaints and 6
-classes, sampling noise alone pushes the predictions PSI past 0.2 in roughly 13-15% of months, so
-each signal also gets a null (what PSI looks like with no drift), two ways:
-  - leave-out: draw n complaints from the 2022 reference WITHOUT replacement and compare them with
-    the remaining rows (the stream month is independent of the reference, so must the sample be);
+0.2 is an industry convention for coarse, decile-style bins, not a law. So each signal also gets
+a null (what PSI looks like with no drift), two ways:
+  - leave-out, stratified like the sample: each draw picks one 2022 month (or quarter) at random
+    and draws, WITHOUT replacement from the 2022 reference, as many complaints of each category as
+    that period has, then compares them with the remaining rows (the stream month is independent
+    of the reference, so must the sample be). The sample's months are quota-stratified by
+    category (ml/data/README.md, step 3), so a real month's class mix is nearly fixed; a simple
+    random draw of 50 would add class-mix variance real months never have. A noise model must
+    match how the data was sampled.
   - within-2022: each 2022 month / quarter against the rest of 2022, which includes real
-    month-to-month variation that i.i.d. sampling misses.
+    month-to-month variation that the draws miss.
 The calibrated alert asks for PSI above max(leave-out p95, largest within-2022 value), per signal
-and period length. Expected chance alerts: the p95 is exceeded 5% of the time by construction, so
-24 months x 5% = 1.2 per signal (at most 2.4 for either of the two: the union bound, whatever
-their correlation); 8 quarters x 5% = 0.4 per signal (at most 0.8). The within-2022 maximum makes
-the real rate lower. A count above that is something to investigate, not proof of drift.
+and period length. The unstratified draws (simple random samples of n) are kept in drift.json as
+`null_unstratified`, for comparison only: that is the noise an unstratified production stream of
+50 complaints would see, and it pushes the predictions PSI past 0.2 in about 13% of months, while
+the stratified draws do in about 1%. Expected chance alerts: the p95 is exceeded 5% of the time by
+construction, so 24 months x 5% = at most 1.2 per signal (at most 2.4 for either of the two: the
+union bound, whatever their correlation); 8 quarters x 5% = at most 0.4 per signal (at most 0.8).
+The within-2022 maximum makes the real rate lower. A count above that is something to
+investigate, not proof of drift.
 
 Run (from ml/python):
     python monitor.py                   # print the table, write nothing
@@ -48,7 +56,6 @@ import json
 import math
 import sys
 from collections import Counter
-from pathlib import Path
 
 import numpy as np
 
@@ -126,26 +133,77 @@ def _psi_vs_rest(m, mask) -> float:
     return psi((m.sum(axis=0) - m[mask].sum(axis=0)).tolist(), m[mask].sum(axis=0).tolist())
 
 
-def null_band(ref: tuple, dates: list[str], size: int, unit: str,
+def _leave_out_values(m, chosen) -> list[float]:
+    """PSI of each drawn sample (rows of `chosen`: summed counts) against the rows left over."""
+    total = m.sum(axis=0)
+    return [psi((total - c).tolist(), c.tolist()) for c in chosen]
+
+
+def _summary(values: list[float]) -> dict:
+    p50, p95 = np.percentile(values, [50, 95])
+    return {"p50": float(p50), "p95": float(p95),
+            "share_at_or_above_alert_at": sum(v >= ALERT_AT for v in values) / len(values)}
+
+
+def _scale_counts(counts, size: int) -> list[int]:
+    """`counts` rescaled to add up to `size`, by largest remainder (ties to the earlier category).
+    Only for a period size the reference periods do not have (the report's are all 50 / 150)."""
+    exact = [c * size / sum(counts) for c in counts]
+    out = [math.floor(x) for x in exact]
+    for i in sorted(range(len(exact)), key=lambda i: (out[i] - exact[i], i))[:size - sum(out)]:
+        out[i] += 1
+    return out
+
+
+def stratified_picks(categories: list[str], periods, size: int, draws: int,
+                     rng: np.random.Generator):
+    """A (draws x rows) boolean mask. Each draw picks one reference period at random and takes, without
+    replacement from the whole reference, as many rows of each category as that period has: a draw
+    matches the sample's design (every period's class mix is fixed by quota, README step 3). For a
+    size the periods do not have, that period's counts are rescaled to `size`."""
+    keys = sorted(set(periods))
+    cats = sorted(set(categories))
+    cat = np.array([cats.index(c) for c in categories])
+    need = np.array([[int(np.sum((periods == p) & (cat == j))) for j in range(len(cats))] for p in keys])
+    if (need.sum(axis=1) != size).any():
+        need = np.array([_scale_counts(row, size) for row in need])
+    choice = rng.integers(len(keys), size=draws)
+    noise = rng.random((draws, len(categories)))
+    rank = np.empty((draws, len(categories)), dtype=np.int64)
+    for j in range(len(cats)):
+        cols = np.flatnonzero(cat == j)
+        rank[:, cols] = np.argsort(np.argsort(noise[:, cols], axis=1), axis=1)
+    return rank < need[choice][:, cat]
+
+
+def null_band(ref: tuple, dates: list[str], categories: list[str], size: int, unit: str,
               draws: int = DRAWS, seed: int = train.SEED) -> dict:
     """What PSI looks like with NO drift, per signal, two ways (see the docstring).
-    leave-out: `draws` samples of `size` complaints without replacement vs the remaining rows
-    (p50, p95). within_2022: each 2022 period vs the rest of 2022 (values and max).
-    threshold = max(p95, within-2022 max): the calibrated alert level."""
+    leave-out: `draws` stratified samples (one 2022 period's category counts, drawn without replacement
+    from the reference) vs the remaining rows (p50, p95, share at or above 0.2). within_2022: each
+    2022 period vs the rest of 2022 (values and max). threshold = max(p95, within-2022 max)."""
     rng = np.random.default_rng(seed)
     periods = np.array([_period(d, unit) for d in dates])
+    picks = stratified_picks(categories, periods, size, draws, rng).astype(np.int64)
     out = {"n": size, "draws": draws, "seed": seed}
-    picks = np.vstack([np.argsort(rng.random((250, len(dates))), axis=1)[:, :size]
-                       for _ in range(draws // 250)])
     for name, m in (("predictions", ref[0]), ("words", ref[1])):
-        total = m.sum(axis=0)
-        chosen = np.stack([m[p].sum(axis=0) for p in picks])
-        values = [psi((total - c).tolist(), c.tolist()) for c in chosen]
-        p50, p95 = np.percentile(values, [50, 95])
+        band = _summary(_leave_out_values(m, picks @ m))
         within = {p: _psi_vs_rest(m, periods == p) for p in sorted(set(periods))}
-        out[name] = {"p50": float(p50), "p95": float(p95), "within_2022": within,
-                     "within_2022_max": max(within.values()),
-                     "threshold": max(float(p95), max(within.values()))}
+        out[name] = {**band, "within_2022": within, "within_2022_max": max(within.values()),
+                     "threshold": max(band["p95"], max(within.values()))}
+    return out
+
+
+def null_band_unstratified(ref: tuple, n_rows: int, size: int, draws: int = DRAWS,
+                           seed: int = train.SEED) -> dict:
+    """For comparison only: simple random samples of `size` (no regard to category) vs the rest.
+    This is the noise an unstratified stream would see; it does not match this sample's design."""
+    rng = np.random.default_rng(seed)
+    picks = np.vstack([np.argsort(rng.random((250, n_rows)), axis=1)[:, :size]
+                       for _ in range(draws // 250)])
+    out = {"n": size, "draws": draws, "seed": seed}
+    for name, m in (("predictions", ref[0]), ("words", ref[1])):
+        out[name] = _summary(_leave_out_values(m, np.stack([m[p].sum(axis=0) for p in picks])))
     return out
 
 
@@ -171,6 +229,7 @@ def drift(stream_rows: list[dict], model_json: dict, *, reference_rows: list[dic
         groups.setdefault(_period(r["date"], unit), []).append(r)
     nulls = {} if nulls is None else dict(nulls)
     dates = [r["date"] for r in reference_rows]
+    categories = [r["product"] for r in reference_rows]
     out = []
     for key in sorted(groups):
         rows = groups[key]
@@ -183,7 +242,7 @@ def drift(stream_rows: list[dict], model_json: dict, *, reference_rows: list[dic
         p_pred, p_words = psi(exp_pred, act_pred), sum(parts)
         big = n >= MIN_N
         if big and calibrate and (unit, n) not in nulls:
-            nulls[(unit, n)] = null_band(ref, dates, n, unit)
+            nulls[(unit, n)] = null_band(ref, dates, categories, n, unit)
         null = nulls.get((unit, n))
         out.append({
             "period": key, "n": n, "psi_predictions": p_pred, "psi_words": p_words,
@@ -254,8 +313,9 @@ def build_report(rows: list[dict], generated_by: str) -> dict:
                  for m in monthly_drift(splits["stream"], model, reference_rows=splits["train"],
                                         calibrate=False)]
     dates = [r["date"] for r in splits["test"]]
-    nulls = {("month", 50): null_band(ref, dates, 50, "month"),
-             ("quarter", 150): null_band(ref, dates, 150, "quarter")}
+    categories = [r["product"] for r in splits["test"]]
+    nulls = {("month", 50): null_band(ref, dates, categories, 50, "month"),
+             ("quarter", 150): null_band(ref, dates, categories, 150, "quarter")}
     kw = dict(reference_rows=splits["test"], train_rows=splits["train"])
     return {"generated_by": generated_by,
             "settings": {"alert_at": ALERT_AT, "epsilon": EPSILON, "min_n": MIN_N,
@@ -263,10 +323,12 @@ def build_report(rows: list[dict], generated_by: str) -> dict:
                          "reference": "2022 test split (v1 predictions and tokens); words chosen "
                                       "from the training split, stop words excluded",
                          "stop_words": sorted(STOP_WORDS)},
-            "null": {"reference": "2022 test split. leave-out: n complaints drawn without "
-                                  "replacement vs the remaining rows; within_2022: each 2022 "
-                                  "period vs the rest of 2022. threshold = max of p95 and the "
-                                  "within-2022 maximum",
+            "null": {"reference": "2022 test split. leave-out, stratified like the sample: each "
+                                  "draw picks one 2022 period at random and draws, without "
+                                  "replacement, as many complaints of each category as that period "
+                                  "has, vs the remaining rows; within_2022: each 2022 period vs "
+                                  "the rest of 2022. threshold = max of p95 and the within-2022 "
+                                  "maximum",
                      "expected_chance_alerts": {
                          "note": "p95 is exceeded 5% of the time by construction; the within-2022 "
                                  "maximum makes the real rate lower. either_signal_max is the union "
@@ -276,6 +338,14 @@ def build_report(rows: list[dict], generated_by: str) -> dict:
                          "month": {"per_signal": round(24 * 0.05, 9), "either_signal_max": round(2 * 24 * 0.05, 9)},
                          "quarter": {"per_signal": round(8 * 0.05, 9), "either_signal_max": round(2 * 8 * 0.05, 9)}},
                      "month": nulls[("month", 50)], "quarter": nulls[("quarter", 150)]},
+            "null_unstratified": {
+                "note": "For comparison only, not used for alerts: simple random samples of n from "
+                        "the 2022 reference, with no regard to category, vs the remaining rows. "
+                        "This is the noise an unstratified production stream would see; the "
+                        "sample's periods are quota-stratified by category, so it overstates "
+                        "this sample's noise.",
+                "month": null_band_unstratified(ref, len(dates), 50),
+                "quarter": null_band_unstratified(ref, len(dates), 150)},
             "months": monthly_drift(splits["stream"], model, nulls=nulls, **kw),
             "quarters": quarterly_drift(splits["stream"], model, nulls=nulls, **kw),
             "reference_training_in_sample": {
