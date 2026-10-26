@@ -1,0 +1,46 @@
+{
+ "generated_by": "python bench.py --write-reports",
+ "note": "Numbers from ONE machine (see `machine`), one client, sequential requests over localhost. Absolute milliseconds will differ elsewhere; only the ratio between the two servers is meaningful.",
+ "request_set": {
+  "source": "ml/data/fixtures/predictions.json, the valid inputs (1 to 20,000 characters), cycled",
+  "distinct_texts": 28,
+  "requests_per_server": 500,
+  "warmup_per_server": 20,
+  "order": "alternating python, go, request by request; one keep-alive connection per server"
+ },
+ "parity": "both servers gave the same label, low_confidence and scores (within 1e-9) for every distinct text before timing",
+ "machine": {
+  "cpu": "Apple M5",
+  "cores": 10,
+  "os": "macOS-27.0.1-arm64-arm-64bit",
+  "python": "3.12.3",
+  "go": "go version go1.27.2 darwin/arm64",
+  "fastapi": "0.136.1",
+  "uvicorn": "0.34.0"
+ },
+ "servers": {
+  "python": {
+   "command": "uvicorn server:app (FastAPI), 1 worker, access log off",
+   "n": 500,
+   "p50_ms": 0.25239548995159566,
+   "p95_ms": 0.3998252854216844,
+   "mean_ms": 0.27707769034896046,
+   "min_ms": 0.19645900465548038,
+   "max_ms": 1.0505419922992587
+  },
+  "go": {
+   "command": "ml-serve serve (go build; net/http)",
+   "n": 500,
+   "p50_ms": 0.11950000771321356,
+   "p95_ms": 0.20293747365940368,
+   "mean_ms": 0.13107364997267723,
+   "min_ms": 0.09041698649525642,
+   "max_ms": 0.3569170366972685
+  }
+ },
+ "ratio_python_over_go": {
+  "p50": 2.1120960138957994,
+  "p95": 1.970189527897266,
+  "mean": 2.1139084049823764
+ }
+}
