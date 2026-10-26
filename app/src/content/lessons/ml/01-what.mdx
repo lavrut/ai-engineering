@@ -96,7 +96,7 @@ Everything from the data to the exported file lives in `ml/python/train.py`, in 
 
 <CodeTabs source="ml-train" section={1} />
 
-- `SEED = 7` seeds every random choice in this file, such as the solver and the report's snippets. The sample and lesson 6's Claude sample use 7 as well. The same seed gives the same model.
+- `SEED = 7` seeds every random choice in this file, such as the report's snippets. The sample and lesson 6's Claude sample use 7 as well. The same seed gives the same model.
 - `ML_DIR = Path(__file__).resolve().parent.parent` finds `ml/` from the file's own location, so the script works from any directory.
 - `PATHS` names the three places it reads and writes: the committed `complaints.jsonl`, `models/` and `reports/`.
 - `SPLITS` divides the data by date: train 2019–2021, test 2022, and a `stream` of 2023–2024 that plays production later. Lesson 2 explains why by date.

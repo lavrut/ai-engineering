@@ -48,7 +48,7 @@ Both read the same 200 complaints: a sample of the 2022 test year, stratified by
 
 ### Accuracy
 
-On those 200 complaints Claude is right 86.5% of the time and v1 81.0%. The gap is 5.5 points. The <Term t="noise band" /> for 200 complaints is ±7.1 points (1/√200), so the gap is inside it: **this sample cannot tell them apart on accuracy.** Claude may well be better; showing it would take more complaints.
+On those 200 complaints Claude is right 86.5% of the time and v1 81.0%. The gap is 5.5 points. The noise band for 200 complaints is ±7.1 points (1/√200), so the gap is inside it: **this sample cannot tell them apart on accuracy.** Claude may well be better; showing it would take more complaints.
 
 v1 scores 81.0% here and 80.8% on all 600 test complaints: the 200 are a sample, and its number moves a little with which complaints are in it.
 
@@ -60,7 +60,7 @@ The two also make different mistakes. Both are right on 151 complaints and both 
 
 v1 is served by the Python and Go servers you build in lesson 9. Measured over localhost on one machine, one request at a time, the median request took 0.252 ms on the Python server and 0.120 ms on the Go one. Claude's recorded calls took a median of 1,151.5 ms each.
 
-That is not like for like. v1's number is arithmetic on a local CPU with a small model already in memory. Claude's is a round trip over the network to a much larger model, recorded with 8 calls in flight at once, so it includes the network, the API's queue and SDK retries. Your numbers for both will differ. The gap is still thousands of times, and it decides some designs on its own: a model that answers in a quarter of a millisecond can sit inside a web request; one that answers in about a second needs the caller to wait.
+That is not like for like. v1's number is a localhost request whose work is arithmetic on a model already in memory. Claude's is a round trip over the network to a much larger model, recorded with 8 calls in flight at once, so it includes the network, the API's queue and SDK retries. Your numbers for both will differ. The gap is still thousands of times, and it decides some designs on its own: a model that answers in a quarter of a millisecond can sit inside a web request; one that answers in about a second needs the caller to wait.
 
 ### Cost
 

@@ -153,4 +153,4 @@ You should see, after a few seconds:
 
 As `C` grows, the training score climbs towards 100% and the test score peaks, then falls. A weaker penalty also takes more iterations, because the weights have further to travel. The test differences between `C = 1` and `C = 10` are inside the ±4.1-point band, so this sweep would not justify a change even if choosing on test were allowed.
 
-To train and export Naive Bayes instead, run `python train.py --model nb --version nb1`. It writes a new file, `ml/models/nb1.json`, in the same format as `v1.json`, and leaves `v1.json` and the reports alone. Delete it when you are done. Everything here runs on your CPU for free.
+To train and export Naive Bayes instead, run `python train.py --model nb --version nb1`. It writes a new file, `ml/models/nb1.json`, in the same format as `v1.json`, and leaves `v1.json` and the reports alone. Git ignores `nb*.json` files in `ml/models/`, so you can keep it or delete it. Everything here runs on your CPU for free.

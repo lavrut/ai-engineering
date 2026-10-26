@@ -21,7 +21,7 @@ quiz:
       - The vocabulary will be too small
       - idf cannot be computed on more than 1,800 complaints
     answer: 1
-    explanation: The vocabulary and idf are learned from data, so they are part of training. Fit on every year and words that appear only in 2022–2024 enter the vocabulary (7,273 words instead of 5,539 in Try it). The rule is to fit everything on train and only transform the rest.
+    explanation: The vocabulary and idf are learned from data, so they are part of training. Fit on every year and the vocabulary grows from 5,539 to 7,273 words in Try it. Only 554 of the extra words are new; 1,180 were in a single training complaint and pass min_df = 2 only with help from later years. So leakage changes which training words survive, not just which new words arrive. Fit everything on train and only transform the rest.
   - question: In the training years, "escrow" has idf 4.353 and "the" has idf 1.135. Why?
     options:
       - The word "escrow" is longer
@@ -81,7 +81,7 @@ Each feature is count × idf. Then the whole row is scaled so its squared weight
 
 ### Fit on train only
 
-The vocabulary and the idf weights are learned from data, so they are part of training. Fit them on every year and the test years leak in: words that only appear in 2022–2024 join the vocabulary, and their complaints change every idf. The rule is to fit on train and only transform test and stream.
+The vocabulary and the idf weights are learned from data, so they are part of training. Fit them on every year and the test years leak in, in two ways. Words that only appear in 2022–2024 join the vocabulary. Less obviously, words seen in just one training complaint, which `min_df = 2` would drop, survive because later complaints use them too. And every idf changes, because `n` and every `df` now count the later complaints. The rule is to fit on train and only transform test and stream.
 
 The test suite proves it with a poison word. `test_no_leakage` puts `leakword` 50 times at the start of every complaint after 2021, and reverses the rest of their text, then refits. If anything fitted had seen those years, `leakword` would be in the vocabulary. The test asserts it is not, and that the vocabulary, the idf and every model weight are identical to an unpoisoned fit.
 
@@ -186,6 +186,11 @@ right, _ = train.fit_tfidf([r["narrative"] for r in train.split_by_time(poisoned
 wrong, _ = train.fit_tfidf([r["narrative"] for r in poisoned])     # the mistake: every year
 print("fit on train only:", len(right), "words, leakword" , "in" if "leakword" in right else "not in", "it")
 print("fit on all years: ", len(wrong), "words, leakword", "in" if "leakword" in wrong else "not in", "it")
+
+seen = {t for r in train.split_by_time(rows)["train"] for t in train.tokenize(r["narrative"])}
+extra = set(wrong) - set(right)
+print(len(extra), "extra words:", len(extra & seen), "in one training complaint,",
+      len(extra - seen), "never in training")
 ```
 
 ```bash
@@ -197,6 +202,7 @@ You should see:
 ```text
 fit on train only: 5539 words, leakword not in it
 fit on all years:  7273 words, leakword in it
+1734 extra words: 1180 in one training complaint, 554 never in training
 ```
 
-Fitting on every year adds 1,734 words that the training years never had, `leakword` among them. The full test runs with `python -m pytest tests/test_train.py -k leakage` and prints `1 passed`. All of this is local and free.
+Fitting on every year adds 1,734 words. Only 554 of them, `leakword` among them, never occur in the training years. The other 1,180 do occur there, each in a single training complaint, and pass `min_df = 2` only because later complaints use them too. The leak changed which training words the model keeps, not just which new words arrive. Unlike the test, `leak.py` does not reverse the rest of each later complaint, so the later years' real words count here. The full test runs with `python -m pytest tests/test_train.py -k leakage` and prints `1 passed`. All of this is local and free.

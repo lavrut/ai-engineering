@@ -101,13 +101,13 @@ export const glossary = {
   'time split':
     'Dividing data by date, training on earlier records and testing on later ones, so the test imitates scoring the future.',
   'data leakage':
-    'Information from the test data, or from the future, reaching training, so the test score is better than the model will do on new data.',
+    'Information from the test data, or from the future, reaching training, so the test no longer measures how the model will do on new data, and often flatters it.',
   tokenizer:
     'The fixed rules that split text into tokens (here, lowercase words); training, serving and the browser must apply the same rules.',
   'TF-IDF':
     'Term frequency times inverse document frequency: a word’s count in a text, weighted up when few training texts contain it.',
   'Naive Bayes':
-    'A classifier that scores each category by its prior plus the log probability of every word given that category, treating words as independent.',
+    'A classifier that scores each category by its log prior plus the log probability of every word given that category, treating words as independent.',
   'logistic regression':
     'A classifier that learns one weight per category and feature plus an intercept, and turns the weighted sums into probabilities with softmax.',
   overfitting:

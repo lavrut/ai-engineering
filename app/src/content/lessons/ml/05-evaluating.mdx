@@ -72,7 +72,7 @@ As in the LLMs track, `1/√n` is a rough band on an accuracy over `n` cases: ±
 
 ### Train against test
 
-Score the model on the complaints it learned from and it does better: logistic regression gets 90.2% on the training years and 80.8% on 2022. The drop, 9.3 points, is well outside the ±4.1 band, so it is real. Part of it is overfitting, from lesson 4: the model fits its own training complaints more closely than new ones. Part is that 2022 is a different year, with different complaints. The time split measures both together, which is what deployment will meet. Naive Bayes shows the same pattern, 92.7% against 81.8%.
+Score the model on the complaints it learned from and it does better: logistic regression gets 90.2% on the training years and 80.8% on 2022. The drop, 9.3 points (90.17% − 80.83%), is well outside the ±4.1 band, so it is real. Part of it is overfitting, from lesson 4: the model fits its own training complaints more closely than new ones. Part is that 2022 is a different year, with different complaints. The time split measures both together, which is what deployment will meet. Naive Bayes shows the same pattern, 92.7% against 81.8%.
 
 A training score alone says little. A test score near the training score is reassuring; a test score far below it says the model learned its examples rather than the task.
 

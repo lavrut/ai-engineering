@@ -89,7 +89,7 @@ The data is split by `date`:
 
 This is a <Term t="time split" />. A deployed model only ever scores complaints written after its training data, so the test should do the same. Shuffle all four years and hold out a random quarter, and some 2022 complaints land in training: the model learns from the year it is tested on. That is <Term t="data leakage" />: the test no longer asks "how will this do next year?" but "how does it do on years it has seen?"
 
-Leakage does not always make the number higher. On this sample, random splits of 2019–2022 score between 0.763 and 0.803, against 0.808 for the time split (Try it below). 2022 is an easy year: credit reporting, the category the model finds most reliably (97.3% of them on test, lesson 5), is 43.3% of it against 37.1% of training. The time split is right because it asks the question you care about, not because of the number it gives.
+Leakage does not always make the number higher. On this sample, random splits of 2019–2022 score between 0.763 and 0.803, against 0.808 for the time split (Try it below). 2022 may be an easier year. One possible reason: credit reporting, the category the model finds most reliably (97.3% of them on test, lesson 5), is 43.3% of it against 37.1% of training. The time split is right because it asks the question you care about, not because of the number it gives.
 
 You know dev and test from the LLMs track. Here, the test year plays the test set. Settings were chosen without it, by cross-validation on the training years: lesson 1 showed `NB_ALPHA` chosen that way.
 
