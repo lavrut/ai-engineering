@@ -6,13 +6,17 @@ MLflow is optional: nothing else in the course imports it. Install it only if yo
 run this file (a virtual environment keeps it out of your system Python):
     pip install mlflow
 
+Why keep our tiny tracker next to MLflow? mlops.py shows the mechanism with zero dependencies
+and plain files that diff in git. MLflow adds a UI, a query API and a server-grade registry,
+and needs a database even for a laptop demo.
+
 Run (from ml/python):
     python with_mlflow.py                    # log, register, alias, then compare with our run
     python with_mlflow.py --workdir mlflow-demo
     mlflow ui --backend-store-uri sqlite:///mlflow-demo/mlflow.db     # browse it at :5000
 
 Without --workdir everything goes to a temporary folder that is deleted at the end, so
-nothing lands in the repository. Tested with MLflow 3.17: its model registry needs a
+nothing lands in the repository. Tested on MLflow 3.17.2 (requirements.txt allows >=3.1,<4): its model registry needs a
 database, so the tracking store is a local SQLite file (the old plain-files store is
 deprecated and refuses to start). Still no server: SQLite is one file on disk.
 """
@@ -87,12 +91,13 @@ def register(run_id: str, name: str = MODEL_NAME, alias: str = "production") -> 
     return version
 
 
-def read_back(name: str, alias: str = "production") -> dict:
-    """Follow the alias to a version, its run, and the model file; hash the file we get."""
+def read_back(name: str, alias: str = "production", *, dst: str | Path) -> dict:
+    """Follow the alias to a version, its run, and the model file; hash the file we get.
+    The download goes to dst (inside the workdir), not the system temp folder."""
     client = MlflowClient()
     mv = client.get_model_version_by_alias(name, alias)
     run = client.get_run(mv.run_id)
-    folder = Path(client.download_artifacts(mv.run_id, "model"))
+    folder = Path(client.download_artifacts(mv.run_id, "model", dst_path=dst))
     model_file = next(folder.glob("*.json"))
     return {"version": mv.version, "params": dict(run.data.params), "metrics": dict(run.data.metrics),
             "sha256": hashlib.sha256(model_file.read_bytes()).hexdigest()}
@@ -126,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
         run_id = log_run(ours, model)
         version = register(run_id)
         print(f"logged run {run_id[:8]}, registered {MODEL_NAME} v{version}, alias 'production'\n")
-        return side_by_side(ours, read_back(MODEL_NAME, "production"))
+        return side_by_side(ours, read_back(MODEL_NAME, "production", dst=workdir / "downloads"))
 
     if args.workdir:
         agree = go(args.workdir)

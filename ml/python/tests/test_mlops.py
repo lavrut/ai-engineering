@@ -236,7 +236,7 @@ def test_runs_name_the_registered_model_files():
         assert run["model"]["sha256"] == entry["sha256"], version
 
 
-def test_canonical_commands_reproduce_committed_files(tmp_path, monkeypatch):
+def test_canonical_commands_reproduce_committed_files(tmp_path, monkeypatch, pinned_stack):
     """Re-run the canonical commands in an empty copy and compare bytes. The git fields
     record the checkout at the time of the original run, so they are pinned to it here."""
     committed = mlops.list_runs(ML / "runs")[0]

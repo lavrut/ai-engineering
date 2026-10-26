@@ -204,7 +204,7 @@ def test_tokenize_refuses_settings_it_does_not_implement():
         train.tokenize("Hi", {**train.FEATURES, "lowercase": "unicode"})
 
 
-def test_canonical_build_is_byte_identical(tmp_path, monkeypatch):
+def test_canonical_build_is_byte_identical(tmp_path, monkeypatch, pinned_stack):
     """The committed v1.json and reports are exactly what the canonical command writes,
     on any day: nothing in them depends on the clock."""
     monkeypatch.setitem(train.PATHS, "models", tmp_path / "models")

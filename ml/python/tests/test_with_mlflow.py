@@ -17,7 +17,7 @@ def test_run_registered_and_read_back_by_alias(tmp_path):
     with_mlflow.configure(tmp_path / "mlflow")
     mlflow_run = with_mlflow.log_run(mine, model)
     version = with_mlflow.register(mlflow_run, "complaints-classifier")
-    seen = with_mlflow.read_back("complaints-classifier", "production")
+    seen = with_mlflow.read_back("complaints-classifier", "production", dst=tmp_path / "downloads")
 
     assert seen["version"] == version
     assert seen["params"] == {k: str(v) for k, v in mine["params"].items()}   # MLflow stores strings
