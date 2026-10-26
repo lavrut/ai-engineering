@@ -16,7 +16,7 @@ API itself. Live mode is documented in the lesson, not run here.
 Run (from the repo root, in the venv):
     .venv-inspect/bin/pip install -r llms/inspect/requirements.txt
 
-    # the triage eval, free, from saved responses (add --split dev|test to limit it)
+    # the triage eval, free, from saved responses (add -T split=dev or -T split=test to limit it)
     .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v1_basic
     .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v2_rules --epochs 3
     .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v3_examples
