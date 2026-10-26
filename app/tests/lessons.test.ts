@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { lessonSchema } from '../src/content/schemas';
 import { glossary } from '../src/data/glossary';
 import { listSections } from '../src/lib/regions';
+import { viewId } from '../src/lib/router';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const lessonsDir = join(here, '../src/content/lessons');
@@ -113,6 +114,20 @@ describe('lesson content', () => {
   it.each(lessons.map((l) => [l.name, l] as const))('%s: every FlowDiagram names an existing diagram', (_n, l) => {
     const names = matches(l.content, /<FlowDiagram\b[^>]*\bdiagram="([^"]*)"/g);
     expect(names.filter((d) => !diagramKeys.has(d))).toEqual([]);
+  });
+
+  it('gives every lesson file its own view id', () => {
+    const ids = lessons.map((l) => viewId(l.data.track, l.data.slug));
+    expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
+  });
+
+  it('ids content entries by path, so a slug repeated across tracks does not replace a lesson', () => {
+    // Without generateId the glob loader keys entries by the slug field, and
+    // llms/01-what would silently replace harness/01-what (both slug "what").
+    const config = readFileSync(join(here, '../src/content.config.ts'), 'utf8');
+    const lessonsLoader = config.slice(config.indexOf('const lessons'), config.indexOf('export const collections'));
+    expect(lessonsLoader).toMatch(/generateId:\s*\(\{\s*entry\s*\}\)\s*=>\s*entry\.replace\(/);
+    expect(lessons.filter((l) => l.data.slug === 'what').length).toBeGreaterThan(1);
   });
 
   it.each(lessons.map((l) => [l.name, l] as const))('%s: every Term names a glossary key', (_n, l) => {

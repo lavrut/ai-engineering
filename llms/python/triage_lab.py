@@ -503,8 +503,8 @@ def estimate_plan(root=DATA_DIR, only: str | None = None) -> list[dict]:
 # A score on a small set is noisy. The band is how far a score can move by luck alone,
 # so a difference smaller than the band is not evidence of anything.
 def noise_band(m: int) -> float:
-    """Rough one-sigma noise on an accuracy, about 1/sqrt(m), where m is the number of
-    scored lines (non-error, across all reps). More scored lines shrink it."""
+    """Rough noise on an accuracy, 1/sqrt(m): about two standard errors at worst (p = 0.5),
+    where m is the number of scored lines (non-error, across all reps). More scored lines shrink it."""
     if m <= 0:
         raise ValueError("no scored cases")
     return 1 / math.sqrt(m)

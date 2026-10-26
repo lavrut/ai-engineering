@@ -65,7 +65,7 @@ export const glossary = {
   baseline:
     'The score a trivial method gets, such as always answering the most common label; a real score is judged by how far it beats this.',
   'structured output':
-    'An API feature that makes the model’s reply follow a JSON Schema you send, so the answer always parses and only uses allowed values.',
+    'An API feature that makes the model’s reply follow a JSON Schema you send, so when the model finishes normally the answer parses and only uses allowed values.',
   accuracy:
     'The share of graded cases a model got right, from 0 to 1, usually shown as a percentage.',
   'confusion matrix':

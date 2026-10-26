@@ -790,8 +790,9 @@ func run[C any](cases []C, fn func(c C, rep int) (Line, error), reps, workers in
 // A score on a small set is noisy. The band is how far a score can move by luck alone,
 // so a difference smaller than the band is not evidence of anything.
 
-// noiseBand is the rough one-sigma noise on an accuracy, about 1/sqrt(m), where m is the
-// number of scored lines (non-error, across all reps). More scored lines shrink it.
+// noiseBand is the rough noise on an accuracy, 1/sqrt(m): about two standard errors at worst
+// (p = 0.5), where m is the number of scored lines (non-error, across all reps). More scored
+// lines shrink it.
 func noiseBand(m int) (float64, error) {
 	if m <= 0 {
 		return 0, errors.New("no scored cases")

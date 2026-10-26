@@ -48,7 +48,7 @@ Every model call goes through one function, and `--mode` decides what it does:
 - **`record`** calls the API and appends the answer to the file. A request that is already saved without an error is skipped, so an interrupted recording resumes where it stopped and never pays twice.
 - **`live`** calls the API and saves nothing. Use it to try something once.
 
-Record once, then replay as often as you like. Every number in this track comes from replaying one approved recording.
+Record once, then replay as often as you like. Every number in this track comes from replaying two approved recordings: the first run, and a re-record after the labelling guide changed the prompts.
 
 ### The cache key
 
@@ -78,7 +78,9 @@ The estimate is deliberately rough. Haiku's recorded `v2_rules` calls averaged a
 
 Run the same prompt on the same tickets three times and the score moves. Haiku with `v2_rules` on the 40 dev tickets scored 97.5%, 97.5% and 95.0%. `t034` was wrong every time; `t018` was right twice and wrong once.
 
-That is only the model's own randomness. A bigger source is which tickets happen to be in the set: a different 40 tickets would score differently. The <Term t="noise band" /> covers both, roughly, as `1/√m` for `m` scored lines. For one run of 40 that is ±15.8%. Pool the three repeats, 120 lines, and it shrinks to ±9.1%.
+That is only the model's own randomness. A bigger source is which tickets happen to be in the set: a different 40 tickets would score differently. The <Term t="noise band" /> covers both, roughly, as `1/√m` for `m` scored lines. For one run of 40 that is ±15.8%.
+
+Pool the three repeats and the code reports 120 scored lines and ±9.1%. Read that band with care: all 120 lines come from the same 40 tickets. Repeats shrink only the model-randomness part. They tell you nothing about which tickets happen to be in the set, so ±9.1% understates the uncertainty; to shrink that part, you need more tickets.
 
 The rule that follows: **a difference smaller than the band is not evidence.** `v1_basic` to `v2_rules` on dev is +27.5 points, larger than 15.8, so it is a real difference. `v2_rules` and `v3_examples` both score 97.5%: nothing to choose between them on this set.
 
@@ -90,7 +92,7 @@ The simulator replays the real recording of Haiku with `v2_rules` on dev: each c
 
 <EvalRunSim />
 
-Every call is green except `t034`. The cost lands well under the $0.0176 estimate, because the real replies were short. The three repeats differ by 2.5 points, far inside the ±15.8% band for one run of 40: rerunning alone could produce that much.
+Every call is green except `t034`. The cost lands well under the $0.0176 estimate, because the real replies were short. The three repeats differ by 2.5 points. That spread is pure rerun variation: same prompt, same tickets. It sits well inside the ±15.8% band, which also allows for the larger, unseen variation from which tickets are in the set.
 
 ## The code
 

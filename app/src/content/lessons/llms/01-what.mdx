@@ -113,6 +113,6 @@ v1_basic / claude-haiku-5-5 / effort default / dev split / 1 rep / replay
 python triage_lab.py run --prompt v2_rules
 ```
 
-`both` rises to `97.5%`. Lesson 2 explains why much of that jump is less impressive than it looks. Then run the Go version from `llms/go` with `go run . run --prompt v1_basic`. It reads the same files and prints the same four numbers.
+`both` rises to `97.5%`. Lesson 2 explains why much of that jump is less impressive than it looks. Then run the Go version from `llms/go` with `go run . run --prompt v1_basic`. The first `go run` may download the SDK modules, which is free but needs a network connection. It reads the same files and prints the same four numbers.
 
 A live run of the first command (`--mode live`) would make 40 Haiku calls. The lab prints its estimate before calling: `$0.02`, worst case `$0.04` if every reply used all of `max_tokens`. Don't run it now; replay gives you the recorded answers for free.

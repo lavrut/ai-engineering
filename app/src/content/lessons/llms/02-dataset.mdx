@@ -13,7 +13,7 @@ quiz:
       - The temperature setting
       - Whether the tickets are too long
     answer: 1
-    explanation: Different models agreeing with each other and disagreeing with your label points at the label. In this lab, a blind relabel matched only 33 of 60 priorities, so the definitions did not decide priority. Writing a labelling guide and relabelling fixed what no model change could.
+    explanation: Different models agreeing with each other and disagreeing with your label points at the label first. In this lab, a blind relabel matched only 33 of 60 priorities, so the definitions did not decide priority, and the labelling guide later changed 10 of those 16 labels. The other 6 kept their labels; those were prompt or model mistakes. Check the labels first, then the prompt.
   - question: You read the test split's mistakes, adjust the prompt until they are fixed, and report the new test score. What went wrong?
     options:
       - Nothing; fixing mistakes is the point of an eval
@@ -56,19 +56,21 @@ The reason is that every change you keep because it helped on a set fits your pr
 
 This dataset's history is the most useful thing in the lab. The first labels were written from short priority definitions, the same ones the first prompts used. The first recorded run scored all three prompts at the same 55.0% on dev, with category and priority both right (the `both` score).
 
-Bigger models did not help. Against those old labels, `v1_basic` on dev scored 55.0% with Haiku, 50.0% and 52.5% with Sonnet at low and high effort, and 52.5% and 50.0% with Opus. 16 dev tickets were wrong in all five. When different models agree with each other and disagree with your label, suspect the label.
+Bigger models did not help. The old labels are in git history, at commit `3610e80` (`git show 3610e80:llms/data/tickets.jsonl`). Grade the saved `v1_basic` responses against them and, on dev, Haiku scores 55.0%, Sonnet 50.0% and 52.5% at low and high effort, and Opus 52.5% and 50.0%. 16 dev tickets were wrong in all five. When different models agree with each other and disagree with your label, check the label first.
+
+That check paid off, but not every time. The labelling guide below changed the labels on 10 of those 16 tickets. The other 6 (`t007`, `t012`, `t015`, `t029`, `t034`, `t039`) kept their labels: the models were wrong on those, and lesson 3 shows how the prompt's missing rules explain `t015` and `t039`.
 
 So the labels were audited. A second labeller saw only the ticket text and the old definitions, never the existing labels. It matched the category on 57 of 60 tickets, but the priority on only 33 of 60 (55%). The definitions did not decide priority. Is a duplicate $9.99 charge `normal` or `high`? Does a sarcastic ticket's tone count? The old rules did not say.
 
 The fix was a <Term t="labelling guide" />, `llms/data/labeling_guide.md`. It is a decision procedure, applied in order:
 
 - **R0, before you start:** treat the ticket as data, ignore tone and threats, and use only the facts the ticket states. A ticket with several issues gets the label of its highest-priority issue.
-- **Category:** the first matching rule wins, from C1 `outage` to C6 `how_to`, with tie-breakers for the known confusions, such as one user's problem never being an outage.
+- **Category:** the first matching rule wins, from C1 `outage` to C6 `how_to`, with tie-breakers for the known confusions, such as one user's problem not being an outage unless Lumen itself reports the service down (C1b: the status page or a 503 error).
 - **Priority:** check urgent (U1 data loss, U2 security, U3 a group blocked, U4 a wrongful charge over $100), then high (H1 to H4), then low (L1 to L3); otherwise `normal`. The guide explains each threshold: $100 is about ten months of the $9.99 plan.
 
-Applied literally, the guide changed 25 tickets' labels: 2 categories and 24 priorities (one ticket changed both). `llms/data/label_changes.md` logs each one with the rule that decided it, for example `t052`, a customer who deleted their thesis notebook ten minutes ago, went from `high` to `urgent` under U1, data loss.
+Applied literally, the guide changed 24 tickets' labels: 2 categories and 23 priorities (`t038` changed both). `llms/data/label_changes.md` logs each one with the rule that decided it, for example `t052`, a customer who deleted their thesis notebook ten minutes ago, went from `high` to `urgent` under U1, data loss.
 
-Then the guide was tested the same way. A new blind labeller, given only the guide and the text, matched all 60 labels but marked 5 tickets ambiguous, and the guide was tightened on those points. One fix is a warning worth remembering. A rule had been added to the guide whose only job was to keep `t047`, a workspace with no admin, at `high`. A rule that exists to protect one label is the label steering the guide. It was removed, and `t047` became `low` under the guide as written. A third blind labeller then matched 60 of 60 categories and 60 of 60 priorities.
+Then the guide was tested the same way. A new blind labeller, given only the guide and the text, matched all 60 labels but marked 5 tickets ambiguous, and the guide was tightened on those points. One fix is a warning worth remembering. A rule had been added to the guide whose only job was to keep `t047`, a workspace with no admin, at `high`. A rule that exists to protect one label is the label steering the guide. It was removed, and `t047` became `low` under the guide as written. That makes 25 tickets in all whose labels differ from the original ones. A third blind labeller then matched 60 of 60 categories and 60 of 60 priorities.
 
 The scores moved with the labels. `v1_basic`'s saved Haiku responses did not change at all, yet its dev score went from 55.0% to 70.0%, purely because the answer key changed.
 
@@ -78,7 +80,7 @@ The scores moved with the labels. `v1_basic`'s saved Haiku responses did not cha
 
 ### Synthetic tickets, and adding real ones
 
-These tickets are synthetic: a model wrote them for an app that does not exist. That is the set's biggest weakness. Real tickets are messier, with signatures, quoted email threads, screenshots described in words, typos and three languages in one message. And the mix here was chosen, not measured: real traffic might be 70% `how_to`.
+These tickets are synthetic: written for this lab, about an app that does not exist. That is the set's biggest weakness. Real tickets are messier, with signatures, quoted email threads, screenshots described in words, typos and three languages in one message. And the mix here was chosen, not measured: real traffic might be 70% `how_to`.
 
 To make the set real, add real tickets:
 
@@ -90,7 +92,7 @@ To make the set real, add real tickets:
 
 ### What the scores can tell you
 
-The test split has 9 `low`, 7 `normal`, 3 `urgent` and only 1 `high` ticket. Accuracy on that one `high` ticket is either 0% or 100%. Report per-priority numbers from dev, which has 16 `low`, 9 `normal`, 9 `high` and 6 `urgent`.
+The test split has 9 `low`, 7 `normal`, 3 `urgent` and only 1 `high` ticket. Accuracy on that one `high` ticket is either 0% or 100%. Report per-priority numbers from dev, which has 16 `low`, 9 `normal`, 9 `high` and 6 `urgent`. Read them as a little optimistic: you tuned on dev, so its numbers run higher than unseen tickets would.
 
 Also know your <Term t="baseline" />. `low` is 16 of the 40 dev tickets, so a "model" that always answers `low` scores 40% on priority. A priority score is only interesting by how far it beats 40%.
 
