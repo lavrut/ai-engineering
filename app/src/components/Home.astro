@@ -4,10 +4,11 @@ import type { Track } from '../content/schemas';
 interface Props {
   tracks: Track[];
   lessonCounts: Record<string, number>;
-  startHref: string | null;
+  /** The first lesson of each live track, in track order. */
+  starts: { title: string; href: string }[];
 }
 
-const { tracks, lessonCounts, startHref } = Astro.props;
+const { tracks, lessonCounts, starts } = Astro.props;
 const planned = tracks.filter((t) => t.status === 'planned');
 ---
 
@@ -17,14 +18,20 @@ const planned = tracks.filter((t) => t.status === 'planned');
     <h1>Build the program around the model.</h1>
     <p class="lede">
       Short, hands-on lessons on the engineering that turns a language model into working software:
-      the loop, the tools, the context and the guardrails. Each lesson pairs a Python and a Go
-      implementation of the same harness.
+      the loop, the tools, the context and the guardrails of an agent harness, and the evals that
+      show whether a change helped. Most lessons pair a Python and a Go implementation of the same code.
     </p>
     {
-      startHref ? (
-        <a class="button-primary" href={startHref}>Start the Harness track</a>
+      starts.length > 0 ? (
+        <div class="home-starts">
+          {starts.map((s, i) => (
+            <a class={i === 0 ? 'button-primary' : 'button-secondary'} href={s.href}>
+              Start {s.title}
+            </a>
+          ))}
+        </div>
       ) : (
-        <p class="muted">The first Harness lessons are being written.</p>
+        <p class="muted">The first lessons are being written.</p>
       )
     }
   </header>
@@ -83,6 +90,11 @@ const planned = tracks.filter((t) => t.status === 'planned');
   }
   .home-intro h1 {
     margin: 8px 0 16px;
+  }
+  .home-starts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
   }
   .lede {
     margin: 0 0 24px;

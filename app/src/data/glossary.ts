@@ -86,6 +86,16 @@ export const glossary = {
     'A model’s tendency to answer differently depending on where things sit in its prompt, such as whether a rubric comes before or after the text it grades.',
   'few-shot':
     'Prompting with a few worked examples of inputs and their right outputs placed in the prompt itself.',
+  effort:
+    'A request setting, output_config.effort (low, medium, high, xhigh or max), for how much the model thinks before it answers; the thinking is billed as output tokens.',
+  weights:
+    'The numbers inside a model that turn an input into an output; training changes them, a prompt does not.',
+  'fine-tuning':
+    'Training an existing model further on your own examples, so its weights change and the new behaviour no longer has to be written into every prompt.',
+  LoRA:
+    'Low-rank adaptation: fine-tuning that freezes the model and trains two thin matrices A (d × r) and B (r × d) beside a weight matrix, whose product is added to it.',
+  'eval gate':
+    'A check that runs an eval on a change and fails, with a non-zero exit code, when the score falls below a minimum or further below a baseline than the noise band.',
 } as const satisfies Record<string, string>;
 
 export type GlossaryKey = keyof typeof glossary;

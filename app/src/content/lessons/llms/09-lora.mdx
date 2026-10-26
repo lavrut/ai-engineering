@@ -1,0 +1,196 @@
+---
+track: llms
+order: 9
+slug: lora
+title: Fine-tuning with LoRA
+goal: Explain what fine-tuning changes that prompting cannot, count what LoRA trains, decide when fine-tuning is worth it, and run the lab's LoRA script on a free Colab GPU.
+minutes: 25
+quiz:
+  - question: What does fine-tuning change that a new prompt version does not?
+    options:
+      - The tokenizer
+      - The model's weights, so the new behaviour is in the model itself and needs no instructions in the request
+      - The JSON schema the model must follow
+      - The cache key
+    answer: 1
+    explanation: A prompt changes what goes into the model on each call; the model is the same. Fine-tuning runs training on your examples and changes the model's weights, so the trained model behaves differently with a short prompt or none. That is also why it costs more to change. A new prompt is an edit; a new behaviour is a training run.
+  - question: LoRA adds A (896 × 8) and B (8 × 896) beside a frozen 896 × 896 matrix W. Why does it train so few numbers?
+    options:
+      - It trains only every hundredth weight of W
+      - The update A·B is built from two thin matrices, 2 × 896 × 8 = 14,336 numbers, instead of all 802,816 in W; the product still has W's shape but can only change W in 8 independent directions
+      - It compresses W to 8-bit numbers
+      - It trains W but skips the backward pass
+    answer: 1
+    explanation: A·B is a full 896 × 896 matrix, so it can be added to W, but its rank is at most 8. Training learns only A and B, 1.79% of W's size. The bet is that the change a task needs is small in this sense, which holds well enough for many tasks.
+  - question: Suppose your Colab run gets 17 of the 20 test tickets right, where v2_rules with Haiku gets 19. What can you conclude?
+    options:
+      - Haiku is better by 10 points
+      - The LoRA model is nearly as good, so fine-tune instead
+      - Nothing about which is better; with 20 tickets the band is about ±22%, and 15 optimizer steps on 40 examples is a demonstration, not a tuned model
+      - The LoRA run failed
+    answer: 2
+    explanation: Two or three tickets on 20 is well inside ±22.4%. The training run is also tiny on purpose, so a weak score says little about what fine-tuning could reach with more data. What the run does show is the mechanics, end to end, graded by the same code as every other configuration.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import LoraDiagram from '../../../components/llms/LoraDiagram.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+Lessons 7 and 8 tuned what you send: the prompt, the model and its effort. The model itself never changed. This lesson changes the model.
+
+### Weights, not words
+
+A model is a very large set of numbers, its <Term t="weights" />. Every answer is computed from the input and those numbers. A prompt changes the input on each call. <Term t="fine-tuning" /> changes the weights: you show the model your examples, measure how far its answers are from the right ones, and nudge the weights to close the gap, many times over.
+
+After fine-tuning, the behaviour lives in the model. The trained model can answer in your format with a short prompt, because it no longer needs the rules spelled out.
+
+You cannot download Claude's weights, so this lesson uses a small open model you can train yourself: `Qwen/Qwen2.5-0.5B-Instruct`, about half a billion weights, small enough for a free Colab GPU.
+
+### LoRA
+
+Training every weight means storing a gradient and optimizer state for every one of them, and saving a full copy of the model afterwards. <Term t="LoRA" /> (low-rank adaptation) avoids that. It freezes the model's weights and trains a small update beside chosen matrices.
+
+Take one weight matrix `W`, `d × d`. LoRA adds two thin matrices: `A`, `d × r`, and `B`, `r × d`. Their product `A·B` has the same shape as `W`, and the model uses `W + A·B` in its place. Only `A` and `B` are trained. The small number `r` is the rank: `A·B` can change `W` in at most `r` independent directions.
+
+The count is simple. `A` and `B` hold `2 · d · r` numbers; `W` holds `d²`. In this model `d = 896`. With `r = 8`, that is 14,336 trained numbers against 802,816 in `W`: 1.79%.
+
+`lora.py` puts adapters on four attention matrices in every layer: `q_proj`, `k_proj`, `v_proj` and `o_proj`. `q_proj` and `o_proj` are 896 × 896. In this model `k_proj` and `v_proj` are 896 × 128, so their adapters are smaller. Across the whole model the trained share is well under 1%, and `print_trainable_parameters()` prints the exact count when the script runs.
+
+The bet behind LoRA is that the change a narrow task needs is small in this sense. It often holds well enough, and it makes training fit on one small GPU.
+
+### When fine-tuning is worth it
+
+Fine-tuning is worth trying when a prompt cannot get you there, or costs too much to send every time:
+
+- the behaviour is hard to put into words, but easy to show with many examples;
+- the prompt is long, the volume is high, and a shorter prompt on a tuned model would cost less per call;
+- you need a small model you run yourself, for cost, latency or where the data may go.
+
+It is not worth it when prompting already clears your bar. Here it does: `v2_rules` on Haiku gets 97.5% on dev and 95.0% on test (lesson 7), for about $0.25 per 1,000 tickets (lesson 8). A prompt change takes minutes and replays for free. A fine-tune needs labelled examples, a training run and a model to host, and you redo all of it when the rules change.
+
+### The tiny-data caveat
+
+`lora.py` trains on the 40 dev tickets and grades on the 20 test tickets. That is far too little to call the result a tuned model:
+
+- **About 15 optimizer steps.** 40 tickets, in batches of 4 with 2 batches added up per step, is 5 steps an epoch. Three epochs make 15 steps. An optimizer step is one update of the trained numbers.
+- **20 test tickets.** The noise band is `1/√20`, ±22.4%. Any difference from Haiku's 95.0% smaller than that is not evidence.
+- **No reply.** The tuned model writes only `category` and `priority`. Its `reply` is saved as an empty string, so the judge has nothing to grade, and the score covers two of the feature's three outputs.
+
+The run shows the mechanics end to end, graded by the same code as every other configuration. It does not show what fine-tuning could reach with hundreds of real examples.
+
+This also changes what dev is for. In lessons 7 and 8, dev was where you compared and chose. Here the dev tickets are the training data itself, so a score on dev would only show how well the model memorised them. That is why `lora.py` grades on test.
+
+## See it
+
+The diagram draws one 896 × 896 matrix `W` beside `A` and `B`, to scale. Watch the trained count and the bar as you move the rank from 8 down to 1, then up to 64.
+
+<LoraDiagram initial={8} />
+
+At `r = 8`, `A` and `B` are thin strips beside `W`: 14,336 numbers, 1.79%. At `r = 1` they are 1,792 numbers, 0.22%. At `r = 64` they are 114,688, 14.29%. The count grows in a straight line with the rank, while `W` stays frozen at 802,816. A higher rank lets the update change more, at the cost of more trained numbers.
+
+## The code
+
+`llms/finetune/lora.py` is Python only. It runs on a GPU in Colab, and it imports `triage_lab` to reuse the dataset, the graders and the report rather than copy them.
+
+Section 1 is the configuration.
+
+<CodeTabs source="lora" section={1} />
+
+- `BASE_MODEL = "Qwen/Qwen2.5-0.5B-Instruct"` is the open model to fine-tune. The first run downloads about 1 GB of its weights from Hugging Face.
+- `MODEL_NAME = BASE_MODEL + "+lora"` is saved on every prediction line, so a predictions file names what made it.
+- `LORA_R = 8` is the rank. `LORA_ALPHA = 16` scales the update; `alpha / r = 2` is a common default.
+- `TARGET_MODULES` lists the four attention matrices that get adapters. The rest of the model gets none.
+- `EPOCHS = 3` passes over the 40 dev tickets. `SEED = 0` fixes the adapters' random start and the order of the data, so two runs are comparable.
+- `LEARNING_RATE = 2e-4` is how big each nudge is. LoRA tolerates a higher rate than training every weight.
+- `MAX_NEW_TOKENS = 32` caps each generated answer; the answer is a short JSON object.
+- `SYSTEM` is the short instruction the model is trained and tested with. It names the allowed values and asks for JSON only. It has none of `v2_rules`'s rules: the examples are meant to teach them.
+
+Section 2 turns tickets into training examples.
+
+<CodeTabs source="lora" section={2} />
+
+- `to_example(ticket)` pairs the ticket text with the exact completion wanted, compact JSON such as `{"category":"bug","priority":"high"}`. The labels from lesson 2 are the training targets.
+- `parse_completion(text)` takes the text between the first `{` and the last `}`, parses it, and returns `None` unless both values are allowed. A small model has no structured output to enforce the shape, so the check is here.
+- `chat(tokenizer, prompt, completion)` formats with the model's own chat template. Without a completion, it ends on the assistant marker so the model writes the answer.
+- `prediction_line(ticket, text)` wraps the generated text as a saved-response line (lesson 4). An unparseable answer becomes an `error` line, and `reply` is always `""`.
+
+Section 3 loads the model and adds the adapters.
+
+<CodeTabs source="lora" section={3} />
+
+- `AutoModelForCausalLM.from_pretrained(BASE_MODEL, torch_dtype=torch.float32)` loads the full model. At 0.5B weights, 32-bit numbers fit on a free T4 GPU.
+- `LoraConfig(r=LORA_R, lora_alpha=LORA_ALPHA, target_modules=TARGET_MODULES, lora_dropout=0.05, ...)` describes the adapters. Dropout randomly switches off 5% of the adapter's inputs during training, which makes it lean less on any one of them.
+- `get_peft_model(model, config)` freezes every original weight and inserts `A` and `B` beside each target matrix.
+- `model.print_trainable_parameters()` prints how many numbers will train and their share of the whole.
+
+Section 4 is the training.
+
+<CodeTabs source="lora" section={4} />
+
+- `tokenize(example, tokenizer)` builds the token ids for the prompt plus the completion. `labels = [-100] * len(prompt_ids) + ...` marks the prompt tokens with `-100`, which the loss ignores, so the model is trained only on writing the answer, not on repeating the ticket.
+- `[:512]` cuts very long examples to 512 tokens.
+- `TrainingArguments(... per_device_train_batch_size=4, gradient_accumulation_steps=2 ...)` sets 4 examples per batch and adds up 2 batches before each step. That is where 5 steps an epoch comes from.
+- `logging_steps=10` prints the training loss every 10 steps, so a 15-step run prints it about once.
+- `save_strategy="no"` saves no checkpoints, so the trained adapters are gone when the session ends. The predictions are what you keep.
+- `DataCollatorForSeq2Seq(tokenizer, padding=True)` pads the ids and the labels in each batch to the same length.
+
+Section 5 predicts on test and grades the answers.
+
+<CodeTabs source="lora" section={5} />
+
+- `model.generate(**inputs, max_new_tokens=MAX_NEW_TOKENS, do_sample=False)` decodes greedily, always taking the likeliest next token, so the same trained model gives the same answers.
+- `summarize(lines, test)` grades each line with `triage_lab.grade` (lesson 3). It prints two scores, because `accuracy` skips error lines: the share right over all 20 test tickets, with unparseable answers counted wrong, and the share right over the parsed answers only, with its noise band.
+- `main` handles `--score predictions.jsonl` first, so a saved file can be graded again on any machine, with no GPU and no model download.
+- `set_seed(SEED)` runs before `load_model()`, because `get_peft_model` draws the adapters' random start.
+- `OUT_PATH.write_text(...)` writes `predictions.jsonl`, one saved-response line per test ticket.
+
+<Callout kind="warning" title="Colab deletes your files">
+  A Colab session's files are gone when it ends. Download `predictions.jsonl` from the file panel, or copy it to Drive, before you close the tab. It is the only result the run keeps.
+</Callout>
+
+## Try it
+
+First, run the format tests on your own machine. They check `to_example`, `parse_completion` and `prediction_line`, and need no GPU and no model:
+
+```bash
+python3 -m pytest llms/finetune -q
+```
+
+```text
+6 passed
+```
+
+Then train in Google Colab. A free Colab session with a T4 GPU costs nothing, and no step calls the Claude API. The steps, as `lora.py`'s docstring gives them, take about 10 minutes:
+
+1. In Colab, choose **Runtime > Change runtime type > T4 GPU**.
+2. On your machine, zip the repo's `llms/` folder into `llms.zip`. The course repo is private, so do not paste a GitHub token into a notebook.
+3. In Colab, upload `llms.zip` in the file panel, then run:
+
+```bash
+!unzip -q llms.zip
+!pip install -q -r llms/finetune/requirements.txt
+!python llms/finetune/lora.py
+```
+
+The first run downloads about 1 GB of model weights from Hugging Face. `predictions.jsonl` is written to the current directory: download it from the file panel, or copy it to Drive.
+
+Here is what to look for, in order:
+
+- the `trainable params` line from `print_trainable_parameters()`, well under 1% of all params;
+- the training loss, logged once at step 10, and a summary with `train_loss` when training ends;
+- `wrote predictions.jsonl (20 lines)`;
+- `correct on all 20 test tickets: N/20`, counting every ticket;
+- a `WARNING: ... outputs were unparseable` line, if any answer was not valid JSON with allowed values;
+- `over the N parsed outputs only: category ..., priority ..., both ... (noise band +-...)`.
+
+Then read the result against what you know. Haiku with `v2_rules` gets 19 of the 20 (95.0%) and `v1_basic` gets 11 (55.0%), on the same tickets. Any gap smaller than ±22.4% is not evidence either way. If many outputs were unparseable, the model has not yet learned the format, which 15 steps may not be enough for.
+
+Back on your machine, grade the saved file again, with no GPU:
+
+```bash
+python3 llms/finetune/lora.py --score ~/Downloads/predictions.jsonl
+```
+
+Use the path where you saved the file. It prints the same lines as the end of the Colab run. To see whether the rank matters, change `LORA_R` to 4 or 16 in your copy, rerun in Colab, and compare the two `correct on all 20` lines. Expect the difference to sit inside the band: 20 tickets cannot rank two small training runs.

@@ -1,0 +1,246 @@
+---
+track: llms
+order: 10
+slug: capstone
+title: "Capstone: an eval gate"
+goal: Run one command that fails when a change makes the triage scores worse, explain its two conditions and what it cannot catch, and wire it in before a prompt change ships.
+minutes: 20
+quiz:
+  - question: The gate compares a candidate prompt with a baseline on 40 dev tickets. The baseline scores 97.5% and the candidate 90.0%. With the default minimum of 0.7, does the gate pass?
+    options:
+      - No, because the candidate is lower than the baseline
+      - Yes; 90.0% is above the minimum, and a 7.5-point drop is inside the ±15.8% band, so the gate does not count it as evidence of a regression
+      - No, because 90.0% is below 95%
+      - Yes, because the gate only checks the minimum
+    answer: 1
+    explanation: The gate fails on either of two conditions, a score below the minimum or a drop larger than the noise band. 90.0% clears 0.7, and 97.5 − 15.8 = 81.7, so 90.0% is not far enough below the baseline. The gate is built to fail only on drops that luck alone is unlikely to produce. Smaller regressions need more tickets to see.
+  - question: Why does the gate subtract the noise band instead of failing on any drop below the baseline?
+    options:
+      - To make the gate faster
+      - Because the band is always zero in replay mode
+      - Because scores on 40 tickets move by luck; a gate that failed on every small drop would fail changes that made nothing worse, and people would learn to ignore it
+      - Because the baseline is always wrong by the band
+    answer: 2
+    explanation: A one-ticket drop is 2.5 points, far inside ±15.8%. If any drop failed the gate, harmless changes would fail about as often as they passed. The band makes a failure mean something, at the price of missing small real drops.
+  - question: In CI, the gate runs in replay mode with no API key. A pull request adds a new prompt version but no saved responses for it. What happens?
+    options:
+      - The gate calls the API to get the missing answers
+      - The gate passes, because there is nothing to compare
+      - The gate exits 1 with a replay-miss error, so the pull request is blocked until someone records the answers on purpose and commits them
+      - The gate scores the new version as 0%
+    answer: 2
+    explanation: Replay never falls back to a paid call. A missing answer raises ReplayMiss, and the command line turns that into exit code 1, the same code as a failed gate. The person making the change records the answers, approving the printed cost first, and commits them with the change, so CI stays free.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+You have built every part of an eval. Lessons 1 to 4 made the dataset, the graders and the runner. Lessons 5 and 6 added a judge and checked it. Lessons 7 to 9 used the numbers to tune the prompt and the model, and looked at tuning the weights.
+
+The last step turns all of that into one command that says no. An <Term t="eval gate" /> runs the eval on a candidate change, compares it with a baseline, and exits with an error when the change made the scores worse. Run it before a prompt change ships, and a regression stops there instead of reaching customers.
+
+Here is the lab, section by section, with the lessons that covered each part:
+
+| Section | What it does | Lessons |
+|---|---|---|
+| 1. Configuration | Models, mode, prices, data paths | 1, 8 |
+| 2. Dataset | Load tickets, split dev and test | 2 |
+| 3. The task | The answer's JSON schema | 3, 7, 8 |
+| 4. Model call with saved responses | Cache key, replay, record, live; `triage` | 4 |
+| 5. Code graders | Exact match, accuracy, confusion matrix | 3 |
+| 6. LLM judge | Rubric verdicts with reasons | 5 |
+| 7. Judge agreement | Agreement, kappa, position flips | 6 |
+| 8. Runner | Thread pool, cost estimate, cap | 4 |
+| 9. Report and compare | Noise band, compare, gate | 7, 10 |
+| 10. Command line | `run`, `compare`, `judge`, `agreement`, `gate`, `record` | all |
+
+### Two conditions
+
+`gate` fails when either of these is true:
+
+1. **Below the minimum.** The candidate's `both` accuracy is below `--minimum`, 0.7 by default. This is the floor the feature must never go under, whatever the baseline did.
+2. **Too far below the baseline.** The candidate's `both` is lower than the baseline's `both` minus the noise band. This catches a change that made things worse by more than luck explains.
+
+Both checks are strict: a score exactly at the minimum passes the first. Each failed condition prints its own reason, and the command exits with code 1. A pass exits with 0.
+
+The second condition is why the gate is worth trusting. On 40 tickets, a score moves by about ±15.8% by luck alone (lesson 4). A gate that failed on any drop would fail changes that made nothing worse about as often as it passed them, and people would stop reading it. With the band, a failure means something.
+
+### What it cannot catch
+
+The band has a price. A real drop smaller than the band passes: a candidate at 90.0% against a baseline at 97.5% is 7.5 points worse and still passes. To catch smaller drops you need more tickets, not a stricter rule.
+
+The gate grades only `category` and `priority`. It does not look at the reply. Lesson 7 found exactly that kind of change: `v2_rules` is far better than `v1_basic` on triage, and its test replies passed the judge's `addresses_issue` 14 times out of 20 against 19. This gate would pass that change. A judge gate is possible, but it costs Opus calls on every run you record.
+
+Both sides also run with the same `--model`, `--effort` and `--split`. The gate compares prompt versions; to compare models, use lesson 8's table.
+
+### Where it runs
+
+Run the gate yourself before you ship a prompt change. Then run it in CI, the checks that run on every pull request, so nobody has to remember.
+
+CI runs in replay mode: free, with no API key. A new prompt version has no saved answers, so replay fails with a `ReplayMiss`, and the command exits with 1 just as a failed gate does. That is the right outcome. The person making the change records the answers on purpose, approving the printed estimate first, and commits the response file with the change. CI then grades those answers for free on every push.
+
+Gate on dev. Dev is where you tune and compare. Running the gate on test on every change would turn test into a second dev set (lesson 2); report test once, for the version you ship.
+
+## See it
+
+This is the diagram from lesson 1 in replay mode: the code panel starts open. Press **Next** to step through one eval run. At step 7 the panel shows section 9, where `gate` lives, and at step 8 section 10, where `cmd_gate` runs it. The panel follows the **Python** or **Go** tab you last chose on a code block.
+
+<FlowDiagram diagram="eval-pipeline" mode="replay" />
+
+The gate runs this flow twice, once for the candidate and once for the baseline: load the tickets, build each request, replay the saved answer, grade it with code, and turn the grades into a score with a band. It skips step 6, the judge, which is why it cannot see the replies. The gate is one last comparison on top of step 7.
+
+## The code
+
+Section 9 holds the report, the comparison and the gate.
+
+<CodeTabs source="llms" section={9} goNote="gate returns a GateResult and an error, because report errors when nothing was scored; Python raises ValueError there. The two checks and their messages are the same, and go run . gate exits with 1 on a failure." />
+
+- `noise_band(m)` is `1 / math.sqrt(m)`: ±15.8% for 40 scored lines.
+- `report(grades)` gives `both` and `band` for one configuration (lesson 7).
+- `gate(grades, baseline_grades, minimum=0.7)` reports both sides first. `r["band"]` comes from the candidate's own scored lines.
+- `if r["both"] < minimum:` is the floor. It is strict, so exactly 0.700 passes.
+- `if r["both"] < base["both"] - r["band"]:` is the regression check: fail only when the drop is larger than the band. A candidate above the baseline always passes this check.
+- `reasons` collects one message per failed condition, and `"passed": not reasons` passes only when there are none.
+
+`cmd_gate`, in section 10, is the command around it:
+
+- `_grades(args, tickets, prompts, ...)` replays and grades every ticket in `--split`, once for `--prompt` and once for `--baseline`, with the same `--model` and `--effort`.
+- `return 0 if result["passed"] else 1` makes the result an exit code, which is what CI reads.
+- `main` catches `ReplayMiss`, prints `error: ...` and returns 1, so a missing answer also fails the check.
+
+### The whole file
+
+Here is each file in full. Read it top to bottom once: you have met every part.
+
+<CodeTabs source="llms" whole goNote="The Go file has the same ten sections with the same titles. The main differences, all covered in earlier lessons: canonicalJSON writes the cache key's JSON byte for byte as Python does, and run is generic over its cases, with goroutines, a semaphore channel and a WaitGroup (lesson 4). Verdicts are *bool, so nil means not graded (lesson 6). Errors are returned as values where Python raises. The recording plan lives only in the Python file." />
+
+The Python file is about 850 lines and needs one package, the `anthropic` SDK. The Go file is about 1,400 lines, mostly because Go spells out types, JSON decoding and error checks. Both read the same data files and give the same scores, and neither calls the API in replay mode.
+
+<Callout kind="note" title="What the gate's pass means">
+  A pass says the candidate is not measurably worse on these 40 tickets' category and priority. It does not say the change is better, that the replies are as good, or that real tickets behave like these synthetic ones. Read the fixed and broken lists from `compare` before you ship, as you did in lesson 7.
+</Callout>
+
+## Try it
+
+### Watch the gate fail
+
+Gate the minimal prompt against the tuned one, on dev, from the saved responses. This is free:
+
+```bash
+cd llms/python
+python triage_lab.py gate --prompt v1_basic --baseline v2_rules --split dev
+echo "exit $?"
+```
+
+```text
+gate v1_basic vs baseline v2_rules (minimum 0.7): FAIL
+  both 0.700 is more than the band 0.158 below the baseline 0.975
+exit 1
+```
+
+`v1_basic` scores exactly 0.700, so it clears the minimum; the strict check lets it through. It fails on the drop: 0.975 − 0.158 = 0.817, and 0.700 is below that.
+
+Raise the floor and both conditions fail:
+
+```bash
+python triage_lab.py gate --prompt v1_basic --baseline v2_rules --minimum 0.8
+```
+
+```text
+gate v1_basic vs baseline v2_rules (minimum 0.8): FAIL
+  both 0.700 is below the minimum 0.800
+  both 0.700 is more than the band 0.158 below the baseline 0.975
+```
+
+Now a change that makes nothing worse. `v3_examples` scores the same as `v2_rules` (lesson 7):
+
+```bash
+python triage_lab.py gate --prompt v3_examples --baseline v2_rules
+echo "exit $?"
+```
+
+```text
+gate v3_examples vs baseline v2_rules (minimum 0.7): PASS
+exit 0
+```
+
+The Go version gives the same verdicts:
+
+```bash
+cd ../go
+go run . gate --prompt v1_basic --baseline v2_rules --split dev
+```
+
+```text
+gate v1_basic vs baseline v2_rules (minimum 0.7): FAIL
+  both 0.700 is more than the band 0.158 below the baseline 0.975
+exit status 1
+```
+
+`exit status 1` is `go run` reporting the program's exit code.
+
+### Exercises
+
+Work in a copy of the data, so the lab's files stay as they are. Each exercise is free until a step says it costs money.
+
+- [ ] **Add a ticket.** Copy the data and add one dev ticket to the copy:
+
+  ```bash
+  cd llms/python
+  cp -r ../data ~/lumen-gate
+  echo '{"id": "t061", "text": "Since this morning every note I open shows a spinning wheel and never loads. Same on my phone and laptop.", "category": "bug", "priority": "high", "tags": [], "split": "dev"}' >> ~/lumen-gate/tickets.jsonl
+  python triage_lab.py --data ~/lumen-gate gate --prompt v1_basic --baseline v2_rules
+  ```
+
+  The gate stops with `error: no saved response for triage / claude-haiku-5-5 / v1_basic / case t061 (rep 0)` and exits with 1. A new ticket has no answers in either version. Before you record, check the label against `labeling_guide.md`: one customer on two devices is one user, so it is not an outage. Recording costs money: `python triage_lab.py --data ~/lumen-gate run --prompt v1_basic --mode record` prints the estimate and asks first. It counts all 41 tickets, `$0.02`, worst case `$0.04`, but record mode skips the 40 already saved, so only `t061` is paid for, about `$0.0004`. Do the same for `v2_rules`, then rerun the gate. The band is now `1/√41`, ±15.6%.
+
+- [ ] **Gate a deliberately worse prompt.** Save this as `llms/python/worse_version.py`. It writes `v5_no_priority`, a copy of `v2_rules` without its priority rules:
+
+  ```python
+  import json
+  import pathlib
+  import sys
+
+  path = pathlib.Path(sys.argv[1]) / "prompts.json"
+  prompts = json.loads(path.read_text())
+  text = prompts["triage"]["v2_rules"]
+  start, end = text.index("Priorities (check"), text.index("Reply:")
+  prompts["triage"]["v5_no_priority"] = text[:start] + text[end:]
+  path.write_text(json.dumps(prompts, indent=2, ensure_ascii=False) + "\n")
+  print("added v5_no_priority to", path)
+  ```
+
+  ```bash
+  python worse_version.py ~/lumen-gate
+  python triage_lab.py --data ~/lumen-gate gate --prompt v5_no_priority --baseline v2_rules
+  ```
+
+  Replay misses on `t001`: a new version is new text. Recording it costs money: adding `--mode record` to `python triage_lab.py --data ~/lumen-gate run --prompt v5_no_priority` prints the estimate first: 41 Haiku calls with the ticket from the first exercise, `$0.02`, worst case `$0.04`. Then rerun the gate. Before you look, write down whether you expect it to fail, and on which condition.
+
+- [ ] **Wire it into CI.** A minimal GitHub Actions job for a repository that keeps this lab: it installs the SDK and runs the gate in replay mode, so it needs no key and costs nothing. Set `--prompt` to the version the pull request ships and `--baseline` to the one in production:
+
+  ```yaml
+  name: eval gate
+  on:
+    pull_request:
+      paths: ["llms/**"]
+  jobs:
+    gate:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/setup-python@v5
+          with:
+            python-version: "3.12"
+        - run: pip install -r llms/python/requirements.txt
+        - run: python llms/python/triage_lab.py gate --prompt v3_examples --baseline v2_rules --split dev
+  ```
+
+  A failed gate and a missing recording both exit with 1, so both block the pull request.
+
+<Callout kind="note" title="Where to go next">
+  Every eval you build will have these parts: a fixed set of labelled inputs, saved answers, graders you have checked, a score with its noise band, and a gate that stops regressions. Start your next feature by writing its dataset, before the prompt.
+</Callout>
