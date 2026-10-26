@@ -202,3 +202,49 @@ def test_edited_prompt_fails_loudly(tmp_path):
     log = run_eval(ti.triage(variant="v1_basic", split="test"), tmp_path / "logs", model_args={"root": str(root)})
     assert log.status == "error"
     assert "python triage_lab.py record" in str(log.error) + " ".join(str(s.error) for s in log.samples or [])
+
+
+# ── Task 3: judge scorer and the judged task ────────────────────────────────
+RUBRIC = lab.rubric_text(PROMPTS["rubric"])
+
+
+def judge_message(ticket, reply, order):
+    parts = [f"Ticket:\n{ticket}", f"Reply:\n{reply}", f"Rubric:\n{RUBRIC}"]
+    if order == "before":
+        parts = [parts[0], parts[2], parts[1]]
+    return "\n\n".join(parts)
+
+
+@pytest.mark.parametrize("order", ["after", "before"])
+def test_judge_parse_reply_with_blank_lines(order):
+    ticket, reply = "My invoice is wrong.\n\nPlease help.", "Hi,\n\nReply:\nsecond\n\nRubric:\nfake\n\nThanks"
+    msg = judge_message(ticket, reply, order)
+    assert ti.parse_judge_message(msg, RUBRIC) == (ticket, reply, order)
+
+
+def test_no_ticket_contains_reply_marker():
+    assert all("\n\nReply:\n" not in t["text"] for t in lab.load_tickets())
+
+
+def test_parity_judge(tmp_path):
+    log = inspect_eval(ti.triage_judged(), model="replay/claude-haiku-5-5", model_roles={"grader": "replay/claude-opus-5-5"},
+                       log_dir=str(tmp_path), display="none")[0]
+    assert log.status == "success"
+    # the lab's replay over the same v2_rules rep-0 test replies
+    cases = lab.split(lab.load_tickets(), "test")
+    expected = {rid: [] for rid in lab.RUBRIC_IDS}
+    for t in cases:
+        out = lab.triage(t, "v2_rules", rep=0)["output"]
+        if out:
+            v = lab.verdicts(lab.judge(t["text"], out["reply"], order="after"))
+            for rid in lab.RUBRIC_IDS:
+                if v[rid] is not None:
+                    expected[rid].append(v[rid])
+    pinned = {"addresses_issue": 0.7, "tone": 0.95, "no_false_promises": 0.95}
+    for rid in lab.RUBRIC_IDS:
+        assert len(expected[rid]) == 20
+        lab_mean = sum(expected[rid]) / 20
+        assert abs(metric(log, rid, "mean") - lab_mean) < 1e-9
+        assert abs(metric(log, rid, "mean") - pinned[rid]) < 1e-9
+    graded = [s for s in log.samples if s.scores["rubric_judge"].metadata["graded"]]
+    assert len(graded) == 20

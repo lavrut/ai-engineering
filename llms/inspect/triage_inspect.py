@@ -42,14 +42,16 @@ from inspect_ai.dataset import Sample
 from inspect_ai.model import (
     ChatMessage,
     ChatMessageSystem,
+    ChatMessageUser,
     GenerateConfig,
     ModelAPI,
     ModelOutput,
     ModelUsage,
     ResponseSchema,
+    get_model,
     modelapi,
 )
-from inspect_ai.scorer import CORRECT, INCORRECT, Score, Target, accuracy, scorer, stderr
+from inspect_ai.scorer import CORRECT, INCORRECT, Score, Target, accuracy, mean, scorer, stderr
 from inspect_ai.solver import Generate, Solver, TaskState, solver
 from inspect_ai.tool import ToolChoice, ToolInfo
 from inspect_ai.util import JSONSchema
@@ -68,7 +70,9 @@ from triage_lab import (  # noqa: F401  (later sections use the rest)
     load_prompts,
     load_tickets,
     response_path,
+    rubric_text,
     triage_key,
+    verdicts,
 )
 
 # ── 1. Configuration ────────────────────────────────────────────────────────
@@ -108,6 +112,31 @@ def saved_line(kind, model, prompt_version, effort, key, root) -> dict:
                      f"Record it: python triage_lab.py record ...")
 
 
+REPLY_MARK = "\n\nReply:\n"
+
+
+def parse_judge_message(text: str, rubric: str) -> tuple[str, str, str]:
+    """Recover (ticket, reply, order) from the lab's judge message. The rubric text is known exactly, so find it
+    first; then split ticket from reply at the first "\n\nReply:\n" (a reply may itself contain blank lines
+    or the word "Reply:"; ticket texts never contain the marker)."""
+    rubric_part = "\n\nRubric:\n" + rubric
+    if not text.startswith("Ticket:\n"):
+        raise ReplayMiss(f"unrecognised judge message {text[:40]!r}. Record it: python triage_lab.py record ...")
+    body = text[len("Ticket:\n"):]
+    if body.endswith(rubric_part):                    # after: ticket, reply, rubric
+        order, body = "after", body[: -len(rubric_part)]
+        ticket, sep, reply = body.partition(REPLY_MARK)
+    elif (rubric_part + REPLY_MARK) in body:          # before: ticket, rubric, reply
+        order = "before"
+        ticket, _, reply = body.partition(rubric_part + REPLY_MARK)
+        sep = REPLY_MARK
+    else:
+        raise ReplayMiss(f"unrecognised judge message {text[:40]!r}. Record it: python triage_lab.py record ...")
+    if not sep:
+        raise ReplayMiss(f"judge message has no reply {text[:40]!r}. Record it: python triage_lab.py record ...")
+    return ticket, reply, order
+
+
 def _text(message: ChatMessage) -> str:
     return message.text
 
@@ -139,7 +168,9 @@ class ReplayAPI(ModelAPI):
             key = triage_key(user, variant, self.model_name, None, rep, self.prompts)
             line = saved_line("triage", self.model_name, variant, None, key, self.root)
         elif system == _judge_system(self.prompts):
-            raise NotImplementedError("the judge branch arrives with the grader (Task 3)")
+            ticket, reply, order = parse_judge_message(user, rubric_text(self.prompts["rubric"]))
+            key = judge_key(ticket, reply, order, self.model_name, self.prompts)
+            line = saved_line("judge", self.model_name, order, None, key, self.root)
         else:
             raise ReplayMiss(f"no saved response for {self.model_name}: unknown system prompt "
                              f"{system[:60]!r}. Record it: python triage_lab.py record ...")
@@ -202,6 +233,46 @@ def priority_match():
     return _field_scorer("priority")
 
 
+# ── 6. Judge scorer ─────────────────────────────────────────────────────────
+# Tone has no exact answer, so a stronger model grades the reply against the rubric, as in the lab.
+# The judge is the "grader" model role, so the same task can be pointed at a live model without code changes.
+def judge_message(ticket: str, reply: str, rubric: str) -> str:
+    """The lab's "after" order: ticket, reply, then the rubric."""
+    return f"Ticket:\n{ticket}\n\nReply:\n{reply}\n\nRubric:\n{rubric}"
+
+
+@scorer(metrics={rid: [mean()] for rid in RUBRIC_IDS})
+def rubric_judge():
+    prompts = load_prompts()
+    rubric = rubric_text(prompts["rubric"])
+    schema = ResponseSchema(name="judge", json_schema=JSONSchema.model_validate(JUDGE_SCHEMA))
+
+    async def score(state: TaskState, target: Target) -> Score:
+        none = {rid: 0.0 for rid in RUBRIC_IDS}
+        try:
+            parsed = json.loads(state.output.completion) if state.output.completion else None
+        except json.JSONDecodeError:
+            parsed = None
+        reply = parsed.get("reply") if isinstance(parsed, dict) else None
+        if not reply:        # no triage reply to judge: the lab skips these tickets
+            return Score(value=none, metadata={"graded": False, "verdicts": dict.fromkeys(RUBRIC_IDS), "reasons": {}})
+        grader = get_model(role="grader")
+        out = await grader.generate([ChatMessageSystem(content=_judge_system(prompts)),
+                                     ChatMessageUser(content=judge_message(state.input_text, reply, rubric))],
+                                    config=GenerateConfig(response_schema=schema))
+        try:
+            output = json.loads(out.completion) if out.completion else None
+        except json.JSONDecodeError:
+            output = None
+        v = verdicts({"output": output})
+        if output is None:   # a judge line with no output: not graded
+            return Score(value=none, metadata={"graded": False, "verdicts": v, "reasons": {}})
+        return Score(value={rid: 1.0 if v[rid] else 0.0 for rid in RUBRIC_IDS},
+                     metadata={"graded": True, "verdicts": v,
+                               "reasons": {rid: output[rid]["reason"] for rid in RUBRIC_IDS}})
+    return score
+
+
 # ── 7. The task ─────────────────────────────────────────────────────────────
 # The lab command that gives the same numbers (split all; run from llms/python).
 LAB_COMMANDS = {
@@ -226,4 +297,11 @@ def triage(variant: str = "v2_rules", split: str | None = None) -> Task:
                 # Inspect cannot treat the two exceptions differently, so we use a threshold: a few
                 # errored samples are logged and left out of the accuracy, but if more than half error
                 # (an edited prompt makes all of them miss) the eval fails and shows the record hint.
+                fail_on_error=MAX_ERROR_SHARE)
+
+
+@task
+def triage_judged() -> Task:
+    """The judged run: v2_rules rep-0 replies on the test split, graded by the rubric judge."""
+    return Task(dataset=dataset("test"), solver=triage_solver("v2_rules"), scorer=rubric_judge(),
                 fail_on_error=MAX_ERROR_SHARE)
