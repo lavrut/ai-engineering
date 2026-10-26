@@ -1,0 +1,21 @@
+---
+// Build-time wrapper: for each recorded prompt version of Haiku 5.5 (no effort),
+// passes rep 0's [category, priority] per dev ticket, plus each ticket's id, labels
+// and first 140 characters (ruling R30). The island re-grades with grade() and
+// calls compare(). Defaults: A v1_basic, B v2_rules.
+import PromptABIsland from './PromptAB.tsx';
+import { loadLlmsData } from '../../lib/llmsData';
+import { DEFAULT_AB, promptAbProps } from '../../lib/llmsAids';
+
+interface Props {
+  /** Prompt version shown as A, e.g. v1_basic. */
+  a?: string;
+  /** Prompt version shown as B, e.g. v2_rules. */
+  b?: string;
+}
+
+const { a = DEFAULT_AB.a, b = DEFAULT_AB.b } = Astro.props;
+const props = promptAbProps(loadLlmsData(), { a, b });
+---
+
+<PromptABIsland client:visible {...props} />

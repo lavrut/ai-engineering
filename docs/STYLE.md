@@ -62,6 +62,7 @@ Use these instead of hand-built HTML, so every lesson looks the same:
 | Other aids | `<ContextMeter client:visible />`, `<Timeline />`, `<TraceView />` |
 | LLMs eval aids (`components/llms/`) | `<DatasetBrowser />`, `<ConfusionMatrix run="..." />`, `<EvalRunSim run="..." />`: .astro wrappers that read `llms/data` at build time; `run` is a response file name without `.jsonl` |
 | LLMs judging aids (`components/llms/`) | `<JudgeCard initial="r001" />` (the 30 labelled replies; opt in to judged test replies with `groups={['labelled', 'v2_rules']}` or `groups={['v2_rules']}`, each adding ~25 KB), `<AgreementView />`, `<LabelingPage />`: judge lines found by cache key; the learner's reply labels live in localStorage `aie:reply-labels`, and AgreementView uses them when present |
+| LLMs tuning aids (`components/llms/`) | `<PromptAB a="v1_basic" b="v2_rules" />` (Haiku prompt versions on dev, verdict from `compare().significant`), `<CostQualityChart prompt="v2_rules" />` (one point per recorded model/effort config, log-scale cost per 1,000 tickets, ± noise band, data table), `<LoraDiagram initial={8} />` (data-free, d = 896, rank 1–64) |
 
 A new aid goes in `app/src/components/`, with its logic in `app/src/lib/` and a test in `app/tests/`.
 

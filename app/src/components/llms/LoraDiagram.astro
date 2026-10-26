@@ -1,0 +1,14 @@
+---
+// Wrapper for the data-free LoRA diagram: d = 896 (Qwen2.5-0.5B hidden size), rank 1–64.
+import LoraDiagramIsland from './LoraDiagram.tsx';
+import { LORA_RANK } from '../../lib/llmsAids';
+
+interface Props {
+  /** The rank shown first (1–64); lora.py uses 8. */
+  initial?: number;
+}
+
+const { initial = LORA_RANK.initial } = Astro.props;
+---
+
+<LoraDiagramIsland client:visible initial={initial} />
