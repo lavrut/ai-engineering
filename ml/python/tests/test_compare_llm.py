@@ -74,6 +74,7 @@ def test_request_is_structured_with_the_category_enum_and_no_sampling_params():
     fmt = p["output_config"]["format"]
     assert fmt["type"] == "json_schema"
     assert fmt["schema"]["properties"]["category"]["enum"] == CLASSES
+    assert p["thinking"] == {"type": "disabled"}
     assert not {"temperature", "top_p", "top_k", "tool_choice"} & set(p)
     assert p["messages"] == [{"role": "user", "content": "my narrative"}]
     for c in CLASSES:
@@ -85,6 +86,10 @@ def test_cache_key_changes_with_every_input():
     assert base == cl.cache_key("m", "sys", "text", 0)
     assert len({base, cl.cache_key("m2", "sys", "text", 0), cl.cache_key("m", "sys2", "text", 0),
                 cl.cache_key("m", "sys", "text2", 0), cl.cache_key("m", "sys", "text", 1)}) == 5
+    s = {"thinking": cl.THINKING, "max_tokens": cl.MAX_TOKENS, "schema": cl.SCHEMA}
+    assert base == cl.cache_key("m", "sys", "text", 0, s)
+    for change in ({"thinking": {"type": "adaptive"}}, {"max_tokens": 301}, {"schema": {}}):
+        assert cl.cache_key("m", "sys", "text", 0, {**s, **change}) != base
 
 
 def test_cost_estimate_and_worst_case():
@@ -195,3 +200,28 @@ def test_committed_sample_is_200_stratified_2022_complaints():
         assert abs(counts[c] - sum(r["product"] == c for r in test) / 3) <= 1
     saved = json.loads((ML / "data" / "llm_sample.json").read_text())
     assert saved["ids"] == ids
+
+
+def test_failed_answers_count_as_wrong_and_are_still_paid_for(ml):
+    record_some(ml, 4)
+    path = cl.response_path(ml)
+    lines = [json.loads(x) for x in path.read_text().splitlines()]
+    for x in lines[:2]:                       # two replies came back unusable
+        x["output"], x["error"], x["stop_reason"] = None, "no usable reply (stop_reason max_tokens)", "max_tokens"
+    path.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    rep = cl.compare(ml)
+    rows = cl.load_sample_rows(ml)[:4]
+    assert rep["n"] == 4 and rep["no_answer"] == 2
+    right = sum(r["product"] == "Mortgage" for r in rows[2:])
+    assert rep["claude"]["accuracy"] == pytest.approx(right / 4)
+    assert rep["answered_only"]["n"] == 2 and rep["answered_only"]["claude_accuracy"] == pytest.approx(right / 2)
+    want = train.per_class_metrics([r["product"] for r in rows],
+                                   [train.score(V1, r["narrative"])["label"] for r in rows], CLASSES)
+    assert rep["v1"]["accuracy"] == pytest.approx(want["accuracy"])      # v1 scored on all 4 too
+    assert rep["claude"]["cost_per_1000"] == pytest.approx(1000 * cl.call_cost("claude-haiku-5-5", 1000, 20))
+    assert "remote" in rep["claude"]["latency_note"] and "different things" in rep["latency_caveat"]
+
+
+def test_record_limit_makes_a_pilot_of_n_calls(ml):
+    record_some(ml, 5)
+    assert Counter.calls == 5

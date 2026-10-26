@@ -36,6 +36,10 @@ MODEL = "claude-haiku-5-5"
 PRICES = {"claude-haiku-5-5": (0.10, 0.50)}  # dollars per million tokens: (input, output)
 MAX_TOKENS = 300                            # the most output one call may use. Any thinking is billed
                                             # as output and counts here; the answer itself is ~20 tokens
+# Haiku 5.5 thinks by default, and thinking tokens count toward max_tokens and are billed as output.
+# A 300-token cap with thinking on would often stop with stop_reason "max_tokens" and no answer, so
+# the classifier call turns thinking off. These settings are part of every cache key.
+THINKING = {"type": "disabled"}
 SAMPLE_SIZE = 200
 DEFAULT_MAX_COST = 10.0                     # the --max-cost default: a run stops once it has spent this
 EST_TOKENS = (1100, 25)                     # typical (input, output) per call: ~600-word narrative + prompt
@@ -93,8 +97,9 @@ def load_sample_rows(ml: Path = ML_DIR) -> list[dict]:
 # ── 3. Request ──────────────────────────────────────────────────────────────
 def build_request(narrative: str, model: str = MODEL) -> dict:
     """Structured output makes the reply `{"category": <one of the six>}` every time. No
-    temperature, top_p or top_k (the newest models reject them) and no forced tool_choice."""
-    return {"model": model, "max_tokens": MAX_TOKENS, "system": SYSTEM,
+    temperature, top_p or top_k (the newest models reject them) and no forced tool_choice.
+    Thinking is disabled so the 300 output tokens are all for the answer."""
+    return {"model": model, "max_tokens": MAX_TOKENS, "thinking": THINKING, "system": SYSTEM,
             "messages": [{"role": "user", "content": narrative}],
             "output_config": {"format": {"type": "json_schema", "schema": SCHEMA}}}
 
@@ -111,9 +116,11 @@ class CostLimit(Exception):
         self.lines, self.spent = lines, spent
 
 
-def cache_key(model: str, system: str, narrative: str, rep: int) -> str:
-    """sha256 of the canonical JSON of everything that shapes the answer."""
-    request = {"model": model, "prompt_text": system, "input": narrative, "rep": rep}
+def cache_key(model: str, system: str, narrative: str, rep: int, settings: dict | None = None) -> str:
+    """sha256 of the canonical JSON of everything that shapes the answer, including the thinking
+    setting, max_tokens and the schema, so changing any of them can never replay an old answer."""
+    settings = settings or {"thinking": THINKING, "max_tokens": MAX_TOKENS, "schema": SCHEMA}
+    request = {"model": model, "prompt_text": system, "input": narrative, "rep": rep, "settings": settings}
     return hashlib.sha256(json.dumps(request, sort_keys=True, separators=(",", ":"),
                                      ensure_ascii=False).encode("utf-8")).hexdigest()
 
@@ -239,36 +246,57 @@ def compare(ml: Path = ML_DIR, model: str = MODEL) -> dict | None:
     this function has no client and no mode, so it cannot call the API. None if nothing is saved."""
     v1 = json.loads((Path(ml) / "models" / "v1.json").read_text())
     latency = json.loads((Path(ml) / "reports" / "latency.json").read_text())["servers"]
-    rows, lines, errors = [], [], 0
+    rows, lines = [], []
     for row in load_sample_rows(ml):
         try:
-            line = classify(row, mode="replay", ml=ml, model=model)
+            lines.append(classify(row, mode="replay", ml=ml, model=model))
+            rows.append(row)
         except ReplayMiss:
             continue
-        if line.get("error") or not line.get("output"):
-            errors += 1
-        else:
-            rows.append(row)
-            lines.append(line)
     if not lines:
         return None
+    classes = v1["classes"]
+    answered = [bool(x.get("output")) and not x.get("error") for x in lines]
+    # A refused, truncated or errored reply is a wrong answer, not a missing row: it is scored
+    # as "no answer" (an extra class that is never the true one), over every replayed complaint.
+    guess = [x["output"]["category"] if ok else NO_ANSWER for x, ok in zip(lines, answered)]
     y_true = [r["product"] for r in rows]
-    mine = train.per_class_metrics(y_true, [train.score(v1, r["narrative"])["label"] for r in rows], v1["classes"])
-    theirs = train.per_class_metrics(y_true, [x["output"]["category"] for x in lines], v1["classes"])
-    cost = sum(call_cost(model, x["input_tokens"], x["output_tokens"]) for x in lines)
+    mine = train.per_class_metrics(y_true, [train.score(v1, r["narrative"])["label"] for r in rows], classes)
+    theirs = _six_class_metrics(y_true, guess, classes)
+    keep = [i for i, ok in enumerate(answered) if ok]
+    only = train.per_class_metrics([y_true[i] for i in keep], [guess[i] for i in keep], classes) if keep else None
+    mine_only = train.per_class_metrics([y_true[i] for i in keep],
+                                        [train.score(v1, rows[i]["narrative"])["label"] for i in keep], classes) if keep else None
+    cost = sum(call_cost(model, x["input_tokens"], x["output_tokens"]) for x in lines)   # every paid line, errors too
     return {
-        "n": len(rows), "sample_size": len(load_sample_ids(ml)), "errors": errors, "band": mine["band"],
-        "split": "test (2022)", "classes": v1["classes"],
+        "n": len(rows), "sample_size": len(load_sample_ids(ml)), "no_answer": answered.count(False),
+        "band": mine["band"], "split": "test (2022)", "classes": classes,
+        "scoring": "headline = all replayed complaints; a Claude reply with no usable answer counts as wrong",
+        "answered_only": {"n": len(keep), "v1_accuracy": mine_only["accuracy"] if keep else None,
+                          "claude_accuracy": only["accuracy"] if keep else None},
         "v1": {"version": v1["version"], "accuracy": mine["accuracy"], "macro_f1": mine["macro"]["f1"],
                "per_class_f1": {c: m["f1"] for c, m in mine["per_class"].items()},
                "latency_p50_ms": latency["python"]["p50_ms"], "latency_p50_ms_go": latency["go"]["p50_ms"],
-               "latency_note": "p50 of one request to the local server (reports/latency.json)",
+               "latency_note": "local CPU inference: one request to the model served on this machine (reports/latency.json)",
                "cost_per_1000": 0.0},
-        "claude": {"model": model, "accuracy": theirs["accuracy"], "macro_f1": theirs["macro"]["f1"],
-                   "per_class_f1": {c: m["f1"] for c, m in theirs["per_class"].items()},
+        "claude": {"model": model, "accuracy": theirs["accuracy"], "macro_f1": theirs["macro_f1"],
+                   "per_class_f1": theirs["per_class_f1"],
                    "latency_p50_ms": statistics.median(x["latency_ms"] for x in lines),
+                   "latency_note": "remote API round trip: network, SDK retries and queueing behind 8 concurrent "
+                                   "workers while recording; not comparable to the local inference above",
                    "cost_per_1000": cost / len(lines) * 1000},
+        "latency_caveat": "The two latencies measure different things (local CPU inference vs a remote API call).",
     }
+
+
+NO_ANSWER = "no answer"
+
+
+def _six_class_metrics(y_true, y_pred, classes) -> dict:
+    """Accuracy and macro-F1 over the six real categories; "no answer" is a seventh, never-true prediction."""
+    m = train.per_class_metrics(y_true, y_pred, classes + [NO_ANSWER])
+    f1 = {c: m["per_class"][c]["f1"] for c in classes}
+    return {"accuracy": m["accuracy"], "macro_f1": sum(f1.values()) / len(classes), "per_class_f1": f1}
 
 
 # ── 6. Entry point ──────────────────────────────────────────────────────────
@@ -328,7 +356,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         _write_json(ml / "reports" / "llm_compare.json", {"generated_by": "python compare_llm.py compare", **report})
         print(f"{report['n']} complaints: v1 accuracy {report['v1']['accuracy']:.3f}, "
-              f"{MODEL} {report['claude']['accuracy']:.3f} (noise band ±{report['band']:.3f}).")
+              f"{MODEL} {report['claude']['accuracy']:.3f} (noise band ±{report['band']:.3f}); "
+              f"{report['no_answer']} Claude replies had no usable answer, counted wrong.")
         return 0
 
     rows = load_sample_rows(ml)[: args.limit]
