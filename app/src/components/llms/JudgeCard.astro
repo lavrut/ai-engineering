@@ -1,0 +1,25 @@
+---
+// Build-time wrapper: finds every recorded judge verdict by cache key (R25): the
+// 30 labelled replies in both rubric orders and the judged test-split replies of
+// v1_basic and v2_rules. Passes ticket text once per ticket, each reply and its
+// verdicts with reasons; no runs or saved lines (R30).
+import JudgeCardIsland from './JudgeCard.tsx';
+import { loadLlmsData } from '../../lib/llmsData';
+import { judgeKey } from '../../lib/llmsKey';
+import { JUDGE_MODEL, judgeCardProps, type JudgeCaseGroup } from '../../lib/llmsAids';
+
+interface Props {
+  /** The case shown first: a label id (r001) or prompt:ticket (v2_rules:t041). */
+  initial?: string;
+  /** Which cases to offer: 'labelled', 'v1_basic', 'v2_rules' (default all three; fewer means a smaller page). */
+  groups?: JudgeCaseGroup[];
+}
+
+const data = loadLlmsData();
+const props = judgeCardProps(data, (ticket, reply, order) => judgeKey(ticket, reply, order, JUDGE_MODEL, data.prompts), {
+  initial: Astro.props.initial,
+  groups: Astro.props.groups,
+});
+---
+
+<JudgeCardIsland client:visible {...props} />
