@@ -54,7 +54,7 @@ Use these instead of hand-built HTML, so every lesson looks the same:
 
 | Need | Component |
 |---|---|
-| Real harness code with Python/Go tabs | `<CodeTabs section={N} goNote="..." />` (N is a numbered section, 1–9 **(tested)**) or `<CodeTabs whole />` |
+| Real code with Python/Go tabs | `<CodeTabs section={N} goNote="..." />` (N must be a numbered section of the source **(tested)**) or `<CodeTabs whole />`. `source="harness"` (default), `"llms"` (the eval lab) or `"lora"` (Python only); `pythonOnly` hides the Go tab |
 | A caveat or gotcha | `<Callout kind="note" \| "warning" \| "go" title="...">` |
 | A glossary term | `<Term t="..." />` |
 | A numbered flow | `<FlowDiagram diagram="..." />` (the name must exist in `src/data/diagrams/` **(tested)**) |
@@ -68,7 +68,7 @@ A new aid goes in `app/src/components/`, with its logic in `app/src/lib/` and a 
 - **Colors:** every color is a token in `app/src/styles/tokens.css`, with a light and a dark value. **(tested)** No hex colors anywhere else; use `var(--token)`.
   - Surfaces and text: `--bg`, `--surface`, `--surface-2`, `--ink`, `--muted`, `--line`.
   - Action and status: `--accent`, `--accent-ink`, `--good`, `--warn`, `--bad`.
-  - Diagram roles, used the same way in every diagram: `--role-user`, `--role-harness`, `--role-model`, `--role-tool`, `--role-memory`, `--role-logs`.
+  - Diagram roles, used the same way in every diagram: `--role-user`, `--role-harness`, `--role-model`, `--role-tool`, `--role-memory`, `--role-logs`, `--role-dataset`, `--role-grader`. Each has at least 3:1 contrast on `--bg` in both themes. **(tested)**
 - **Type:** Bricolage Grotesque for headings (`--font-display`), IBM Plex Sans for body (`--font-body`), IBM Plex Mono for code and labels (`--font-mono`). Sizes come from the `--text-*` tokens.
 - **Shape:** corners use `--radius`. Prose stays within `--prose-w`.
 - **Themes:** readers pick Light, Dark or Auto in the sidebar. Check every new component in both themes and at phone width (375px).
@@ -76,6 +76,7 @@ A new aid goes in `app/src/components/`, with its logic in `app/src/lib/` and a 
 ## Code
 
 - **Reference harnesses:** `harness/python/harness.py` and `harness/go/main.go` keep the same numbered sections, marked `# ── N. Title` and `// ── N. Title`. Lessons quote code by section number, so renumbering a section means updating the lessons.
+- **LLMs lab:** `llms/python/triage_lab.py` and `llms/go/main.go` keep the same numbered sections 1–10; `llms/finetune/lora.py` (Python only) has sections 1–5. A `FlowDiagram` step links to one with `code.source`.
 - **Python:** standard library plus the official SDK, type hints, 4-space indent.
 - **Go:** `gofmt` formatting, standard library plus the official SDK.
 - **App:** TypeScript, 2-space indent, single quotes. Pure logic lives in `src/lib/` with tests; components stay thin.

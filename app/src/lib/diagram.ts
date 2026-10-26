@@ -10,7 +10,9 @@
 //   from the source's side facing the first waypoint, through each waypoint,
 //   into the target's side facing the last one. Keep waypoints axis-aligned.
 
-export type Role = 'user' | 'harness' | 'model' | 'tool' | 'memory' | 'logs';
+export type Role = 'user' | 'harness' | 'model' | 'tool' | 'memory' | 'logs' | 'dataset' | 'grader';
+/** The code a step can link to: the harness, the LLMs lab, or the LoRA script (Python only). */
+export type CodeSource = 'harness' | 'llms' | 'lora';
 export type DNode = { id: string; label: string; role: Role; x: number; y: number; w?: number; h?: number };
 export type DEdge = {
   id: string;
@@ -24,7 +26,8 @@ export type DStep = {
   n: number;
   highlight: string[];
   caption: string;
-  code?: { file: 'python' | 'go'; section: number };
+  /** `source` defaults to 'harness'. The section must exist in that source (tested in diagrams.test.ts). */
+  code?: { file: 'python' | 'go'; section: number; source?: CodeSource };
 };
 export type Diagram = {
   id: string;
@@ -35,6 +38,12 @@ export type Diagram = {
   edges: DEdge[];
   steps: DStep[];
 };
+
+/** Key for a step's code in the FlowDiagram island's code maps: "6" for the harness, "llms:6" otherwise. */
+export function codeKey(code: { section: number; source?: CodeSource }): string {
+  const source = code.source ?? 'harness';
+  return source === 'harness' ? String(code.section) : `${source}:${code.section}`;
+}
 
 export const DEFAULT_NODE_W = 150;
 export const DEFAULT_NODE_H = 56;
@@ -69,8 +78,9 @@ export function validateDiagram(d: Diagram): string[] {
     for (const h of s.highlight) {
       if (!ids.has(h)) errors.push(`step ${s.n}: highlight ${h} is not a node or edge id`);
     }
-    if (s.code && !(Number.isInteger(s.code.section) && s.code.section >= 1 && s.code.section <= 9)) {
-      errors.push(`step ${s.n}: code section ${s.code.section} not in 1..9`);
+    // Whether the section exists in its source file is checked against the file in diagrams.test.ts.
+    if (s.code && !(Number.isInteger(s.code.section) && s.code.section >= 1)) {
+      errors.push(`step ${s.n}: code section ${s.code.section} is not a section number`);
     }
   });
 

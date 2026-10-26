@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/preact
 import FlowDiagram, { routeEdges } from '../src/components/FlowDiagram';
 import { DEFAULT_NODE_H, DEFAULT_NODE_W, type Diagram } from '../src/lib/diagram';
 import { LANG_EVENT } from '../src/lib/lang';
+import { evalPipeline } from '../src/data/diagrams/eval-pipeline';
 import { harnessFlow } from '../src/data/diagrams/harness-flow';
 import { requestResponse } from '../src/data/diagrams/request-response';
 import { toolRoundtrip } from '../src/data/diagrams/tool-roundtrip';
@@ -122,6 +123,48 @@ describe('FlowDiagram code panel', () => {
     expect(container.querySelector('.fd-code pre')?.textContent).toBe('PY-6');
   });
 
+  it('labels harness code with the harness file names', () => {
+    const { container } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show code' }));
+    expect(container.querySelector('.fd-code-label')?.textContent).toBe('harness.py · section 6');
+  });
+
+  it('labels and picks code by the step source (llms)', () => {
+    const view = render(
+      <FlowDiagram diagram={evalPipeline} codePython={{ 'llms:2': 'LLMS-PY-2' }} codeGo={{ 'llms:2': 'LLMS-GO-2' }} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Show code' }));
+    expect(view.container.querySelector('.fd-code-label')?.textContent).toBe('triage_lab.py · section 2');
+    expect(view.container.querySelector('.fd-code pre')?.textContent).toBe('LLMS-PY-2');
+    act(() => {
+      window.dispatchEvent(new CustomEvent(LANG_EVENT, { detail: 'go' }));
+    });
+    expect(view.container.querySelector('.fd-code-label')?.textContent).toBe('main.go · section 2');
+    expect(view.container.querySelector('.fd-code pre')?.textContent).toBe('LLMS-GO-2');
+  });
+
+  it('falls back to Python for a Python-only source', () => {
+    const lora: Diagram = {
+      id: 'lora-test',
+      title: 'LoRA',
+      width: 400,
+      height: 200,
+      nodes: [
+        { id: 'a', label: 'A', role: 'dataset', x: 10, y: 10 },
+        { id: 'b', label: 'B', role: 'grader', x: 200, y: 10 },
+      ],
+      edges: [{ id: 'e', from: 'a', to: 'b' }],
+      steps: [{ n: 1, highlight: ['a', 'e', 'b'], caption: 'x', code: { file: 'python', section: 3, source: 'lora' } }],
+    };
+    vi.stubGlobal('localStorage', { getItem: (k: string) => (k === 'aie:lang' ? 'go' : null) });
+    const view = render(<FlowDiagram diagram={lora} codePython={{ 'lora:3': 'LORA-3' }} codeGo={{}} mode="replay" />);
+    expect(view.container.querySelector('.fd-code-label')?.textContent).toBe('lora.py · section 3');
+    expect(view.container.querySelector('.fd-code pre')?.textContent).toBe('LORA-3');
+    expect(view.container.querySelector('.fd-legend')?.textContent).toContain('Dataset');
+    expect(view.container.querySelector('.fd-legend')?.textContent).toContain('Grader');
+  });
+
   it('disables Show code on a step with no linked section', () => {
     setup();
     expect((screen.getByRole('button', { name: 'Show code' }) as HTMLButtonElement).disabled).toBe(true);
@@ -157,6 +200,7 @@ describe.each([
   ['harness-flow', harnessFlow],
   ['request-response', requestResponse],
   ['tool-roundtrip', toolRoundtrip],
+  ['eval-pipeline', evalPipeline],
 ])('routeEdges(%s)', (_name, d) => {
   const routes = routeEdges(d);
 

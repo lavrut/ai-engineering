@@ -21,6 +21,8 @@
   --role-tool: #b86a00;
   --role-memory: #7a4fb3;
   --role-logs: #6b7280;
+  --role-dataset: #4d7c0f;
+  --role-grader: #b8306b;
 
   --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -61,6 +63,8 @@
     --role-tool: #e9a23b;
     --role-memory: #b494e8;
     --role-logs: #9aa3b2;
+    --role-dataset: #9ccc5a;
+    --role-grader: #f07aa8;
 
     color-scheme: dark;
   }
@@ -85,6 +89,8 @@
   --role-tool: #e9a23b;
   --role-memory: #b494e8;
   --role-logs: #9aa3b2;
+  --role-dataset: #9ccc5a;
+  --role-grader: #f07aa8;
 
   color-scheme: dark;
 }
