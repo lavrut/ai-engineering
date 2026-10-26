@@ -74,8 +74,12 @@ def test_run_within_max_cost_returns_everything():
 
 
 # ── recording plan ──────────────────────────────────────────────────────────
-def test_recording_plan_estimate_under_10():
-    rows = lab.estimate_plan(DATA)
+def test_recording_plan_estimate_under_10(tmp_path):
+    # the full plan as if nothing were recorded: the real tickets, prompts and labels, no responses/
+    for name in ("tickets.jsonl", "prompts.json", "reply_labels.jsonl"):
+        shutil.copy(DATA / name, tmp_path / name)
+    rows = lab.estimate_plan(tmp_path)
+    assert all(r["todo"] == r["calls"] for r in rows)
     assert 0 < sum(r["cost"] for r in rows) < 10.0
 
 
