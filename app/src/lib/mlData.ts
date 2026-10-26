@@ -28,6 +28,9 @@ export type ModelJson = ScoringModel & {
   metrics: Record<string, unknown>;
 };
 
+/** One line of ml/data/complaints.jsonl. */
+export type Complaint = { id: string; date: string; product: string; product_raw: string; narrative: string };
+
 // ── Report types (ml/reports/*.json, ml/runs/*.json, ml/registry.json) ─────
 export type ClassMetrics = { precision: number; recall: number; f1: number; support: number };
 export type SplitMetrics = {
@@ -251,6 +254,8 @@ export type MlData = {
   /** The production model for the feature explorer, exact (full vocabulary and idf, weights for
    *  the COEF_SLICE_SIZE most influential words). Give an island forExplorer(explorer). */
   explorer: ExplorerModel;
+  /** Every complaint in ml/data/complaints.jsonl, in file order (build time only: aids pick a few). */
+  complaints: Complaint[];
 };
 
 // ── Registry ────────────────────────────────────────────────────────────────
@@ -296,7 +301,16 @@ export function buildMlData(files: MlFiles): MlData {
     registry,
     production,
     explorer: buildExplorer(json<ModelJson>(registry.versions[production].path), files['data/complaints.jsonl']),
+    complaints: parseComplaints(files['data/complaints.jsonl'] ?? ''),
   };
+}
+
+/** The lines of complaints.jsonl, in file order. */
+export function parseComplaints(jsonl: string): Complaint[] {
+  return jsonl
+    .split('\n')
+    .filter((l) => l.trim())
+    .map((l) => JSON.parse(l) as Complaint);
 }
 
 /** Complaints sent in 2022-2024 (test and stream splits): unseen by v1, where agreement is measured. */
@@ -306,10 +320,7 @@ export const AGREEMENT_WINDOW = { from: '2022-01-01', to: '2024-12-31' };
  *  gets) labels a complaint the way the full model does, over AGREEMENT_WINDOW. */
 export function buildExplorer(model: ModelJson, complaintsJsonl: string | undefined): ExplorerModel {
   if (complaintsJsonl === undefined) throw new Error('ml/data/complaints.jsonl is missing');
-  const texts = complaintsJsonl
-    .split('\n')
-    .filter((l) => l.trim())
-    .map((l) => JSON.parse(l) as { date: string; narrative: string })
+  const texts = parseComplaints(complaintsJsonl)
     .filter((r) => r.date >= AGREEMENT_WINDOW.from && r.date <= AGREEMENT_WINDOW.to)
     .map((r) => r.narrative);
   const exact = explorerModel(model, COEF_SLICE_SIZE);

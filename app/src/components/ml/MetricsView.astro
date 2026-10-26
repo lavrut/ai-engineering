@@ -1,0 +1,11 @@
+---
+// Build-time wrapper: passes metrics.json's three models on train and test (per-class metrics,
+// averages, accuracy, band, confusion; 6 significant figures; 6.8 KB) and its note.
+import MetricsViewIsland from './MetricsView.tsx';
+import { loadMlData } from '../../lib/mlData';
+import { metricsViewProps } from '../../lib/mlAids';
+
+const props = metricsViewProps(loadMlData().metrics);
+---
+
+<MetricsViewIsland client:visible {...props} />

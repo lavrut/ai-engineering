@@ -1,0 +1,11 @@
+---
+// Build-time wrapper: passes the sample's counts per category and year, the real per-year
+// shares (drift.json real_class_shares), the time splits and dataset.json's 18 snippets (7.3 KB).
+import ComplaintExplorerIsland from './ComplaintExplorer.tsx';
+import { loadMlData } from '../../lib/mlData';
+import { complaintExplorerProps } from '../../lib/mlAids';
+
+const props = complaintExplorerProps(loadMlData());
+---
+
+<ComplaintExplorerIsland client:visible {...props} />
