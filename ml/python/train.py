@@ -17,8 +17,9 @@ import math
 from collections import Counter
 from pathlib import Path
 
-import numpy as np
 import re
+
+import numpy as np
 import scipy.sparse as sp
 
 # ── 1. Configuration ────────────────────────────────────────────────────────
