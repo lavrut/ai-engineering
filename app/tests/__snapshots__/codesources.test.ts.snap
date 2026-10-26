@@ -294,8 +294,8 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
   "llms/11-framework.mdx #3": {
     "go": null,
     "python": {
-      "lines": 50,
-      "sha256": "9170437aa14cadb4a11593bd9e1a6d44a7c25bbe351571f2e033cf67c8c67411",
+      "lines": 51,
+      "sha256": "abee1a7fbe7c66feca618a5b5d124ac2518483d50e133ce6cc0a44713ea3dfd4",
     },
   },
 }

@@ -90,17 +90,17 @@ python3 -m venv .venv-inspect
 .venv-inspect/bin/pip install -r llms/inspect/requirements.txt    # inspect-ai==0.3.285
 .venv-inspect/bin/pip install -e llms/inspect                     # registers the replay provider, which the CLI needs
 
-.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v1_basic
-.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v2_rules --epochs 3
-.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v3_examples
-.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage_judged --model replay/claude-haiku-5-5 --model-role grader=replay/claude-opus-5-5
+.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v1_basic --log-dir llms/inspect/logs
+.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v2_rules --epochs 3 --log-dir llms/inspect/logs
+.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v3_examples --log-dir llms/inspect/logs
+.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage_judged --model replay/claude-haiku-5-5 --model-role grader=replay/claude-opus-5-5 --log-dir llms/inspect/logs
 
 .venv-inspect/bin/inspect view --log-dir llms/inspect/logs        # browse the logs
 .venv-inspect/bin/python llms/inspect/summarize.py                # run all four, write llms/data/inspect_summary.json
 .venv-inspect/bin/python -m pytest llms/inspect/tests -q          # the parity tests
 ```
 
-`summarize.py` exits non-zero if an Inspect score stops matching the lab's. Logs go to `llms/inspect/logs/`; only the summary is committed. The live path (`--model anthropic/claude-haiku-5-5`) costs money: get the estimate first from `python3 llms/python/triage_lab.py run --prompt v2_rules --split all --reps 3 --mode live` and answer `N` to the prompt.
+`summarize.py` exits non-zero if an Inspect score stops matching the lab's. Logs go to `llms/inspect/logs/`; only the summary is committed. The live path (`--model anthropic/claude-haiku-5-5`) costs money: get the estimate first from `python3 llms/python/triage_lab.py run --prompt v2_rules --split all --reps 3 --mode live` and answer `N` to the prompt (it prints about $0.08, worst case $0.20; the judged run's Opus grader adds about $0.47, worst case $0.91).
 
 ### LoRA on Colab
 

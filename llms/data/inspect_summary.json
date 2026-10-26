@@ -8,7 +8,7 @@
       "label": "v1_basic, all 60 tickets",
       "task": "triage",
       "epochs": 1,
-      "command": "inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v1_basic",
+      "command": "inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v1_basic --log-dir llms/inspect/logs",
       "lab_command": "python triage_lab.py run --prompt v1_basic --split all",
       "rows": [
         {
@@ -34,7 +34,7 @@
       "label": "v2_rules, 3 epochs, all 60 tickets",
       "task": "triage",
       "epochs": 3,
-      "command": "inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v2_rules --epochs 3",
+      "command": "inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v2_rules --epochs 3 --log-dir llms/inspect/logs",
       "lab_command": "python triage_lab.py run --prompt v2_rules --split all --reps 3",
       "rows": [
         {
@@ -60,7 +60,7 @@
       "label": "v3_examples, all 60 tickets",
       "task": "triage",
       "epochs": 1,
-      "command": "inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v3_examples",
+      "command": "inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v3_examples --log-dir llms/inspect/logs",
       "lab_command": "python triage_lab.py run --prompt v3_examples --split all",
       "rows": [
         {
@@ -86,7 +86,7 @@
       "label": "judge, v2_rules rep-0 replies, 20 test tickets",
       "task": "triage_judged",
       "epochs": 1,
-      "command": "inspect eval llms/inspect/triage_inspect.py@triage_judged --model replay/claude-haiku-5-5 --model-role grader=replay/claude-opus-5-5",
+      "command": "inspect eval llms/inspect/triage_inspect.py@triage_judged --model replay/claude-haiku-5-5 --model-role grader=replay/claude-opus-5-5 --log-dir llms/inspect/logs",
       "lab_command": "python triage_lab.py judge --prompt v2_rules --split test --order after",
       "rows": [
         {

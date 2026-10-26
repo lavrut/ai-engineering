@@ -2,7 +2,7 @@ import { useId, useState } from 'preact/hooks';
 import { allMatch, compareRows, runOptions, type InspectSummary } from '../../lib/frameworkCompare';
 import NoRecordedRun from './NoRecordedRun';
 
-export const SUMMARIZE_COMMAND = 'python llms/inspect/summarize.py';
+export const SUMMARIZE_COMMAND = '.venv-inspect/bin/python llms/inspect/summarize.py';
 
 export default function FrameworkCompare({ summary }: { summary: InspectSummary | null }) {
   const groupName = useId();
@@ -14,7 +14,7 @@ export default function FrameworkCompare({ summary }: { summary: InspectSummary 
         <p class="fc-eyebrow">Lab vs Inspect</p>
         <NoRecordedRun
           command={SUMMARIZE_COMMAND}
-          text="Run the Inspect tasks once in the Inspect environment, then summarise them. This reads saved answers and calls no API. Then rebuild the app."
+          text="Run the summarize command in the Inspect environment. It runs the four evals itself from saved answers, calls no API and writes the summary. Then rebuild the app."
         />
         <style>{css}</style>
       </section>
@@ -75,6 +75,11 @@ export default function FrameworkCompare({ summary }: { summary: InspectSummary 
           </tbody>
         </table>
       </div>
+      {run?.id === 'judge' && (
+        <p class="fc-note">
+          Judge stderr is computed by summarize.py from the lab's verdicts, not by Inspect.
+        </p>
+      )}
       <p class="fc-live" role="status">
         {announce}
       </p>
@@ -127,6 +132,7 @@ const css = `
 .fc-table tbody th { font-family: var(--font-mono); font-weight: 600; }
 .fc-ok { font-weight: 600; color: var(--good); }
 .fc-bad { font-weight: 600; color: var(--ink); }
+.fc-note { margin: 0; font-size: var(--text-small); color: var(--muted); }
 .fc-live { margin: 0; font-size: var(--text-small); color: var(--muted); }
 .fc-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 12px; }
 .fc-lists > div { padding: 12px 14px; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }

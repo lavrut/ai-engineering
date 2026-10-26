@@ -18,14 +18,18 @@ Run (from the repo root, in the venv):
     .venv-inspect/bin/pip install -e llms/inspect     # registers the replay provider (the CLI needs it)
 
     # the triage eval, free, from saved responses (add -T split=dev or -T split=test to limit it)
-    .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v1_basic
-    .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v2_rules --epochs 3
-    .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v3_examples
+    .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v1_basic --log-dir llms/inspect/logs
+    .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v2_rules --epochs 3 --log-dir llms/inspect/logs
+    .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v3_examples --log-dir llms/inspect/logs
+
+    # the judged run: the Opus grader replays too (rep-0 replies on the test split)
+    .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage_judged --model replay/claude-haiku-5-5 --model-role grader=replay/claude-opus-5-5 --log-dir llms/inspect/logs
 
 Live (a paid run): swap `replay/` for `anthropic/` in --model. This costs money.
 Check the lab's estimate for the same run first (from llms/python):
     python triage_lab.py run --prompt v2_rules --split all --reps 3 --mode live
-It prints the estimate and asks "Make these paid calls? [y/N]"; answering N spends nothing.
+With stdin closed (< /dev/null) it prints the estimate (about $0.08, worst case $0.20) and declines; interactively it asks "Make these paid calls? [y/N]"; answering N spends nothing.
+The judged run adds the Opus grader: about $0.47, worst case $0.91.
 The spend cap defaults to --max-cost 10 (dollars).
 """
 from __future__ import annotations
@@ -60,6 +64,7 @@ from inspect_ai.util import JSONSchema
 from triage_lab import (  # noqa: F401  (later sections use the rest)
     DATA_DIR,
     JUDGE_MODEL,
+    MAX_TOKENS,
     JUDGE_SCHEMA,
     RUBRIC_IDS,
     TASK_MODEL,
@@ -194,13 +199,14 @@ class ReplayAPI(ModelAPI):
 @solver
 def triage_solver(variant: str) -> Solver:
     """The lab's call: the variant's system prompt, the ticket, the lab's JSON schema.
-    No temperature, top_p or top_k are set (the lab sets none). The epoch picks the saved rep."""
+    No temperature, top_p or top_k are set (the lab sets none); max_tokens is the lab's, so the live request is the lab's request. The epoch picks the saved rep."""
     system = ChatMessageSystem(content=load_prompts()["triage"][variant])
     schema = ResponseSchema(name="triage", json_schema=JSONSchema.model_validate(TRIAGE_SCHEMA))
 
     async def solve(state: TaskState, generate: Generate) -> TaskState:
         state.messages.insert(0, system)
-        return await generate(state, extra_headers={REP_HEADER: str(state.epoch - 1)}, response_schema=schema)
+        return await generate(state, extra_headers={REP_HEADER: str(state.epoch - 1)}, response_schema=schema,
+                              max_tokens=MAX_TOKENS)
 
     return solve
 
@@ -245,8 +251,9 @@ def judge_message(ticket: str, reply: str, rubric: str) -> str:
 
 @metric
 def graded_mean():
-    """Pass rate (Inspect hands a dict-valued scorer's metric one key at a time) over the graded samples only. The lab leaves a ticket with no reply and a
-    judge line with no output out of the denominator, so a plain mean() (which counts them as fails) is wrong."""
+    """Pass rate over the graded samples only (Inspect hands a dict-valued scorer's metric one key at a time).
+    The lab leaves a ticket with no reply and a judge line with no output out of the denominator,
+    so a plain mean() (which counts them as fails) is wrong."""
     def compute(scores: list[SampleScore]) -> float:
         graded = [s.score.value for s in scores if s.score.metadata and s.score.metadata["graded"]]
         return sum(graded) / len(graded) if graded else 0.0
@@ -273,7 +280,7 @@ def rubric_judge():
         grader = get_model(role="grader")
         out = await grader.generate([ChatMessageSystem(content=_judge_system(prompts)),
                                      ChatMessageUser(content=judge_message(state.input_text, reply, rubric))],
-                                    config=GenerateConfig(response_schema=schema))
+                                    config=GenerateConfig(response_schema=schema, max_tokens=MAX_TOKENS))
         try:
             output = json.loads(out.completion) if out.completion else None
         except json.JSONDecodeError:

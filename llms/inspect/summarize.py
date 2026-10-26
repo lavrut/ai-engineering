@@ -39,6 +39,7 @@ DEFAULT_LOG_DIR = HERE / "logs"
 MODEL = "replay/claude-haiku-5-5"
 GRADER = "replay/claude-opus-5-5"
 CLI = "inspect eval llms/inspect/triage_inspect.py"
+LOG_DIR_ARG = "--log-dir llms/inspect/logs"
 
 # id, label, variant, epochs
 TRIAGE_RUNS = [("v1_basic", "v1_basic, all 60 tickets", "v1_basic", 1),
@@ -121,12 +122,12 @@ def build_summary(log_dir, logs: dict | None = None) -> dict:
     for rid, label, variant, epochs in TRIAGE_RUNS:
         extra = f" --epochs {epochs}" if epochs > 1 else ""
         runs.append({"id": rid, "label": label, "task": "triage", "epochs": epochs,
-                     "command": f"{CLI}@triage --model {MODEL} -T variant={variant}{extra}",
+                     "command": f"{CLI}@triage --model {MODEL} -T variant={variant}{extra} {LOG_DIR_ARG}",
                      "lab_command": ti.LAB_COMMANDS[rid],
                      "rows": _triage_rows(logs[rid], variant, epochs)})
     runs.append({"id": "judge", "label": "judge, v2_rules rep-0 replies, 20 test tickets", "task": "triage_judged",
                  "epochs": 1,
-                 "command": f"{CLI}@triage_judged --model {MODEL} --model-role grader={GRADER}",
+                 "command": f"{CLI}@triage_judged --model {MODEL} --model-role grader={GRADER} {LOG_DIR_ARG}",
                  "lab_command": ti.LAB_COMMANDS["judge"], "rows": _judge_rows(logs["judge"])})
     return {"inspect_version": ti.INSPECT_VERSION, "lab": "llms/python/triage_lab.py", "split": "all",
             "runs": runs, "framework_gives": FRAMEWORK_GIVES, "we_still_own": WE_STILL_OWN}

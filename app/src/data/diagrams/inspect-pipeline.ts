@@ -26,7 +26,7 @@ export const inspectPipeline: Diagram = {
       n: 1,
       highlight: ['dataset', 'e-dataset-solver'],
       caption:
-        'Each ticket becomes an Inspect sample: the text as input, the right category and priority as target, and the rest as metadata. In the lab: section 2.',
+        'Each ticket becomes an Inspect sample: the text as input, the right category as target, and the priority, split and tags as metadata. In the lab: section 2.',
       code: { file: 'python', section: 2, source: 'llms-inspect' },
     },
     {

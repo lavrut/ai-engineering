@@ -122,6 +122,7 @@ def test_no_sampling_params(tmp_path):
     for c in seen:
         assert c.temperature is None and c.top_p is None and c.top_k is None
         assert c.response_schema is not None and c.extra_headers[ti.REP_HEADER] == "0"
+        assert c.max_tokens == 2000 == lab.MAX_TOKENS
 
 
 def tmp_root(tmp_path, variant, lines_for):
@@ -367,3 +368,44 @@ def test_cli_judge_command(tmp_path):
                    "--model-role", "grader=replay/claude-opus-5-5"], tmp_path)
     assert log.status == "success"
     assert score(log, "addresses_issue", "graded_mean") == pytest.approx(0.7)
+
+
+def test_judge_config_has_lab_max_tokens(tmp_path):
+    seen = []
+    cls = type(get_model("replay/claude-opus-5-5").api)
+    real = cls.generate
+
+    async def spy(self, input, tools, tool_choice, config):
+        seen.append((self.model_name, config))
+        return await real(self, input, tools, tool_choice, config)
+
+    cls.generate = spy
+    try:
+        inspect_eval(ti.triage_judged(), model="replay/claude-haiku-5-5", model_roles={"grader": "replay/claude-opus-5-5"},
+                     log_dir=str(tmp_path), display="none", limit=2)
+    finally:
+        cls.generate = real
+    judge_calls = [c for name, c in seen if name == "claude-opus-5-5"]
+    assert judge_calls and all(c.max_tokens == 2000 for c in judge_calls)
+
+
+def test_printed_command_verbatim_writes_to_repo_logs():
+    """Run the summary's printed v1_basic command word for word from the repo root: the log lands in llms/inspect/logs."""
+    import shlex
+    cmd = next(r for r in json.loads((REPO / "llms/data/inspect_summary.json").read_text())["runs"]
+               if r["id"] == "v1_basic")["command"]
+    logs = REPO / "llms/inspect/logs"
+    before = set(logs.glob("*.eval")) if logs.exists() else set()
+    args = shlex.split(cmd)
+    assert args[0] == "inspect"
+    proc = subprocess.run([str(Path(sys.executable).parent / "inspect"), *args[1:], "--display", "none"],
+                          cwd=REPO, capture_output=True, text=True, timeout=300)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    new = set(logs.glob("*.eval")) - before
+    try:
+        assert len(new) == 1
+        log = read_eval_log(str(next(iter(new))))
+        assert score(log, "category_match", "accuracy") == pytest.approx(0.9)
+    finally:
+        for f in new:
+            f.unlink()

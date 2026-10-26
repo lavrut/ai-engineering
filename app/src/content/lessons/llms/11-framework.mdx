@@ -75,7 +75,7 @@ It rebuilds the lab's own cache key from the request and reads the saved line. I
 
 ## See it
 
-Press **Next** to step through one run. Watch where the lab's saved responses come in: step 3, the replay provider, is the only place the model is replaced. Every other step is Inspect's own.
+Press **Next** to step through one run. Watch where the lab's saved responses come in: step 3, the replay provider, is the only place the model is replaced. The solver and the scorers are our code, written on Inspect's API and run the way Inspect would run them live.
 
 <FlowDiagram diagram="inspect-pipeline" />
 
@@ -149,10 +149,10 @@ The first line of pip installs `inspect-ai==0.3.285` and the lab's requirements.
 Each command replays saved answers. It costs nothing and needs no API key. The log goes to `llms/inspect/logs/`.
 
 ```bash
-.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v1_basic
-.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v2_rules --epochs 3
-.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v3_examples
-.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage_judged --model replay/claude-haiku-5-5 --model-role grader=replay/claude-opus-5-5
+.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v1_basic --log-dir llms/inspect/logs
+.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v2_rules --epochs 3 --log-dir llms/inspect/logs
+.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v3_examples --log-dir llms/inspect/logs
+.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage_judged --model replay/claude-haiku-5-5 --model-role grader=replay/claude-opus-5-5 --log-dir llms/inspect/logs
 ```
 
 Look for these scores on all 60 tickets: `v1_basic` 0.9 category and 0.7333 priority, `v2_rules` 1.0 and 0.9611, `v3_examples` 1.0 and 0.9667. The judged run should show `addresses_issue` 0.7, `tone` 0.95 and `no_false_promises` 0.95.
@@ -180,7 +180,7 @@ cp -r llms/data ~/lumen-inspect
 Add a few words to the end of the `v1_basic` text under `triage` in `~/lumen-inspect/prompts.json`, then point the provider at the copy with `-M root`:
 
 ```bash
-.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v1_basic -M root=$HOME/lumen-inspect
+.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v1_basic -M root=$HOME/lumen-inspect --log-dir llms/inspect/logs
 ```
 
 Every sample misses, so the eval stops with `ReplayMiss: no saved response for claude-haiku-5-5: unknown system prompt ... Record it: python triage_lab.py record ...`. It names the case and the lab's record command, and it never calls the API.
@@ -197,10 +197,10 @@ It prints the estimate and the worst case, then `Make these paid calls? [y/N]`. 
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model anthropic/claude-haiku-5-5 -T variant=v2_rules --epochs 3
+.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model anthropic/claude-haiku-5-5 -T variant=v2_rules --epochs 3 --log-dir llms/inspect/logs
 ```
 
-This calls the API and costs money. Inspect has no estimate and no `y/N` prompt. It does have `--cost-limit`, a dollar limit on each sample, and `--token-limit`, but neither is the lab's `--max-cost` cap on the whole run, so hold yourself to the number the lab printed.
+This calls the API and costs money. With stdin closed, the lab prints its figures: about $0.08 for the `v2_rules` run over 3 epochs (worst case $0.20). The judged run adds the Opus grader, about $0.47 (worst case $0.91). Inspect has no estimate and no `y/N` prompt. It does have `--cost-limit`, a dollar limit on each sample, and `--token-limit`, but neither is the lab's `--max-cost` cap on the whole run, so hold yourself to the number the lab printed.
 
 <Callout kind="note" title="When to reach for a framework">
   A framework earns its place when you run many evals, share them with a team, or want logs and a viewer for free. The hand-built lab earns its place when you need to know exactly why a number is what it is. Here you used both: the lab as the check, Inspect as the tool.

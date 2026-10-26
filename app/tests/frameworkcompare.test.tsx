@@ -73,7 +73,7 @@ describe('FrameworkCompare', () => {
   it('shows the empty state with the summarize command when there is no summary', () => {
     render(<FrameworkCompare summary={null} />);
     expect(screen.getByText('No recorded run yet')).toBeTruthy();
-    expect(screen.getByText('python llms/inspect/summarize.py')).toBeTruthy();
+    expect(screen.getByText('.venv-inspect/bin/python llms/inspect/summarize.py')).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
   });
 });
