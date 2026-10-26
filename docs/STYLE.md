@@ -60,6 +60,7 @@ Use these instead of hand-built HTML, so every lesson looks the same:
 | A numbered flow | `<FlowDiagram diagram="..." />` (the name must exist in `src/data/diagrams/` **(tested)**) |
 | A stepping loop | `<LoopSimulator client:visible scenario="..." />` |
 | Other aids | `<ContextMeter client:visible />`, `<Timeline />`, `<TraceView />` |
+| LLMs eval aids (`components/llms/`) | `<DatasetBrowser />`, `<ConfusionMatrix run="..." />`, `<EvalRunSim run="..." />`: .astro wrappers that read `llms/data` at build time; `run` is a response file name without `.jsonl` |
 
 A new aid goes in `app/src/components/`, with its logic in `app/src/lib/` and a test in `app/tests/`.
 

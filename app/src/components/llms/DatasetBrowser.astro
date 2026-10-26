@@ -1,0 +1,11 @@
+---
+// Build-time wrapper: loads the tickets and passes each one's id, labels, tags,
+// split and first 140 characters (ruling R30). Needs no recorded run.
+import DatasetBrowserIsland from './DatasetBrowser.tsx';
+import { loadLlmsData } from '../../lib/llmsData';
+import { ticketRows } from '../../lib/llmsAids';
+
+const tickets = ticketRows(loadLlmsData().tickets);
+---
+
+<DatasetBrowserIsland client:visible tickets={tickets} />

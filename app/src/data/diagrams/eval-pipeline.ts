@@ -16,7 +16,7 @@ export const evalPipeline: Diagram = {
     { id: 'prompt', label: 'Task prompt', role: 'memory', x: 270, y: 60 },
     { id: 'model', label: 'Model (Haiku)', role: 'model', x: 510, y: 60, w: 170 },
     { id: 'saved', label: 'Saved response', role: 'logs', x: 770, y: 60, w: 170 },
-    { id: 'judge', label: 'LLM judge (Opus)', role: 'grader', x: 960, y: 230, w: 160 },
+    { id: 'judge', label: 'LLM judge (Opus)', role: 'model', x: 960, y: 230, w: 160 },
     { id: 'grader', label: 'Code grader', role: 'grader', x: 770, y: 230, w: 170 },
     { id: 'score', label: 'Score', role: 'harness', x: 510, y: 230, w: 170 },
     { id: 'report', label: 'Report', role: 'harness', x: 270, y: 230 },

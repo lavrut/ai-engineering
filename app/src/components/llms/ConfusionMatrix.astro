@@ -1,0 +1,18 @@
+---
+// Build-time wrapper: for every recorded triage config on the dev split (rep 0),
+// passes one category answer per ticket plus each ticket's id, label and first
+// 140 characters (ruling R30). `run` picks the config shown first.
+import ConfusionMatrixIsland from './ConfusionMatrix.tsx';
+import { loadLlmsData } from '../../lib/llmsData';
+import { DEFAULT_MATRIX_RUN, matrixProps } from '../../lib/llmsAids';
+
+interface Props {
+  /** A response file name without .jsonl, e.g. triage__claude-haiku-5-5__v1_basic__default. */
+  run?: string;
+}
+
+const { run = DEFAULT_MATRIX_RUN } = Astro.props;
+const props = matrixProps(loadLlmsData(), { run });
+---
+
+<ConfusionMatrixIsland client:visible {...props} />
