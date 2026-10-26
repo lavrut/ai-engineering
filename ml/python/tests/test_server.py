@@ -41,7 +41,7 @@ def test_health(client):
 def test_predict_matches_fixture(client, case):
     r = client.post("/predict", json={"text": case["input"]})
     exp = case["expected"]
-    if len(case["input"]) > 20000:
+    if not 1 <= len(case["input"]) <= 20000:    # the API rejects these; scoring has no limit
         assert r.status_code == 400 and r.json() == LENGTH_ERROR
         return
     assert r.status_code == 200
