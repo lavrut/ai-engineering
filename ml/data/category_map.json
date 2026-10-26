@@ -1,0 +1,65 @@
+{
+  "note": "Published CFPB product names (2019-2024 narratives) -> the current name the course classifies into. A key 'Product•Sub-product' overrides the plain product key. 'to': null means the complaint is left out because, under today's names, it belongs to a category the course does not use. Counts come from the narratives archive; see README.md.",
+  "categories": [
+    "Credit reporting or other personal consumer reports",
+    "Debt collection",
+    "Credit card",
+    "Checking or savings account",
+    "Mortgage",
+    "Money transfer, virtual currency, or money service"
+  ],
+  "map": {
+    "Credit reporting or other personal consumer reports": {
+      "to": "Credit reporting or other personal consumer reports",
+      "note": "Current name, first seen in 2023 complaints; the only name used in 2024."
+    },
+    "Credit reporting, credit repair services, or other personal consumer reports": {
+      "to": "Credit reporting or other personal consumer reports",
+      "note": "Renamed in 2023: used for all of 2019-2022, alongside the new name in 2023, gone in 2024."
+    },
+    "Credit reporting, credit repair services, or other personal consumer reports•Credit repair services": {
+      "to": null,
+      "note": "Credit repair moved to the new product 'Debt or credit management' in 2023 (its 'Credit repair services' sub-product starts then), so it is not credit reporting under today's names."
+    },
+    "Debt collection": {
+      "to": "Debt collection",
+      "note": "Unchanged."
+    },
+    "Credit card": {
+      "to": "Credit card",
+      "note": "Current name, first seen in 2023, after 'Credit card or prepaid card' was split into 'Credit card' and 'Prepaid card'."
+    },
+    "Credit card or prepaid card•General-purpose credit card or charge card": {
+      "to": "Credit card",
+      "note": "Split in 2023: the credit-card sub-products of the old combined product became 'Credit card'."
+    },
+    "Credit card or prepaid card•Store credit card": {
+      "to": "Credit card",
+      "note": "Split in 2023, as above."
+    },
+    "Credit card or prepaid card": {
+      "to": null,
+      "note": "Its other sub-products (general-purpose prepaid, gift, government benefit, payroll and student prepaid cards) became 'Prepaid card', which the course does not use."
+    },
+    "Checking or savings account": {
+      "to": "Checking or savings account",
+      "note": "Unchanged."
+    },
+    "Mortgage": {
+      "to": "Mortgage",
+      "note": "Unchanged."
+    },
+    "Money transfer, virtual currency, or money service": {
+      "to": "Money transfer, virtual currency, or money service",
+      "note": "Name unchanged; a few sub-products were renamed or moved (below)."
+    },
+    "Money transfer, virtual currency, or money service•Debt settlement": {
+      "to": null,
+      "note": "Not used under this product after 2023; 'Debt settlement' is a sub-product of 'Debt or credit management' from 2023."
+    },
+    "Money transfer, virtual currency, or money service•Refund anticipation check": {
+      "to": null,
+      "note": "Not used under this product after 2023 (refund anticipation products now sit with 'Payday loan, title loan, personal loan, or advance loan'); left out so the label means the same thing in every year."
+    }
+  }
+}
