@@ -79,18 +79,61 @@
   ]
  },
  "null": {
-  "reference": "bootstrap samples of the 2022 test split vs the whole split",
+  "reference": "2022 test split. leave-out: n complaints drawn without replacement vs the remaining rows; within_2022: each 2022 period vs the rest of 2022. threshold = max of p95 and the within-2022 maximum",
+  "expected_chance_alerts": {
+   "note": "p95 is exceeded 5% of the time by construction; the within-2022 maximum makes the real rate lower. A few alerts above this count is the signal.",
+   "month": {
+    "per_signal": 1.2000000000000002,
+    "either_signal_max": 2.3400000000000007
+   },
+   "quarter": {
+    "per_signal": 0.4,
+    "either_signal_max": 0.7800000000000002
+   }
+  },
   "month": {
    "n": 50,
    "draws": 5000,
    "seed": 7,
    "predictions": {
-    "p50": 0.09422573794896584,
-    "p95": 0.2835099383485289
+    "p50": 0.10205551213725927,
+    "p95": 0.30591644660012135,
+    "within_2022": {
+     "2022-01": 0.02376622282086638,
+     "2022-02": 0.07324318353248385,
+     "2022-03": 0.019561034001746202,
+     "2022-04": 0.09558229324080066,
+     "2022-05": 0.07525499334475878,
+     "2022-06": 0.01079577591003888,
+     "2022-07": 0.08374918768980982,
+     "2022-08": 0.13375242653863112,
+     "2022-09": 0.07579569498190955,
+     "2022-10": 0.07060949002368888,
+     "2022-11": 0.04060014907468462,
+     "2022-12": 0.08036381402053798
+    },
+    "within_2022_max": 0.13375242653863112,
+    "threshold": 0.30591644660012135
    },
    "words": {
-    "p50": 0.02951132952526632,
-    "p95": 0.04837154045655302
+    "p50": 0.03291267620588037,
+    "p95": 0.05233369145978416,
+    "within_2022": {
+     "2022-01": 0.03454212869346123,
+     "2022-02": 0.033475896336235884,
+     "2022-03": 0.06187898711692783,
+     "2022-04": 0.027576829072030674,
+     "2022-05": 0.04080729987552133,
+     "2022-06": 0.01799681299290683,
+     "2022-07": 0.037610937198024295,
+     "2022-08": 0.030509726447787534,
+     "2022-09": 0.04278336849995261,
+     "2022-10": 0.025319228691373617,
+     "2022-11": 0.020000221525432325,
+     "2022-12": 0.034357556522193466
+    },
+    "within_2022_max": 0.06187898711692783,
+    "threshold": 0.06187898711692783
    }
   },
   "quarter": {
@@ -98,12 +141,28 @@
    "draws": 5000,
    "seed": 7,
    "predictions": {
-    "p50": 0.030175498000881762,
-    "p95": 0.07632530818030228
+    "p50": 0.039778217408715344,
+    "p95": 0.10334731791812309,
+    "within_2022": {
+     "2022-Q1": 0.012464340555156498,
+     "2022-Q2": 0.008631231536358685,
+     "2022-Q3": 0.01213678506251915,
+     "2022-Q4": 0.021835487702529296
+    },
+    "within_2022_max": 0.021835487702529296,
+    "threshold": 0.10334731791812309
    },
    "words": {
-    "p50": 0.009840031688003008,
-    "p95": 0.015794964728276104
+    "p50": 0.013449025468341803,
+    "p95": 0.020848865545238068,
+    "within_2022": {
+     "2022-Q1": 0.026035835494326982,
+     "2022-Q2": 0.015824377078952095,
+     "2022-Q3": 0.014183095342390923,
+     "2022-Q4": 0.010882754512937045
+    },
+    "within_2022_max": 0.026035835494326982,
+    "threshold": 0.026035835494326982
    }
   }
  },
@@ -289,7 +348,7 @@
    "psi_predictions": 0.055352395337110116,
    "psi_words": 0.04899962752843039,
    "alert_convention": false,
-   "alert_calibrated": true,
+   "alert_calibrated": false,
    "top_shifted_words": [
     {
      "word": "payments",
@@ -639,7 +698,7 @@
    "psi_predictions": 0.018663867082273543,
    "psi_words": 0.051548980473797266,
    "alert_convention": false,
-   "alert_calibrated": true,
+   "alert_calibrated": false,
    "top_shifted_words": [
     {
      "word": "days",
@@ -744,7 +803,7 @@
    "psi_predictions": 0.06272675405248548,
    "psi_words": 0.04980485225647761,
    "alert_convention": false,
-   "alert_calibrated": true,
+   "alert_calibrated": false,
    "top_shifted_words": [
     {
      "word": "call",
@@ -814,7 +873,7 @@
    "psi_predictions": 0.08545264032321256,
    "psi_words": 0.04991708801564793,
    "alert_convention": false,
-   "alert_calibrated": true,
+   "alert_calibrated": false,
    "top_shifted_words": [
     {
      "word": "00",
@@ -849,7 +908,7 @@
    "psi_predictions": 0.12266437466333945,
    "psi_words": 0.0516156003221859,
    "alert_convention": false,
-   "alert_calibrated": true,
+   "alert_calibrated": false,
    "top_shifted_words": [
     {
      "word": "not",
@@ -991,7 +1050,7 @@
    "psi_predictions": 0.025985730115703928,
    "psi_words": 0.016314974450749378,
    "alert_convention": false,
-   "alert_calibrated": true,
+   "alert_calibrated": false,
    "top_shifted_words": [
     {
      "word": "payments",
@@ -1131,7 +1190,7 @@
    "psi_predictions": 0.0436481883341277,
    "psi_words": 0.021029630216403274,
    "alert_convention": false,
-   "alert_calibrated": true,
+   "alert_calibrated": false,
    "top_shifted_words": [
     {
      "word": "these",
@@ -1166,7 +1225,7 @@
    "psi_predictions": 0.015622130532410008,
    "psi_words": 0.021438371908972992,
    "alert_convention": false,
-   "alert_calibrated": true,
+   "alert_calibrated": false,
    "top_shifted_words": [
     {
      "word": "these",

@@ -25,9 +25,17 @@ months), which makes every unseen month look drifted; that variant is kept in dr
 `reference_training_in_sample`, to show why it misleads.
 
 0.2 is an industry convention for coarse, decile-style bins, not a law. With 50 complaints and 6
-classes, sampling noise alone pushes PSI past 0.2 in about one month in five, so each signal also
-gets a null band: PSI between bootstrap samples of the reference and the reference itself. The
-calibrated alert asks for PSI above that null's 95th percentile.
+classes, sampling noise alone pushes the predictions PSI past 0.2 in roughly 13-15% of months, so
+each signal also gets a null (what PSI looks like with no drift), two ways:
+  - leave-out: draw n complaints from the 2022 reference WITHOUT replacement and compare them with
+    the remaining rows (the stream month is independent of the reference, so must the sample be);
+  - within-2022: each 2022 month / quarter against the rest of 2022, which includes real
+    month-to-month variation that i.i.d. sampling misses.
+The calibrated alert asks for PSI above max(leave-out p95, largest within-2022 value), per signal
+and period length. Expected chance alerts: the p95 is exceeded 5% of the time by construction, so
+24 months x 5% = 1.2 per signal (up to ~2.3 for either of the two); 8 quarters x 5% = 0.4 per
+signal (up to ~0.8). The within-2022 maximum makes the real rate lower. A handful of alerts above
+that count is the signal; one or two are not.
 
 Run (from ml/python):
     python monitor.py                   # print the table, write nothing
@@ -114,21 +122,31 @@ def featurize(rows: list[dict], words: list[str], model_json: dict, index: dict)
     return labels, counts
 
 
-def null_band(ref: tuple, size: int, draws: int = DRAWS, seed: int = train.SEED) -> dict:
-    """What PSI looks like with NO drift: `draws` samples of `size` complaints (with replacement)
-    from the reference, each compared with the whole reference. Returns p50 and p95 per signal."""
-    labels, counts = ref
+def _psi_vs_rest(m, mask) -> float:
+    return psi((m.sum(axis=0) - m[mask].sum(axis=0)).tolist(), m[mask].sum(axis=0).tolist())
+
+
+def null_band(ref: tuple, dates: list[str], size: int, unit: str,
+              draws: int = DRAWS, seed: int = train.SEED) -> dict:
+    """What PSI looks like with NO drift, per signal, two ways (see the docstring).
+    leave-out: `draws` samples of `size` complaints without replacement vs the remaining rows
+    (p50, p95). within_2022: each 2022 period vs the rest of 2022 (values and max).
+    threshold = max(p95, within-2022 max): the calibrated alert level."""
     rng = np.random.default_rng(seed)
-    out = {}
-    for name, m in (("predictions", labels), ("words", counts)):
-        expected = m.sum(axis=0).tolist()
-        values = []
-        for _ in range(draws // 250):
-            idx = rng.integers(0, len(m), size=(250, size))
-            values += [psi(expected, row) for row in m[idx].sum(axis=1).tolist()]
+    periods = np.array([_period(d, unit) for d in dates])
+    out = {"n": size, "draws": draws, "seed": seed}
+    picks = np.vstack([np.argsort(rng.random((250, len(dates))), axis=1)[:, :size]
+                       for _ in range(draws // 250)])
+    for name, m in (("predictions", ref[0]), ("words", ref[1])):
+        total = m.sum(axis=0)
+        chosen = np.stack([m[p].sum(axis=0) for p in picks])
+        values = [psi((total - c).tolist(), c.tolist()) for c in chosen]
         p50, p95 = np.percentile(values, [50, 95])
-        out[name] = {"p50": float(p50), "p95": float(p95)}
-    return {"n": size, "draws": draws, "seed": seed, **out}
+        within = {p: _psi_vs_rest(m, periods == p) for p in sorted(set(periods))}
+        out[name] = {"p50": float(p50), "p95": float(p95), "within_2022": within,
+                     "within_2022_max": max(within.values()),
+                     "threshold": max(float(p95), max(within.values()))}
+    return out
 
 
 # ── 4. Monthly and quarterly drift ──────────────────────────────────────────
@@ -136,11 +154,13 @@ def _period(date: str, unit: str) -> str:
     return date[:7] if unit == "month" else f"{date[:4]}-Q{(int(date[5:7]) - 1) // 3 + 1}"
 
 
-def drift(stream_rows: list[dict], model_json: dict, reference_rows: list[dict],
-          unit: str = "month", train_rows: list[dict] | None = None) -> list[dict]:
+def drift(stream_rows: list[dict], model_json: dict, *, reference_rows: list[dict],
+          unit: str = "month", train_rows: list[dict] | None = None,
+          nulls: dict | None = None, calibrate: bool = True) -> list[dict]:
     """One dict per period of the stream: n, psi_predictions, psi_words, alert_convention
-    (PSI >= 0.2, n >= 30), alert_calibrated (PSI above that signal's null p95, n >= 30) and
-    top_shifted_words. Words are chosen from `train_rows` (default: the reference)."""
+    (PSI >= 0.2, n >= 30), alert_calibrated (PSI above that signal's null threshold, n >= 30) and
+    top_shifted_words. Words are chosen from `train_rows` (default: the reference). `nulls` maps
+    (unit, n) to a ready null band; `calibrate=False` skips the null (alert_calibrated is then False)."""
     index = {t: i for i, t in enumerate(model_json["vocabulary"])}
     words = top_words(train_rows or reference_rows, model_json)
     ref = featurize(reference_rows, words, model_json, index)
@@ -149,7 +169,8 @@ def drift(stream_rows: list[dict], model_json: dict, reference_rows: list[dict],
     groups: dict[str, list[dict]] = {}
     for r in stream_rows:
         groups.setdefault(_period(r["date"], unit), []).append(r)
-    nulls: dict[int, dict] = {}
+    nulls = {} if nulls is None else dict(nulls)
+    dates = [r["date"] for r in reference_rows]
     out = []
     for key in sorted(groups):
         rows = groups[key]
@@ -161,14 +182,14 @@ def drift(stream_rows: list[dict], model_json: dict, reference_rows: list[dict],
         shifted = sorted(range(len(words)), key=lambda i: (-parts[i], words[i]))[:SHOWN_WORDS]
         p_pred, p_words = psi(exp_pred, act_pred), sum(parts)
         big = n >= MIN_N
-        if big and n not in nulls:
-            nulls[n] = null_band(ref, n)
-        null = nulls.get(n)
+        if big and calibrate and (unit, n) not in nulls:
+            nulls[(unit, n)] = null_band(ref, dates, n, unit)
+        null = nulls.get((unit, n))
         out.append({
             "period": key, "n": n, "psi_predictions": p_pred, "psi_words": p_words,
             "alert_convention": big and (p_pred >= ALERT_AT or p_words >= ALERT_AT),
-            "alert_calibrated": big and (p_pred > null["predictions"]["p95"]
-                                         or p_words > null["words"]["p95"]),
+            "alert_calibrated": bool(big and calibrate and (p_pred > null["predictions"]["threshold"]
+                                                            or p_words > null["words"]["threshold"])),
             "top_shifted_words": [{"word": words[i], "contribution": parts[i],
                                    "direction": "up" if a_prop[i] > e_prop[i] else "down"}
                                   for i in shifted],
@@ -176,14 +197,16 @@ def drift(stream_rows: list[dict], model_json: dict, reference_rows: list[dict],
     return out
 
 
-def monthly_drift(stream_rows, model_json, reference_rows, train_rows=None) -> list[dict]:
-    return [{"month": p.pop("period"), **p}
-            for p in drift(stream_rows, model_json, reference_rows, "month", train_rows)]
+def monthly_drift(stream_rows, model_json, *, reference_rows, train_rows=None, **kw) -> list[dict]:
+    return [{"month": p.pop("period"), **p} for p in
+            drift(stream_rows, model_json, reference_rows=reference_rows, unit="month",
+                  train_rows=train_rows, **kw)]
 
 
-def quarterly_drift(stream_rows, model_json, reference_rows, train_rows=None) -> list[dict]:
-    return [{"quarter": p.pop("period"), **p}
-            for p in drift(stream_rows, model_json, reference_rows, "quarter", train_rows)]
+def quarterly_drift(stream_rows, model_json, *, reference_rows, train_rows=None, **kw) -> list[dict]:
+    return [{"quarter": p.pop("period"), **p} for p in
+            drift(stream_rows, model_json, reference_rows=reference_rows, unit="quarter",
+                  train_rows=train_rows, **kw)]
 
 
 # ── 5. Report ───────────────────────────────────────────────────────────────
@@ -228,17 +251,31 @@ def build_report(rows: list[dict], generated_by: str) -> dict:
     ref = featurize(splits["test"], words, model, index)
     sample = Counter((r["date"][:4], r["product"]) for r in rows)
     in_sample = [{k: m[k] for k in ("month", "n", "psi_predictions", "psi_words", "alert_convention")}
-                 for m in monthly_drift(splits["stream"], model, splits["train"])]
+                 for m in monthly_drift(splits["stream"], model, reference_rows=splits["train"],
+                                        calibrate=False)]
+    dates = [r["date"] for r in splits["test"]]
+    nulls = {("month", 50): null_band(ref, dates, 50, "month"),
+             ("quarter", 150): null_band(ref, dates, 150, "quarter")}
+    kw = dict(reference_rows=splits["test"], train_rows=splits["train"])
     return {"generated_by": generated_by,
             "settings": {"alert_at": ALERT_AT, "epsilon": EPSILON, "min_n": MIN_N,
                          "top_k": TOP_K, "model_version": model["version"],
                          "reference": "2022 test split (v1 predictions and tokens); words chosen "
                                       "from the training split, stop words excluded",
                          "stop_words": sorted(STOP_WORDS)},
-            "null": {"reference": "bootstrap samples of the 2022 test split vs the whole split",
-                     "month": null_band(ref, 50), "quarter": null_band(ref, 150)},
-            "months": monthly_drift(splits["stream"], model, splits["test"], splits["train"]),
-            "quarters": quarterly_drift(splits["stream"], model, splits["test"], splits["train"]),
+            "null": {"reference": "2022 test split. leave-out: n complaints drawn without "
+                                  "replacement vs the remaining rows; within_2022: each 2022 "
+                                  "period vs the rest of 2022. threshold = max of p95 and the "
+                                  "within-2022 maximum",
+                     "expected_chance_alerts": {
+                         "note": "p95 is exceeded 5% of the time by construction; the within-2022 "
+                                 "maximum makes the real rate lower. A few alerts above this count "
+                                 "is the signal.",
+                         "month": {"per_signal": 24 * 0.05, "either_signal_max": 24 * (1 - 0.95 ** 2)},
+                         "quarter": {"per_signal": 8 * 0.05, "either_signal_max": 8 * (1 - 0.95 ** 2)}},
+                     "month": nulls[("month", 50)], "quarter": nulls[("quarter", 150)]},
+            "months": monthly_drift(splits["stream"], model, nulls=nulls, **kw),
+            "quarters": quarterly_drift(splits["stream"], model, nulls=nulls, **kw),
             "reference_training_in_sample": {
                 "note": "v1 scoring its own training rows (in-sample) as the reference; unseen "
                         "months then look drifted. Shown to explain why it misleads.",
@@ -258,8 +295,8 @@ def main(argv: list[str] | None = None) -> None:
     report = build_report(rows, " ".join(["python monitor.py", *argv]))
     for unit, key in (("month", "months"), ("quarter", "quarters")):
         null = report["null"][unit]
-        print(f"null p95 at n={null['n']}: predictions {null['predictions']['p95']:.4f}, "
-              f"words {null['words']['p95']:.4f}")
+        print(f"null threshold at n={null['n']}: predictions {null['predictions']['threshold']:.4f}, "
+              f"words {null['words']['threshold']:.4f}")
         print(f"{unit:<9}{'n':>4}{'psi_pred':>10}{'psi_words':>11}  conv  calib  top shifted words")
         for m in report[key]:
             top = ", ".join(f"{w['word']}{'+' if w['direction'] == 'up' else '-'}"

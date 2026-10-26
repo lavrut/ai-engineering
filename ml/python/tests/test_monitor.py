@@ -39,7 +39,8 @@ def test_small_months_never_alert(setup):
     # but never alerted, under either flag; with 30 it alerts under both.
     def month(k):
         rows = [{**r, "narrative": "zebra " * 50} for r in stream[:k]]
-        return monitor.monthly_drift(rows, model, splits["test"], splits["train"])[0]
+        return monitor.monthly_drift(rows, model, reference_rows=splits["test"],
+                                     train_rows=splits["train"])[0]
     small, full = month(29), month(30)
     assert small["n"] == 29
     assert small["psi_words"] >= monitor.ALERT_AT and small["psi_predictions"] >= monitor.ALERT_AT
@@ -51,10 +52,20 @@ def test_null_band_is_deterministic_and_ordered(setup):
     splits, model = setup
     index = {t: i for i, t in enumerate(model["vocabulary"])}
     ref = monitor.featurize(splits["test"], monitor.top_words(splits["train"], model), model, index)
-    a, b = monitor.null_band(ref, 50, draws=500), monitor.null_band(ref, 50, draws=500)
-    assert a == b
+    dates = [r["date"] for r in splits["test"]]
+    a = monitor.null_band(ref, dates, 50, "month", draws=500)
+    assert a == monitor.null_band(ref, dates, 50, "month", draws=500)
+    q = monitor.null_band(ref, dates, 150, "quarter", draws=500)
     assert 0 < a["predictions"]["p50"] < a["predictions"]["p95"]
-    assert monitor.null_band(ref, 150, draws=500)["predictions"]["p95"] < a["predictions"]["p95"]
+    assert q["predictions"]["p95"] < a["predictions"]["p95"]
+    assert len(a["words"]["within_2022"]) == 12 and len(q["words"]["within_2022"]) == 4
+    assert a["words"]["threshold"] == max(a["words"]["p95"], a["words"]["within_2022_max"])
+
+
+def test_reference_rows_is_keyword_only(setup):
+    splits, model = setup
+    with pytest.raises(TypeError):
+        monitor.monthly_drift(splits["stream"], model, splits["test"])
 
 
 def test_stop_words_are_not_word_buckets(setup):
@@ -70,6 +81,7 @@ def test_drift_report_months_and_fields():
         (0.2, 1e-4, 30, monitor.TOP_K, "v1")
     assert report["null"]["month"]["n"] == 50 and report["null"]["quarter"]["n"] == 150
     assert report["null"]["month"]["draws"] >= 5000 and report["null"]["month"]["seed"] == 7
+    assert report["null"]["expected_chance_alerts"]["month"]["per_signal"] == pytest.approx(1.2)
     fields = {"n", "psi_predictions", "psi_words", "alert_convention", "alert_calibrated",
               "top_shifted_words"}
     months, quarters = report["months"], report["quarters"]
@@ -80,8 +92,8 @@ def test_drift_report_months_and_fields():
         for m in rows:
             assert set(m) == fields | {unit} and m["n"] == n
             assert m["alert_convention"] == (m["psi_predictions"] >= 0.2 or m["psi_words"] >= 0.2)
-            assert m["alert_calibrated"] == (m["psi_predictions"] > null["predictions"]["p95"]
-                                             or m["psi_words"] > null["words"]["p95"])
+            assert m["alert_calibrated"] == (m["psi_predictions"] > null["predictions"]["threshold"]
+                                             or m["psi_words"] > null["words"]["threshold"])
             for w in m["top_shifted_words"]:
                 assert set(w) == {"word", "contribution", "direction"} and w["direction"] in ("up", "down")
     old = report["reference_training_in_sample"]["months"]
