@@ -1,0 +1,280 @@
+{
+ "generated_by": "python train.py --model logreg --version v1",
+ "n": 3600,
+ "years": [
+  "2019",
+  "2020",
+  "2021",
+  "2022",
+  "2023",
+  "2024"
+ ],
+ "classes": [
+  "Checking or savings account",
+  "Credit card",
+  "Credit reporting or other personal consumer reports",
+  "Debt collection",
+  "Money transfer, virtual currency, or money service",
+  "Mortgage"
+ ],
+ "splits": {
+  "train": {
+   "from": "2019-01-01",
+   "to": "2021-12-31",
+   "n": 1800
+  },
+  "test": {
+   "from": "2022-01-01",
+   "to": "2022-12-31",
+   "n": 600
+  },
+  "stream": {
+   "from": "2023-01-01",
+   "to": "2024-12-31",
+   "n": 1200
+  }
+ },
+ "counts": {
+  "Checking or savings account": {
+   "2019": 72,
+   "2020": 71,
+   "2021": 72,
+   "2022": 70,
+   "2023": 72,
+   "2024": 61
+  },
+  "Credit card": {
+   "2019": 79,
+   "2020": 74,
+   "2021": 72,
+   "2022": 71,
+   "2023": 72,
+   "2024": 65
+  },
+  "Credit reporting or other personal consumer reports": {
+   "2019": 211,
+   "2020": 231,
+   "2021": 225,
+   "2022": 260,
+   "2023": 264,
+   "2024": 280
+  },
+  "Debt collection": {
+   "2019": 105,
+   "2020": 92,
+   "2021": 96,
+   "2022": 76,
+   "2023": 72,
+   "2024": 74
+  },
+  "Money transfer, virtual currency, or money service": {
+   "2019": 60,
+   "2020": 60,
+   "2021": 63,
+   "2022": 60,
+   "2023": 60,
+   "2024": 60
+  },
+  "Mortgage": {
+   "2019": 73,
+   "2020": 72,
+   "2021": 72,
+   "2022": 63,
+   "2023": 60,
+   "2024": 60
+  }
+ },
+ "counts_raw": {
+  "Checking or savings account": {
+   "2019": 72,
+   "2020": 71,
+   "2021": 72,
+   "2022": 70,
+   "2023": 72,
+   "2024": 61
+  },
+  "Credit card": {
+   "2019": 0,
+   "2020": 0,
+   "2021": 0,
+   "2022": 0,
+   "2023": 24,
+   "2024": 65
+  },
+  "Credit card or prepaid card": {
+   "2019": 79,
+   "2020": 74,
+   "2021": 72,
+   "2022": 71,
+   "2023": 48,
+   "2024": 0
+  },
+  "Credit reporting or other personal consumer reports": {
+   "2019": 0,
+   "2020": 0,
+   "2021": 0,
+   "2022": 0,
+   "2023": 92,
+   "2024": 280
+  },
+  "Credit reporting, credit repair services, or other personal consumer reports": {
+   "2019": 211,
+   "2020": 231,
+   "2021": 225,
+   "2022": 260,
+   "2023": 172,
+   "2024": 0
+  },
+  "Debt collection": {
+   "2019": 105,
+   "2020": 92,
+   "2021": 96,
+   "2022": 76,
+   "2023": 72,
+   "2024": 74
+  },
+  "Money transfer, virtual currency, or money service": {
+   "2019": 60,
+   "2020": 60,
+   "2021": 63,
+   "2022": 60,
+   "2023": 60,
+   "2024": 60
+  },
+  "Mortgage": {
+   "2019": 73,
+   "2020": 72,
+   "2021": 72,
+   "2022": 63,
+   "2023": 60,
+   "2024": 60
+  }
+ },
+ "narrative_chars": {
+  "min": 10,
+  "median": 710,
+  "max": 23091
+ },
+ "snippets": {
+  "Checking or savings account": [
+   {
+    "id": "3547132",
+    "date": "2020-02-27",
+    "product_raw": "Checking or savings account",
+    "text": "I opened a \" free '' checking account with these crooks and they have ( without any disclosure mind you ) been taking {$5.00} out of my account each month. By the time I logged in and checked they ha…"
+   },
+   {
+    "id": "3311146",
+    "date": "2019-07-18",
+    "product_raw": "Checking or savings account",
+    "text": "I have a Synchrony Bank XXXX that matures today, XX/XX/2019, and I notified Synchrony Bank by email on XX/XX/2019 that I wished to transfer {$5000.00} to my external account XXXX XXXX XXXX and the re…"
+   },
+   {
+    "id": "3688707",
+    "date": "2020-06-08",
+    "product_raw": "Checking or savings account",
+    "text": "I know this is probably small to you but I am a victim of fraud by counterfeit check because TD Bank did not do their job when a fake check with the WRONG routing number which should have been FLAGGE…"
+   }
+  ],
+  "Credit card": [
+   {
+    "id": "4187485",
+    "date": "2021-03-05",
+    "product_raw": "Credit card or prepaid card",
+    "text": "I had two active cards with citi Bank diamond and citi bank double cash .i was affected by covid and i could only pay the minimum and when I received other money i would send extra. I was trying to g…"
+   },
+   {
+    "id": "3161963",
+    "date": "2019-02-25",
+    "product_raw": "Credit card or prepaid card",
+    "text": "On XX/XX/XXXX, I realized there was multiple purchase totaling in the amount of {$1700.00} ( {$370.00}, {$240.00}, {$190.00}, {$440.00} & & {$440.00} ) on XX/XX/XXXX in XXXX XXXX, PA. I never been in…"
+   },
+   {
+    "id": "3189852",
+    "date": "2019-03-25",
+    "product_raw": "Credit card or prepaid card",
+    "text": "Sent two letters thru the mail stating that I have an credit card account with XXXX XXXX XXXX XXXX XXXX XXXX Oh XXXX the card is a XXXX Card? It states that my card has been suspended due to irregula…"
+   }
+  ],
+  "Credit reporting or other personal consumer reports": [
+   {
+    "id": "4489866",
+    "date": "2021-06-24",
+    "product_raw": "Credit reporting, credit repair services, or other personal consumer reports",
+    "text": "ALL 3 \" CRA '' FAIL TO SEND COPY UPON REQUEST IN WRITING OVER 45 DAYS AGO ... ID WAS ATTACHED WITH REQUEST LETTERS SENT ON XX/XX/2021"
+   },
+   {
+    "id": "3278275",
+    "date": "2019-06-18",
+    "product_raw": "Credit reporting, credit repair services, or other personal consumer reports",
+    "text": "These following accounts are not mine and were taken out in a different name. \r\nU S DEPT OF EDXXXX XXXX {$0.00} - - Installment Negative XX/XX/XXXX U S DEPT OF EDXXXX XXXX {$0.00} - - Installment Neg…"
+   },
+   {
+    "id": "3847240",
+    "date": "2020-09-16",
+    "product_raw": "Credit reporting, credit repair services, or other personal consumer reports",
+    "text": "Dear Mgr ; How are you? Im extremely upset and shocked about the way this charge-off account is reporting on my credit report which continues to report with incomplete, inconsistent and unverifiable …"
+   }
+  ],
+  "Debt collection": [
+   {
+    "id": "3200637",
+    "date": "2019-04-03",
+    "product_raw": "Debt collection",
+    "text": "Diversified consultant XXXX is reporting on my credit and I have never received anything from them. I do not owe XXXX anyways because back then we got XXXX & we paid our final bills. I don't even kno…"
+   },
+   {
+    "id": "4659761",
+    "date": "2021-08-24",
+    "product_raw": "Debt collection",
+    "text": "This is a medical bill that was paid by insurance and I do not like to feel threaten about my personal information on my credit report"
+   },
+   {
+    "id": "3501380",
+    "date": "2020-01-18",
+    "product_raw": "Debt collection",
+    "text": "Selip & Stylianou , LLP Attorney at Law on behalf of Metro Portfolios , INC representing XXXX XXXX XXXX has subpoenaed my financial records and decided to collect the debt directly from my paycheck. …"
+   }
+  ],
+  "Money transfer, virtual currency, or money service": [
+   {
+    "id": "3164269",
+    "date": "2019-02-27",
+    "product_raw": "Money transfer, virtual currency, or money service",
+    "text": "On XX/XX/XXXX, I used a banking app called XXXX, owned by Early Warning Services, to send money to my sister in the amount of {$250.00} from my bank account, via my debit card. The app states that th…"
+   },
+   {
+    "id": "3249529",
+    "date": "2019-05-21",
+    "product_raw": "Money transfer, virtual currency, or money service",
+    "text": "On XX/XX/2019, I was searching an XXXX XXXX XXXX on XXXX. Found one selling for {$400.00}. On the website, it has a feature to contact seller in a chat. I did and sent the seller a message, the perso…"
+   },
+   {
+    "id": "3950969",
+    "date": "2020-11-12",
+    "product_raw": "Money transfer, virtual currency, or money service",
+    "text": "Bank of America Online Services provides false information regarding Inbound ACH Transfers. \n\nBank Of America 's Online Banking System provides Inbound Transfer Services from other institutions. In t…"
+   }
+  ],
+  "Mortgage": [
+   {
+    "id": "3700143",
+    "date": "2020-06-15",
+    "product_raw": "Mortgage",
+    "text": "On XX/XX/2020, I went on the company website to add my XXXX XXXX savings account information to make XXXX additional payments toward the principal of my mortgage loan. On XX/XX/2020, I noticed the pa…"
+   },
+   {
+    "id": "3185955",
+    "date": "2019-03-20",
+    "product_raw": "Mortgage",
+    "text": "Our mortgage was bought by a different lender SPS Loan Servicing, we were behind due to loss of income, and the lender asked that we start making payments XX/XX/2017, yet have reported to the credit …"
+   },
+   {
+    "id": "3435317",
+    "date": "2019-11-11",
+    "product_raw": "Mortgage",
+    "text": "On XX/XX/2019 I spoke to a Ditech representative, she set up electronic payment arrangement plan for my to pay back the pass due amount for XX/XX/XXXX, XX/XX/XXXX and XX/XX/XXXX, totaling at little o…"
+   }
+  ]
+ }
+}
