@@ -41,7 +41,7 @@ LORA_R = 8                             # rank: how many numbers each adapter may
 LORA_ALPHA = 16                        # scale; alpha / r = 2 is a common default
 TARGET_MODULES = ["q_proj", "k_proj", "v_proj", "o_proj"]   # attention projections
 EPOCHS = 3
-SEED = 0                              # fixed so runs are comparable
+SEED = 0   # fixed so runs are comparable: set_seed in main() covers adapter init; TrainingArguments(seed) covers data order
 LEARNING_RATE = 2e-4                   # LoRA tolerates a higher rate than full fine-tuning
 MAX_NEW_TOKENS = 32                    # the answer is a short JSON object
 OUT_PATH = Path("predictions.jsonl")
@@ -127,9 +127,8 @@ def train(model, tokenizer, tickets: list[dict]):
     """40 tickets / batch 4 / accumulate 2 = 5 steps per epoch, so about 15 steps in all:
     enough to see the format and some signal, far too little to call the model tuned."""
     from datasets import Dataset
-    from transformers import DataCollatorForSeq2Seq, Trainer, TrainingArguments, set_seed
+    from transformers import DataCollatorForSeq2Seq, Trainer, TrainingArguments
 
-    set_seed(SEED)
 
     rows = [to_example(t) for t in tickets]
     data = Dataset.from_list(rows).map(lambda e: tokenize(e, tokenizer), remove_columns=["prompt", "completion"])
@@ -185,6 +184,8 @@ def main(argv: list[str] | None = None) -> int:
         summarize(triage_lab.load_jsonl(argv[1]), test)
         return 0
     dev = triage_lab.split(triage_lab.load_tickets(), "dev")
+    from transformers import set_seed
+    set_seed(SEED)                               # before load_model(): get_peft_model draws the adapter's random start
     model, tokenizer = load_model()
     train(model, tokenizer, dev)
     lines = predict(model, tokenizer, test)
