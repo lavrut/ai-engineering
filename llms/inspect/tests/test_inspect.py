@@ -191,3 +191,14 @@ def test_errored_sample_left_out_of_accuracy(tmp_path):
     assert log.status == "success"
     assert sum(1 for s in log.samples if s.error) == 1
     assert metric(log, "category_match") == 1.0 and metric(log, "priority_match") == 1.0
+
+
+def test_edited_prompt_fails_loudly(tmp_path):
+    """An edited prompts.json in the data root: every sample misses. The eval must not look like a success."""
+    root = tmp_root(tmp_path / "data", "v1_basic", lambda t: None)
+    edited = json.loads((root / "prompts.json").read_text())
+    edited["triage"]["v1_basic"] += " (edited)"
+    (root / "prompts.json").write_text(json.dumps(edited))
+    log = run_eval(ti.triage(variant="v1_basic", split="test"), tmp_path / "logs", model_args={"root": str(root)})
+    assert log.status == "error"
+    assert "python triage_lab.py record" in str(log.error) + " ".join(str(s.error) for s in log.samples or [])

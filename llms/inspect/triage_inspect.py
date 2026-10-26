@@ -22,8 +22,10 @@ Run (from the repo root, in the venv):
     .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v3_examples
 
 Live (a paid run): swap `replay/` for `anthropic/` in --model. This costs money.
-Check the lab's estimate first: python triage_lab.py record --plan pilot (run from llms/python).
-`record` prints its cost estimate and asks "Make these paid calls? [y/N]" before it spends anything.
+Check the lab's estimate for the same run first (from llms/python):
+    python triage_lab.py run --prompt v2_rules --split all --reps 3 --mode live
+It prints the estimate and asks "Make these paid calls? [y/N]"; answering N spends nothing.
+The spend cap defaults to --max-cost 10 (dollars).
 """
 from __future__ import annotations
 
@@ -35,22 +37,22 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "python"))   # import the lab from any cwd
 
 import inspect_ai
+from inspect_ai import Task, task
 from inspect_ai.dataset import Sample
 from inspect_ai.model import (
     ChatMessage,
     ChatMessageSystem,
-    ResponseSchema,
     GenerateConfig,
     ModelAPI,
     ModelOutput,
     ModelUsage,
+    ResponseSchema,
     modelapi,
 )
 from inspect_ai.scorer import CORRECT, INCORRECT, Score, Target, accuracy, scorer, stderr
 from inspect_ai.solver import Generate, Solver, TaskState, solver
 from inspect_ai.tool import ToolChoice, ToolInfo
 from inspect_ai.util import JSONSchema
-from inspect_ai import Task, task
 
 from triage_lab import (  # noqa: F401  (later sections use the rest)
     DATA_DIR,
@@ -210,11 +212,18 @@ LAB_COMMANDS = {
 }
 
 
+MAX_ERROR_SHARE = 0.5
+
+
 @task
 def triage(variant: str = "v2_rules", split: str | None = None) -> Task:
     """The lab's triage eval: one prompt variant over a split (None = all 60)."""
     return Task(dataset=dataset(split), solver=triage_solver(variant),
                 scorer=[category_match(), priority_match()],
-                # The lab leaves an errored call out of the accuracy. By default Inspect stops the whole
-                # eval on the first sample error; False keeps going, logs the error, and scores only the rest.
-                fail_on_error=False)
+                # The lab leaves an errored call out of the accuracy, but a prompt miss must be loud.
+                # Inspect stops the eval on the first sample error by default (too strict for one saved
+                # error line); False never stops (hides a miss: every sample would error, yet "success").
+                # Inspect cannot treat the two exceptions differently, so we use a threshold: a few
+                # errored samples are logged and left out of the accuracy, but if more than half error
+                # (an edited prompt makes all of them miss) the eval fails and shows the record hint.
+                fail_on_error=MAX_ERROR_SHARE)
