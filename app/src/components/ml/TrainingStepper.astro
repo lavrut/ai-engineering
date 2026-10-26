@@ -1,0 +1,11 @@
+---
+// Build-time wrapper: passes training_log.json's checkpoints (loss, penalty, and the top 8
+// words per class where recorded; 5.0 KB).
+import TrainingStepperIsland from './TrainingStepper.tsx';
+import { loadMlData } from '../../lib/mlData';
+import { trainingStepperProps } from '../../lib/mlAids';
+
+const props = trainingStepperProps(loadMlData().trainingLog);
+---
+
+<TrainingStepperIsland client:visible {...props} />

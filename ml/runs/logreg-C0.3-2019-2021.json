@@ -1,0 +1,64 @@
+{
+ "run_id": "logreg-C0.3-2019-2021",
+ "time": "2023-01-01T00:00:00Z",
+ "params": {
+  "model": "logreg",
+  "C": 0.3,
+  "max_iter": 1000,
+  "min_df": 2,
+  "max_features": 20000,
+  "seed": 7
+ },
+ "windows": {
+  "train": {
+   "from": "2019-01-01",
+   "to": "2021-12-31"
+  },
+  "eval": {
+   "name": "test",
+   "from": "2022-01-01",
+   "to": "2022-12-31"
+  }
+ },
+ "data_version": "sha256:5c2b05a03e9dfee3a9fc28e25bc9c619cc420deda0cb663525c0a29ae3a3f8b6",
+ "model": {
+  "path": null,
+  "sha256": "388c239cab94e8851b548ba27346f75aad9d757d03bc7f035c8d463c44839c66"
+ },
+ "metrics": {
+  "test": {
+   "split": "test",
+   "n": 600,
+   "accuracy": 0.7433333333333333,
+   "band": 0.040824829046386304,
+   "macro_f1": 0.6858767480037251,
+   "weighted_f1": 0.7251010182027156,
+   "per_class_f1": {
+    "Checking or savings account": 0.6865671641791045,
+    "Credit card": 0.6610169491525424,
+    "Credit reporting or other personal consumer reports": 0.8139904610492845,
+    "Debt collection": 0.5454545454545454,
+    "Money transfer, virtual currency, or money service": 0.5806451612903226,
+    "Mortgage": 0.8275862068965516
+   }
+  },
+  "train": {
+   "split": "train",
+   "n": 1800,
+   "accuracy": 0.7938888888888889,
+   "band": 0.023570226039551584,
+   "macro_f1": 0.7843164848191324,
+   "weighted_f1": 0.7889270828107435,
+   "per_class_f1": {
+    "Checking or savings account": 0.8067632850241545,
+    "Credit card": 0.7169811320754718,
+    "Credit reporting or other personal consumer reports": 0.8110831234256927,
+    "Debt collection": 0.7306122448979591,
+    "Money transfer, virtual currency, or money service": 0.7572815533980584,
+    "Mortgage": 0.8831775700934579
+   }
+  }
+ },
+ "git_commit": "256e694e42f09fa011cf13aaade487fe543778e7",
+ "git_dirty": false
+}

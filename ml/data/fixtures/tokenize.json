@@ -1,0 +1,202 @@
+[
+ {
+  "name": "punctuation and case",
+  "input": "Hello, World!",
+  "tokens": [
+   "hello",
+   "world"
+  ]
+ },
+ {
+  "name": "apostrophe inside a word",
+  "input": "I don't know",
+  "tokens": [
+   "i",
+   "don't",
+   "know"
+  ]
+ },
+ {
+  "name": "surrounding apostrophes stripped",
+  "input": "'quoted' text",
+  "tokens": [
+   "quoted",
+   "text"
+  ]
+ },
+ {
+  "name": "inner double apostrophe kept",
+  "input": "o''clock",
+  "tokens": [
+   "o''clock"
+  ]
+ },
+ {
+  "name": "trailing apostrophe stripped",
+  "input": "don't'",
+  "tokens": [
+   "don't"
+  ]
+ },
+ {
+  "name": "only apostrophes",
+  "input": "''",
+  "tokens": []
+ },
+ {
+  "name": "money splits on punctuation",
+  "input": "$1,200.50",
+  "tokens": [
+   "1",
+   "200",
+   "50"
+  ]
+ },
+ {
+  "name": "digits and letters mix",
+  "input": "order a1b2 on 3rd",
+  "tokens": [
+   "order",
+   "a1b2",
+   "on",
+   "3rd"
+  ]
+ },
+ {
+  "name": "scrubbed date",
+  "input": "XX/XX/XXXX",
+  "tokens": []
+ },
+ {
+  "name": "scrubbed word mid-sentence",
+  "input": "I paid XXXX on XXXX to Bank",
+  "tokens": [
+   "i",
+   "paid",
+   "on",
+   "to",
+   "bank"
+  ]
+ },
+ {
+  "name": "single x is kept",
+  "input": "x marks the spot",
+  "tokens": [
+   "x",
+   "marks",
+   "the",
+   "spot"
+  ]
+ },
+ {
+  "name": "x run with other characters is kept",
+  "input": "xxxxy xxx1 x'x",
+  "tokens": [
+   "xxxxy",
+   "xxx1",
+   "x'x"
+  ]
+ },
+ {
+  "name": "x run inside apostrophes is dropped after stripping",
+  "input": "'xx' ok",
+  "tokens": [
+   "ok"
+  ]
+ },
+ {
+  "name": "uppercase",
+  "input": "ABC def GhI",
+  "tokens": [
+   "abc",
+   "def",
+   "ghi"
+  ]
+ },
+ {
+  "name": "accented e is a separator",
+  "input": "café",
+  "tokens": [
+   "caf"
+  ]
+ },
+ {
+  "name": "diaeresis splits the word",
+  "input": "naïve",
+  "tokens": [
+   "na",
+   "ve"
+  ]
+ },
+ {
+  "name": "sharp s is a separator",
+  "input": "Straße",
+  "tokens": [
+   "stra",
+   "e"
+  ]
+ },
+ {
+  "name": "emoji is a separator",
+  "input": "great 😀 job",
+  "tokens": [
+   "great",
+   "job"
+  ]
+ },
+ {
+  "name": "Turkish dotted capital I is a separator, not case-folded",
+  "input": "İstanbul",
+  "tokens": [
+   "stanbul"
+  ]
+ },
+ {
+  "name": "non-Latin letters are separators",
+  "input": "привет world 你好",
+  "tokens": [
+   "world"
+  ]
+ },
+ {
+  "name": "fullwidth letters are separators",
+  "input": "ＡＢＣ abc",
+  "tokens": [
+   "abc"
+  ]
+ },
+ {
+  "name": "Arabic-Indic digits are separators",
+  "input": "٣ 3",
+  "tokens": [
+   "3"
+  ]
+ },
+ {
+  "name": "tabs and newlines",
+  "input": "a\tb\nc\r\nd",
+  "tokens": [
+   "a",
+   "b",
+   "c",
+   "d"
+  ]
+ },
+ {
+  "name": "empty string",
+  "input": "",
+  "tokens": []
+ },
+ {
+  "name": "only spaces",
+  "input": "   ",
+  "tokens": []
+ },
+ {
+  "name": "very long word",
+  "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "tokens": [
+   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ]
+ }
+]

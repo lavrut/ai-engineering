@@ -1,28 +1,20 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { validateDiagram, type Diagram } from '../src/lib/diagram';
-import { listSections } from '../src/lib/regions';
+import { codeProblems } from '../src/lib/codeSourceText';
+import { codeKey, validateDiagram, type Diagram } from '../src/lib/diagram';
 import { evalPipeline } from '../src/data/diagrams/eval-pipeline';
 import { harnessFlow } from '../src/data/diagrams/harness-flow';
+import { mlLoop } from '../src/data/diagrams/ml-loop';
+import { mlPipeline } from '../src/data/diagrams/ml-pipeline';
 import { requestResponse } from '../src/data/diagrams/request-response';
 import { toolRoundtrip } from '../src/data/diagrams/tool-roundtrip';
-
-const repo = join(dirname(fileURLToPath(import.meta.url)), '../..');
-// The files a step's code link can show, by `code.source` (default harness).
-const SOURCE_FILES: Record<string, string[]> = {
-  harness: ['harness/python/harness.py', 'harness/go/main.go'],
-  llms: ['llms/python/triage_lab.py', 'llms/go/main.go'],
-  lora: ['llms/finetune/lora.py'],
-};
-const sectionsIn = (file: string) => listSections(readFileSync(join(repo, file), 'utf8')).map((s) => s.n);
 
 const all: [string, Diagram][] = [
   ['harness-flow', harnessFlow],
   ['request-response', requestResponse],
   ['tool-roundtrip', toolRoundtrip],
   ['eval-pipeline', evalPipeline],
+  ['ml-pipeline', mlPipeline],
+  ['ml-loop', mlLoop],
 ];
 
 describe('diagram data', () => {
@@ -44,16 +36,41 @@ describe('diagram data', () => {
   });
 
   it.each(all)('%s: every step code link names a section in its source', (_name, d) => {
-    const problems: string[] = [];
-    for (const s of d.steps) {
-      if (!s.code) continue;
-      const files = SOURCE_FILES[s.code.source ?? 'harness'];
-      if (!files) problems.push(`step ${s.n}: unknown source ${s.code.source}`);
-      for (const f of files ?? []) {
-        if (!sectionsIn(f).includes(s.code.section)) problems.push(`step ${s.n}: no section ${s.code.section} in ${f}`);
-      }
-    }
+    // The same check as a lesson's CodeTabs: Python's section, and Go's (goSection where the Go file numbers its own).
+    const problems = d.steps.flatMap((s) => (s.code ? codeProblems(s.code).map((p) => `step ${s.n}: ${p}`) : []));
     expect(problems).toEqual([]);
+  });
+
+  it('checks a step code link against both of its files', () => {
+    const step = (code: object) => codeProblems(code as { section: number });
+    expect(step({ file: 'python', section: 4, source: 'ml-serve', goSection: 5 })).toEqual([]);
+    expect(step({ file: 'python', section: 4, source: 'ml-serve' })).toHaveLength(1);
+    expect(step({ file: 'python', section: 9, source: 'ml-train' })).toHaveLength(1);
+  });
+
+  it('keys a step with a goSection apart from one without', () => {
+    expect(codeKey({ section: 6 })).toBe('6');
+    expect(codeKey({ section: 6, source: 'llms' })).toBe('llms:6');
+    expect(codeKey({ section: 4, source: 'ml-serve', goSection: 5 })).toBe('ml-serve:4:go5');
+  });
+
+  it('ml-pipeline follows one complaint to a label, linked to train.py', () => {
+    expect(mlPipeline.nodes.map((n) => n.id)).toEqual(['complaint', 'tokenizer', 'tfidf', 'model-file', 'scores', 'label']);
+    expect(mlPipeline.steps.length).toBeGreaterThanOrEqual(5);
+    for (const s of mlPipeline.steps) if (s.code) expect(s.code.source).toBe('ml-train');
+    const sec = Object.fromEntries(mlPipeline.steps.map((s) => [s.n, s.code?.section]));
+    expect(sec).toMatchObject({ 2: 3, 3: 3 });
+  });
+
+  it('ml-loop runs serve, monitor, retrain, gate, promote, and can roll back', () => {
+    const ids = mlLoop.nodes.map((n) => n.id);
+    for (const id of ['server', 'monitor', 'retrain', 'gate', 'registry']) expect(ids).toContain(id);
+    const loops = mlLoop.edges.filter((e) => e.loop);
+    expect(loops.map((e) => [e.from, e.to])).toEqual([['registry', 'server']]);
+    expect(mlLoop.edges.some((e) => e.id === 'e-rollback')).toBe(true);
+    expect(mlLoop.steps.at(-1)!.highlight).toContain('e-rollback');
+    const sources = new Set(mlLoop.steps.map((s) => s.code?.source));
+    for (const s of ['ml-serve', 'ml-monitor', 'ml-mlops']) expect(sources.has(s as never)).toBe(true);
   });
 
   it('eval-pipeline has the 8 eval steps, linked to llms sections', () => {

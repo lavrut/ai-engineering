@@ -1,0 +1,12 @@
+# Python 3.12+: its sum() is compensated (Neumaier), which the Python/Go parity and the
+# byte-identical rebuilds rely on; older Pythons add floats differently.
+scikit-learn==1.8.0
+numpy==2.5.4
+scipy==1.17.1
+fastapi>=0.110
+uvicorn>=0.29
+httpx>=0.27
+pytest>=8
+anthropic>=1.0  # compare_llm.py and its tests import it; replay needs no API key
+brotli>=1.2  # older brotli makes every API call fail with "Connection error" under the SDK's HTTP client
+# mlflow>=3.1,<4  # optional: only for the experiment-tracking lesson (tested on 3.17.2)

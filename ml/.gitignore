@@ -1,0 +1,16 @@
+mlruns/
+mlflow.db
+mlflow-demo/
+go/ml-serve
+# lesson 4's optional Naive Bayes export
+models/nb*.json
+# scripts the ML lessons have the learner save
+python/peek.py
+python/splits.py
+python/random_split.py
+python/features.py
+python/leak.py
+python/sweep.py
+python/evaluate.py
+python/disagree.py
+python/alerts.py

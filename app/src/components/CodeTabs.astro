@@ -1,39 +1,25 @@
 ---
 import { Code } from 'astro:components';
 import Callout from './Callout.astro';
-import { extractSection } from '../lib/regions';
-import harnessPython from '../../../harness/python/harness.py?raw';
-import harnessGo from '../../../harness/go/main.go?raw';
-import llmsPython from '../../../llms/python/triage_lab.py?raw';
-import llmsGo from '../../../llms/go/main.go?raw';
-import loraPython from '../../../llms/finetune/lora.py?raw';
-
-// harness: the reference harness. llms: the eval lab. lora: the LoRA script (Python only).
-const sources = {
-  harness: { python: harnessPython, go: harnessGo },
-  llms: { python: llmsPython, go: llmsGo },
-  lora: { python: loraPython, go: undefined },
-} as const;
+import type { CodeSourceId } from '../lib/codeSources';
+import { resolveCode } from '../lib/codeSourceText';
 
 interface Props {
+  /** The section to show; with `goSection`, the Python one only. */
   section?: number;
+  /** The Go section, for a source whose Go file numbers its own sections (ml-serve, ml-monitor). */
+  goSection?: number;
   whole?: boolean;
   goNote?: string;
-  source?: keyof typeof sources;
-  /** Show only the Python tab. Implied by source="lora". */
+  /** A name from CODE_SOURCES in lib/codeSources.ts. Defaults to 'harness'. */
+  source?: CodeSourceId;
+  /** Show only the Python tab. Implied by a source with no Go file (lora, ml-train, ...). */
   pythonOnly?: boolean;
 }
 
-const { section, whole = false, goNote, source = 'harness' } = Astro.props;
-if (!whole && section === undefined) {
-  throw new Error('CodeTabs needs either `section={n}` or `whole`');
-}
-const src = sources[source];
-if (!src) throw new Error(`CodeTabs: unknown source "${source}"`);
-const pythonOnly = Astro.props.pythonOnly || src.go === undefined;
-const pick = (text: string) => (whole ? text : extractSection(text, section as number));
-const py = pick(src.python);
-const go = pythonOnly || src.go === undefined ? undefined : pick(src.go);
+const { section, goSection, whole = false, goNote, source = 'harness', pythonOnly = false } = Astro.props;
+// Throws (failing the build) on an unknown source, a missing section, or a missing goSection.
+const { python: py, go } = resolveCode({ source, section, goSection, whole, pythonOnly });
 const themes = { light: 'github-light', dark: 'github-dark' } as const;
 ---
 

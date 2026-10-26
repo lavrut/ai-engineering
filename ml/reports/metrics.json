@@ -1,0 +1,688 @@
+{
+ "generated_by": "python train.py --model logreg --version v1 --write-reports",
+ "note": "v1 is logistic regression although Naive Bayes leads by 0.005 test macro-F1: that is inside the +/-0.041 band, and logistic regression's per-word weights are easy to read and drive the training-log aid.",
+ "classes": [
+  "Checking or savings account",
+  "Credit card",
+  "Credit reporting or other personal consumer reports",
+  "Debt collection",
+  "Money transfer, virtual currency, or money service",
+  "Mortgage"
+ ],
+ "C": 1.0,
+ "nb_alpha": 0.1,
+ "models": {
+  "majority": {
+   "train": {
+    "classes": [
+     "Checking or savings account",
+     "Credit card",
+     "Credit reporting or other personal consumer reports",
+     "Debt collection",
+     "Money transfer, virtual currency, or money service",
+     "Mortgage"
+    ],
+    "n": 1800,
+    "accuracy": 0.3705555555555556,
+    "band": 0.023570226039551584,
+    "per_class": {
+     "Checking or savings account": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 215
+     },
+     "Credit card": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 225
+     },
+     "Credit reporting or other personal consumer reports": {
+      "precision": 0.3705555555555556,
+      "recall": 1.0,
+      "f1": 0.5407377381434941,
+      "support": 667
+     },
+     "Debt collection": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 293
+     },
+     "Money transfer, virtual currency, or money service": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 183
+     },
+     "Mortgage": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 217
+     }
+    },
+    "macro": {
+     "precision": 0.061759259259259264,
+     "recall": 0.16666666666666666,
+     "f1": 0.09012295635724903
+    },
+    "weighted": {
+     "precision": 0.13731141975308642,
+     "recall": 0.3705555555555556,
+     "f1": 0.200373372967617
+    },
+    "confusion": [
+     [
+      0,
+      0,
+      215,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      225,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      667,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      293,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      183,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      217,
+      0,
+      0,
+      0
+     ]
+    ]
+   },
+   "test": {
+    "classes": [
+     "Checking or savings account",
+     "Credit card",
+     "Credit reporting or other personal consumer reports",
+     "Debt collection",
+     "Money transfer, virtual currency, or money service",
+     "Mortgage"
+    ],
+    "n": 600,
+    "accuracy": 0.43333333333333335,
+    "band": 0.040824829046386304,
+    "per_class": {
+     "Checking or savings account": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 70
+     },
+     "Credit card": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 71
+     },
+     "Credit reporting or other personal consumer reports": {
+      "precision": 0.43333333333333335,
+      "recall": 1.0,
+      "f1": 0.6046511627906976,
+      "support": 260
+     },
+     "Debt collection": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 76
+     },
+     "Money transfer, virtual currency, or money service": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 60
+     },
+     "Mortgage": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 63
+     }
+    },
+    "macro": {
+     "precision": 0.07222222222222223,
+     "recall": 0.16666666666666666,
+     "f1": 0.10077519379844961
+    },
+    "weighted": {
+     "precision": 0.1877777777777778,
+     "recall": 0.43333333333333335,
+     "f1": 0.26201550387596895
+    },
+    "confusion": [
+     [
+      0,
+      0,
+      70,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      71,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      260,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      76,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      60,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      63,
+      0,
+      0,
+      0
+     ]
+    ]
+   }
+  },
+  "nb": {
+   "train": {
+    "classes": [
+     "Checking or savings account",
+     "Credit card",
+     "Credit reporting or other personal consumer reports",
+     "Debt collection",
+     "Money transfer, virtual currency, or money service",
+     "Mortgage"
+    ],
+    "n": 1800,
+    "accuracy": 0.9266666666666666,
+    "band": 0.023570226039551584,
+    "per_class": {
+     "Checking or savings account": {
+      "precision": 0.9454545454545454,
+      "recall": 0.9674418604651163,
+      "f1": 0.9563218390804596,
+      "support": 215
+     },
+     "Credit card": {
+      "precision": 0.9359605911330049,
+      "recall": 0.8444444444444444,
+      "f1": 0.8878504672897195,
+      "support": 225
+     },
+     "Credit reporting or other personal consumer reports": {
+      "precision": 0.8800539083557951,
+      "recall": 0.9790104947526237,
+      "f1": 0.9268985095812634,
+      "support": 667
+     },
+     "Debt collection": {
+      "precision": 0.9710743801652892,
+      "recall": 0.8020477815699659,
+      "f1": 0.8785046728971962,
+      "support": 293
+     },
+     "Money transfer, virtual currency, or money service": {
+      "precision": 0.9826589595375722,
+      "recall": 0.9289617486338798,
+      "f1": 0.9550561797752809,
+      "support": 183
+     },
+     "Mortgage": {
+      "precision": 0.9636363636363636,
+      "recall": 0.9769585253456221,
+      "f1": 0.9702517162471396,
+      "support": 217
+     }
+    },
+    "macro": {
+     "precision": 0.9464731247137618,
+     "recall": 0.9164774758686086,
+     "f1": 0.9291472308118432
+    },
+    "weighted": {
+     "precision": 0.930177939468814,
+     "recall": 0.9266666666666666,
+     "f1": 0.9257436827314293
+    },
+    "confusion": [
+     [
+      208,
+      1,
+      4,
+      0,
+      2,
+      0
+     ],
+     [
+      5,
+      190,
+      28,
+      1,
+      1,
+      0
+     ],
+     [
+      0,
+      3,
+      653,
+      6,
+      0,
+      5
+     ],
+     [
+      1,
+      6,
+      49,
+      235,
+      0,
+      2
+     ],
+     [
+      6,
+      3,
+      3,
+      0,
+      170,
+      1
+     ],
+     [
+      0,
+      0,
+      5,
+      0,
+      0,
+      212
+     ]
+    ]
+   },
+   "test": {
+    "classes": [
+     "Checking or savings account",
+     "Credit card",
+     "Credit reporting or other personal consumer reports",
+     "Debt collection",
+     "Money transfer, virtual currency, or money service",
+     "Mortgage"
+    ],
+    "n": 600,
+    "accuracy": 0.8183333333333334,
+    "band": 0.040824829046386304,
+    "per_class": {
+     "Checking or savings account": {
+      "precision": 0.7432432432432432,
+      "recall": 0.7857142857142857,
+      "f1": 0.7638888888888888,
+      "support": 70
+     },
+     "Credit card": {
+      "precision": 0.7704918032786885,
+      "recall": 0.6619718309859155,
+      "f1": 0.712121212121212,
+      "support": 71
+     },
+     "Credit reporting or other personal consumer reports": {
+      "precision": 0.8193548387096774,
+      "recall": 0.9769230769230769,
+      "f1": 0.8912280701754386,
+      "support": 260
+     },
+     "Debt collection": {
+      "precision": 0.8837209302325582,
+      "recall": 0.5,
+      "f1": 0.6386554621848739,
+      "support": 76
+     },
+     "Money transfer, virtual currency, or money service": {
+      "precision": 0.8,
+      "recall": 0.6666666666666666,
+      "f1": 0.7272727272727272,
+      "support": 60
+     },
+     "Mortgage": {
+      "precision": 0.9193548387096774,
+      "recall": 0.9047619047619048,
+      "f1": 0.912,
+      "support": 63
+     }
+    },
+    "macro": {
+     "precision": 0.8226942756956408,
+     "recall": 0.7493396275086416,
+     "f1": 0.7741943934405234
+    },
+    "weighted": {
+     "precision": 0.8214105811011901,
+     "recall": 0.8183333333333334,
+     "f1": 0.808970508818094
+    },
+    "confusion": [
+     [
+      55,
+      5,
+      2,
+      1,
+      6,
+      1
+     ],
+     [
+      6,
+      47,
+      14,
+      2,
+      1,
+      1
+     ],
+     [
+      0,
+      2,
+      254,
+      2,
+      0,
+      2
+     ],
+     [
+      2,
+      1,
+      32,
+      38,
+      2,
+      1
+     ],
+     [
+      11,
+      5,
+      4,
+      0,
+      40,
+      0
+     ],
+     [
+      0,
+      1,
+      4,
+      0,
+      1,
+      57
+     ]
+    ]
+   }
+  },
+  "logreg": {
+   "train": {
+    "classes": [
+     "Checking or savings account",
+     "Credit card",
+     "Credit reporting or other personal consumer reports",
+     "Debt collection",
+     "Money transfer, virtual currency, or money service",
+     "Mortgage"
+    ],
+    "n": 1800,
+    "accuracy": 0.9016666666666666,
+    "band": 0.023570226039551584,
+    "per_class": {
+     "Checking or savings account": {
+      "precision": 0.8981481481481481,
+      "recall": 0.9023255813953488,
+      "f1": 0.9002320185614849,
+      "support": 215
+     },
+     "Credit card": {
+      "precision": 0.9270833333333334,
+      "recall": 0.7911111111111111,
+      "f1": 0.8537170263788969,
+      "support": 225
+     },
+     "Credit reporting or other personal consumer reports": {
+      "precision": 0.8663967611336032,
+      "recall": 0.9625187406296851,
+      "f1": 0.9119318181818181,
+      "support": 667
+     },
+     "Debt collection": {
+      "precision": 0.9224806201550387,
+      "recall": 0.8122866894197952,
+      "f1": 0.8638838475499092,
+      "support": 293
+     },
+     "Money transfer, virtual currency, or money service": {
+      "precision": 0.9467455621301775,
+      "recall": 0.8743169398907104,
+      "f1": 0.909090909090909,
+      "support": 183
+     },
+     "Mortgage": {
+      "precision": 0.9419642857142857,
+      "recall": 0.9723502304147466,
+      "f1": 0.9569160997732427,
+      "support": 217
+     }
+    },
+    "macro": {
+     "precision": 0.9171364517690977,
+     "recall": 0.8858182154768995,
+     "f1": 0.8992952865893767
+    },
+    "weighted": {
+     "precision": 0.9041831950573411,
+     "recall": 0.9016666666666666,
+     "f1": 0.9005706305554427
+    },
+    "confusion": [
+     [
+      194,
+      5,
+      9,
+      0,
+      6,
+      1
+     ],
+     [
+      5,
+      178,
+      34,
+      5,
+      3,
+      0
+     ],
+     [
+      2,
+      3,
+      642,
+      14,
+      0,
+      6
+     ],
+     [
+      2,
+      4,
+      46,
+      238,
+      0,
+      3
+     ],
+     [
+      12,
+      2,
+      5,
+      1,
+      160,
+      3
+     ],
+     [
+      1,
+      0,
+      5,
+      0,
+      0,
+      211
+     ]
+    ]
+   },
+   "test": {
+    "classes": [
+     "Checking or savings account",
+     "Credit card",
+     "Credit reporting or other personal consumer reports",
+     "Debt collection",
+     "Money transfer, virtual currency, or money service",
+     "Mortgage"
+    ],
+    "n": 600,
+    "accuracy": 0.8083333333333333,
+    "band": 0.040824829046386304,
+    "per_class": {
+     "Checking or savings account": {
+      "precision": 0.75,
+      "recall": 0.6857142857142857,
+      "f1": 0.7164179104477612,
+      "support": 70
+     },
+     "Credit card": {
+      "precision": 0.8275862068965517,
+      "recall": 0.676056338028169,
+      "f1": 0.7441860465116279,
+      "support": 71
+     },
+     "Credit reporting or other personal consumer reports": {
+      "precision": 0.7931034482758621,
+      "recall": 0.9730769230769231,
+      "f1": 0.8739205526770294,
+      "support": 260
+     },
+     "Debt collection": {
+      "precision": 0.8541666666666666,
+      "recall": 0.5394736842105263,
+      "f1": 0.6612903225806451,
+      "support": 76
+     },
+     "Money transfer, virtual currency, or money service": {
+      "precision": 0.7924528301886793,
+      "recall": 0.7,
+      "f1": 0.743362831858407,
+      "support": 60
+     },
+     "Mortgage": {
+      "precision": 0.9137931034482759,
+      "recall": 0.8412698412698413,
+      "f1": 0.8760330578512397,
+      "support": 63
+     }
+    },
+    "macro": {
+     "precision": 0.8218503759126726,
+     "recall": 0.7359318453832909,
+     "f1": 0.7692017869877851
+    },
+    "weighted": {
+     "precision": 0.8124971987276802,
+     "recall": 0.8083333333333333,
+     "f1": 0.8004262063365968
+    },
+    "confusion": [
+     [
+      48,
+      4,
+      8,
+      1,
+      8,
+      1
+     ],
+     [
+      4,
+      48,
+      14,
+      1,
+      2,
+      2
+     ],
+     [
+      1,
+      2,
+      253,
+      3,
+      0,
+      1
+     ],
+     [
+      1,
+      1,
+      31,
+      41,
+      1,
+      1
+     ],
+     [
+      9,
+      2,
+      6,
+      1,
+      42,
+      0
+     ],
+     [
+      1,
+      1,
+      7,
+      1,
+      0,
+      53
+     ]
+    ]
+   }
+  }
+ }
+}

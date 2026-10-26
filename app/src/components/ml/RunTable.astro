@@ -1,0 +1,11 @@
+---
+// Build-time wrapper: passes every ml/runs/*.json (params, windows, eval metrics, metrics
+// flattened for the diff, data/model/git hashes) with the registry version each became: 8.7 KB.
+import RunTableIsland from './RunTable.tsx';
+import { loadMlData } from '../../lib/mlData';
+import { runTableProps } from '../../lib/mlAids';
+
+const props = runTableProps(loadMlData());
+---
+
+<RunTableIsland client:visible {...props} />

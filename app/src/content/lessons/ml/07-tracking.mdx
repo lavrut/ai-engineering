@@ -1,0 +1,210 @@
+---
+track: ml
+order: 7
+slug: tracking
+title: Tracking experiments
+goal: Record every training run with its settings, data version, code version, metrics and model hash, compare two runs, and rebuild a run to prove it reproduces.
+minutes: 20
+quiz:
+  - question: Six months from now, someone asks which data and code produced v1. Which fields of its run record answer that?
+    options:
+      - "`params` and `metrics`"
+      - "`data_version`, `git_commit` with `git_dirty`, and `model.sha256`"
+      - "`time` and `run_id`"
+      - Only the model file itself, because it holds everything
+    answer: 1
+    explanation: The data version is the hash of the complaints file, the commit names the code, `git_dirty` false says the code and data matched that commit, and the model hash ties the record to one exact file. Params and metrics say what was set and what came out, not where it came from.
+  - question: "`git_dirty` is true on a run you just logged. What does it tell you, and what should you do?"
+    options:
+      - The run failed; rerun it
+      - The model is worse than the last one
+      - The code or data in `ml/python` or `ml/data` differed from the recorded commit, so the commit does not fully describe the run; commit the code, run again, then commit the run
+      - Git is not installed
+    answer: 2
+    explanation: A dirty run names a commit that is not the code that ran, so nobody can rebuild it from the record. The habit that keeps records honest is commit the code, then run, then commit the artefacts.
+  - question: logreg C = 1 and C = 3 score 0.769 and 0.767 macro-F1 on the 2022 test year (n = 600, band ±0.041). The run diff shows C = 3 is 6.4 points higher on the training year. What does the record support?
+    options:
+      - Switch to C = 3, because the training score is much higher
+      - Keep C = 1; the test scores are tied inside the band, and the larger train–test gap at C = 3 is a sign of overfitting
+      - Switch to C = 3, because 0.767 is close enough
+      - Nothing; training scores cannot be compared
+    answer: 1
+    explanation: The test difference, 0.002, is far inside ±0.041, so the test year cannot separate them. The training score is not evidence of a better model; a higher training score with a flat test score is what overfitting looks like.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import RunTable from '../../../components/ml/RunTable.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+In lesson 4 you swept `C` and printed a table. Close the terminal and it is gone. A month later nobody can say which settings made v1, which data it learned from, or whether the code has changed since. This half of the track runs the model the way a team does, and the first habit is to write every run down.
+
+### What a run record holds
+
+<Term t="experiment tracking" /> means saving one record per training run. Ours is a JSON file in `ml/runs/`, and it holds:
+
+- `params`: what you set. For v1, `model: logreg`, `C: 1.0`, `max_iter: 1000`, plus the shared `min_df: 2`, `max_features: 20000` and `seed: 7`.
+- `windows`: the dates it trained on (2019–2021) and was scored on (the 2022 test year).
+- `metrics`: what came out, on the test year and on the training years: n, accuracy, its noise band, macro-F1, weighted F1 and F1 per category.
+- `data_version`: the SHA-256 of `complaints.jsonl`, `sha256:5c2b05a0…`. Change one character of the data and it changes.
+- `model`: the SHA-256 of the exported file, and its path when the file is kept. v1's run names `models/v1.json` with `a804df41…`, the same hash the registry records in lesson 8.
+- `git_commit` and `git_dirty`: the commit the code came from, and whether `ml/python` or `ml/data` differed from it when the run was made, counting new untracked files.
+
+Together they answer three questions about any number in this track: what was set, what data it saw, and which code ran.
+
+### The five runs
+
+`ml/runs/` holds five records. Four are the experiment set behind v1, all trained on 2019–2021 and scored on the 600 complaints of 2022:
+
+| Run | Macro-F1 | Accuracy |
+|---|---|---|
+| `nb-alpha0.1-2019-2021` | 0.774 | 0.818 |
+| `logreg-C0.3-2019-2021` | 0.686 | 0.743 |
+| `logreg-C1-2019-2021` (v1) | 0.769 | 0.808 |
+| `logreg-C3-2019-2021` | 0.767 | 0.808 |
+
+The fifth, `logreg-C1-2019-2022`, is the retrain from lesson 11: v1's settings on 2019–2022, scored on the first half of 2023. Its numbers sit on a different evaluation window, so they cannot be set against the other four.
+
+The three that matter are tied. Naive Bayes, C = 1 and C = 3 are within 0.007 macro-F1 of each other, far inside the ±0.041 band. Lesson 4 explained why v1 is still the C = 1 run: when the numbers cannot separate models, choose on something you can defend, and say so. The record keeps that choice checkable.
+
+### Ids, times and replays
+
+A run's id is built from what makes it different: `logreg-C1-2019-2021` is the model, its knob and its training years. Rebuild the same experiment and you get the same id and, if nothing changed, the same file. If a rerun would change a record, `log_run` refuses unless you pass `--replace`, so a result cannot be overwritten by accident. MLflow does it the other way: every run gets a fresh random id, so a rerun creates a new run rather than replacing one.
+
+A run's `time` is not the clock. It is midnight after the last complaint it used: 2023-01-01 for the four runs scored on 2022, 2023-07-01 for the retrain. That keeps the committed files byte-identical when they are rebuilt.
+
+### Provenance
+
+All five records name commit `256e694` with `git_dirty: false`. That is only true because of the order the work was done in: **commit the code, then run, then commit the artefacts.** Run with uncommitted code and the record names a commit that is not what ran; `git_dirty: true` says so, and the run cannot be rebuilt from its record.
+
+Only v1's run keeps its model file. The other three experiment models were written to a temporary folder and deleted, so their records keep the hash alone. That still says exactly what was built: rebuild the run and compare hashes.
+
+### And MLflow?
+
+MLflow is the standard open-source tool for the same job. It stores runs in a database, gives you a web UI to browse and compare them, and has a model registry (lesson 8). `ml/python/with_mlflow.py` logs v1's run to MLflow and checks that both tools recorded the same numbers and the same model hash.
+
+MLflow is optional here; nothing else in the course imports it. The track keeps its own tracker next to it because its tracker is section 1 of `mlops.py`, about 90 lines of standard-library Python, every moving part is visible, and its records are plain files that diff in git. MLflow adds the UI, a query API and a registry that a team can share, and it needs a database even on a laptop.
+
+## See it
+
+The table lists the five committed runs. Sort it by each metric and watch the order of the three tied runs change. Then diff two runs: the diff shows only what differs.
+
+<RunTable />
+
+Sorting by accuracy or macro-F1 puts Naive Bayes first, by less than the noise band shown under the table. Pick C = 3 as run B: the diff against C = 1 shows one changed param, `C`, and test numbers that move by less than 0.02 each, while training macro-F1 jumps 6.4 points. The registry column shows that only two runs became versions: v1 in production and v2 in staging.
+
+## The code
+
+`ml/python/mlops.py` has five numbered sections; this lesson uses section 1, the run tracker.
+
+<CodeTabs source="ml-mlops" section={1} />
+
+- `git_state()` runs `git rev-parse HEAD` for the commit and `git status --porcelain -- python data` for the dirty flag, from the `ml/` folder. Untracked files count, so a new unsaved script makes the run dirty. Without git, both are `None`: a run without provenance is still worth logging.
+- `settings(**knobs)` adds the shared feature settings and the seed to the model's own knobs, so every record carries all of them.
+- `run_id_for(params, train_window)` builds the readable id, `logreg-C1-2019-2021`, from the model, its knob (`C` or `alpha`) and the training years.
+- `log_run(...)` puts the record together. `sha256_file(model_path)` hashes the model file; `keep_path=False` keeps the hash and drops the path, for a model that is thrown away.
+- `if target.exists() and not replace and ... != dump_json(run)` refuses to overwrite a record whose contents would change. Rewriting an identical record is allowed, which is what makes a rebuild safe.
+- `write_json_atomic(target, run)` writes the file all at once or not at all; lesson 8 shows how.
+- `list_runs()` reads every record and sorts by time, then id. `python mlops.py runs` prints it.
+- `compare_runs(a, b)` returns only what differs: params as `[a, b]`, numeric metrics as `[a, b, b − a]`. `_flatten` turns nested metrics into names like `test.per_class_f1.Mortgage` first.
+
+`ml/python/with_mlflow.py` does the same with MLflow. Section 1 points MLflow at a folder; section 2 logs one run.
+
+<CodeTabs source="ml-mlflow" section={2} />
+
+- `mlflow.start_run(run_name=run["run_id"])` opens a run. MLflow gives it its own random id; our id becomes its display name.
+- `mlflow.log_params(run["params"])` stores the settings. MLflow keeps params as text, so the comparison in section 4 compares text.
+- `mlflow.log_metrics(headline(run))` stores every number except the per-category F1s: their names contain commas, which MLflow refuses in a metric name.
+- `mlflow.set_tags(...)` keeps what MLflow has no field for: our run id, the data hash and the git commit.
+- `mlflow.log_artifact(str(model_path), artifact_path="model")` copies `v1.json` into the run's artifact folder as a plain file. Our model is JSON, so it needs none of MLflow's pickled model formats.
+
+<Callout kind="note" title="MLflow needs a database">
+  `configure` in section 1 sets the tracking store to a SQLite file, `sqlite:///.../mlflow.db`. MLflow 3's model registry needs a database, and its old plain-files store is deprecated and refuses to start. SQLite is still one file and no server. Without `--workdir`, the script works in a temporary folder that is deleted at the end, so nothing lands in the repository. It was tested on MLflow 3.17.2.
+</Callout>
+
+## Try it
+
+List the runs and diff two. Both commands only read `ml/runs/`:
+
+```bash
+cd ml/python
+python mlops.py runs
+```
+
+You should see:
+
+```text
+run                       time                  eval      macro F1  accuracy
+logreg-C0.3-2019-2021     2023-01-01T00:00:00Z  test         0.686     0.743
+logreg-C1-2019-2021       2023-01-01T00:00:00Z  test         0.769     0.808
+logreg-C3-2019-2021       2023-01-01T00:00:00Z  test         0.767     0.808
+nb-alpha0.1-2019-2021     2023-01-01T00:00:00Z  test         0.774     0.818
+logreg-C1-2019-2022       2023-07-01T00:00:00Z  holdout      0.764     0.813
+```
+
+```bash
+python mlops.py compare logreg-C1-2019-2021 logreg-C3-2019-2021
+```
+
+The output starts:
+
+```text
+{
+ "a": "logreg-C1-2019-2021",
+ "b": "logreg-C3-2019-2021",
+ "params": {
+  "C": [
+   1.0,
+   3.0
+  ]
+ },
+ "metrics": {
+  "test.macro_f1": [
+   0.7692017869877851,
+   0.7673338948994007,
+   -0.0018678920883843375
+  ],
+```
+
+and goes on with every metric that differs. `test.accuracy` is missing: both runs score exactly 0.808 on the test year. `train.macro_f1` goes from 0.899 to 0.964.
+
+Now prove the records reproduce. Rebuild the experiment set in a copy of `ml/`, so nothing in the repository changes. It takes a few seconds:
+
+```bash
+ML="$(mktemp -d)/ml"
+cp -R .. "$ML"
+rm -r "$ML/runs"
+python mlops.py --root "$ML" experiments
+diff -r ../runs "$ML/runs"
+```
+
+You should see four `logged` lines, then a diff with two kinds of difference. `Only in ../runs: logreg-C1-2019-2022.json`: the retrain is lesson 11's, not part of this set. And in each of the four files, one line:
+
+```text
+<  "git_commit": "256e694e42f09fa011cf13aaade487fe543778e7",
+---
+>  "git_commit": "…the commit you have checked out…",
+```
+
+Every param, metric and model hash is the same to the last digit. Only the code's commit differs, because you are on a later one. If you see `"git_dirty": true` in the copy, you have uncommitted changes in `ml/python` or `ml/data`.
+
+To run the MLflow version, install MLflow in a throwaway virtual environment, so it stays out of your main Python. The environment takes about 670 MB once installed; it is free, and nothing calls a paid API:
+
+```bash
+python3 -m venv /tmp/mlflow-venv
+/tmp/mlflow-venv/bin/pip install -r requirements.txt "mlflow==3.17.2"
+/tmp/mlflow-venv/bin/python with_mlflow.py
+```
+
+After MLflow's own log lines, you should see a table that ends:
+
+```text
+metric train.macro_f1       0.899295              0.899295              ok
+metric train.weighted_f1    0.900571              0.900571              ok
+model sha256                a804df411869ed9f7416  a804df411869ed9f7416  ok
+
+the two records agree
+```
+
+The first line names MLflow's run id, which is random and differs on every run. To browse the run in MLflow's UI, add `--workdir mlflow-demo` and then run the `mlflow ui` command it prints; git ignores `mlflow-demo/`.

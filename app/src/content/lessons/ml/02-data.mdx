@@ -1,0 +1,217 @@
+---
+track: ml
+order: 2
+slug: data
+title: The data
+goal: Describe where the complaint sample comes from and what it hides, split it by time into train, test and stream, and explain why a random split answers the wrong question.
+minutes: 20
+quiz:
+  - question: Why does the course commit a fixed sample, complaints.jsonl, instead of fetching complaints when you run the code?
+    options:
+      - The files are too large to download
+      - The CFPB stopped publishing narratives through its live API and bulk download in August 2026, and a model's numbers are only reproducible if its data stays put
+      - Committed data trains faster
+      - The CFPB licence forbids downloading
+    answer: 1
+    explanation: A source you depend on can change or disappear, and this one did. The narratives survive only in an archive. A fixed file with a recorded SHA-256 means anyone can retrain v1 and get the same numbers, whatever happens to the source next.
+  - question: In 2024, the sample's explorer shows credit reporting at 46.7% of complaints. What should you conclude about the real 2024 complaint mix?
+    options:
+      - Credit reporting was about 47% of real complaints
+      - Nothing; the sample's class mix is muted by design (50 a month, at least 5 per category), and the real share in 2024 was 80.0%
+      - Credit reporting was shrinking
+      - The sample is broken and should be redrawn
+    answer: 1
+    explanation: The floors keep every category big enough to learn and score, at the cost of hiding how the real mix moved. Use the sample for vocabulary and label changes, and the real shares in ml/data/README.md for what the class mix actually did.
+  - question: Why train on 2019–2021 and test on 2022, instead of shuffling all four years and holding out a random quarter?
+    options:
+      - A random split always gives a higher score
+      - A deployed model only ever scores complaints written after its training data, and a time split asks that question; a random split lets training see complaints from the test year
+      - Time splits need less data
+      - scikit-learn does not support random splits
+    answer: 1
+    explanation: The test should imitate how the model is used. A random split mixes 2022 complaints into training, so the test asks how well the model does on years it has already seen. On this sample a random split does not even score higher (0.763 to 0.803 against 0.808), so the reason is the question asked, not the number it gives.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import ComplaintExplorer from '../../../components/ml/ComplaintExplorer.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+A classic model learns everything it knows from its training data. So before any code, know the data: where it came from, what each line holds, what was left out and what the sample distorts.
+
+### The source
+
+The CFPB's Consumer Complaint Database publishes complaints that consumers send about financial products. When a consumer agrees, the database includes their own description of what happened, the narrative. The CFPB scrubs personal details first: names, account numbers and similar details become `XXXX` (42,622 times in this sample), dates often become `XX/XX/XXXX`, and dollar amounts appear in braces, like `{$250.00}`.
+
+### The source disappeared
+
+In August 2026 the CFPB stopped publishing narratives in the live database. The announcement is dated 2026-08-14, and the change to the API's code, pull request 256 in `cfpb/ccdb5-api`, "Remove narratives, trends, geo", was merged on 2026-08-18. On 2026-10-26 the search API returned no narrative field, and the bulk `complaints.csv.zip` had no narrative column.
+
+The narratives survive in the CFPB's official FOIA Narratives Archive: 21 ZIP files of every complaint published from December 1, 2011 to August 14, 2026. The course uses the 7 that cover 2019–2024, 710,749,149 bytes in all. `ml/data/README.md` lists each file with its size and SHA-256.
+
+That is why the sample is committed. A source you depend on can change or disappear, and a model's numbers are only reproducible if its data stays put. `complaints.jsonl` is 3,600 lines, 4,609,144 bytes, and two full rebuilds from the archive gave the same SHA-256, `5c2b05a0…`. If the archive moves, the fetch script fails with a clear message and the committed sample keeps working.
+
+### What a line holds
+
+Each line of `ml/data/complaints.jsonl` keeps five fields: `id`, `date` (the day the CFPB received it), `product` (the current CFPB name), `product_raw` (the name as published) and `narrative`. Company, state, ZIP code and the rest are dropped. Narratives run from 10 to 23,091 characters, with a median of 710. The longest, complaint `4219949`, is over the servers' 20,000-character limit, so lesson 9's servers reject it.
+
+### Six categories, renamed in 2023
+
+The CFPB renamed products over time, so the same kind of complaint was filed under different names in different years. `category_map.json` maps each published name to today's:
+
+- "Credit reporting, credit repair services, or other personal consumer reports" became "Credit reporting or other personal consumer reports" in 2023. Its credit repair complaints moved to another product, so they are left out.
+- "Credit card or prepaid card" was split in two in 2023. The map uses the sub-product to send credit cards to "Credit card"; prepaid cards are left out.
+
+In the sample, 2023 has 172 credit reporting complaints under the old name and 92 under the new one; by 2024 every complaint uses the new names. Labels changing meaning or name over time is real label drift, and lesson 10 comes back to it. The model only ever sees `product`, so the renames cannot confuse it.
+
+### A stratified sample
+
+There were 2,045,259 eligible narratives for 2019–2024 in these six categories. The sample takes 600 per year, 50 per month, with seed 7. Within each month every category gets at least 5, so at least 60 a year, and the rest of the month follows that month's real mix.
+
+The floors are deliberate. Without them, credit reporting would take about 80% of 2024 and money transfer would get about 8 complaints a year, too few to learn or score.
+
+The cost is that the sample mutes how the real class mix moved:
+
+- Credit reporting went from 51.0% of real complaints in 2019 to 80.0% in 2024. In the sample it goes only from 35.2% to 46.7%.
+- Mortgage fell from 8.8% to 1.5%. In the sample it sits at the floor, 10.0%, in 2023 and 2024.
+- Money transfer fell from 2.4% to 1.3%, but stays at about 10% in the sample.
+
+So the sample is good for how complaint text and labels change. For what production's class mix actually did, read the real shares in `ml/data/README.md`, not the sample's.
+
+### Splitting by time
+
+The data is split by `date`:
+
+- **train**, 2019–2021: 1,800 complaints the model learns from.
+- **test**, 2022: 600 complaints, scored once to report.
+- **stream**, 2023–2024: 1,200 complaints that play production, scored month by month from lesson 10.
+
+This is a <Term t="time split" />. A deployed model only ever scores complaints written after its training data, so the test should do the same. Shuffle all four years and hold out a random quarter, and some 2022 complaints land in training: the model learns from the year it is tested on. That is <Term t="data leakage" />: the test no longer asks "how will this do next year?" but "how does it do on years it has seen?"
+
+Leakage does not always make the number higher. On this sample, random splits of 2019–2022 score between 0.763 and 0.803, against 0.808 for the time split (Try it below). 2022 may be an easier year. One possible reason: credit reporting, the category the model finds most reliably (97.3% of them on test, lesson 5), is 43.3% of it against 37.1% of training. The time split is right because it asks the question you care about, not because of the number it gives.
+
+You know dev and test from the LLMs track. Here, the test year plays the test set. Settings were chosen without it, by cross-validation on the training years: lesson 1 showed `NB_ALPHA` chosen that way.
+
+## See it
+
+Pick 2024 in the explorer. For each category, compare the solid sample bar with the hatched real bar, and watch credit reporting and mortgage. Then filter the snippets to read what each category's complaints sound like.
+
+<ComplaintExplorer />
+
+In 2024, credit reporting is 46.7% of the sample but 80.0% of real complaints, and mortgage is 10.0% against 1.5%. The sample keeps every category learnable and hides the real shift. The snippets also show the scrubbing: `XXXX` where a name or account number was, and some old names, such as "published as" the pre-2023 credit reporting name.
+
+## The code
+
+Section 2 of `train.py` loads the sample and splits it by time.
+
+<CodeTabs source="ml-train" section={2} />
+
+- `load_complaints(path)` reads one JSON object per line into a list of dicts.
+- `_is_iso_date(text)` accepts only `YYYY-MM-DD` that is also a real calendar day, so `2021-02-30` fails.
+- `split_by_time(rows)` compares dates as text. ISO dates sort correctly as strings, which is why the exact format is checked first.
+- `if first <= r["date"] <= last` puts each complaint into the split whose date range holds it. Both ends are inclusive.
+- `else: raise ValueError(...)` is the loop's `else`: it runs only when no split matched. A complaint outside every split stops the run instead of disappearing quietly.
+
+The sample itself was built once by `ml/data/fetch_sample.py`. Section 1 pins the archive files.
+
+<CodeTabs source="ml-fetch" section={1} />
+
+- `ARCHIVE_PAGE` and `BASE_URL` are the archive's addresses; an error message points at the page if a file has moved.
+- `USER_AGENT = "ai-engineering-course-sample/1.0"` is generic, so no request carries personal data.
+- `FILES` lists each export's name, size in bytes and SHA-256 as downloaded on 2026-10-26. Any change means the archive changed, and `check()` stops the sample build.
+- `PER_YEAR = 600` and `MIN_PER_YEAR = 60` set the sample size and the per-category floor.
+- `CATEGORIES` is the six current names, chosen from real counts: the six largest consumer-finance products present in every year under one current name.
+- `NARRATIVE = "Consumer complaint narrative"` is the column the live database no longer has.
+
+Section 5 draws the sample.
+
+<CodeTabs source="ml-fetch" section={5} />
+
+- `month_floor(per_year, n_categories)` gives each category 5 complaints a month: 60 a year, divided by 12, rounded up.
+- `allocate(per_month, available, floor)` gives every category its floor first, then shares out the rest of the month in proportion to the real counts.
+- `if not any(extra.values())` hands out the last few places one at a time, to the largest share, so a month always reaches its quota when it can.
+- `stratified_sample(rows, ...)` groups complaints by month and category, allocates each month and draws with `random.Random(seed)`.
+- `pool = sorted(..., key=lambda r: int(r["id"]))` sorts before sampling, so the same rows and seed give the same sample whatever order the archive lists them in.
+
+<Callout kind="warning" title="Rebuilding the sample is optional">
+  `python ml/data/fetch_sample.py download --dir DIR` downloads about 711 MB from the CFPB, then `sample --dir DIR` rewrites `complaints.jsonl`. It is free, but nothing in the track needs it: the committed file is the data every lesson's numbers come from.
+</Callout>
+
+## Try it
+
+Look at the splits and the renames. Save this as `ml/python/splits.py`:
+
+```python
+import collections
+import train
+
+rows = train.load_complaints(train.PATHS["complaints"])
+splits = train.split_by_time(rows)
+for name, part in splits.items():
+    print(name, len(part), part[0]["date"], "to", part[-1]["date"])
+
+renamed = collections.Counter(
+    r["date"][:4] for r in rows if r["product_raw"] != r["product"])
+print("published under an old name, by year:", dict(sorted(renamed.items())))
+
+text = splits["train"][0]["narrative"]
+print(text.count("XXXX"), "XXXX marks in", splits["train"][0]["id"])
+```
+
+```bash
+cd ml/python
+python splits.py
+```
+
+You should see:
+
+```text
+train 1800 2019-01-02 to 2021-12-31
+test 600 2022-01-01 to 2022-12-31
+stream 1200 2023-01-02 to 2024-12-31
+published under an old name, by year: {'2019': 290, '2020': 305, '2021': 297, '2022': 331, '2023': 220}
+12 XXXX marks in 3115053
+```
+
+Every credit reporting and credit card complaint from 2019–2022 carries an old name, 220 of 2023's 600 do, and none in 2024.
+
+Now compare the time split with random splits of the same four years. Save this as `ml/python/random_split.py`:
+
+```python
+import random
+import train
+
+rows = train.load_complaints(train.PATHS["complaints"])
+past = [r for r in rows if r["date"] <= "2022-12-31"]      # 2019-2022, 2,400 complaints
+
+
+def test_accuracy(train_rows, test_rows):
+    fitted = train.train_models(train_rows)
+    X = train.transform([r["narrative"] for r in test_rows], fitted["vocabulary"], fitted["idf"])
+    pred = fitted["models"]["logreg"].predict(X)
+    return sum(p == r["product"] for p, r in zip(pred, test_rows)) / len(test_rows)
+
+
+by_time = train.split_by_time(rows)
+print(f"time split:   {test_accuracy(by_time['train'], by_time['test']):.3f}")
+for seed in (1, 2, 3):
+    shuffled = past[:]
+    random.Random(seed).shuffle(shuffled)
+    print(f"random split, seed {seed}: {test_accuracy(shuffled[:1800], shuffled[1800:]):.3f}")
+```
+
+```bash
+python random_split.py
+```
+
+You should see, after a few seconds:
+
+```text
+time split:   0.808
+random split, seed 1: 0.803
+random split, seed 2: 0.763
+random split, seed 3: 0.775
+```
+
+The random splits do not score higher here, and they move by 4 points between seeds, about the ±4.1-point band for 600 complaints. Only the first line answers "how will a model trained on the past do on the next year?" It all runs locally and costs nothing.

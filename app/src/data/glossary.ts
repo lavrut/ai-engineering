@@ -96,6 +96,42 @@ export const glossary = {
     'Low-rank adaptation: fine-tuning that freezes the model and trains two thin matrices A (d × r) and B (r × d) beside a weight matrix, whose product is added to it.',
   'eval gate':
     'A check that runs an eval on a change and fails, with a non-zero exit code, when the score falls below a minimum or further below a baseline than the noise band.',
+  feature:
+    'One number a model reads about an input; here, the TF-IDF weight of one vocabulary word in a complaint.',
+  'time split':
+    'Dividing data by date, training on earlier records and testing on later ones, so the test imitates scoring the future.',
+  'data leakage':
+    'Information from the test data, or from the future, reaching training, so the test no longer measures how the model will do on new data, and often flatters it.',
+  tokenizer:
+    'The fixed rules that split text into tokens (here, lowercase words); training, serving and the browser must apply the same rules.',
+  'TF-IDF':
+    'Term frequency times inverse document frequency: a word’s count in a text, weighted up when few training texts contain it.',
+  'Naive Bayes':
+    'A classifier that scores each category by its log prior plus the log probability of every word given that category, treating words as independent.',
+  'logistic regression':
+    'A classifier that learns one weight per category and feature plus an intercept, and turns the weighted sums into probabilities with softmax.',
+  overfitting:
+    'Fitting the training data’s details instead of the general pattern, seen as a score that is clearly higher on training data than on new data.',
+  precision:
+    'Of the items a model assigned to a category, the share that really belong to it.',
+  recall:
+    'Of the items that really belong to a category, the share the model assigned to it.',
+  F1:
+    'The harmonic mean of precision and recall, 2PR / (P + R): high only when both are high.',
+  'macro average':
+    'The plain mean of a metric over categories, so a small category counts as much as a large one.',
+  'experiment tracking':
+    'Recording every training run’s settings, data version, code version, metrics and model file hash, so any result can be compared, explained and rebuilt later.',
+  'model registry':
+    'The list of a model’s registered versions, each with its file, hash and stage (staging, production or archived), plus a history of every move; servers load the version it names production.',
+  drift:
+    'A change, after a model is deployed, in the data it receives or in what its labels mean, compared with the data it was built and tested on.',
+  PSI:
+    'Population Stability Index: the sum over buckets of (a − e) × ln(a / e), where e and a are a reference period’s and a new period’s proportions; 0 when they match, larger as they move apart.',
+  'promotion gate':
+    'The check a candidate model must pass before it replaces production; here, beat production’s macro-F1 by more than the noise band on data neither model trained on, with no category’s F1 below a floor.',
+  rollback:
+    'Making the previous production version production again, as a recorded registry move, when a promoted model turns out worse.',
 } as const satisfies Record<string, string>;
 
 export type GlossaryKey = keyof typeof glossary;

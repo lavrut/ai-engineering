@@ -1,0 +1,56 @@
+{
+ "generated_by": "python compare_llm.py compare",
+ "n": 200,
+ "sample_size": 200,
+ "no_answer": 0,
+ "band": 0.07071067811865475,
+ "split": "test (2022)",
+ "classes": [
+  "Checking or savings account",
+  "Credit card",
+  "Credit reporting or other personal consumer reports",
+  "Debt collection",
+  "Money transfer, virtual currency, or money service",
+  "Mortgage"
+ ],
+ "scoring": "headline = all replayed complaints; a Claude reply with no usable answer counts as wrong",
+ "answered_only": {
+  "n": 200,
+  "v1_accuracy": 0.81,
+  "claude_accuracy": 0.865
+ },
+ "v1": {
+  "version": "v1",
+  "accuracy": 0.81,
+  "macro_f1": 0.764524693512114,
+  "per_class_f1": {
+   "Checking or savings account": 0.6363636363636365,
+   "Credit card": 0.6511627906976745,
+   "Credit reporting or other personal consumer reports": 0.8900523560209425,
+   "Debt collection": 0.7727272727272727,
+   "Money transfer, virtual currency, or money service": 0.7368421052631577,
+   "Mortgage": 0.9
+  },
+  "latency_p50_ms": 0.25239548995159566,
+  "latency_p50_ms_go": 0.11950000771321356,
+  "latency_note": "local CPU inference: one request to the model served on this machine (reports/latency.json)",
+  "cost_per_1000": 0.0
+ },
+ "claude": {
+  "model": "claude-haiku-5-5",
+  "accuracy": 0.865,
+  "macro_f1": 0.8351694518270808,
+  "per_class_f1": {
+   "Checking or savings account": 0.8085106382978724,
+   "Credit card": 0.7826086956521738,
+   "Credit reporting or other personal consumer reports": 0.9273743016759777,
+   "Debt collection": 0.7727272727272727,
+   "Money transfer, virtual currency, or money service": 0.7441860465116279,
+   "Mortgage": 0.975609756097561
+  },
+  "latency_p50_ms": 1151.5,
+  "latency_note": "remote API round trip: network, SDK retries and queueing behind 8 concurrent workers while recording; not comparable to the local inference above",
+  "cost_per_1000": 0.1021975
+ },
+ "latency_caveat": "The two latencies measure different things (local CPU inference vs a remote API call)."
+}

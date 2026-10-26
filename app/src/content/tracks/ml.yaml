@@ -1,6 +1,6 @@
 id: ml
 title: Machine Learning
 order: 3
-status: planned
+status: live
 summary: "Core machine learning and the operations that keep models healthy in production."
 subsections: ["MLOps"]

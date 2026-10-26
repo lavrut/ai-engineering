@@ -1,0 +1,75 @@
+{
+ "run_id": "logreg-C1-2019-2022",
+ "time": "2023-07-01T00:00:00Z",
+ "params": {
+  "model": "logreg",
+  "C": 1.0,
+  "max_iter": 1000,
+  "min_df": 2,
+  "max_features": 20000,
+  "seed": 7
+ },
+ "windows": {
+  "train": {
+   "from": "2019-01-01",
+   "to": "2022-12-31"
+  },
+  "eval": {
+   "name": "holdout",
+   "from": "2023-01-01",
+   "to": "2023-06-30"
+  }
+ },
+ "data_version": "sha256:5c2b05a03e9dfee3a9fc28e25bc9c619cc420deda0cb663525c0a29ae3a3f8b6",
+ "model": {
+  "path": "models/v2.json",
+  "sha256": "d44c626d3fb4dd5b639ecc4152d5da791c65edd5536be9678bfcabc369ec7d2c"
+ },
+ "metrics": {
+  "holdout": {
+   "split": "holdout 2023-01-01..2023-06-30",
+   "n": 300,
+   "accuracy": 0.8133333333333334,
+   "band": 0.05773502691896257,
+   "macro_f1": 0.7642312011491262,
+   "weighted_f1": 0.8044179419071672,
+   "per_class_f1": {
+    "Checking or savings account": 0.6933333333333334,
+    "Credit card": 0.6956521739130435,
+    "Credit reporting or other personal consumer reports": 0.8912280701754387,
+    "Debt collection": 0.7540983606557377,
+    "Money transfer, virtual currency, or money service": 0.5833333333333334,
+    "Mortgage": 0.967741935483871
+   }
+  },
+  "production_holdout": {
+   "split": "holdout 2023-01-01..2023-06-30",
+   "n": 300,
+   "accuracy": 0.81,
+   "band": 0.05773502691896257,
+   "macro_f1": 0.7590030972711942,
+   "weighted_f1": 0.8003307453403841,
+   "per_class_f1": {
+    "Checking or savings account": 0.6486486486486486,
+    "Credit card": 0.6461538461538462,
+    "Credit reporting or other personal consumer reports": 0.89198606271777,
+    "Debt collection": 0.7878787878787877,
+    "Money transfer, virtual currency, or money service": 0.5957446808510638,
+    "Mortgage": 0.9836065573770492
+   }
+  },
+  "gate": {
+   "passed": false,
+   "gain": 0.005228103877932044,
+   "band": 0.05773502691896257,
+   "floor": 0.5,
+   "reasons": [
+    "macro-F1 0.764 vs 0.759: gain +0.005 <= band 0.058 (n=300)",
+    "every category's F1 is at or above the floor 0.50"
+   ],
+   "production_version": "v1"
+  }
+ },
+ "git_commit": "256e694e42f09fa011cf13aaade487fe543778e7",
+ "git_dirty": false
+}

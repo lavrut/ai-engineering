@@ -1,0 +1,487 @@
+{
+ "generated_by": "python tests/make_predictions.py",
+ "model": "ml/models/v1.json",
+ "note": "expected = train.score(v1, input). Go and FastAPI must match: same label and low_confidence, every score within 1e-9.",
+ "cases": [
+  {
+   "name": "empty",
+   "input": "",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.07038778690741715,
+     "Credit card": 0.0994185519300786,
+     "Credit reporting or other personal consumer reports": 0.4595109407604279,
+     "Debt collection": 0.14810641521274656,
+     "Money transfer, virtual currency, or money service": 0.13137929233376697,
+     "Mortgage": 0.09119701285556271
+    },
+    "low_confidence": true
+   }
+  },
+  {
+   "name": "whitespace only",
+   "input": "   \n\t ",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.07038778690741715,
+     "Credit card": 0.0994185519300786,
+     "Credit reporting or other personal consumer reports": 0.4595109407604279,
+     "Debt collection": 0.14810641521274656,
+     "Money transfer, virtual currency, or money service": 0.13137929233376697,
+     "Mortgage": 0.09119701285556271
+    },
+    "low_confidence": true
+   }
+  },
+  {
+   "name": "all unknown words",
+   "input": "zzqx blorptag frobnicatory quuxle",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.07038778690741715,
+     "Credit card": 0.0994185519300786,
+     "Credit reporting or other personal consumer reports": 0.4595109407604279,
+     "Debt collection": 0.14810641521274656,
+     "Money transfer, virtual currency, or money service": 0.13137929233376697,
+     "Mortgage": 0.09119701285556271
+    },
+    "low_confidence": true
+   }
+  },
+  {
+   "name": "scrubbed placeholders only",
+   "input": "XXXX XX/XX/XXXX XXXX xx",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.07038778690741715,
+     "Credit card": 0.0994185519300786,
+     "Credit reporting or other personal consumer reports": 0.4595109407604279,
+     "Debt collection": 0.14810641521274656,
+     "Money transfer, virtual currency, or money service": 0.13137929233376697,
+     "Mortgage": 0.09119701285556271
+    },
+    "low_confidence": true
+   }
+  },
+  {
+   "name": "25,000 characters (servers reject over 20,000; scoring has no limit)",
+   "input": "They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment on my credit report that is not mine. They keep reporting a late payment",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.0016670361741876498,
+     "Credit card": 0.015684471123975537,
+     "Credit reporting or other personal consumer reports": 0.9385733678232254,
+     "Debt collection": 0.03050866163421749,
+     "Money transfer, virtual currency, or money service": 0.003211088189364194,
+     "Mortgage": 0.010355375055029708
+    },
+    "low_confidence": false
+   }
+  },
+  {
+   "name": "non-ASCII, Spanish",
+   "input": "Mi tarjeta de crédito fue cobrada dos veces — ¿por qué?",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.069788919261684,
+     "Credit card": 0.09321399280251728,
+     "Credit reporting or other personal consumer reports": 0.4763987659866186,
+     "Debt collection": 0.14548570129089033,
+     "Money transfer, virtual currency, or money service": 0.1250433886045128,
+     "Mortgage": 0.09006923205377704
+    },
+    "low_confidence": true
+   }
+  },
+  {
+   "name": "non-ASCII, Turkish dotted I and emoji",
+   "input": "İnternet banking locked my account 😡 since Monday",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.18622129057763434,
+     "Credit card": 0.09245602047999253,
+     "Credit reporting or other personal consumer reports": 0.32348990465228283,
+     "Debt collection": 0.132005674459302,
+     "Money transfer, virtual currency, or money service": 0.19348540917473203,
+     "Mortgage": 0.07234170065605629
+    },
+    "low_confidence": true
+   }
+  },
+  {
+   "name": "digits and amounts",
+   "input": "Charged {$250.00} twice on XX/XX/2022, fee 35, account 12345",
+   "expected": {
+    "label": "Credit card",
+    "scores": {
+     "Checking or savings account": 0.15769110518461496,
+     "Credit card": 0.24987440887630202,
+     "Credit reporting or other personal consumer reports": 0.24592540387611814,
+     "Debt collection": 0.15571637863724408,
+     "Money transfer, virtual currency, or money service": 0.11595267846403585,
+     "Mortgage": 0.07484002496168503
+    },
+    "low_confidence": true
+   }
+  },
+  {
+   "name": "case and apostrophes",
+   "input": "I DON'T owe this DEBT; it's NOT mine!!! 'Collector' keeps calling",
+   "expected": {
+    "label": "Debt collection",
+    "scores": {
+     "Checking or savings account": 0.019758233622566793,
+     "Credit card": 0.024660311606781105,
+     "Credit reporting or other personal consumer reports": 0.14007489871573825,
+     "Debt collection": 0.7647558572458867,
+     "Money transfer, virtual currency, or money service": 0.03089398188348572,
+     "Mortgage": 0.019856716925541446
+    },
+    "low_confidence": false
+   }
+  },
+  {
+   "name": "one word: mortgage",
+   "input": "mortgage",
+   "expected": {
+    "label": "Mortgage",
+    "scores": {
+     "Checking or savings account": 0.001208927774418396,
+     "Credit card": 0.0015693519328839186,
+     "Credit reporting or other personal consumer reports": 0.01176881776438074,
+     "Debt collection": 0.0022418798498809035,
+     "Money transfer, virtual currency, or money service": 0.002474509943147464,
+     "Mortgage": 0.9807365127352887
+    },
+    "low_confidence": false
+   }
+  },
+  {
+   "name": "one word: overdraft",
+   "input": "overdraft",
+   "expected": {
+    "label": "Checking or savings account",
+    "scores": {
+     "Checking or savings account": 0.34342095748965557,
+     "Credit card": 0.06947208214513625,
+     "Credit reporting or other personal consumer reports": 0.2982808104372575,
+     "Debt collection": 0.12911317704433178,
+     "Money transfer, virtual currency, or money service": 0.08924899411324949,
+     "Mortgage": 0.07046397877036942
+    },
+    "low_confidence": true
+   }
+  },
+  {
+   "name": "one word: zelle",
+   "input": "Zelle",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.07038778690741715,
+     "Credit card": 0.0994185519300786,
+     "Credit reporting or other personal consumer reports": 0.4595109407604279,
+     "Debt collection": 0.14810641521274656,
+     "Money transfer, virtual currency, or money service": 0.13137929233376697,
+     "Mortgage": 0.09119701285556271
+    },
+    "low_confidence": true
+   }
+  },
+  {
+   "name": "one known word among unknown",
+   "input": "zzqx blorptag escrow",
+   "expected": {
+    "label": "Mortgage",
+    "scores": {
+     "Checking or savings account": 0.020889597898972625,
+     "Credit card": 0.03148212938843098,
+     "Credit reporting or other personal consumer reports": 0.11410364555951984,
+     "Debt collection": 0.0521418068159127,
+     "Money transfer, virtual currency, or money service": 0.043170763806228835,
+     "Mortgage": 0.738212056530935
+    },
+    "low_confidence": false
+   }
+  },
+  {
+   "name": "vague, likely low confidence",
+   "input": "I called them and nobody helped me.",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.07768176473932123,
+     "Credit card": 0.11349929707440216,
+     "Credit reporting or other personal consumer reports": 0.36216152940239194,
+     "Debt collection": 0.21758095133647698,
+     "Money transfer, virtual currency, or money service": 0.14581889581266852,
+     "Mortgage": 0.08325756163473916
+    },
+    "low_confidence": true
+   }
+  },
+  {
+   "name": "single letter x is a token",
+   "input": "x",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.06868179145473996,
+     "Credit card": 0.10004610508084444,
+     "Credit reporting or other personal consumer reports": 0.45353188341345907,
+     "Debt collection": 0.14628380180735306,
+     "Money transfer, virtual currency, or money service": 0.12847654976608436,
+     "Mortgage": 0.10297986847751912
+    },
+    "low_confidence": true
+   }
+  },
+  {
+   "name": "test split complaint 5613844 (Credit card)",
+   "input": "XXXX account balance is not being reported.",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.07204891396102232,
+     "Credit card": 0.14004965776065534,
+     "Credit reporting or other personal consumer reports": 0.5108651526480549,
+     "Debt collection": 0.18944641209865695,
+     "Money transfer, virtual currency, or money service": 0.056040839823006595,
+     "Mortgage": 0.03154902370860389
+    },
+    "low_confidence": false
+   }
+  },
+  {
+   "name": "test split complaint 5258921 (Mortgage)",
+   "input": "Made payments on XX/XX/2022 and XX/XX/2022 and UWM has not applied these payments to my account.",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.043244689487248675,
+     "Credit card": 0.0751394128406227,
+     "Credit reporting or other personal consumer reports": 0.649388334919161,
+     "Debt collection": 0.066335485691945,
+     "Money transfer, virtual currency, or money service": 0.045755372601089084,
+     "Mortgage": 0.12013670445993341
+    },
+    "low_confidence": false
+   }
+  },
+  {
+   "name": "test split complaint 5744472 (Credit card)",
+   "input": "On : XX/XX/2022, XXXX gave to : Citibank, {$59.00} as a Credit, on a Citibank Cash Back Card, that is already Closed. Citibank doesn't want the Credit to be given to me on another Debit Card, that I currently have.",
+   "expected": {
+    "label": "Credit card",
+    "scores": {
+     "Checking or savings account": 0.08381599686748509,
+     "Credit card": 0.7211763745957992,
+     "Credit reporting or other personal consumer reports": 0.1095989728517787,
+     "Debt collection": 0.040683981732349064,
+     "Money transfer, virtual currency, or money service": 0.025219387723600144,
+     "Mortgage": 0.019505286228987718
+    },
+    "low_confidence": false
+   }
+  },
+  {
+   "name": "test split complaint 6170642 (Debt collection)",
+   "input": "all 3 credit reporting agencies reported the following : XXXX XXXX {$680.00} opened XX/XX/22 in collections on XX/XX/22 Collection agency is Transworld Systems Inc. \n\nI have never heard of this company and never opened any accounts with them",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.02097211524101189,
+     "Credit card": 0.05066384565507932,
+     "Credit reporting or other personal consumer reports": 0.6746968907836195,
+     "Debt collection": 0.21982336275223704,
+     "Money transfer, virtual currency, or money service": 0.01861261967584523,
+     "Mortgage": 0.01523116589220705
+    },
+    "low_confidence": false
+   }
+  },
+  {
+   "name": "test split complaint 5122859 (Debt collection)",
+   "input": "This debt is not mine. I never had any contract with this company. Have reached out several times to have this remove from my file. They never sent in documentation or contract when asked for proof. This is causing me damages and will litigate if necessary.",
+   "expected": {
+    "label": "Debt collection",
+    "scores": {
+     "Checking or savings account": 0.023814060945283662,
+     "Credit card": 0.030599295326843565,
+     "Credit reporting or other personal consumer reports": 0.18836468588601737,
+     "Debt collection": 0.7124966539870806,
+     "Money transfer, virtual currency, or money service": 0.02245977850930775,
+     "Mortgage": 0.0222655253454671
+    },
+    "low_confidence": false
+   }
+  },
+  {
+   "name": "test split complaint 5148158 (Debt collection)",
+   "input": "I CHECKED MY REPORT AND THIS CREDIT LOAN IS ON IT, WHICH I HAVE NO KNOWLEDGE OF.",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.015047046195490391,
+     "Credit card": 0.03028131376699292,
+     "Credit reporting or other personal consumer reports": 0.7889030087835128,
+     "Debt collection": 0.11041308003144239,
+     "Money transfer, virtual currency, or money service": 0.01617534162405676,
+     "Mortgage": 0.039180209598504795
+    },
+    "low_confidence": false
+   }
+  },
+  {
+   "name": "test split complaint 6003020 (Credit reporting or other personal consumer reports)",
+   "input": "XXXX XXXX UNAUTHORIZED HARD CREDIT INQUIRY.",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.01554939369704933,
+     "Credit card": 0.06301082515463917,
+     "Credit reporting or other personal consumer reports": 0.8404748263692795,
+     "Debt collection": 0.035221100547696345,
+     "Money transfer, virtual currency, or money service": 0.026810002168773668,
+     "Mortgage": 0.01893385206256194
+    },
+    "low_confidence": false
+   }
+  },
+  {
+   "name": "test split complaint 5183671 (Credit card)",
+   "input": "The following information listed below is inaccurate. The Credit Reporting Agencies has not taken the correct steps to evaluate the information. I need you to please evaluate this reporting by making a revision of the information provided. \n\nJPMCB CARD XXXX",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.01730029698722848,
+     "Credit card": 0.05658188122979024,
+     "Credit reporting or other personal consumer reports": 0.7973626072286124,
+     "Debt collection": 0.08013264841532816,
+     "Money transfer, virtual currency, or money service": 0.02480498622730869,
+     "Mortgage": 0.02381757991173204
+    },
+    "low_confidence": false
+   }
+  },
+  {
+   "name": "test split complaint 5694152 (Credit reporting or other personal consumer reports)",
+   "input": "From XXXX to XXXX my spouse and I had a small XXXX out of our single dwelling home in XXXX. We formed an LLC and used a po box for It. The po box is still on record as being a residence. Please correct this.",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.08468438162609739,
+     "Credit card": 0.09028702235596538,
+     "Credit reporting or other personal consumer reports": 0.3170275821881334,
+     "Debt collection": 0.21307589188529713,
+     "Money transfer, virtual currency, or money service": 0.07820836422729822,
+     "Mortgage": 0.21671675771720844
+    },
+    "low_confidence": true
+   }
+  },
+  {
+   "name": "test split complaint 6067427 (Checking or savings account)",
+   "input": "Earlier this year my chase account got hacked and it was close due to fraud",
+   "expected": {
+    "label": "Checking or savings account",
+    "scores": {
+     "Checking or savings account": 0.24538789895722196,
+     "Credit card": 0.23442810544224654,
+     "Credit reporting or other personal consumer reports": 0.17395022531233947,
+     "Debt collection": 0.11910280760555489,
+     "Money transfer, virtual currency, or money service": 0.13440360540737187,
+     "Mortgage": 0.09272735727526517
+    },
+    "low_confidence": true
+   }
+  },
+  {
+   "name": "test split complaint 5129522 (Debt collection)",
+   "input": "I'm not swayed that Bureaus efficiently pleased the principles of the Fair Credit Reporting Act in completing their investigation. The Bureaus are reporting inaccurate information on NATLCRSYS. Per FCRA, reporting must be 100 % accurate or the information must be deleted.",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.01145849087446366,
+     "Credit card": 0.04262225850834707,
+     "Credit reporting or other personal consumer reports": 0.8555407019239284,
+     "Debt collection": 0.0570048239618923,
+     "Money transfer, virtual currency, or money service": 0.015894844052714303,
+     "Mortgage": 0.01747888067865427
+    },
+    "low_confidence": false
+   }
+  },
+  {
+   "name": "test split complaint 5977115 (Credit reporting or other personal consumer reports)",
+   "input": "I did not consent to, authorize nor benefit to any of the following inquiries. I want them blocked and removed. \n1. XXXX XX/XX/2022 XXXX",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.05380492340822671,
+     "Credit card": 0.11312470664981429,
+     "Credit reporting or other personal consumer reports": 0.568450127599767,
+     "Debt collection": 0.11301143099908498,
+     "Money transfer, virtual currency, or money service": 0.0963311783700531,
+     "Mortgage": 0.05527763297305386
+    },
+    "low_confidence": false
+   }
+  },
+  {
+   "name": "test split complaint 5386237 (Credit reporting or other personal consumer reports)",
+   "input": "I am very concerned about the items that are being shown on my credit report. Not only are they inaccurate, they are also unjust, because they should not be reporting on my credit report! I ask that you delete these accounts, or I will be filing a legal complaint against you!",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.00750312521877841,
+     "Credit card": 0.02446896832103927,
+     "Credit reporting or other personal consumer reports": 0.9150596607143198,
+     "Debt collection": 0.03774839351558789,
+     "Money transfer, virtual currency, or money service": 0.0077978913891118,
+     "Mortgage": 0.007421960841162769
+    },
+    "low_confidence": false
+   }
+  },
+  {
+   "name": "test split complaint 5120315 (Credit reporting or other personal consumer reports)",
+   "input": "My credit reports are inaccurate. These inaccuracies are causing creditors to deny me credit. You have the duty to report accurate information about consumers. Please investigate these accounts and inquires and update these accounts accordingly to avoid future litigation.",
+   "expected": {
+    "label": "Credit reporting or other personal consumer reports",
+    "scores": {
+     "Checking or savings account": 0.005512560973221041,
+     "Credit card": 0.012016063221595895,
+     "Credit reporting or other personal consumer reports": 0.949429683165546,
+     "Debt collection": 0.02055093980186984,
+     "Money transfer, virtual currency, or money service": 0.006780784242816212,
+     "Mortgage": 0.005709968594950932
+    },
+    "low_confidence": false
+   }
+  },
+  {
+   "name": "test split complaint 5159112 (Checking or savings account)",
+   "input": "My Account with truist bank had a balance of XXXX and it was closed, i will like my funds to be released to me and we can part way, but all effort seems not to be working.",
+   "expected": {
+    "label": "Checking or savings account",
+    "scores": {
+     "Checking or savings account": 0.38138645309112396,
+     "Credit card": 0.11845740105460031,
+     "Credit reporting or other personal consumer reports": 0.10607462823014849,
+     "Debt collection": 0.0705777295269601,
+     "Money transfer, virtual currency, or money service": 0.19041628675514202,
+     "Mortgage": 0.13308750134202518
+    },
+    "low_confidence": true
+   }
+  }
+ ]
+}

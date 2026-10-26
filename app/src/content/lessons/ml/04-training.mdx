@@ -1,0 +1,156 @@
+---
+track: ml
+order: 4
+slug: training
+title: Training a classifier
+goal: Train Naive Bayes and logistic regression on the TF-IDF features, read what training minimises from its log, and tune C without fooling yourself with the test year.
+minutes: 20
+quiz:
+  - question: Before the first training step, every logistic regression weight is 0 and the loss is 1.7918. Where does that number come from?
+    options:
+      - It is a random starting value
+      - With all weights 0, every one of the six categories gets probability 1/6, and the loss is −ln(1/6) = ln 6 ≈ 1.7918
+      - It is the penalty for C = 1
+      - It is the share of credit reporting complaints
+    answer: 1
+    explanation: Log-loss is −ln of the probability given to the true category, averaged over the training rows. Equal weights give every category 1/6, whichever is true, so the average is ln 6. Training pushes it down by moving probability towards the right answers.
+  - question: With C = 10, logistic regression scores 99.6% on the training years and 78.8% on 2022. With C = 1 it scores 90.2% and 80.8%. What does that show?
+    options:
+      - C = 10 is better, because its training score is higher
+      - A weaker penalty let the weights fit details of the training complaints that do not carry over to new ones
+      - The test year is mislabelled
+      - C has no effect; the difference is noise
+    answer: 1
+    explanation: C is the inverse strength of the L2 penalty. Raise it and large weights cost almost nothing, so the model can nearly memorise its 1,800 complaints. The training score rises and the test score does not follow. That gap is overfitting.
+  - question: Naive Bayes scores 0.774 test macro-F1 and logistic regression 0.769, with a noise band of ±0.041. What should you conclude?
+    options:
+      - Naive Bayes is better and should be v1
+      - The two are tied on this test set; the 0.005 difference is far inside the band, so other reasons can decide
+      - Logistic regression is broken
+      - The band only applies to accuracy, so Naive Bayes wins
+    answer: 1
+    explanation: A difference smaller than the noise band is not evidence. v1 is logistic regression because its per-word weights are easy to read and they drive the training log, not because it scored higher.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import TrainingStepper from '../../../components/ml/TrainingStepper.astro';
+import Term from '../../../components/Term.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+Lesson 3 turned every complaint into 5,539 numbers. Training now finds the numbers that turn those features into a category. `train.py` fits three models on the same 1,800 training complaints, so you can compare them.
+
+### The baseline
+
+The first model always answers the most common training category, credit reporting. It is the <Term t="baseline" /> you met in the LLMs track: it scores 43.3% on 2022, so any real model must clear that by more than the noise band.
+
+### Naive Bayes
+
+<Term t="Naive Bayes" /> learns by counting. For each category it records how much of each word's weight goes with that category in training, and turns that into a log probability per word. To score a complaint, it adds the category's log prior (how common the category is) to each word's log probability, weighted by the word's feature value.
+
+It is called naive because it treats every word as independent of the others, which they are not: "credit" and "report" travel together. It works well anyway. Training is one counting pass, with no iterations.
+
+A word never seen with a category would get probability 0 and veto that category. Smoothing adds a small amount to every count, `NB_ALPHA = 0.1`. Lesson 1 showed how that value was chosen, on the training years only.
+
+### Logistic regression
+
+<Term t="logistic regression" /> learns one weight per category and word, plus an intercept per category: 6 × 5,539 weights and 6 intercepts. A complaint's score for a category is its features times that category's weights, plus the intercept. Softmax turns the six scores into probabilities. This is exactly the scoring lesson 1 did from the file.
+
+Training searches for the weights. It starts with all of them at 0 and repeatedly adjusts them to lower one number, the training objective. `training_log.json` names its two parts:
+
+- **loss**, the mean log-loss on the training rows: for each complaint, −ln of the probability the model gives the true category, averaged over all 1,800. A confident right answer costs nearly 0; a confident wrong one costs a lot.
+- **penalty**, the L2 penalty: `sum(coef²) / (2 × C × n_train)`. Large weights cost extra.
+
+The solver, lbfgs, minimises loss + penalty. At the start every category gets 1/6, so the loss is ln 6 = 1.7918 and the penalty 0. By iteration 44 it has converged: loss 0.6027, penalty 0.2700.
+
+### What C does
+
+`C` is the inverse strength of the penalty: bigger `C`, weaker penalty. The penalty keeps the model from leaning hard on words that happen to fit a few training complaints.
+
+Too much penalty and the weights stay too small to separate the categories. Too little and the weights grow to fit details of the training complaints that do not carry over. Try it below sweeps `C`:
+
+- `C = 0.1`: 51.8% on train, 54.3% on test. The weights are held too small to learn much.
+- `C = 1.0`, the setting v1 uses: 90.2% on train, 80.8% on test.
+- `C = 10`: 99.6% on train, 78.8% on test. The model nearly memorises its training complaints and does worse on new ones.
+
+That last pattern is <Term t="overfitting" />: a training score clearly above the score on new data. Lesson 5 reads it from the metrics.
+
+### Reading the log
+
+scikit-learn does not report the loss at each step. So `training_log()` refits from scratch, stopping at 1, 2, 3, 5, 8, 13, 21, 34 and 44 iterations, and computes loss and penalty each time. lbfgs is deterministic, so a fit stopped at k steps is exactly the first k steps of the full fit.
+
+The log also keeps each category's top 8 words at iterations 1, 8, 21 and 44. At iteration 1, credit reporting's top five include `i`, `my` and `the`: words that are just common in its many complaints. By iteration 44 its top five are `report`, `credit`, `experian`, `equifax` and `accounts`. Mortgage's are `mortgage`, `loan`, `escrow`, `payment` and `home`; money transfer's start with `paypal`, `money` and `coinbase`.
+
+### What the model is
+
+When training stops, the model is `coef`, `intercept`, `vocabulary` and `idf`, plus the tokenizer settings. Nothing else from training survives into the file. Naive Bayes exports the same shape, its log probabilities as `coef` and its log priors as `intercept`, so one scorer handles both.
+
+### Which one is v1?
+
+On the 2022 test year, Naive Bayes scores 0.774 macro-F1 (lesson 5 defines it) and logistic regression 0.769. The difference is 0.005, far inside the ±0.041 noise band: on this test set the two are tied. The note in `metrics.json` records the choice: v1 is logistic regression because its per-word weights are easy to read and they drive the training log. When the numbers cannot separate two models, choose on something you can defend, and say so.
+
+## See it
+
+Step through the recorded training. Watch loss + penalty fall fast at first and then flatten, while the penalty climbs: training trades a little penalty for a lot less loss. At iterations 1, 8, 21 and 44, read the top words per category.
+
+<TrainingStepper />
+
+Most of the drop happens by iteration 5, from 1.7918 to 1.0478; the last 10 iterations change the total by less than 0.001. The top words move from common words to the words that name each product, and the top-8 weights grow from at most 0.089 at iteration 1 to between 1.19 and 5.32 at iteration 44.
+
+## The code
+
+Section 4 fits the models and records the training log.
+
+<CodeTabs source="ml-train" section={4} />
+
+- `train_models(train_rows, cfg, c)` takes only the training rows. `fit_tfidf` and `transform` run inside it, so the vocabulary and idf come from training alone.
+- `DummyClassifier(strategy="most_frequent")` is the majority baseline.
+- `MultinomialNB(alpha=NB_ALPHA)` is Naive Bayes with the 0.1 smoothing.
+- `LogisticRegression(C=c, max_iter=MAX_ITER, random_state=SEED)` uses scikit-learn's default lbfgs solver; with six categories it learns all six weight rows together. `MAX_ITER = 1000` is a ceiling it never reaches.
+- `classes = [str(k) for k in models["logreg"].classes_]` is the six categories in sorted order, the same for all three models.
+- `"majority_class": max(classes, key=lambda k: counts[k])` stores the most common training category, for the no-known-words fallback.
+- `_objective(...)` computes the two parts of what lbfgs minimises: `loss` is the mean of `-log_p` at each row's true category, and the penalty is `(coef ** 2).sum() / (2 * c * len(y_idx))`.
+- `logits -= logits.max(axis=1, keepdims=True)` keeps the exponentials from overflowing; it does not change the probabilities.
+- `training_log(fitted, top_at=(1, 8, 21))` builds the Fibonacci list of stopping points below `n_iter_`, the 44 iterations the full fit took.
+- `warnings.simplefilter("ignore", ConvergenceWarning)` silences the warning a deliberately stopped fit raises.
+- `np.argsort(-coef[i], kind="stable")[:8]` takes each category's 8 largest weights; the stable sort keeps ties in vocabulary order.
+
+<Callout kind="warning" title="Do not pick C from the test year">
+  The sweep below reads the 2022 test scores. If you chose `C` because it scored best there, the test year would become a dev set and its score would stop being an honest estimate, exactly as in the LLMs track. Choose settings by cross-validation on the training years, as `NB_ALPHA` was, and read the test year once.
+</Callout>
+
+## Try it
+
+Sweep `C` in memory. Nothing is written to `ml/`. Save this as `ml/python/sweep.py`:
+
+```python
+import train
+
+rows = train.load_complaints(train.PATHS["complaints"])
+print(f"{'C':>6}{'iters':>7}{'train acc':>11}{'test acc':>10}{'test macro F1':>15}")
+for c in (0.1, 1.0, 10.0, 100.0):
+    run = train.fit_and_evaluate(rows, c=c)
+    m = run["metrics"]["logreg"]
+    iters = run["fitted"]["models"]["logreg"].n_iter_[0]
+    print(f"{c:>6}{iters:>7}{m['train']['accuracy']:>11.3f}{m['test']['accuracy']:>10.3f}"
+          f"{m['test']['macro']['f1']:>15.3f}")
+```
+
+```bash
+cd ml/python
+python sweep.py
+```
+
+You should see, after a few seconds:
+
+```text
+     C  iters  train acc  test acc  test macro F1
+   0.1     16      0.518     0.543          0.355
+   1.0     44      0.902     0.808          0.769
+  10.0     74      0.996     0.788          0.747
+ 100.0     75      0.998     0.782          0.742
+```
+
+As `C` grows, the training score climbs towards 100% and the test score peaks, then falls. A weaker penalty also takes more iterations, because the weights have further to travel. The test differences between `C = 1` and `C = 10` are inside the ±4.1-point band, so this sweep would not justify a change even if choosing on test were allowed.
+
+To train and export Naive Bayes instead, run `python train.py --model nb --version nb1`. It writes a new file, `ml/models/nb1.json`, in the same format as `v1.json`, and leaves `v1.json` and the reports alone. Git ignores `nb*.json` files in `ml/models/`, so you can keep it or delete it. Everything here runs on your CPU for free.
