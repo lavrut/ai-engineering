@@ -185,3 +185,19 @@ def test_startup_version_mismatch(root):
     (root / "registry.json").write_text(json.dumps(reg))
     with pytest.raises(server.StartupError, match="v9"):
         server.load_production(root)
+
+
+# ── strict JSON (fix round of Task 8, R24) ──────────────────────────────────
+@pytest.mark.parametrize("body", [
+    b'{"text":"hi","x":NaN}', b'{"text":"hi","x":Infinity}', b'{"text":"hi","x":-Infinity}',
+    b'{"text":NaN}',
+    b'{"text":"hi","x":' + b"[" * 20000 + b"]" * 20000 + b"}",      # 20,000-deep nesting
+])
+def test_non_json_constants_and_deep_nesting_are_malformed(client, body):
+    r = post(client, body)
+    assert (r.status_code, r.json()) == (400, BODY_ERROR)
+
+
+def test_lone_surrogate_is_one_code_point(client):
+    r = post(client, b'{"text":"\\ud800"}')
+    assert r.status_code == 200 and r.json()["low_confidence"] is True

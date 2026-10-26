@@ -19,7 +19,8 @@ import (
 )
 
 // The tests read the committed model, fixtures and reports: Python wrote them, Go must agree.
-const root = ".."
+// The same root the commands use (ML_ROOT, else ml/ found from the source file).
+var root = mlRoot()
 
 const (
 	lengthBody = `{"error":"text must be 1 to 20000 characters"}`
@@ -278,6 +279,7 @@ func TestContract(t *testing.T) {
 		return append(append([]byte{}, base...), bytes.Repeat([]byte(" "), n-len(base))...)
 	}
 	emoji := "\U0001F600"
+	deep := []byte(`{"text":"hi","x":` + strings.Repeat("[", 20000) + strings.Repeat("]", 20000) + `}`)
 	cases := []struct {
 		name        string
 		body        []byte
@@ -323,6 +325,12 @@ func TestContract(t *testing.T) {
 		{"duplicate keys: last (empty) wins", []byte(`{"text":"first","text":""}`), "", 400, lengthBody},
 		{"duplicate keys: last (valid) wins", []byte(`{"text":"","text":"mortgage"}`), "", 200, ""},
 		{"duplicate keys: last (number) wins", []byte(`{"text":"hi","text":5}`), "", 400, malformed},
+		{"NaN in an extra field", []byte(`{"text":"hi","x":NaN}`), "", 400, malformed},
+		{"Infinity in an extra field", []byte(`{"text":"hi","x":Infinity}`), "", 400, malformed},
+		{"-Infinity in an extra field", []byte(`{"text":"hi","x":-Infinity}`), "", 400, malformed},
+		{"text is NaN", []byte(`{"text":NaN}`), "", 400, malformed},
+		{"20,000-deep nesting", deep, "", 400, malformed},
+		{"lone surrogate is 1 code point", []byte(`{"text":"\ud800"}`), "", 200, ""},
 	}
 	for _, c := range cases {
 		got := post(t, srv.URL, c.body, c.contentType)
@@ -443,5 +451,17 @@ func TestStartupFailures(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: err = %v, want it to mention %q", c.name, err, c.want)
 		}
+	}
+}
+
+func TestRootFromAnyWorkingDirectory(t *testing.T) {
+	t.Setenv("ML_ROOT", "")
+	t.Chdir(t.TempDir()) // nowhere near ml/
+	if _, err := loadProduction(mlRoot()); err != nil {
+		t.Fatalf("default root should be found from the source file: %v", err)
+	}
+	t.Setenv("ML_ROOT", t.TempDir()) // an override wins, and the error says how to fix it
+	if _, err := loadProduction(mlRoot()); err == nil || !strings.Contains(err.Error(), "set ML_ROOT") {
+		t.Fatalf("err = %v, want a hint to set ML_ROOT", err)
 	}
 }

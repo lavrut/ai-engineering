@@ -25,8 +25,12 @@ Request rules (Go matches these):
   plus overhead). A longer body is the LENGTH 400 above, decided on the bytes actually read
   (Go: http.MaxBytesReader with the same cap), before any parsing.
 - The body must be strict UTF-8 JSON: a BOM or UTF-16/32 is the malformed-body 400.
+- Strict JSON: NaN, Infinity and -Infinity (which Python's json accepts) are the malformed-body
+  400 anywhere in the body; so is nesting too deep to parse (never a 5xx).
 - Content-Type is not checked (none, or text/plain, is fine). Extra fields are ignored.
   Duplicate keys: the last value wins.
+- A lone surrogate escape ("\\ud800") counts as 1 code point and is a token separator in both
+  servers (Go reads it as U+FFFD), so the reply is the same.
 
 Run (from the repo root; ML_ROOT defaults to ml/, where registry.json and models/ live):
     uvicorn server:app --app-dir ml/serve --port 8000
@@ -126,13 +130,18 @@ async def read_body(request: Request) -> bytes:
     return bytes(body)
 
 
+def _not_json(name: str):
+    raise ValueError(f"{name} is not JSON")
+
+
 def read_text(body: bytes) -> str | None:
     """The "text" field, or None when the body is malformed. We parse by hand so that no
     framework default (the 422 reply) can leak into the contract."""
     try:
-        data = json.loads(body.decode("utf-8"))     # strict UTF-8 first: no BOM, no UTF-16
-    except ValueError:                              # UnicodeDecodeError is a ValueError
-        return None
+        # strict UTF-8 first (no BOM, no UTF-16), then strict JSON: NaN and Infinity are not JSON
+        data = json.loads(body.decode("utf-8"), parse_constant=_not_json)
+    except (ValueError, RecursionError):            # UnicodeDecodeError is a ValueError;
+        return None                                 # very deep nesting must be a 400, not a 500
     text = data.get("text") if isinstance(data, dict) else None
     return text if isinstance(text, str) else None
 

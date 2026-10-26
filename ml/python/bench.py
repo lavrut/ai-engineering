@@ -58,12 +58,14 @@ def free_port() -> int:
 def start(cmd: list[str], port: int, stack: ExitStack, cwd: Path) -> subprocess.Popen:
     """Start a server and register its shutdown, so it stops even if the benchmark fails."""
     env = {**os.environ, "ML_ROOT": str(ML_DIR)}
-    proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    log = stack.enter_context(tempfile.TemporaryFile())   # a file, not a pipe: it never fills up
+    proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.DEVNULL, stderr=log)
     stack.callback(stop, proc)
     deadline = time.monotonic() + STARTUP_TIMEOUT
     while time.monotonic() < deadline:
         if proc.poll() is not None:
-            raise RuntimeError(f"{cmd[0]} exited: {proc.stderr.read().decode(errors='replace')}")
+            log.seek(0)
+            raise RuntimeError(f"{cmd[0]} exited: {log.read().decode(errors='replace')}")
         try:
             conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
             conn.request("GET", "/health")
@@ -83,8 +85,6 @@ def stop(proc: subprocess.Popen) -> None:
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait()
-    if proc.stderr:
-        proc.stderr.close()
 
 
 def python_server(port: int) -> list[str]:
