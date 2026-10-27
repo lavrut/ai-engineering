@@ -101,7 +101,7 @@ The whole server is started in one place. Section 6 of `read_server.py` chooses 
 
 - `ap.add_argument("--http", action="store_true", ...)` is the only switch. With no flag the server speaks stdio.
 - `build_read_server().run()` builds the server and runs it on stdio. The client starts this process and owns its stdin and stdout.
-- `app = build_http_app()` builds the HTTP app instead. Serving over HTTP is lesson 7.
+- `app = build_http_app(port=args.port)` builds the HTTP app instead. Serving over HTTP is lesson 7.
 - `uvicorn.run(app, host="127.0.0.1", port=args.port)` binds the loopback address only, on port `8765` unless you pass `--port`.
 
 What a request looks like on the wire follows. It is a real `tools/call` captured from `lumen-read` for the lesson 2 aid, not typed in:

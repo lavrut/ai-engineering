@@ -78,7 +78,7 @@ Section 5 of `lumen-read` builds the HTTP app.
 
 - `if mcp.settings.auth is None: raise ValueError(...)` refuses to serve HTTP from a server built without auth. There is no way to start `lumen-read` over HTTP with no token check.
 - `mcp.streamable_http_app(..., max_request_body_size=MAX_BODY_BYTES, transport_security=transport_security(port))` builds the SDK's app. `MAX_BODY_BYTES` is `131072` in `lumen_core`, and the Go core has the same value. `transport_security(port)` gives the SDK's own DNS-rebinding check the same explicit lists, instead of its default, which accepts any port on `127.0.0.1`.
-- `return LocalOnly(app, port)` wraps it in the course's own check, from `resource_auth.py`. It runs first on `/mcp`, for every method, and answers 403 unless `Host` is in `local_hosts(port)` and `Origin` is absent or in `local_origins(port)`.
+- `return LocalOnly(app, port)` wraps it in the course's own check, from `resource_auth.py`. It runs first on `/mcp`, for every method, and answers 403 unless `Host` is in `local_hosts` and `Origin` is absent or in `local_origins`, both built from the port.
 - In section 6, `uvicorn.run(app, host="127.0.0.1", port=args.port)` binds the loopback address only, and `build_http_app(port=args.port)` builds the lists for that port.
 
 Section 2 of the client is where `--url` goes.

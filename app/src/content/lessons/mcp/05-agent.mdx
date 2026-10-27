@@ -110,10 +110,10 @@ Section 6 is the model call, in replay and record.
 - `request_key(model, system, messages, tools, overrides)` is the SHA-256 of the canonical JSON of those parts. No time, ids or usage go in, so the same request always gets the same key.
 - `block_dict(block)` keeps only the listed fields of each content block. An unknown block type raises, instead of guessing which of its fields are stable.
 - `find_recording(path, key)` returns the latest line with that key.
-- `raise ReplayMiss(f"no recording for model call {n} in {shown}. See the cost: ... Record it (paid; asks first): ...")` is the miss. It names both the free estimate command and the paid record command.
+- `raise ReplayMiss(f"no recording for model call {n} in {shown}. " ...)` is the miss. It names both the free estimate command and the paid record command.
 - `if ledger.spent + worst > max_cost: raise CostLimit(...)` runs before every paid call. The worst case for one call is its request size in, and all of `MAX_TOKENS` out.
 - `client = client or client_factory()` creates the API client on the first paid call only, so replay and the estimate never make one.
-- `path.open("a")` appends each real response, with its key, scenario, model and usage. A recording is written by a real run and by nothing else.
+- `path.open("a", encoding="utf-8")` appends each real response, with its key, scenario, model and usage. A recording is written by a real run and by nothing else.
 
 <Callout kind="go" title="No Go agent">
   The agent is Python only, because the Track 1 harness is the Python one. The Go side of this track is the servers and the client. So there is no "How Go does it" section here.
