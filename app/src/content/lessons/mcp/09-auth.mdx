@@ -1,0 +1,232 @@
+---
+track: mcp
+order: 9
+slug: auth
+title: Authorization
+goal: Get a token for one Lumen server through the OAuth flow, use it from the client, and explain why the server checks the audience before the scope and never passes a token on.
+minutes: 40
+quiz:
+  - question: A token issued for lumen-read carries the scope tickets:read. It is sent to lumen-ops. What does lumen-ops answer, and why?
+    options:
+      - 403, because the scope is wrong
+      - 200, because the signature is valid
+      - 401, because the token's audience names lumen-read. A token for another server is an invalid token here, so the scope is never looked at
+      - 400, because the request is malformed
+    answer: 2
+    explanation: The spec says a resource server must check that a token was issued for it. Both servers check the audience while verifying the token, before the scope check, so the answer is 401 whatever scopes the token carries. A 403 is kept for a token that is for this server but lacks the scope.
+  - question: How does a client with no token learn which authorization server to ask, and which scope it needs?
+    options:
+      - It is configured by hand for every server
+      - The server's 401 carries a WWW-Authenticate header naming its protected resource metadata. That document lists the authorization server and the scopes
+      - It asks the model
+      - It tries every authorization server it knows
+    answer: 1
+    explanation: The 401 points to the metadata, the metadata points to the authorization server, and that server's own metadata gives the endpoints. The client discovers each step from the one before, starting from nothing but the server's URL.
+  - question: lumen-ops needs data from another API that also uses OAuth. Why must it not forward the token the client sent it?
+    options:
+      - Forwarding is slower
+      - That token's audience is lumen-ops. Passing it on would let the other API be called with the user's authority by a server the user never authorised for it, and the other API could not tell who really asked
+      - Tokens cannot be copied
+      - The other API would reject every forwarded token anyway, so it is harmless
+    answer: 1
+    explanation: A token is for one audience. A server that forwards it turns itself into a way to spend the user's permission somewhere else, which is the confused-deputy problem. A server that needs another API gets its own token for that API, and the Lumen servers call no other API at all.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+Lesson 7 ended with a refusal: `HTTP 401 Unauthorized`. Over HTTP, each Lumen server is an OAuth resource server. It never issues tokens. It only checks the bearer token on each request, and answers 401 or 403 when it does not hold up.
+
+Three parties take part:
+
+- The **resource server** is `lumen-read` (`http://127.0.0.1:8765/mcp`) or `lumen-ops` (`http://127.0.0.1:8766/mcp`).
+- The **client** is our client, or any MCP host.
+- The <Term t="authorization server" /> issues tokens. Ours is `mcp/python/auth_server.py` on `127.0.0.1:9000`. It is **test only**. It approves every request at once for one fixed user, `user-1`, with no login. A real one checks who the user is and asks for their consent.
+
+### Discovery from a 401
+
+A client starts with nothing but the server's URL:
+
+1. Its first request has no token. The server answers 401 with a `WWW-Authenticate` header that names its <Term t="protected resource metadata" />, for example `http://127.0.0.1:8765/.well-known/oauth-protected-resource/mcp`.
+2. That document says which authorization server to ask, `http://127.0.0.1:9000`, and which scope this server uses, `tickets:read`.
+3. The authorization server's own metadata, at `/.well-known/oauth-authorization-server`, lists its endpoints.
+
+### Getting a token
+
+The client sends the user's browser to the authorization server with a request for a code. It uses <Term t="PKCE" />: the client makes a random secret, sends a hash of it now, and must show the secret itself when it swaps the code for a token. So a stolen code alone is useless. The request also names the server the token is for, with the `resource` parameter of RFC 8707. The token comes back signed, with that server as its <Term t="audience" /> and the granted <Term t="OAuth scope" />.
+
+The client also needs a client id. The spec lists the ways to get one in order of preference:
+
+- **Pre-registered:** the authorization server already knows the client. This is our main path: `lumen-cli` is a public client, with no secret, so PKCE is what protects its code.
+- **Client ID Metadata Documents (CIMD):** the client id is an HTTPS URL, and the authorization server fetches a JSON document about the client from it. The spec prefers this for clients a server has never seen. The SDK's own authorization server does not support it, and the SDK's client accepts only an `https://` document URL, which a lab on `127.0.0.1` cannot serve. So we teach it and do not run it.
+- **Dynamic Client Registration:** the client registers itself at `/register`. This revision marks it deprecated. Our test server keeps it on as the second path.
+
+### Audience, then scope
+
+A server checks a token in this order:
+
+1. The signature, the issuer and the times. Expiry is strict: a token is dead the second it expires. `nbf` and `iat` allow 30 seconds of clock skew.
+2. The audience. It must name this server's own URI, and only this one: a token listing several audiences is refused, because any of them could replay it to the others. A wrong audience is 401.
+3. The scope. `lumen-read` needs `tickets:read` and `lumen-ops` needs `tickets:write`. A right-audience token without it is 403.
+
+Audience comes before scope because the spec says a resource server must refuse a token that was not issued for it. So a token for `lumen-read`, whatever its scope says, is simply invalid at `lumen-ops`: 401.
+
+### No token passthrough
+
+A server that needs another API must not forward the token it was given. That token's audience is this server. Passing it on would let the other API be called with the user's authority, by a server the user never approved for it, and the other API could not tell who really asked. If a server needs another API, it gets its own token for it. The Lumen servers call no other API at all.
+
+### Where the key lives
+
+The test authorization server signs tokens with HS256, a shared secret. The secret is never in the source code. On its first start the authorization server writes 32 random bytes, as hex, to `mcp/data/dev-signing.key`, with mode `0600`. The file is git-ignored. Both resource servers read the same file, and refuse to start without it. Set `LUMEN_SIGNING_KEY_FILE` to keep it elsewhere. Whoever holds this file can mint tokens, which is acceptable only on a loopback lab. A production authorization server signs with a private key and publishes only the public half, so resource servers hold no secret.
+
+### Where the client takes the token from
+
+The client reads the token from `--token-file PATH` first, then `--token`, then the `LUMEN_TOKEN` environment variable. Prefer the file or the variable. `--token` works, but it prints a warning, because a command line is visible in the process list and in your shell history.
+
+## See it
+
+Press **Next** through how a client gets a token for `lumen-read`. Watch steps 4 and 5: the authorization server and the resource server never talk to each other. They share only the key file.
+
+<FlowDiagram diagram="mcp-oauth" />
+
+The diagram showed the 401 leading to the metadata, the code request with PKCE and a named resource, a token signed with the shared key, and the retry. The last step checks audience before scope.
+
+## The code
+
+Section 2 of `resource_auth.py` verifies a token.
+
+<CodeTabs source="mcp-auth" section={2} />
+
+- `jwt.decode(token, self._key, algorithms=["HS256"], issuer=ISSUER, leeway=0, ...)` checks the signature, the issuer and a strict expiry. `"verify_aud": False` is deliberate: the audience is judged in the next step, by the SDK.
+- `for claim in ("nbf", "iat")` allows `LEEWAY_SECONDS` (30) of clock skew on the start times only.
+- `if not isinstance(client_id, str) or not client_id or ...` refuses a token without a client or a subject. The client id becomes the `client_id` of every label row.
+- `def _resource(aud)` accepts a string or a one-entry list and refuses anything else, so a token for several servers is never valid.
+- `return AccessToken(..., resource=resource, ...)` reports the audience. The verifier does not judge it.
+
+Section 3 turns a server into a resource server.
+
+<CodeTabs source="mcp-auth" section={3} />
+
+- `"token_verifier": JWTVerifier(resource)` reads the key file at construction, so a server without a key fails at start, not on its first request.
+- `validate_token_resource=True` makes the SDK compare the reported audience with `resource_server_url`, and answer 401 on a mismatch. It is set explicitly: left unset, it means `False`.
+- `required_scopes=[scope]` is the 403 check. The SDK runs it only on a token that passed the audience check.
+
+## How Go does it
+
+The Go SDK's `RequireBearerToken` checks scopes and expiry, but not the audience. So in `mcp/go/auth/auth.go` the audience check sits in the token verifier itself:
+
+- `Verifier(resource, key)` checks the algorithm (`HS256` only, never `none`), the signature with `hmac.Equal`, the issuer, the times, then `oauthex.MatchesResource([]string{aud}, resource)`. A failure wraps `ErrInvalidToken`, which the SDK answers with 401.
+- `RequireBearerToken(..., &RequireBearerTokenOptions{Scopes: []string{scope}})` then checks the scope, for 403.
+
+Two small differences remain, and both are documented rather than changed:
+
+- **Comparing the audience.** Python's SDK compares URLs after normalising them, so case in the scheme and host and a trailing slash do not matter. Go compares exactly, except for a trailing slash. Both accept the course's canonical URIs.
+- **The 401 header with no token.** Python's SDK sends `error="invalid_token"`. Go sends no `error=` at all, which is what RFC 6750 asks for a request that carried no token. Go adds `invalid_token` only when a token was sent, and `insufficient_scope` on a 403.
+
+## Try it
+
+This runs the real OAuth flow with real processes. It needs ports 9000, 8765 and 8766 free, and four terminals, all from the repo root. Everything here is free. The flow needs no browser: `auth_live_check.py` runs the SDK's OAuth client, fetches the `/authorize` URL itself, and hands the code from the redirect back to the client.
+
+### Start the three servers
+
+```bash
+.venv-mcp/bin/python mcp/python/auth_server.py
+```
+
+```bash
+.venv-mcp/bin/python mcp/python/read_server.py --http
+```
+
+```bash
+cd mcp/go && go run ./opsserver -labels /tmp/lumen-live-labels.jsonl
+```
+
+That is the test authorization server, `lumen-read` in Python, and `lumen-ops` in Go, writing its labels to a file in `/tmp`.
+
+### Read the refusals and the metadata
+
+In the fourth terminal, send a request with no token to each server, and print only the status and the `WWW-Authenticate` header:
+
+```bash
+curl -s -i -X POST http://127.0.0.1:8765/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | grep -i -E "^HTTP|^www-authenticate"
+curl -s -i -X POST http://127.0.0.1:8766/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | grep -i -E "^HTTP|^www-authenticate"
+```
+
+Both are `HTTP/1.1 401 Unauthorized`. Python's header is `Bearer error="invalid_token", error_description="Authentication required", resource_metadata="http://127.0.0.1:8765/.well-known/oauth-protected-resource/mcp"`. Go's is `Bearer resource_metadata="http://127.0.0.1:8766/.well-known/oauth-protected-resource/mcp", scope="tickets:write"`, with no `error=`.
+
+Follow the pointer, then the authorization server's metadata:
+
+```bash
+curl -s http://127.0.0.1:8766/.well-known/oauth-protected-resource/mcp
+curl -s http://127.0.0.1:9000/.well-known/oauth-authorization-server
+```
+
+The first prints `"resource":"http://127.0.0.1:8766/mcp"`, `"authorization_servers":["http://127.0.0.1:9000"]` and `"scopes_supported":["tickets:write"]`. The second lists the `/authorize`, `/token` and `/register` endpoints and `"code_challenge_methods_supported":["S256"]`. Nothing in it advertises CIMD.
+
+### Get a token for lumen-read
+
+```bash
+.venv-mcp/bin/python mcp/python/auth_live_check.py --url http://127.0.0.1:8765/mcp \
+    --save-token /tmp/lumen-read.tok get_ticket '{"id": "t001"}'
+```
+
+You should see `registration: pre-registered lumen-cli`, then `token claims: aud=http://127.0.0.1:8765/mcp scope=tickets:read client_id=lumen-cli sub=user-1`, then ticket `t001` under `untrusted_body`, and `access token saved to /tmp/lumen-read.tok (mode 0600)`. The token itself is never printed.
+
+### Use it from both clients
+
+```bash
+.venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8765/mcp --token-file /tmp/lumen-read.tok call search_tickets '{"query": "charged twice", "limit": 1}'
+(cd mcp/go && go run ./client -url http://127.0.0.1:8765/mcp -token-file /tmp/lumen-read.tok call search_tickets '{"query": "charged twice", "limit": 1}')
+```
+
+Both print the same JSON: one result, `t001`, in `billing`. Now try the command-line flag, and send the output away so only the warning shows:
+
+```bash
+.venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8765/mcp --token "$(cat /tmp/lumen-read.tok)" tools > /dev/null
+```
+
+You should see `client: warning: a token on the command line is visible in the process list and shell history; use a token file or LUMEN_TOKEN`.
+
+### Take the token to the other server
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8766/mcp \
+    -H "Authorization: Bearer $(cat /tmp/lumen-read.tok)" -H 'Content-Type: application/json' \
+    -H 'Accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+.venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8766/mcp --token-file /tmp/lumen-read.tok tools
+```
+
+`curl` prints `401`, and the client prints `client: the server refused the request: HTTP 401 Unauthorized`. The token is genuine and unexpired, but it is not for `lumen-ops`.
+
+### A confirmed write with the right token
+
+```bash
+.venv-mcp/bin/python mcp/python/auth_live_check.py --url http://127.0.0.1:8766/mcp --yes \
+    label_ticket '{"id": "t001", "label": "billing"}'
+cat /tmp/lumen-live-labels.jsonl
+```
+
+This time the claims are `aud=http://127.0.0.1:8766/mcp scope=tickets:write`. `--yes` answers the server's confirmation question with yes, which is exactly the kind of answer lesson 8 says a server cannot tell from a person's. The result is `{"label": "billing", "ticket_id": "t001", "written": true}`, and the row says `"client_id":"lumen-cli"` and `"confirmed":true`. The client id came from the verified token, not from anything the client said.
+
+### The 403 case
+
+A token for the right server without the right scope gets 403. The live flow always asks for the scope the metadata names, so the tests mint such tokens directly:
+
+```bash
+.venv-mcp/bin/python -m pytest mcp/python/tests/test_auth.py -q -k "scope or audience"
+```
+
+We got `6 passed`.
+
+### Clean up
+
+Stop the three servers with Ctrl-C, then:
+
+```bash
+rm -f /tmp/lumen-read.tok /tmp/lumen-live-labels.jsonl
+```
+
+Keep `mcp/data/dev-signing.key` for the next run, or delete it to change the key. Deleting it makes every token issued so far invalid. Never commit it.

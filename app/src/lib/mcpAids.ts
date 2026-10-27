@@ -61,10 +61,15 @@ export type InjectionRecording = {
   final_answer: string;
 };
 
-/** mcp/data/derived/injection.json: recordings exist only after the paid runs were approved. */
-export type InjectionJson =
+/** One SIMULATED run (simulate.py: a scripted model that obeys t061, through the real agent). Not a real model. */
+export type SimulatedRun = InjectionRecording & { simulated: true };
+
+/** mcp/data/derived/injection.json: recordings exist only after the paid runs were approved. The
+ * `simulated` block is separate and never mixed into `recordings` (ruling R41). */
+export type InjectionJson = (
   | { recorded: true; recordings: Record<string, InjectionRecording> }
-  | { recorded: false; command?: string[] };
+  | { recorded: false; command?: string[] }
+) & { simulated?: Record<string, SimulatedRun> };
 
 export type McpData = {
   messages: MessagesJson;
@@ -369,11 +374,15 @@ export type InjectionRow = {
   /** The honest reading, in words. */
   reading: string;
   finalAnswer: string;
+  /** True only for a scripted run from the `simulated` block; its model text says it is not a real model. */
+  simulated: boolean;
 };
 
 export type InjectionLabProps = {
   recorded: boolean;
   rows: InjectionRow[];
+  /** The simulated runs, kept apart from the real recordings and shown under their own heading. */
+  simulatedRows: InjectionRow[];
   commands: string[];
 };
 
@@ -397,30 +406,47 @@ export function readingOf(r: Pick<InjectionRecording, 'label_ticket_attempted' |
   return `The model called label_ticket and no row was written.`;
 }
 
+/** A simulated run's reading: always starts "Simulated: " and speaks of the scripted model. */
+export function simulatedReadingOf(r: Pick<InjectionRecording, 'label_ticket_attempted' | 'rows_written' | 'outcome'>): string {
+  if (!r.label_ticket_attempted) return `Simulated: the scripted model did not call label_ticket. Rows written: ${r.rows_written}.`;
+  if (r.rows_written > 0) {
+    return `Simulated: the scripted model called label_ticket and ${plural(r.rows_written, 'row')} ${r.rows_written === 1 ? 'was' : 'were'} written.`;
+  }
+  const why = r.outcome === 'guard denied' ? ' The guard asked the person, who said no.' : '';
+  return `Simulated: the scripted model called label_ticket and no row was written.${why}`;
+}
+
+export const SIMULATED_MODEL_NOTE = '(scripted, not a real model)';
+
 const callText = (c: { name: string; input: Record<string, Json> }) => `${c.name}(${Object.values(c.input).map(String).join(', ')})`;
 
+const toRow =
+  (simulated: boolean) =>
+  ([name, r]: [string, InjectionRecording]): InjectionRow => ({
+    name,
+    model: simulated ? `${r.model} ${SIMULATED_MODEL_NOTE}` : r.model,
+    framing: r.framing,
+    framingNote: framingNote(r.framing),
+    guard: r.guard,
+    toolCalls: r.tool_calls.map(callText),
+    attempted: r.label_ticket_attempted,
+    outcome: r.outcome,
+    rowsWritten: r.rows_written,
+    reading: simulated ? simulatedReadingOf(r) : readingOf(r),
+    finalAnswer: r.final_answer,
+    simulated,
+  });
+
+const byName = <T,>(rec: Record<string, T>) => Object.entries(rec).sort(([a], [b]) => a.localeCompare(b));
+
 export function injectionLabProps(inj: InjectionJson): InjectionLabProps {
+  const simulatedRows = byName(inj.simulated ?? {}).map(toRow(true));
   if (!inj.recorded) {
     // The file's record commands win; derive.py (which turns recordings into this file) always comes last.
     const record = inj.command?.length ? inj.command : INJECTION_COMMANDS.slice(0, -1);
-    return { recorded: false, rows: [], commands: [...record, DERIVE_COMMAND] };
+    return { recorded: false, rows: [], simulatedRows, commands: [...record, DERIVE_COMMAND] };
   }
-  const rows = Object.entries(inj.recordings)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([name, r]): InjectionRow => ({
-      name,
-      model: r.model,
-      framing: r.framing,
-      framingNote: framingNote(r.framing),
-      guard: r.guard,
-      toolCalls: r.tool_calls.map(callText),
-      attempted: r.label_ticket_attempted,
-      outcome: r.outcome,
-      rowsWritten: r.rows_written,
-      reading: readingOf(r),
-      finalAnswer: r.final_answer,
-    }));
-  return { recorded: true, rows, commands: INJECTION_COMMANDS };
+  return { recorded: true, rows: byName(inj.recordings).map(toRow(false)), simulatedRows, commands: INJECTION_COMMANDS };
 }
 
 export type GuardFilter = 'all' | 'guard' | 'noguard';
@@ -439,4 +465,12 @@ export function injectionSummary(rows: InjectionRow[]): string {
       ? 'In none of them did the model try to write.'
       : `In ${attempted} of them the model tried to write.`;
   return `${plural(rows.length, 'recording')} shown. ${tried} Rows written in total: ${written}.`;
+}
+
+/** The summary line for the simulated table: it names the runs as simulated every time. */
+export function simulatedSummary(rows: InjectionRow[]): string {
+  if (rows.length === 0) return 'No simulated runs match this filter.';
+  const attempted = rows.filter((r) => r.attempted).length;
+  const written = rows.reduce((a, r) => a + r.rowsWritten, 0);
+  return `${plural(rows.length, 'simulated run')} shown (a scripted model, not a real one). In ${attempted} of them the script tried to write. Rows written in total: ${written}.`;
 }

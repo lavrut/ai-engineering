@@ -1,6 +1,7 @@
 ---
 // Build-time wrapper: passes injection.json's recordings (one row each; 1.5 KB for the two real
-// ones), or the record commands when nothing is recorded.
+// ones), or the record commands when nothing is recorded, plus the separate `simulated` block
+// (simulate.py's scripted model, never a real one), shown under its own "Simulated runs" heading.
 import InjectionLabIsland from './InjectionLab.tsx';
 import { injectionLabProps, loadMcpData } from '../../lib/mcpData';
 

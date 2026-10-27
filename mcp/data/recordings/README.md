@@ -11,7 +11,9 @@ changes, its key changes, and replay stops with an error that names the record c
 never falls back to a paid call.
 
 **Recordings come only from real runs against the Claude API, made after the user has approved the
-printed estimate. They are never written by hand or edited.** Tests use a fake model with
+printed estimate. They are never written by hand or edited.** A scripted stand-in model that obeys ticket t061
+(`mcp/python/simulate.py`) writes its transcripts to `mcp/data/simulated/`, never here; every line
+there says `"simulated": true`, and `derive.py` refuses a simulated line in this folder. Tests use a fake model with
 hand-written responses, and write anything they record to a temporary folder, never here.
 
 ## The three recordings

@@ -1,0 +1,175 @@
+---
+track: mcp
+order: 7
+slug: http
+title: Going remote over HTTP
+goal: Run lumen-read over Streamable HTTP on 127.0.0.1, connect a client to it with --url, and explain what the Origin check, the body cap and the order of the checks each protect against.
+minutes: 30
+quiz:
+  - question: Both Lumen servers listen on 127.0.0.1 only. Why is that not enough to keep a web page you visit from calling them?
+    options:
+      - It is enough, because a browser can never reach 127.0.0.1
+      - A page in your browser runs on your machine, so it can send requests to 127.0.0.1. The server has to check the Origin header and refuse origins it does not trust
+      - Only HTTPS servers can be called from a page
+      - The page would need the server's port, which it cannot guess
+    answer: 1
+    explanation: Binding to 127.0.0.1 keeps other machines out, but your browser is on the same machine. A malicious page can send a POST to a local port, and DNS rebinding can even make it look same-site. The Origin check refuses any browser origin the server does not list, and a non-browser client sends no Origin at all.
+  - question: A request with a bad Origin and no token gets 401 from the Python server and 403 from the Go server. What explains the difference?
+    options:
+      - The Go server is stricter about tokens
+      - The two servers run the same checks in a different order. Python's SDK checks the token first and stops at 401; Go checks the Origin first and stops at 403
+      - Python does not check the Origin at all
+      - One of them has a bug
+    answer: 1
+    explanation: Both refuse the request, which is what matters. The status shows which check fired first. With a valid token, both answer 403 for the bad Origin, and the tests pin that case in both languages.
+  - question: Why cap the request body at 131,072 bytes instead of letting the JSON parser reject a huge request?
+    options:
+      - JSON cannot be longer than that
+      - So the server refuses an oversized request before it reads all of it into memory. A parser only runs after the bytes have arrived
+      - To make requests faster
+      - Because the protocol says so
+    answer: 1
+    explanation: A server that reads first and checks later can be made to hold any amount of data. The cap is checked against Content-Length and again while reading, so even a chunked body stops at the limit. The largest real Lumen request is far smaller.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+Over stdio, the host starts the server as its own child process. Only that host can talk to it. Over <Term t="Streamable HTTP" />, the server listens on a port, and anything that can reach the port can send it a request. That is what makes a remote server useful, and it is also what makes it a target.
+
+In this revision each request stands alone. The client POSTs one JSON-RPC message to one URL, `/mcp`, and gets the answer back. There is no session to open first. Both Lumen servers run their HTTP handler stateless.
+
+### Four checks before the handler
+
+Every request to a Lumen server passes four checks before any MCP code sees it:
+
+- **Bind to 127.0.0.1.** `lumen-read` listens on `127.0.0.1:8765` and `lumen-ops` on `127.0.0.1:8766`. Another machine cannot connect at all.
+- **Check the Origin.** Your browser is on your machine, so a web page you visit can send a request to `127.0.0.1`. A browser always sends an `Origin` header with such a request. The server refuses any origin it does not trust, with 403. A trick called <Term t="DNS rebinding" /> can make a hostile page's requests look as if they were meant for the page's own site, so Python's SDK also checks the `Host` header against the loopback address. A page never has a token, which is the fourth check.
+- **Cap the body.** A request body over `131,072` bytes is refused before it is read in full.
+- **Check the token.** Over HTTP, each Lumen server is an OAuth resource server: every request needs a <Term t="bearer token" /> issued for that server. This lesson only shows the refusal. Lesson 9 shows where a token comes from.
+
+### The order differs by language
+
+Both servers run all four checks, but not in the same order:
+
+- **Go** checks the Origin, then the body cap, then the token. A bad Origin is 403 whether or not there is a token.
+- **Python** uses the SDK's built-in checks, and the SDK checks the token first. A bad Origin with no token is 401. With a valid token it is 403, as in Go.
+
+Either way the request is refused. The tests pin the case where the two agree: a bad Origin with a valid token is 403 in both languages.
+
+### The client
+
+Lesson 4's client spoke stdio. Give it `--url` instead of `--stdio` and it speaks HTTP. Everything after the connection is the same. A token, when you have one, goes in an `Authorization: Bearer` header on every request, never in the URL. The client takes it from `--token-file`, then `--token`, then the `LUMEN_TOKEN` environment variable.
+
+## See it
+
+Press **Next** through one request to `lumen-read`. Watch where each refusal comes from, and which check runs first in each language.
+
+<FlowDiagram diagram="mcp-http" />
+
+The diagram showed five steps between the client and the handler. Only a request that passes every check reaches MCP code. The last step is the one that differs by language: Python's token check comes before its Origin check.
+
+## The code
+
+Section 5 of `lumen-read` builds the HTTP app.
+
+<CodeTabs source="mcp-read" section={5} />
+
+- `if mcp.settings.auth is None: raise ValueError(...)` refuses to serve HTTP from a server built without auth. There is no way to start `lumen-read` over HTTP with no token check.
+- `mcp.streamable_http_app(host="127.0.0.1", ...)` builds the app. Passing the loopback host turns on the SDK's DNS-rebinding protection: a bad `Host` or `Origin` gets 403, for every method. Its default trusts any `127.0.0.1` origin, which includes the Inspector's page.
+- `max_request_body_size=MAX_BODY_BYTES` sets the cap. `MAX_BODY_BYTES` is `131072` in `lumen_core`, and the Go core has the same value.
+- In section 6, `uvicorn.run(app, host="127.0.0.1", port=args.port)` binds the loopback address only.
+
+Section 2 of the client is where `--url` goes.
+
+<CodeTabs source="mcp-client" section={2} />
+
+- `HttpTarget(url, headers)` is a URL plus the headers every request carries. `http_target(url, token)` is the one place the HTTP path is built. With a token it adds `Authorization: Bearer ...`, and the URL stays exactly as given.
+- `if isinstance(target, str) and target.startswith(("http://", "https://"))` sends a URL down the HTTP path. Anything else, such as `StdioServerParameters` or an in-process server in a test, goes to `Client(target, ...)`.
+- `http.event_hooks["response"].append(record)` remembers the status of the last non-2xx answer to a POST. A failed call then says "HTTP 401 Unauthorized" in one line instead of printing an SDK stack.
+- The comment on `connect` notes that the SDK follows a redirect only within the endpoint's own origin, so the token header never goes to another server.
+
+## How Go does it
+
+The Go tab of section 5 is short, because the checks live in `mcp/go/auth/auth.go` and both Go servers share them. `auth.Handler` wraps the MCP handler in this order:
+
+- `CheckOrigin(InspectorOrigins, ...)` answers 403 to any `Origin` that is neither the server's own nor in the list, for every method. Go's built-in `http.CrossOriginProtection` only gates unsafe methods such as POST, and a GET on `/mcp` opens a stream, so the course adds this explicit check. The list holds the Inspector's two origins, `http://127.0.0.1:6274` and `http://localhost:6274`, and nothing else.
+- `cop.Handler(...)` is `http.CrossOriginProtection`, which also reads the browser's `Sec-Fetch-Site` header.
+- `CapBody(...)` answers 413 when `Content-Length` is over `core.MaxBodyBytes`, and wraps the body in `http.MaxBytesReader`, so a chunked body with no length stops at the cap too.
+- Then the bearer token check, which is lesson 9.
+
+`mcp.StreamableHTTPOptions{Stateless: true, MaxRequestBodyBytes: core.MaxBodyBytes}` sets the cap a second time inside the SDK. Python's default is to trust any `127.0.0.1` origin. Go trusts only the listed ones. We documented that difference rather than widen Go.
+
+## Try it
+
+This needs three terminals, all from the repo root. Everything here is free.
+
+### Start the servers
+
+Terminal 1 starts the test authorization server. It is **test only**: it approves every request on its own, so it must stay on `127.0.0.1`. On its first start it writes `mcp/data/dev-signing.key`, which is git-ignored. The HTTP servers read the same key and refuse to start without it.
+
+```bash
+.venv-mcp/bin/python mcp/python/auth_server.py
+```
+
+Terminal 2 starts `lumen-read` over HTTP on `127.0.0.1:8765`:
+
+```bash
+.venv-mcp/bin/python mcp/python/read_server.py --http
+```
+
+### Connect without a token
+
+Terminal 3 connects with `--url`. You should see one line, `client: the server refused the request: HTTP 401 Unauthorized`, and exit code 1. The Go client prints the same line:
+
+```bash
+.venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8765/mcp discover
+```
+
+```bash
+cd mcp/go && go run ./client -url http://127.0.0.1:8765/mcp discover
+```
+
+### Send a bad Origin
+
+Pretend to be a web page at `http://evil.example`. `curl` prints only the status code:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8765/mcp -H 'Origin: http://evil.example' -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+We got `401`: Python checked the token first. Now stop the Python server in terminal 2 with Ctrl-C and start the Go one on the same port:
+
+```bash
+cd mcp/go && go run ./readserver -http
+```
+
+Run the same `curl` command again. We got `403`: Go checked the Origin first. A GET with the same bad Origin is refused too:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8765/mcp -H 'Origin: http://evil.example'
+```
+
+We got `403`.
+
+### Send a body over the cap
+
+Make a file of 131,073 spaces, one byte over the cap, and send it to the Go server:
+
+```bash
+head -c 131073 /dev/zero | tr '\0' ' ' > /tmp/lumen-big.json
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8765/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' --data-binary @/tmp/lumen-big.json
+```
+
+We got `413`. The Python server checks its token first, so without a token it answers 401 here. Its body-cap test sends a valid token, and gets 413 at the same size.
+
+Stop both servers with Ctrl-C and remove the file:
+
+```bash
+rm -f /tmp/lumen-big.json
+```
+
+Lesson 9 gets a token that this server accepts.

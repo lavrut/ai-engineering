@@ -170,6 +170,28 @@ export const glossary = {
     'A reply to a call that means the server needs an answer first. The client asks, then sends the same call again with the answer attached.',
   recording:
     'A file of real model responses, one per call, keyed by a hash of the request, so a run can be replayed for free and give the same answer.',
+  'DNS rebinding':
+    'An attack where a web page’s domain is made to point at 127.0.0.1, so the browser sends the page’s requests to a server on your own machine. Checking the Host and Origin headers defeats it.',
+  'bearer token':
+    'A token sent in an Authorization: Bearer header. Whoever holds it can use it, so it is kept out of URLs and logs and is only good for one server.',
+  elicitation:
+    'An MCP server asking the user a question through the client, with a small form for the answer. lumen-ops uses it to ask for a yes before it writes.',
+  provenance:
+    'A record of where a piece of data came from: here, who wrote a label, through which client, with which model, and whether a yes was claimed.',
+  'authorization server':
+    'The OAuth server that issues tokens after checking who the user is. An MCP server only checks tokens; it never issues them.',
+  'protected resource metadata':
+    'A small JSON document an MCP server publishes (RFC 9728) that names its authorization server and its scopes, so a client can find where to get a token.',
+  PKCE:
+    'Proof Key for Code Exchange: the client sends a hash of a random secret when it asks for a code, and the secret itself when it swaps the code for a token, so a stolen code is useless.',
+  audience:
+    'The server a token was issued for, named in its aud claim (RFC 8707). A server refuses a token whose audience is not its own URI.',
+  'OAuth scope':
+    'A named permission a token carries, such as tickets:read or tickets:write. A server answers 403 to a token for it that lacks the scope it needs.',
+  'MCP App':
+    'An HTML page a server ships with a tool, as a ui:// resource. A host that supports the Apps extension shows it in a sandboxed frame beside the call.',
+  'prompt injection':
+    'Instructions hidden in data a model reads, such as a ticket body or a web page, written in the hope that the model obeys them instead of its user.',
 } as const satisfies Record<string, string>;
 
 export type GlossaryKey = keyof typeof glossary;

@@ -22,6 +22,11 @@ guard}.jsonl), which exist only after the user approves the paid runs. Until the
 outcome, one entry per recording (keyed by name, with its model and framing): the tool calls the model
 made, whether label_ticket was attempted, and the rows written (found by replaying the recording with
 its own settings against the real servers on a tmp labels file). Never fabricated.
+
+injection.json also has a separate `simulated` block (ruling R41), built the same way from
+mcp/data/simulated/ (written by simulate.py: a SCRIPTED model that obeys t061, run through the real
+agent and servers). Every line there must say "simulated": true, and no line in recordings/ may;
+either mix-up stops the build. Each simulated entry carries "simulated": true.
 """
 from __future__ import annotations
 
@@ -50,6 +55,7 @@ from read_server import build_read_server  # noqa: E402
 
 DERIVED_DIR = REPO / "mcp" / "data" / "derived"
 RECORDINGS_DIR = REPO / "mcp" / "data" / "recordings"
+SIMULATED_DIR = REPO / "mcp" / "data" / "simulated"
 FILES = ("messages", "tool_budget", "elicitation", "app_snapshot", "injection")
 SEALED = "<sealed state>"
 SAMPLE_INPUT = {"id": "t001", "label": "billing"}
@@ -260,34 +266,68 @@ def summarize(path: Path, *, settings: dict, rows_written: int) -> dict:
             "outcome": outcome, "rows_written": rows_written, "final_answer": final}
 
 
+def simulated_flags(path: Path) -> set:
+    """The set of "simulated" values on the file's lines (absent counts as False)."""
+    return {json.loads(l).get("simulated", False) is True
+            for l in path.read_text(encoding="utf-8").splitlines() if l.strip()}
+
+
 def derive_injection(recordings: Path = RECORDINGS_DIR,
-                     replay: Callable[[dict, Path], int] = replay_rows) -> dict:
+                     replay: Callable[[dict, Path], int] = replay_rows,
+                     simulated: Path | None = None) -> dict:
     """One entry per capstone recording present (capstone-*.jsonl), keyed by recording name, so
-    recordings from other models or framings are summarised as they appear."""
+    recordings from other models or framings are summarised as they appear. A recording with a
+    simulated line is refused: real and simulated runs never share a table. With `simulated`, the
+    separate block from that folder is added."""
     files = sorted(recordings.glob("capstone-*.jsonl")) if recordings.is_dir() else []
-    if not files:
-        return {"recorded": False, "command": record_commands()}
-    out = {}
     for path in files:
+        if True in simulated_flags(path):
+            raise ValueError(f"{path.name} has a simulated line, but {recordings} holds only real recordings; "
+                             f"simulated transcripts go in {SIMULATED_DIR.relative_to(REPO)}")
+    if not files:
+        out: dict = {"recorded": False, "command": record_commands()}
+    else:
+        runs = {}
+        for path in files:
+            settings = recording_settings(path)
+            runs[path.stem] = summarize(path, settings=settings, rows_written=replay(settings, recordings))
+        out = {"recorded": True, "recordings": runs}
+    if simulated is not None:
+        out["simulated"] = derive_simulated(simulated, replay)
+    return out
+
+
+def derive_simulated(folder: Path = SIMULATED_DIR,
+                     replay: Callable[[dict, Path], int] = replay_rows) -> dict:
+    """The SIMULATED runs (simulate.py), summarised like recordings and replayed through the real
+    agent for the rows written. Every line must say "simulated": true; each entry says so too."""
+    out = {}
+    for path in sorted(folder.glob("capstone-*.jsonl")) if folder.is_dir() else []:
+        if simulated_flags(path) != {True}:
+            raise ValueError(f"{path.name}: every line in {folder} must say \"simulated\": true")
         settings = recording_settings(path)
-        out[path.stem] = summarize(path, settings=settings, rows_written=replay(settings, recordings))
-    return {"recorded": True, "recordings": out}
+        out[path.stem] = {"simulated": True,
+                          **summarize(path, settings=settings, rows_written=replay(settings, folder))}
+    return out
 
 
-def missing_recordings(committed: Path, recordings: Path) -> list[str]:
-    """Recordings the committed injection.json was built from that are no longer there."""
+def missing_recordings(committed: Path, recordings: Path, simulated: Path = SIMULATED_DIR) -> list[str]:
+    """Recordings (and simulated transcripts) the committed injection.json was built from that are
+    no longer there."""
     if not committed.exists():
         return []
     claimed = json.loads(committed.read_text(encoding="utf-8"))
     names = claimed.get("recordings", {}) if claimed.get("recorded") else {}
-    return [f"{n}.jsonl" for n in names if not (recordings / f"{n}.jsonl").exists()]
+    gone = [f"{n}.jsonl" for n in names if not (recordings / f"{n}.jsonl").exists()]
+    return gone + [f"{n}.jsonl (simulated)" for n in claimed.get("simulated", {})
+                   if not (simulated / f"{n}.jsonl").exists()]
 
 
 # ── 4. Writing and checking ─────────────────────────────────────────────────
-async def build_all(recordings: Path = RECORDINGS_DIR) -> dict[str, dict]:
+async def build_all(recordings: Path = RECORDINGS_DIR, simulated: Path = SIMULATED_DIR) -> dict[str, dict]:
     return {"messages": await derive_messages(), "tool_budget": await derive_tool_budget(),
             "elicitation": await derive_elicitation(), "app_snapshot": await derive_app_snapshot(),
-            "injection": await asyncio.to_thread(derive_injection, recordings)}
+            "injection": await asyncio.to_thread(derive_injection, recordings, replay_rows, simulated)}
 
 
 def render(data: dict) -> str:
@@ -299,13 +339,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--check", action="store_true", help="fail if a derived file is stale; write nothing")
     ap.add_argument("--out", type=Path, default=DERIVED_DIR)
     ap.add_argument("--recordings", type=Path, default=RECORDINGS_DIR)
+    ap.add_argument("--simulated", type=Path, default=SIMULATED_DIR)
     args = ap.parse_args(argv)
-    if args.check and (gone := missing_recordings(args.out / "injection.json", args.recordings)):
-        print(f"derive: injection.json was built from recordings that are missing from {args.recordings}: "
+    if args.check and (gone := missing_recordings(args.out / "injection.json", args.recordings, args.simulated)):
+        print(f"derive: injection.json was built from recordings that are missing from {args.recordings} "
+              f"or {args.simulated}: "
               f"{', '.join(gone)}. Restore them (they are committed); not comparing against recorded:false.",
               file=sys.stderr)
         return 1
-    built = asyncio.run(build_all(args.recordings))
+    built = asyncio.run(build_all(args.recordings, args.simulated))
     stale = [n for n, d in built.items()
              if not (args.out / f"{n}.json").exists() or (args.out / f"{n}.json").read_text(encoding="utf-8") != render(d)]
     if args.check:

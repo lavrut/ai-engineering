@@ -49,7 +49,7 @@ describe('code source registry', () => {
     expect([...ids].sort()).toEqual(
       [
         'harness', 'llms', 'llms-inspect', 'lora', 'ml-fetch', 'ml-llm', 'ml-mlflow', 'ml-mlops', 'ml-monitor', 'ml-serve', 'ml-train',
-        'mcp-agent', 'mcp-app', 'mcp-auth', 'mcp-auth-server', 'mcp-client', 'mcp-ops', 'mcp-read',
+        'mcp-agent', 'mcp-app', 'mcp-auth', 'mcp-auth-server', 'mcp-client', 'mcp-ops', 'mcp-read', 'mcp-simulate',
       ].sort(),
     );
     expect(CODE_SOURCES['ml-serve']).toMatchObject({ python: 'ml/serve/server.py', go: 'ml/go/main.go' });
@@ -113,6 +113,7 @@ describe('code source registry', () => {
       ['mcp-auth-server', [1, 2, 3, 4, 5], undefined],
       ['mcp-app', [1, 2, 3, 4, 5, 6, 7], undefined],
       ['mcp-agent', [1, 2, 3, 4, 5, 6, 7, 8, 9], undefined],
+      ['mcp-simulate', [1, 2, 3, 4], undefined],
     ] as const)('%s lists its numbered sections', (id, py, go) => {
       const t = sourceTexts(id);
       expect(nums(t.python)).toEqual(py);

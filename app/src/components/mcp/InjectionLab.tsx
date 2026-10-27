@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { filterRows, injectionSummary, type GuardFilter, type InjectionLabProps } from '../../lib/mcpAids';
+import { filterRows, injectionSummary, simulatedSummary, type GuardFilter, type InjectionLabProps, type InjectionRow } from '../../lib/mcpAids';
 import NoRecordedRun from '../llms/NoRecordedRun';
 import { BASE_CSS } from './mcpStyle';
 
@@ -9,8 +9,89 @@ const FILTERS: { id: GuardFilter; label: string }[] = [
   { id: 'guard', label: 'Guard on' },
 ];
 
-export default function InjectionLab({ recorded, rows, commands }: InjectionLabProps) {
+/** One table of runs. Simulated rows carry a visible "simulated" badge in their first cell. */
+function RunTable({ rows, label }: { rows: InjectionRow[]; label: string }) {
+  return (
+    <div class="mc-scroll mc-focus" role="region" aria-label={`${label} table`} tabIndex={0}>
+      <table class="mc-table il-table" aria-label={label}>
+        <thead>
+          <tr>
+            <th scope="col">{rows.some((r) => r.simulated) ? 'Run' : 'Recording'}</th>
+            <th scope="col">Model</th>
+            <th scope="col">Framing</th>
+            <th scope="col">Guard</th>
+            <th scope="col">Tool calls</th>
+            <th scope="col">Write attempted</th>
+            <th scope="col">Outcome</th>
+            <th scope="col" class="mc-num">Rows written</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.name}>
+              <th scope="row">
+                {r.simulated && <span class="il-badge">simulated</span>} {r.name}
+              </th>
+              <td>{r.model}</td>
+              <td>{r.framing === 'none' ? 'none' : `Framing: ${r.framing}`}</td>
+              <td>{r.guard ? 'on' : 'off'}</td>
+              <td>
+                {r.toolCalls.length ? (
+                  <ul>
+                    {r.toolCalls.map((c, i) => (
+                      <li key={i}>{c}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  'No tool calls'
+                )}
+              </td>
+              <td>{r.attempted ? 'Yes' : 'No'}</td>
+              <td>{r.outcome}</td>
+              <td class="mc-num">{r.rowsWritten}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Readings({ rows, label, answer }: { rows: InjectionRow[]; label: string; answer: string }) {
+  return (
+    <ul class="il-readings" aria-label={label}>
+      {rows.map((r) => (
+        <li key={r.name}>
+          <p class="il-name">{r.name}</p>
+          <p class="il-reading">{r.reading}</p>
+          <details>
+            <summary>{answer}</summary>
+            <p class="il-answer">{r.finalAnswer}</p>
+          </details>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export default function InjectionLab({ recorded, rows, simulatedRows, commands }: InjectionLabProps) {
   const [filter, setFilter] = useState<GuardFilter>('all');
+  const sim = filterRows(simulatedRows, filter);
+
+  const simulatedSection = simulatedRows.length > 0 && (
+    <section class="il-sim" aria-labelledby="il-sim-head">
+      <h3 id="il-sim-head" class="il-sim-head">
+        Simulated runs: a scripted model, not a real one
+      </h3>
+      <p class="mc-note" role="note">
+        These rows come from <code>simulate.py</code>: a script that does what t061 asks, run through the real agent, guard and servers. No model was
+        called. They show what the defences in code do when a model obeys.
+      </p>
+      <p class="mc-live">{simulatedSummary(sim)}</p>
+      <RunTable rows={sim} label="Simulated runs" />
+      <Readings rows={sim} label="What each simulated run shows" answer="What the script answered" />
+    </section>
+  );
 
   if (!recorded) {
     return (
@@ -19,7 +100,8 @@ export default function InjectionLab({ recorded, rows, commands }: InjectionLabP
           command={commands.join('\n')}
           text="These runs call the Claude API and cost money: each command prints an estimate and asks before it spends anything. Then rebuild the derived data (the last command) and the app."
         />
-        <style>{BASE_CSS}</style>
+        {simulatedSection}
+        <style>{BASE_CSS + css}</style>
       </section>
     );
   }
@@ -53,59 +135,9 @@ export default function InjectionLab({ recorded, rows, commands }: InjectionLabP
         </p>
       ))}
 
-      <div class="mc-scroll mc-focus" role="region" aria-label="Recorded runs table" tabIndex={0}>
-        <table class="mc-table il-table" aria-label="Recorded runs">
-          <thead>
-            <tr>
-              <th scope="col">Recording</th>
-              <th scope="col">Model</th>
-              <th scope="col">Framing</th>
-              <th scope="col">Guard</th>
-              <th scope="col">Tool calls</th>
-              <th scope="col">Write attempted</th>
-              <th scope="col">Outcome</th>
-              <th scope="col" class="mc-num">Rows written</th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((r) => (
-              <tr key={r.name}>
-                <th scope="row">{r.name}</th>
-                <td>{r.model}</td>
-                <td>{r.framing === 'none' ? 'none' : `Framing: ${r.framing}`}</td>
-                <td>{r.guard ? 'on' : 'off'}</td>
-                <td>
-                  {r.toolCalls.length ? (
-                    <ul>
-                      {r.toolCalls.map((c, i) => (
-                        <li key={i}>{c}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    'No tool calls'
-                  )}
-                </td>
-                <td>{r.attempted ? 'Yes' : 'No'}</td>
-                <td>{r.outcome}</td>
-                <td class="mc-num">{r.rowsWritten}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <ul class="il-readings" aria-label="What each run shows">
-        {shown.map((r) => (
-          <li key={r.name}>
-            <p class="il-name">{r.name}</p>
-            <p class="il-reading">{r.reading}</p>
-            <details>
-              <summary>What the model answered</summary>
-              <p class="il-answer">{r.finalAnswer}</p>
-            </details>
-          </li>
-        ))}
-      </ul>
+      <RunTable rows={shown} label="Recorded runs" />
+      <Readings rows={shown} label="What each run shows" answer="What the model answered" />
+      {simulatedSection}
       <style>{BASE_CSS + css}</style>
     </section>
   );
@@ -125,4 +157,7 @@ const css = `
 .il-readings summary { font-size: var(--text-small); color: var(--ink); cursor: pointer; }
 .il-readings summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .il-answer { margin: 6px 0 0; font-size: var(--text-small); color: var(--muted); white-space: pre-wrap; }
+.il-sim { display: grid; gap: 10px; margin-top: 8px; padding-top: 12px; border-top: 2px dashed var(--warn); }
+.il-sim-head { margin: 0; font-family: var(--font-display); font-size: var(--text-body); color: var(--ink); }
+.il-badge { display: inline-block; padding: 0 6px; border: 1px solid var(--warn); border-radius: var(--radius); font-family: var(--font-mono); font-size: var(--text-label); color: var(--ink); text-transform: uppercase; letter-spacing: 0.04em; }
 `;

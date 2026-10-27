@@ -1,0 +1,186 @@
+---
+track: mcp
+order: 8
+slug: write-tools
+title: Write tools and confirmation
+goal: Build a write tool that asks the user to confirm in a second round trip, make each confirmation single-use, record provenance, and say exactly what a confirmation does and does not prove.
+minutes: 35
+quiz:
+  - question: label_ticket carries readOnlyHint false. A host that ignores annotations calls it without asking anyone. What stops an unconfirmed write?
+    options:
+      - The annotation, because the protocol enforces it
+      - Nothing, because annotations are the only safeguard
+      - The server itself. It answers the first call with a question and writes only when a retry carries an accepted answer on a state it issued
+      - The model, because it reads the annotation
+    answer: 2
+    explanation: Annotations are hints for the host's interface. A host may ignore them, and a server cannot trust a client's description of itself. lumen-ops puts the confirmation in its own code, so the write happens on the server's terms whatever the host does.
+  - question: A client sends the same accepted retry twice, with the same requestState. What happens, and why?
+    options:
+      - Two rows are written, because both retries are valid
+      - One row is written. The server records each state the first time any answer for it arrives, and refuses that state afterwards
+      - Neither is written, because duplicates are always refused
+      - The second one asks the question again
+    answer: 1
+    explanation: A sealed or signed state stays valid for its whole five minutes, so a signature alone would let it be used twice. The server keeps a set of spent states and spends each one on its first answer of any kind. A declined state can never be replayed as an accept.
+  - question: A row in labels.jsonl says source "agent" and confirmed true. Which statement is correct?
+    options:
+      - A person checked the label, so it can go into the eval set
+      - The client that held the token claimed a yes. The row is never eligible for an eval or training set, because an agent row records a claim, not a checked label
+      - The model chose the label without any confirmation
+      - confirmed true means the label is correct
+    answer: 1
+    explanation: The server cannot tell a person from a script that answers yes. confirmed records what the client said, and source records that the write came through an agent. eligible_for_eval accepts only human, confirmed rows, and a test pins that.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import ElicitationStepper from '../../../components/mcp/ElicitationStepper.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+`lumen-read` only reads. `lumen-ops` has one tool, `label_ticket(id, label)`, and it changes data: it appends a row to `mcp/data/labels.jsonl`. A write needs a person's yes. This lesson is about where that yes is asked for, who enforces it, and what it is worth.
+
+### Annotations are not enforcement
+
+`label_ticket` carries the annotations `readOnlyHint: false`, `destructiveHint: false` and `idempotentHint: false`. They tell a host how to present the tool: this one changes data, destroys nothing, and adds a row each time. A good host asks before calling it. But annotations are hints. A host can ignore them, and a server has no way to check what a client says about itself. So the confirmation lives in the server's code.
+
+### Confirmation in two round trips
+
+The server asks through <Term t="elicitation" />: a question with a small form, sent to the client for the user to answer. In this revision a server cannot send the client a request of its own, so the question comes back as the answer to the call:
+
+1. The client calls `label_ticket` with `{"id": "t001", "label": "billing"}`.
+2. The server checks the input. If it is valid, it answers with an <Term t="InputRequiredResult" />. That holds the question `Set ticket t001 to "billing"?`, a form with one boolean field, `confirm`, and a `requestState`. The client holds the state and sends it back, but cannot forge it: Python's SDK encrypts and authenticates it, and the Go server signs it.
+3. The client asks the user, then sends the same call again with the answer and the same `requestState`.
+4. The server checks the state and the answer. Only an accept whose `confirm` is the JSON boolean `true` writes. Anything else returns the fixed text `label not written: the user declined`.
+
+Invalid input is never put to the user. A bad label or an unknown ticket gets its fixed error on the first call, and nobody is asked.
+
+### Each confirmation works once
+
+A sealed state is valid for its whole lifetime of five minutes (`STATE_TTL_SECONDS = 300`). Without more, a client could send the same accepted retry twice and write twice. So the server keeps a set of spent states. A state is spent by its first answer of any kind, accept or decline. A replay writes nothing, and a declined state can never be sent again as an accept.
+
+The spent set lives in memory, in one process. That is enough here, because each Lumen server is one process. A deployment with several workers behind a load balancer would need two things shared between them: a store of spent states that every worker checks, such as a database table or a cache with expiry, and the same state key, so any worker can open a state another worker issued.
+
+### What a confirmation proves
+
+Be exact about this. The server cannot tell whether a person clicked yes or the client's code answered for them. Lesson 5's agent answers with a script. What a confirmed write proves is only this: the retry came from the same caller, for the same arguments, within five minutes, on a state this server issued and had not seen answered before. The yes itself is the client's claim.
+
+### Provenance
+
+So the server records who claimed what, as <Term t="provenance" />. Each row has `source` (`"agent"` for every write through this server), `client_id` (from the verified token, lesson 9), `model` (`null` here) and `confirmed` (`true`, the claim). An agent's rows never count for an eval or a training set. `eligible_for_eval` in `lumen_core` accepts only rows with `source: "human"` and `confirmed: true`, and a test pins it.
+
+## See it
+
+These are real messages, captured from `lumen-ops` by `derive.py`. Pick an answer, then press **Next**. Watch the second request: it is the same call, with the answer and the state attached.
+
+<ElicitationStepper />
+
+Both paths start the same way: the first call gets the question, not a result. With accept, the retry writes one row and returns `{"ticket_id": "t001", "label": "billing", "written": true}`. With decline, the retry returns the fixed decline text with `isError: true`, and no row is written. The state shows as `<sealed state>` because it is different on every run.
+
+## The code
+
+Section 2 is the question.
+
+<CodeTabs source="mcp-ops" section={2} />
+
+- `class Confirm(BaseModel)` is the form: one field, `confirm: bool`. The SDK turns it into the form's JSON Schema.
+- `only_true_confirms` reads anything other than the JSON boolean `true` as false. `"yes"`, `1`, `null` or a missing field all decline, instead of failing schema validation.
+- `def ask_confirm(id, label)` runs before the tool body. Invalid input resolves to `DeclinedElicitation()` without asking anyone.
+- `return Elicit(f'Set ticket {id} to "{label}"?', Confirm)` is the question.
+
+Section 3 makes each state single-use.
+
+<CodeTabs source="mcp-ops" section={3} />
+
+- `class SpentStates` keeps a SHA-256 digest of each answered state until that state's own expiry plus `PRUNE_MARGIN_SECONDS` (60 seconds). After that the SDK rejects the state as expired anyway.
+- `def spend(self, state, expires_at)` is true the first time and false for every replay, under a lock.
+- `capture_wire_state` records the sealed `requestState` as it arrived. The SDK replaces it with the decrypted text before the tool runs, and that text is the same for every call with the same arguments. The sealed token is unique per question, so it is the one to spend.
+- `install_capture(mcp)` puts the capture just before the SDK's `RequestStateBoundary`. If a later SDK moves the boundary, the server refuses to build, rather than run without the replay guard.
+
+Section 4 is the tool.
+
+<CodeTabs source="mcp-ops" section={4} />
+
+- `@apps.tool(resource_uri=APP_URI, annotations=WRITE)` registers the tool with its write annotations and links the App from lesson 10.
+- `answer: Annotated[ElicitationResult[Confirm], Resolve(ask_confirm)]` is how the SDK runs the round trip: the body only runs once there is an answer.
+- `if (message := validation_error(id, label)) is not None: return fail(message)` comes first, so the fixed error wins.
+- `if exp is None or not spent.spend(wire, exp): return fail(DECLINED)` refuses a state that is unreadable or already answered.
+- `if answer.action != "accept" or not answer.data.confirm: return fail(DECLINED)` writes nothing on anything but a yes.
+- `write_label(id, label, source="agent", client_id=client_id, model=None, confirmed=True, ...)` appends the row with its provenance. `client_id` comes from `get_access_token()`, never from the arguments.
+
+## How Go does it
+
+The Go SDK leaves the state to the server, so section 3 in Go signs its own:
+
+- `confirmState` holds who asked (`Sub`, `ClientID`), what for (`ID`, `Label`), when (`Iat`) and a random `Nonce`. `o.sign(want)` is an HMAC-SHA256 over it, with a 32-byte key made at start. A client can read a Go state but cannot change it.
+- `o.verify(raw, want)` checks the signature, the caller, the arguments and the age, then `o.spent.spend(mac, expires)` makes it single-use, as in Python.
+
+Go also differs on older clients. A client on the earlier protocol era, `2025-11-25`, expects questions as server-to-client requests in the middle of a call. The Go server runs stateless over HTTP, so it has no open channel to send one on. So `label_ticket` refuses those clients up front with the fixed decline: no question, nothing written. They can still list the tool. The Python server keeps sessions and can confirm with them.
+
+<Callout kind="note" title="One process, one key">
+  Both servers make their state key at start, so a restart invalidates every open question. That is deliberate. With several workers, each would have its own key and its own spent set, and a replay sent to a second worker would not be caught. Share both before running more than one.
+</Callout>
+
+## Try it
+
+Run these from the repo root. Everything here is free and runs in memory, with no network and no token.
+
+### Confirm and decline
+
+Save this as `try_confirm.py` in the repo root. It labels ticket `t001` twice, once answering yes and once answering no, then prints the rows:
+
+```python
+"""Label a ticket through lumen-ops in memory: once answering yes, once answering no. Run from the repo root."""
+import asyncio
+import json
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, "mcp/python")
+from mcp import Client  # noqa: E402
+from mcp_types import ElicitResult  # noqa: E402
+from ops_server import build_ops_server  # noqa: E402  (also puts lumen_core on the path)
+from lumen_core.labels import eligible_for_eval  # noqa: E402
+
+
+async def label(server, action: str) -> None:
+    async def answer(context, params) -> ElicitResult:
+        print(f"asked: {params.message} -> {action}")
+        return ElicitResult(action=action, content={"confirm": True} if action == "accept" else None)
+
+    async with Client(server, elicitation_callback=answer) as client:
+        result = await client.call_tool("label_ticket", {"id": "t001", "label": "billing"})
+        print("result:", result.structured_content or result.content[0].text)
+
+
+async def main() -> None:
+    labels = Path(tempfile.mkdtemp()) / "labels.jsonl"
+    server = build_ops_server(labels_path=labels)
+    await label(server, "accept")
+    await label(server, "decline")
+    for line in labels.read_text().splitlines():
+        row = json.loads(line)
+        row.pop("time")
+        print("row:", row, "eligible for eval:", eligible_for_eval(row))
+
+
+asyncio.run(main())
+```
+
+```bash
+.venv-mcp/bin/python try_confirm.py
+```
+
+You should see the question twice, then `result: {'ticket_id': 't001', 'label': 'billing', 'written': True}` for the yes and `result: label not written: the user declined` for the no. Then one row only, with `'source': 'agent'`, `'client_id': 'anonymous'` (no token in memory), `'model': None`, `'confirmed': True`, and `eligible for eval: False`.
+
+### Replays and older clients
+
+The tests send a replayed state, a declined state answered again, and an older-era client:
+
+```bash
+.venv-mcp/bin/python -m pytest mcp/python/tests/test_ops_server.py -q -k "replayed or declined_state or legacy"
+cd mcp/go && go test ./opsserver -run 'TestReplayedStateWritesOnce|TestDeclinedStateCannotBeReanswered|TestLegacyClientFailsClosedOverStatelessHTTP' -v
+```
+
+We got `3 passed` in Python, and `PASS` for each of the three Go tests. In Python the third test checks that an older-era client can confirm. In Go it checks that one is refused and nothing is written.

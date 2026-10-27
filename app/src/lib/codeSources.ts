@@ -30,7 +30,8 @@ export type CodeSourceId =
   | 'mcp-auth'
   | 'mcp-auth-server'
   | 'mcp-app'
-  | 'mcp-agent';
+  | 'mcp-agent'
+  | 'mcp-simulate';
 
 export type CodeSourceInfo = {
   /** Repo-relative path of the Python file. */
@@ -65,6 +66,7 @@ export const CODE_SOURCES: Record<CodeSourceId, CodeSourceInfo> = {
   'mcp-auth-server': { python: 'mcp/python/auth_server.py' }, // the test authorization server, sections 1-5
   'mcp-app': { python: 'mcp/python/ops_server.py' }, // section 7, the labelling App's resource (Python only)
   'mcp-agent': { python: 'mcp/python/agent.py' }, // the harness driving the servers (Python only)
+  'mcp-simulate': { python: 'mcp/python/simulate.py' }, // the SIMULATED compromised model, sections 1-4 (Python only)
 };
 
 export const isSource = (id: string): id is CodeSourceId => Object.hasOwn(CODE_SOURCES, id);

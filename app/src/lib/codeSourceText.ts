@@ -48,6 +48,7 @@ export function sourceTexts(id: CodeSourceId): { python: string; go?: string } {
         '../../../mcp/go/auth/auth.go',
         '../../../mcp/python/auth_server.py',
         '../../../mcp/python/agent.py',
+        '../../../mcp/python/simulate.py',
       ],
       { query: '?raw', import: 'default', eager: true },
     ) as Record<string, string>;
