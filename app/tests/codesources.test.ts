@@ -47,7 +47,10 @@ describe('code source registry', () => {
 
   it('registers the harness, the LLMs lab and the ML files', () => {
     expect([...ids].sort()).toEqual(
-      ['harness', 'llms', 'llms-inspect', 'lora', 'ml-fetch', 'ml-llm', 'ml-mlflow', 'ml-mlops', 'ml-monitor', 'ml-serve', 'ml-train'].sort(),
+      [
+        'harness', 'llms', 'llms-inspect', 'lora', 'ml-fetch', 'ml-llm', 'ml-mlflow', 'ml-mlops', 'ml-monitor', 'ml-serve', 'ml-train',
+        'mcp-agent', 'mcp-app', 'mcp-auth', 'mcp-auth-server', 'mcp-client', 'mcp-ops', 'mcp-read', 'mcp-simulate',
+      ].sort(),
     );
     expect(CODE_SOURCES['ml-serve']).toMatchObject({ python: 'ml/serve/server.py', go: 'ml/go/main.go' });
     expect(CODE_SOURCES['ml-monitor']).toMatchObject({ python: 'ml/python/monitor.py', go: 'ml/go/drift.go' });
@@ -60,7 +63,8 @@ describe('code source registry', () => {
     const info = CODE_SOURCES[id];
     const texts = sourceTexts(id);
     expect(texts.python).toBe(readFileSync(join(repo, info.python), 'utf8'));
-    expect(texts.go).toBe(info.go ? readFileSync(join(repo, info.go), 'utf8') : undefined);
+    const goFiles = info.go ? [info.go, ...(info.goMore ?? [])] : [];
+    expect(texts.go).toBe(goFiles.length ? goFiles.map((f, i) => { const t = readFileSync(join(repo, f), 'utf8'); return i === 0 ? t : t.slice(t.search(/^\/\/ ── \d+\./m)); }).join('\n') : undefined);
     expect(listSections(texts.python).length).toBeGreaterThan(0);
     if (texts.go) expect(listSections(texts.go).length).toBeGreaterThan(0);
   });
@@ -96,6 +100,76 @@ describe('code source registry', () => {
     expect(resolveCode({ source: 'ml-monitor', whole: true }).go).toBe(sourceTexts('ml-monitor').go);
     // Showing only Python needs no Go section.
     expect(resolveCode({ source: 'ml-serve', section: 4, pythonOnly: true }).go).toBeUndefined();
+  });
+
+  // The MCP track: which sections each source has in Python and Go (listed from the real files).
+  describe('MCP sources', () => {
+    const nums = (t: string | undefined) => listSections(t ?? '').map((x) => x.n);
+    it.each([
+      ['mcp-read', [1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6]],
+      ['mcp-ops', [1, 2, 3, 4, 5, 6, 7], [1, 2, 3, 4, 5, 6]],
+      ['mcp-client', [1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6]],
+      ['mcp-auth', [1, 2, 3], [1, 2, 3]],
+      ['mcp-auth-server', [1, 2, 3, 4, 5], undefined],
+      ['mcp-app', [1, 2, 3, 4, 5, 6, 7], undefined],
+      ['mcp-agent', [1, 2, 3, 4, 5, 6, 7, 8, 9], undefined],
+      ['mcp-simulate', [1, 2, 3, 4], undefined],
+    ] as const)('%s lists its numbered sections', (id, py, go) => {
+      const t = sourceTexts(id);
+      expect(nums(t.python)).toEqual(py);
+      expect(go ? nums(t.go) : t.go).toEqual(go);
+      expect(CODE_SOURCES[id].goSections).toBeUndefined();
+    });
+
+    it('reads sections that sit inside a function, flush left', () => {
+      const r = resolveCode({ source: 'mcp-read', section: 2 });
+      expect(r.python.split('\n')[0]).toBe('# ── 2. Tools ────────────────────────────────────────────────────────────');
+      expect(r.python).toContain('\n@mcp.tool(annotations=READ_ONLY)\ndef search_tickets(');
+      expect(r.go!.split('\n')[0]).toMatch(/^\/\/ ── 2\. Tools/);
+      expect(resolveCode({ source: 'mcp-ops', section: 4 }).go!.split('\n')[0]).toMatch(/^\/\/ ── 4\. Tools/);
+    });
+
+    it("joins lumen-read's main.go after server.go, so the entry point is Go section 6", () => {
+      const r = resolveCode({ source: 'mcp-read', section: 6 });
+      expect(r.python).toContain('def main()');
+      expect(r.go!.split('\n')[0]).toMatch(/^\/\/ ── 6\. Entry point/);
+      expect(r.go).toContain('func main()');
+      expect(resolveCode({ source: 'mcp-ops', section: 6 }).go).toContain('func main()');
+      expect(fileName('mcp-read', 'go')).toBe('server.go');
+    });
+
+    it("does not leak main.go's package clause or imports into Go section 5", () => {
+      for (const source of ['mcp-read', 'mcp-ops'] as const) {
+        const go = resolveCode({ source, section: 5 }).go!;
+        expect(go, source).not.toContain('package main');
+        expect(go, source).not.toContain('import (');
+        expect(go.split('\n')[0]).toMatch(/^\/\/ ── 5\. HTTP handler and security/);
+        expect(resolveCode({ source, section: 6 }).go).toMatch(/^\/\/ ── 6\. Entry point/);
+      }
+    });
+
+    it('ends read section 4 with the factory return (the prompts section runs to the next marker)', () => {
+      const py = resolveCode({ source: 'mcp-read', section: 4 }).python.split('\n');
+      expect(py.at(-1)).toBe('return mcp');
+      const go = resolveCode({ source: 'mcp-read', section: 4 }).go!.split('\n');
+      expect(go.at(-1)).toBe('}');
+      expect(go.at(-2)).toBe('return s');
+    });
+
+    it('quotes the App (ops_server section 7) from mcp-app, Python only; mcp-ops needs pythonOnly for it', () => {
+      const app = resolveCode({ source: 'mcp-app', section: 7 });
+      expect(app.python).toContain('APP_URI = "ui://lumen/label.html"');
+      expect(app.go).toBeUndefined();
+      expect(codeProblems({ source: 'mcp-ops', section: 7 })).toEqual(['no section 7 in mcp/go/opsserver/server.go']);
+      expect(codeProblems({ source: 'mcp-ops', section: 7, pythonOnly: true })).toEqual([]);
+    });
+
+    it('quotes the auth code in both languages', () => {
+      const v = resolveCode({ source: 'mcp-auth', section: 2 });
+      expect(v.python).toContain('class ');
+      expect(v.go!.split('\n')[0]).toMatch(/^\/\/ ── 2\. Token verifier/);
+      expect(resolveCode({ source: 'mcp-auth-server', section: 3 }).python.split('\n')[0]).toMatch(/^# ── 3\. The provider/);
+    });
   });
 
   it('reports what is wrong with a request', () => {

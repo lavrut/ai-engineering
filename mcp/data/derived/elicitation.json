@@ -1,0 +1,270 @@
+{
+  "server": "lumen-ops",
+  "tool": "label_ticket",
+  "arguments": {
+    "id": "t001",
+    "label": "billing"
+  },
+  "note": "requestState is sealed and unique per run; shown as a placeholder",
+  "accepted": {
+    "answer": {
+      "action": "accept",
+      "content": {
+        "confirm": true
+      }
+    },
+    "rows_written": 1,
+    "exchanges": [
+      {
+        "method": "tools/call",
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/call",
+          "params": {
+            "name": "label_ticket",
+            "arguments": {
+              "id": "t001",
+              "label": "billing"
+            },
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientInfo": {
+                "name": "mcp",
+                "version": "0.1.0"
+              },
+              "io.modelcontextprotocol/clientCapabilities": {
+                "elicitation": {
+                  "form": {},
+                  "url": {}
+                }
+              }
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "result": {
+            "inputRequests": {
+              "ops_server:ask_confirm": {
+                "method": "elicitation/create",
+                "params": {
+                  "message": "Set ticket t001 to \"billing\"?",
+                  "mode": "form",
+                  "requestedSchema": {
+                    "properties": {
+                      "confirm": {
+                        "title": "Confirm",
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "confirm"
+                    ],
+                    "type": "object"
+                  }
+                }
+              }
+            },
+            "requestState": "<sealed state>",
+            "resultType": "input_required",
+            "_meta": {
+              "io.modelcontextprotocol/serverInfo": {
+                "name": "lumen-ops",
+                "version": ""
+              }
+            }
+          }
+        }
+      },
+      {
+        "method": "tools/call",
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "inputResponses": {
+              "ops_server:ask_confirm": {
+                "action": "accept",
+                "content": {
+                  "confirm": true
+                }
+              }
+            },
+            "requestState": "<sealed state>",
+            "name": "label_ticket",
+            "arguments": {
+              "id": "t001",
+              "label": "billing"
+            },
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientInfo": {
+                "name": "mcp",
+                "version": "0.1.0"
+              },
+              "io.modelcontextprotocol/clientCapabilities": {
+                "elicitation": {
+                  "form": {},
+                  "url": {}
+                }
+              }
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "result": {
+            "content": [
+              {
+                "text": "{\"ticket_id\": \"t001\", \"label\": \"billing\", \"written\": true}",
+                "type": "text"
+              }
+            ],
+            "isError": false,
+            "resultType": "complete",
+            "structuredContent": {
+              "ticket_id": "t001",
+              "label": "billing",
+              "written": true
+            },
+            "_meta": {
+              "io.modelcontextprotocol/serverInfo": {
+                "name": "lumen-ops",
+                "version": ""
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "declined": {
+    "answer": {
+      "action": "decline"
+    },
+    "rows_written": 0,
+    "exchanges": [
+      {
+        "method": "tools/call",
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/call",
+          "params": {
+            "name": "label_ticket",
+            "arguments": {
+              "id": "t001",
+              "label": "billing"
+            },
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientInfo": {
+                "name": "mcp",
+                "version": "0.1.0"
+              },
+              "io.modelcontextprotocol/clientCapabilities": {
+                "elicitation": {
+                  "form": {},
+                  "url": {}
+                }
+              }
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "result": {
+            "inputRequests": {
+              "ops_server:ask_confirm": {
+                "method": "elicitation/create",
+                "params": {
+                  "message": "Set ticket t001 to \"billing\"?",
+                  "mode": "form",
+                  "requestedSchema": {
+                    "properties": {
+                      "confirm": {
+                        "title": "Confirm",
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "confirm"
+                    ],
+                    "type": "object"
+                  }
+                }
+              }
+            },
+            "requestState": "<sealed state>",
+            "resultType": "input_required",
+            "_meta": {
+              "io.modelcontextprotocol/serverInfo": {
+                "name": "lumen-ops",
+                "version": ""
+              }
+            }
+          }
+        }
+      },
+      {
+        "method": "tools/call",
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "inputResponses": {
+              "ops_server:ask_confirm": {
+                "action": "decline"
+              }
+            },
+            "requestState": "<sealed state>",
+            "name": "label_ticket",
+            "arguments": {
+              "id": "t001",
+              "label": "billing"
+            },
+            "_meta": {
+              "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+              "io.modelcontextprotocol/clientInfo": {
+                "name": "mcp",
+                "version": "0.1.0"
+              },
+              "io.modelcontextprotocol/clientCapabilities": {
+                "elicitation": {
+                  "form": {},
+                  "url": {}
+                }
+              }
+            }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "result": {
+            "content": [
+              {
+                "text": "label not written: the user declined",
+                "type": "text"
+              }
+            ],
+            "isError": true,
+            "resultType": "complete",
+            "_meta": {
+              "io.modelcontextprotocol/serverInfo": {
+                "name": "lumen-ops",
+                "version": ""
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

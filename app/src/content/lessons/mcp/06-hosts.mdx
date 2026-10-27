@@ -1,0 +1,202 @@
+---
+track: mcp
+order: 6
+slug: hosts
+title: Hosts and many servers
+goal: Connect lumen-read to a host with a config entry, work out the context cost of each server's tool list, and explain how two servers with the same tool name clash and how a host avoids it.
+minutes: 25
+quiz:
+  - question: An agent is connected to lumen-read and lumen-ops. When does it pay the context cost of their four tool definitions?
+    options:
+      - Once, when it connects
+      - On every model request, because the model only knows a tool from the definition sent with that request
+      - Only when the model calls a tool
+      - Never, because definitions are stored on the server
+    answer: 1
+    explanation: A model has no memory between requests. The host sends the tool definitions with every request, so a bigger tool list is a standing cost on every call, and it takes room from the conversation. That is why the budget is worth measuring.
+  - question: Two servers both offer a tool named search_tickets. The host puts every tool in one table keyed by name. What happens?
+    options:
+      - The host asks the model which one it meant
+      - Both are kept, with the second renamed automatically
+      - One entry silently replaces the other, so the model can call only one, and nothing reports the loss
+      - The protocol rejects the second server
+    answer: 2
+    explanation: A flat table keeps one entry per key. Each client only sees its own server, so the protocol cannot spot the clash. The host has to prevent it, usually by putting the server's name in front of the tool name so every key is unique.
+  - question: You add a server to a host and want to know which protocol revision the host used with it. What is a reliable way to find out?
+    options:
+      - Assume the current revision, 2026-07-28
+      - Read the host's version number and look up its revision
+      - Record what the host sends the server, and read the first message. Initialize means the old handshake, and a request carrying the protocol version in _meta means the new one
+      - Ask the model
+    answer: 2
+    explanation: The host decides the era, and the server answers whichever it gets. The first message on the wire shows which one. Report what you see rather than what the documentation says.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import ToolBudget from '../../../components/mcp/ToolBudget.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+So far the host was our own scripts. Real hosts are applications such as Claude Desktop and Claude Code. They connect to servers you list in a config file, and they usually connect to several at once.
+
+This lesson covers three things that change when there is more than one server: what each server costs the model, what happens when two servers use the same name, and how to see what a host actually does.
+
+### One client per server
+
+The host starts or contacts each server and creates one client for it. The model sees the tools of all the servers merged into one list. Consent is per server: you can approve `lumen-read` and leave `lumen-ops` gated. That is the reason the Lumen tools are split in two. The read-only tools can be trusted with one approval, and the write tool is not carried along with them.
+
+### The context cost of a tool list
+
+Every tool definition (its name, description and schemas) is sent to the model with every request. The model has no other way to know the tool exists. So the tool list is a standing cost in <Term t="context window" /> space and in input tokens, on every call.
+
+We measured it from each server's real `tools/list` result. The token figure is an estimate: the number of characters divided by four, rounded up. It is not a tokenizer count.
+
+### Name clashes
+
+Within one server, a tool name is a key. Across servers, nothing in the protocol enforces anything, because each client talks to one server and cannot see the others. As far as our research sheet records, the spec leaves clashes to the host.
+
+A host that keeps one table of tools by name has a problem as soon as two servers offer `search_tickets`: the later one replaces the earlier one, and no error is raised. The usual fix is a prefix. Hosts choose their own scheme and it can change, so look at your own host's tool list to see it. One we believe Claude Code uses is shown in the optional section below; check your host's docs.
+
+A second kind of clash is about trust, not names. A tool's description is text the model reads, and it comes from the server's author. A server you did not write can describe its tools in words meant to steer the model's choices about other servers' tools. The spec says to treat tool annotations as untrusted unless the server is trusted. Adding a server adds text to the model's context, so add only servers you would trust with that.
+
+## See it
+
+The chart shows the two Lumen servers measured from their real tool lists. Watch the per-tool figure: a tool costs roughly 175 estimated tokens in either server, so the cost grows with the number of tools, not the number of servers.
+
+<ToolBudget />
+
+`lumen-read` has 3 tools, 2,095 characters, about 524 tokens. `lumen-ops` has 1 tool, 705 characters, about 177 tokens. An agent connected to both sends 4 tool definitions, about 701 estimated tokens, with every request. For scale, the real first request in lesson 5, with the three read tools, the system prompt and the task, was 779 input tokens. On our estimate the three tools are about 524 of those 779.
+
+By simple arithmetic, which we did not measure, ten servers like `lumen-read` would send about 5,240 estimated tokens on every request. A host with many tools has to decide which of them to show the model.
+
+## The code
+
+The agent from lesson 5 is a host in miniature. Section 4 is where tools from every server are merged, and it is where a clash would happen.
+
+<CodeTabs source="mcp-agent" section={4} />
+
+- `for server, client in bridge.clients.items():` visits each server in turn.
+- `session.instructions[SERVER_NAMES[server]] = client.instructions or ""` keeps each server's instructions apart, under its own name. Section 7's `system_prompt` joins them as `lumen-read: ...`, so the model can tell which server said what.
+- `session.tools.append(harness.Tool(...))` adds every tool from every server to one list.
+- `harness.REGISTRY.update({t.name: t for t in session.tools})` builds the table by bare tool name. Two tools with the same name would share a key, and the later would win. `lumen-read` and `lumen-ops` share no names, so this is safe today. Nothing in the code would stop a third server from breaking it.
+
+<Callout kind="warning" title="Our agent does not prefix">
+  A real host should put the server's name in front of each tool. `agent.py` does not, because the two Lumen servers share no tool names, and the registry is easier to read without it. The script below shows the failure and the fix.
+</Callout>
+
+## Try it
+
+### Check for clashes, then cause one (free)
+
+Save this as `clash_check.py` in the repo root. It starts both Lumen servers in memory, lists their tool names, then adds a made-up third server that also offers `search_tickets`, and builds the table two ways.
+
+```python
+"""Do two MCP servers offer a tool with the same name? Run from the repo root."""
+import asyncio
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, "mcp/python")
+from mcp import Client  # noqa: E402
+from ops_server import build_ops_server  # noqa: E402
+from read_server import build_read_server  # noqa: E402
+
+
+async def tool_names(server) -> list[str]:
+    async with Client(server) as client:
+        return sorted(t.name for t in (await client.list_tools()).tools)
+
+
+async def main() -> None:
+    labels = Path(tempfile.mkdtemp()) / "labels.jsonl"
+    servers = {
+        "lumen-read": await tool_names(build_read_server()),
+        "lumen-ops": await tool_names(build_ops_server(labels_path=labels)),
+    }
+    for server, names in servers.items():
+        print(f"{server}: {names}")
+
+    # A flat registry keyed by tool name, as the agent in lesson 5 builds. Add a third, made-up
+    # server that also offers search_tickets, and one entry silently replaces the other.
+    servers["other-crm"] = ["search_tickets", "get_contact"]
+    flat: dict[str, str] = {}
+    for server, names in servers.items():
+        for name in names:
+            if name in flat:
+                print(f"clash: {name!r} from {flat[name]} replaced by {server}")
+            flat[name] = server
+
+    # The fix hosts use: put the server's name in front, so every key is unique.
+    prefixed = {f"{server}__{name}" for server, names in servers.items() for name in names}
+    print(f"flat registry: {len(flat)} tools; prefixed: {len(prefixed)} tools")
+
+
+asyncio.run(main())
+```
+
+```bash
+.venv-mcp/bin/python clash_check.py
+```
+
+You should see the three read tools, then `lumen-ops: ['label_ticket']`, then `clash: 'search_tickets' from lumen-read replaced by other-crm`, then `flat registry: 5 tools; prefixed: 6 tools`. The flat table lost one tool without saying so. The prefixed one kept all six.
+
+### Connect a host (optional)
+
+This part needs Claude Desktop or Claude Code and your own account. Nothing in the course depends on it, and it does not run in the tests. We wrote the snippets below from what we know of those hosts and have not run them in a host, so check each host's current documentation if one does not work.
+
+Only `lumen-read` can be added this way. It speaks stdio. `lumen-ops` is HTTP only and needs a token, which lesson 9 covers. Replace `/ABS/PATH` with the absolute path to your copy of this repo.
+
+For **Claude Desktop**, add the server to its config file. On macOS that is `~/Library/Application Support/Claude/claude_desktop_config.json`. Restart the app afterwards.
+
+```json
+{
+  "mcpServers": {
+    "lumen-read": {
+      "command": "/ABS/PATH/.venv-mcp/bin/python",
+      "args": ["/ABS/PATH/mcp/python/read_server.py"]
+    }
+  }
+}
+```
+
+For **Claude Code**, one command adds the same server. Everything after `--` is the command that starts it:
+
+```bash
+claude mcp add lumen-read -- /ABS/PATH/.venv-mcp/bin/python /ABS/PATH/mcp/python/read_server.py
+```
+
+Then ask the host to find the duplicate-charge ticket. It will ask your permission before it calls a tool, and the tool list in its interface will show how it names the tools. We believe Claude Code shows them as `mcp__<server>__<tool>`, a server-name prefix that avoids clashes, but that is from memory, not from a check: see what your host does.
+
+### Which protocol version did the host use? (optional)
+
+The server answers either era, so the answer depends on the host. You can see which one it sent by recording what arrives on the server's stdin. In the config above, replace the command with `bash` and these arguments, so `tee` copies the host's messages to a file before the server reads them:
+
+```json
+{
+  "mcpServers": {
+    "lumen-read": {
+      "command": "bash",
+      "args": ["-c", "tee /tmp/lumen-in.log | /ABS/PATH/.venv-mcp/bin/python /ABS/PATH/mcp/python/read_server.py"]
+    }
+  }
+}
+```
+
+Use the host, then look at the first methods in the log:
+
+```bash
+grep -o '"method":"[^"]*"' /tmp/lumen-in.log | head -3
+```
+
+If the first is `initialize`, the host used the old handshake. If it is `server/discover` or a request whose `_meta` carries `io.modelcontextprotocol/protocolVersion`, it used the new revision. Whatever you see is the answer. We cannot tell you in advance, and the research sheet could not confirm it.
+
+You can check the method on a host you control, the Inspector, without any account. This needs Node 22.19 or later and the network. Run it once per era and compare:
+
+```bash
+npx -y @modelcontextprotocol/inspector@2.12.0 --cli --protocol-era modern bash -c 'tee /tmp/lumen-in.log | .venv-mcp/bin/python mcp/python/read_server.py' --method tools/list
+grep -o '"method":"[^"]*"' /tmp/lumen-in.log | head -3
+```
+
+In modern mode we saw `server/discover`, `subscriptions/listen` and `tools/list`. Change `modern` to `legacy` and run both lines again (`tee` replaces the old log). In legacy mode we saw `initialize`, `notifications/initialized` and `tools/list`. Both eras list the same three tools.

@@ -1,6 +1,6 @@
 id: mcp
 title: MCP
 order: 4
-status: planned
+status: live
 summary: "The Model Context Protocol: clients, servers, apps and tools."
 subsections: ["Clients", "Servers", "Apps", "Tools"]

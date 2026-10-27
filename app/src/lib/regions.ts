@@ -1,6 +1,8 @@
 // Pure string helpers; no Node APIs so this also runs at Astro build time.
-const MARKER = /^(?:#|\/\/) ── (\d+)\.\s*(.*?)\s*─*\s*$/;
-const ANY_MARKER = /^(?:#|\/\/) ── /;
+// A marker may be indented: the MCP servers build their tools inside a function, so sections 2-4
+// sit one level in (and gofmt keeps a Go comment at the code's indent).
+const MARKER = /^[ \t]*(?:#|\/\/) ── (\d+)\.\s*(.*?)\s*─*\s*$/;
+const ANY_MARKER = /^[ \t]*(?:#|\/\/) ── /;
 
 export function listSections(source: string): { n: number; title: string }[] {
   const out: { n: number; title: string }[] = [];
@@ -23,5 +25,10 @@ export function extractSection(source: string, n: number): string {
     }
   }
   while (end > start + 1 && lines[end - 1].trim() === '') end--;
-  return lines.slice(start, end).join('\n');
+  // An indented section is shown dedented by its marker's indent, so a lesson quotes it flush left.
+  const indent = /^[ \t]*/.exec(lines[start])![0];
+  return lines
+    .slice(start, end)
+    .map((l) => (indent && l.startsWith(indent) ? l.slice(indent.length) : l))
+    .join('\n');
 }

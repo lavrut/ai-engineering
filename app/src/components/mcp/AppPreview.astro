@@ -1,0 +1,10 @@
+---
+// Build-time wrapper: passes app_snapshot.json's HTML (mcp/python/app/label.html, 7 KB) with a
+// Content-Security-Policy tag, the sample tool input and a screen-reader description.
+import AppPreviewIsland from './AppPreview.tsx';
+import { appPreviewProps, loadMcpData } from '../../lib/mcpData';
+
+const props = appPreviewProps(loadMcpData().appSnapshot);
+---
+
+<AppPreviewIsland client:visible {...props} />

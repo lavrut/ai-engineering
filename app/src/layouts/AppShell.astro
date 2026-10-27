@@ -197,6 +197,21 @@ const { title = 'AI Engineering' } = Astro.props;
   .prose > * {
     max-width: 68ch;
   }
+  /* A markdown table scrolls inside its own box, so a wide one never scrolls the page (375px). */
+  .prose > table {
+    display: block;
+    width: max-content;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+  }
+  .prose > table th,
+  .prose > table td {
+    padding: 6px 10px;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--line);
+  }
 
   /* ── Shell layout ─────────────────────────────── */
   .app {

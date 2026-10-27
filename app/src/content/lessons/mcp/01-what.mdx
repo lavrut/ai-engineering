@@ -1,0 +1,166 @@
+---
+track: mcp
+order: 1
+slug: what
+title: What MCP is
+goal: Name the three roles in the Model Context Protocol, read a JSON-RPC request, and say what the 2026-07-28 revision removed (the handshake and sessions) and what it added (capabilities on every request).
+minutes: 20
+quiz:
+  - question: A host wants one agent to use lumen-read and lumen-ops. How many MCP clients does it create, and why?
+    options:
+      - One, because a client can hold many servers at once
+      - Two, because each client talks to exactly one server, and the host coordinates them
+      - One per tool, so four in all
+      - None, because the model talks to the servers directly
+    answer: 1
+    explanation: The host is the program that owns the model and the user's consent. It creates one client for each server it connects to. The model never speaks MCP; it asks for a tool by name, and the host's client sends the request.
+  - question: In the 2026-07-28 revision there is no initialize call. How does a server learn what the client can do?
+    options:
+      - It asks the client with a request of its own
+      - It reads the capabilities in the _meta of each request, because no connection state is kept between requests
+      - It remembers them from the first request in a session
+      - It assumes every client can do everything
+    answer: 1
+    explanation: Every request carries the protocol version and the client's capabilities in its own _meta, so a request is complete by itself. There is no session to remember them in, and a server never sends a request to a client.
+  - question: You point a host at lumen-read and it connects, but you cannot tell which protocol revision it used. What is the safe conclusion?
+    options:
+      - It used 2026-07-28, because that is the current revision
+      - It failed, because older hosts cannot connect
+      - You do not know yet. The SDKs speak the old handshake as well, so a host may be using either, and the way to know is to look at what it sent
+      - It used 2025-11-25, because hosts are always one revision behind
+    answer: 2
+    explanation: Nobody has confirmed what Claude Desktop and Claude Code speak, and the SDKs handle both eras. The lesson's smoke test shows lumen-read answering both. Always report the version you observed, not the one you expect.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+In the Harness track you gave an agent tools by writing them inside the harness. That works, and it has a cost. A new tool means new harness code. Another app that wants the same tool writes it again.
+
+The <Term t="MCP" /> (Model Context Protocol) moves the tool out of the program and behind a standard message format. Any program that speaks the protocol can use any server that speaks it. This track builds two such servers, in Python and in Go, for a support team's tickets.
+
+### Three roles
+
+- The <Term t="host" /> is the program the person uses and the one that owns the model: a chat app, an editor, or the agent from lesson 5. It holds the user's consent and decides which tools the model may use.
+- An <Term t="MCP client" /> lives inside the host. It talks to one server. A host with two servers has two clients.
+- An <Term t="MCP server" /> offers capabilities and answers requests. It never talks to the model.
+
+The model only ever sees tool names, descriptions and results as text. The host turns the model's tool request into an MCP request, and the server's answer back into text.
+
+### The messages
+
+Every message is <Term t="JSON-RPC" /> 2.0: a request has an `id`, a `method` and `params`, and the result comes back with the same `id`. The protocol allows only the client to send requests. A server answers; it does not ask.
+
+A server can offer three kinds of thing:
+
+- **Tools** are actions the model chooses to call (`tools/list`, `tools/call`). Lesson 2.
+- **Resources** are data the host reads by address (`resources/list`, `resources/read`). Lesson 3.
+- **Prompts** are templates a person picks (`prompts/list`, `prompts/get`). Lesson 3.
+
+### Two ways to connect
+
+- <Term t="stdio" />: the client starts the server as a child process and the two exchange one JSON message per line on stdin and stdout. Nothing listens on a network port. Lessons 2 to 6 use this.
+- <Term t="Streamable HTTP" />: the server listens at one URL and the client POSTs each request. This is how a server is shared or runs on another machine. Lessons 7 to 9.
+
+### What the 2026-07-28 revision changed
+
+The spec here is revision 2026-07-28. The previous one is 2025-11-25. The facts below come from the research sheet for this track, `docs/superpowers/research/2026-10-26-mcp-facts.md`, section 1, which was read from the spec's changelog.
+
+- **No handshake.** There is no `initialize` call and no `notifications/initialized`. A client can send its first real request straight away.
+- **Capabilities on every request.** Each request carries `_meta` keys for the protocol version, the client's capabilities and (as a "should") the client's name. A result carries the server's name in `_meta`. A mismatch gives an `UnsupportedProtocolVersionError`, code -32022.
+- **No sessions.** The `Mcp-Session-Id` header is gone, and a server's lists may not vary from one connection to the next (they may vary by the caller's authorization scope). A tool that needs state across calls hands back an id that the model passes into the next call.
+- **A discovery call.** `server/discover` returns the versions, capabilities and instructions a server supports. Clients may skip it.
+- **No server-to-client requests.** When a server needs an answer from the person, it replies to the call with an `InputRequiredResult`, and the client retries the same call with the answer. Lesson 8 builds this.
+
+Older things are still around. The sheet lists roots, sampling and logging as deprecated but working, and the SDKs for both languages still serve clients that use the old handshake.
+
+<Callout kind="warning" title="Say which version you saw">
+  The research sheet did not test any real host: it only ran SDK against SDK, and it records that "whether Claude clients speak 2026-07-28 or fall back to initialize is unknown". This track does the same. When a lesson says a host used a version, it is because the learner or a script observed it.
+</Callout>
+
+### What we build
+
+Two servers over one shared core. `lumen-read` has no side effects: three tools, two resources and one prompt over the 60 Lumen tickets plus an extra injection test ticket, `t061`. `lumen-ops` writes labels, only after a person confirms, and only over HTTP. A host can grant consent per server, so the read server can be approved once while the write server stays gated.
+
+## See it
+
+Press **Next** through the diagram. Watch the direction of the arrows: the model talks to the agent, the agent to the client, and the client to the server. The model has no arrow to any server.
+
+<FlowDiagram diagram="mcp-architecture" />
+
+The diagram showed one host (the agent) with one client reaching two servers. Each server sits over the same data, and only lumen-ops writes.
+
+## The code
+
+The whole server is started in one place. Section 6 of `read_server.py` chooses the transport.
+
+<CodeTabs source="mcp-read" section={6} />
+
+- `ap.add_argument("--http", action="store_true", ...)` is the only switch. With no flag the server speaks stdio.
+- `build_read_server().run()` builds the server and runs it on stdio. The client starts this process and owns its stdin and stdout.
+- `app = build_http_app(port=args.port)` builds the HTTP app instead. Serving over HTTP is lesson 7.
+- `uvicorn.run(app, host="127.0.0.1", port=args.port)` binds the loopback address only, on port `8765` unless you pass `--port`.
+
+What a request looks like on the wire follows. It is a real `tools/call` captured from `lumen-read` for the lesson 2 aid, not typed in:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "get_ticket",
+    "arguments": { "id": "t001" },
+    "_meta": {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientInfo": { "name": "mcp", "version": "0.1.0" },
+      "io.modelcontextprotocol/clientCapabilities": {}
+    }
+  }
+}
+```
+
+- `"id": 3` pairs the request with its result.
+- `"method": "tools/call"` names the operation, and `params.name` the tool.
+- `_meta["io.modelcontextprotocol/protocolVersion"]` is the version this one request speaks.
+- `_meta["io.modelcontextprotocol/clientCapabilities"]` is empty here: this client offered nothing a server could use, so a server that needs to ask a question will not.
+
+<Callout kind="note" title="The same servers in Go">
+  The Go servers are the same shape: a `main` that picks stdio or HTTP, then the SDK runs it. Section 6 in `mcp/go/readserver/main.go` is the Go twin of the code above. The next lesson shows both languages side by side.
+</Callout>
+
+## Try it
+
+### Set up
+
+The track needs Python 3.12 or later and Go 1.27.2 or later, the version `mcp/go/go.mod` requires. From the repo root, make a virtual environment for it and install the pinned packages. Never install into your base Python.
+
+```bash
+python3 -m venv .venv-mcp
+.venv-mcp/bin/pip install -r mcp/requirements.txt
+```
+
+Nothing here costs money or calls an API.
+
+### Ask a server what it is
+
+The client from lesson 4 starts `lumen-read` over stdio and asks it to describe itself.
+
+```bash
+.venv-mcp/bin/python mcp/python/client.py --stdio discover
+```
+
+You should see `"protocol_version": "2026-07-28"`, `"server": "lumen-read"`, the three tool names (`classify_complaint`, `get_ticket`, `search_tickets`), one prompt (`review_ticket`), one resource (`lumen://reports/eval`) and one resource template (`lumen://tickets/{id}`). This client and this server are both on the SDK, so both speak the new revision.
+
+### See both eras (optional)
+
+The Inspector is the official test tool for MCP. This script runs it against `lumen-read` twice, once in the modern era and once in the legacy era (the old handshake), and counts the tools. It needs Node 22.19 or later and downloads the pinned Inspector with `npx`, so it needs the network. It skips with a message when Node is missing.
+
+```bash
+bash mcp/scripts/inspector_smoke.sh
+```
+
+On our run it printed `Inspector 2.12.0`, then `ok   (modern): tools/list returned 3 tools`, `ok   (legacy): tools/list returned 3 tools` and `PASS: both protocol eras list 3 tools`. So `lumen-read` answers a host whichever era it speaks. That is the server's behaviour; it tells you nothing about which era a particular host chooses.

@@ -1,0 +1,15 @@
+{
+  "note": "tokens_estimate = ceil(chars / 4) of the compact tools/list tools array: an estimate, not a tokenizer count",
+  "servers": {
+    "lumen-read": {
+      "tools": 3,
+      "chars": 2095,
+      "tokens_estimate": 524
+    },
+    "lumen-ops": {
+      "tools": 1,
+      "chars": 705,
+      "tokens_estimate": 177
+    }
+  }
+}

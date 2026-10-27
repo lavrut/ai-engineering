@@ -140,6 +140,58 @@ export const glossary = {
     'In Inspect, the function that grades one sample’s answer. Its metrics, such as accuracy and standard error, combine the grades into a score.',
   epoch:
     'One pass of an Inspect eval over every sample. Running three epochs repeats each sample three times, as the lab’s three reps do.',
+  MCP:
+    'The Model Context Protocol: an open standard for how a program asks a server for tools, data and prompts, using JSON-RPC messages.',
+  host:
+    'In MCP, the program the person uses and the one that owns the model, such as a chat app or an agent. It holds the user’s consent and creates one client for each server.',
+  'MCP client':
+    'The part of a host that talks to one MCP server. It sends the requests and returns the results to the host.',
+  'MCP server':
+    'A program that offers tools, resources and prompts over MCP and answers requests. It never talks to the model.',
+  'JSON-RPC':
+    'The message format MCP uses: a request has an id, a method and params, and its result comes back with the same id.',
+  stdio:
+    'An MCP transport where the client starts the server as a child process and the two exchange one JSON message per line on standard input and output.',
+  'Streamable HTTP':
+    'An MCP transport where the server listens at one URL and the client POSTs each request, so a server can be shared or run on another machine.',
+  'MCP tool':
+    'A function a server offers that the model can ask for by name. It has a description, an input schema, an optional output schema and annotations.',
+  'structured content':
+    'The JSON value in a tool result that matches the tool’s output schema, sent beside the text blocks.',
+  'MCP resource':
+    'Data a server offers at an address (a URI) that the host reads. The application decides when to read it, not the model.',
+  'resource template':
+    'A resource address with a hole in it, such as lumen://tickets/{id}, which stands for many resources.',
+  'MCP prompt':
+    'A template a server offers for a person to pick, which returns messages to start a conversation.',
+  discovery:
+    'How an MCP client learns what a server has: it lists the tools, resources, templates and prompts and reads the server’s name and instructions.',
+  InputRequiredResult:
+    'A reply to a call that means the server needs an answer first. The client asks, then sends the same call again with the answer attached.',
+  recording:
+    'A file of real model responses, one per call, keyed by a hash of the request, so a run can be replayed for free and give the same answer.',
+  'DNS rebinding':
+    'An attack where a web page’s domain is made to point at 127.0.0.1, so the browser sends the page’s requests to a server on your own machine, with the page’s own name as Host and Origin. Checking each header against a fixed list of local names defeats it; comparing them with each other does not.',
+  'bearer token':
+    'A token sent in an Authorization: Bearer header. Whoever holds it can use it, so it is kept out of URLs and logs and is only good for one server.',
+  elicitation:
+    'An MCP server asking the user a question through the client, with a small form for the answer. lumen-ops uses it to ask for a yes before it writes.',
+  provenance:
+    'A record of where a piece of data came from: here, who wrote a label, through which client, with which model, and whether a yes was claimed.',
+  'authorization server':
+    'The OAuth server that issues tokens after checking who the user is. An MCP server only checks tokens; it never issues them.',
+  'protected resource metadata':
+    'A small JSON document an MCP server publishes (RFC 9728) that names its authorization server and its scopes, so a client can find where to get a token.',
+  PKCE:
+    'Proof Key for Code Exchange: the client sends a hash of a random secret when it asks for a code, and the secret itself when it swaps the code for a token, so a stolen code is useless.',
+  audience:
+    'The server a token was issued for, named in its aud claim (RFC 8707). A server refuses a token whose audience is not its own URI.',
+  'OAuth scope':
+    'A named permission a token carries, such as tickets:read or tickets:write. A server answers 403 to a token for it that lacks the scope it needs.',
+  'MCP App':
+    'An HTML page a server ships with a tool, as a ui:// resource. A host that supports the Apps extension shows it in a sandboxed frame beside the call.',
+  'prompt injection':
+    'Instructions hidden in data a model reads, such as a ticket body or a web page, written in the hope that the model obeys them instead of its user.',
 } as const satisfies Record<string, string>;
 
 export type GlossaryKey = keyof typeof glossary;

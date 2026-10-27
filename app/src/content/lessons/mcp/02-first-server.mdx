@@ -1,0 +1,169 @@
+---
+track: mcp
+order: 2
+slug: first-server
+title: Your first server
+goal: Read lumen-read's three tools, say what its schemas, structured output and read-only hint do and do not guarantee, and call each tool from a client and from the Inspector.
+minutes: 25
+quiz:
+  - question: search_tickets is called with limit 50. The tool's input schema only says limit is an integer. What stops the call, and what does the model get back?
+    options:
+      - The SDK rejects it from the schema, and the model gets a protocol error
+      - The tool's own check, which returns an error result with the fixed text "limit must be 1 to 20" and isError true, so the model can read it and retry
+      - Nothing stops it, and 50 tickets come back
+      - The server crashes and the client reconnects
+    answer: 1
+    explanation: The schema describes the shape (an integer), not every rule. The 1 to 20 rule is code in the tool. It returns a tool error with a fixed message, which goes back to the model as an ordinary result it can act on. Python and Go return exactly the same text.
+  - question: Every tool in lumen-read carries readOnlyHint true. What does that tell a host?
+    options:
+      - That the server cannot write, because the SDK blocks writes
+      - That the server says the tool does not change anything, which is a claim a host may use, for example to skip asking, but cannot check
+      - That the tool needs no arguments
+      - That the result is cached
+    answer: 1
+    explanation: An annotation is a statement by the server. The spec says to treat annotations as untrusted unless the server is trusted. Here the claim is true because no tool in the server writes anything. Lesson 8 returns to why a hint is not a guard.
+  - question: Why does each tool return the result twice, as structured content and as a text block holding the same JSON?
+    options:
+      - So the result is counted twice for billing
+      - Because the schema requires a text block
+      - So a client that understands structured output gets a typed value, and a client that reads only text still gets the full answer
+      - To hide the ticket text from the model
+    answer: 2
+    explanation: Structured content matches the tool's output schema and is what a program wants. The text block is what many hosts hand to the model. Sending both costs nothing and avoids a host that sees an empty answer.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import McpMessageView from '../../../components/mcp/McpMessageView.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+A <Term t="MCP tool" /> is a function the model can ask for by name. A server describes each tool with:
+
+- a `name` and a `description`, which the model reads to decide when to use it;
+- an `inputSchema`, a <Term t="JSON Schema" /> for the arguments;
+- an optional `outputSchema` for the result;
+- `annotations`, hints about the tool such as `readOnlyHint`.
+
+`lumen-read` has three tools:
+
+| Tool | Does | Limits |
+|---|---|---|
+| `search_tickets(query, limit)` | Ranks tickets by how many query words appear in their text | `query` 1 to 200 characters; `limit` 1 to 20, default 5 |
+| `get_ticket(id)` | Returns one ticket, such as `t001` | the id must exist |
+| `classify_complaint(text)` | Runs the production model from the ML track | `text` 1 to 20,000 characters |
+
+### Structured output
+
+A tool result has a list of `content` blocks and, if the tool declares an `outputSchema`, <Term t="structured content" />: a JSON value that matches the schema. Our tools send both, and the text block holds the same JSON. A program reads the structured value. A host that only passes text to the model still gives it the whole answer.
+
+### Ticket text is data
+
+Customers write tickets, so anything in one can try to look like an instruction. Every ticket comes back with its words in one field, named `untrusted_body`, and the server's `instructions` say to treat that field as data. The name is a warning to whoever reads the result, a person or a model. It does not stop the model from obeying the text: lesson 11 shows what does.
+
+### Errors the model can read
+
+A bad argument is not a crash. The tool returns a result with `isError: true` and a fixed message, so the model sees what went wrong and can try again. The messages are the same in Python and Go, and a shared contract file (`mcp/fixtures/contract.jsonl`, 35 cases for `lumen-read`) checks both servers against it:
+
+- `query must be 1 to 200 characters`
+- `limit must be 1 to 20`
+- `text must be 1 to 20000 characters`
+- `unknown ticket: {id}`
+
+### The read-only hint
+
+All three tools carry `readOnlyHint: true`. That is a claim by the server. A host may use it, for example to skip a confirmation. A host cannot verify it, and the spec says to treat annotations as untrusted unless the server is. The claim is true here because no tool writes anything.
+
+## See it
+
+Step through five real exchanges captured from `lumen-read`. Use the first three here: `server/discover`, `tools/list` and `tools/call`. Watch the `tools/list` result, which holds each tool's schema and its `readOnlyHint`, and the `tools/call` result, which holds the text block and the structured content side by side. The last two steps, a resource read and a prompt, are for the next lesson.
+
+<McpMessageView />
+
+The messages are recorded from the running server by `mcp/python/derive.py`. This page makes no calls. In `tools/call`, the same ticket appears twice, once as a JSON string in `content` and once as an object in `structuredContent`, and `isError` is `false`.
+
+## The code
+
+Section 1 holds the limits and the fixed messages. Everything that has to match across languages is a named constant.
+
+<CodeTabs source="mcp-read" section={1} />
+
+- `INSTRUCTIONS = (...)` is the text a host shows the model about the server. It says all tools are read-only and that `untrusted_body` is data.
+- `READ_ONLY = ToolAnnotations(read_only_hint=True)` is built once and attached to every tool.
+- `ERR_QUERY`, `ERR_LIMIT` and `ERR_TEXT` are the fixed messages. The Go server has the same three strings.
+- `def fail(message) -> CallToolResult` returns `CallToolResult(..., is_error=True)` instead of raising. The SDK adds a prefix, "Error executing tool", to a raised error, and the contract needs the text exactly as written.
+- `class Hit(TypedDict)` with `untrusted_body: str` is the output shape. The only field that carries ticket text is named in the type, and the SDK turns the type into the `outputSchema`.
+- `def _ok(structured)` makes the result: the structured value plus a text block holding `json.dumps(structured)`.
+
+Section 2 holds the three tools.
+
+<CodeTabs source="mcp-read" section={2} />
+
+- `@mcp.tool(annotations=READ_ONLY)` registers the function as a tool. The function name is the tool name, and the docstring is the description the model reads.
+- `def search_tickets(query: str, limit: int = DEFAULT_LIMIT)` gives the schema its two properties. Only `query` is required, because `limit` has a default.
+- `if not 1 <= len(query) <= MAX_QUERY_CHARS: return fail(ERR_QUERY)` is the rule the schema cannot state. It checks before any work.
+- `out: SearchOut = {"results": tickets.search(query, limit)}` calls the shared core. The server adds no logic of its own to the search.
+- `except KeyError: return fail(err_unknown(id))` turns a missing id into the fixed message.
+- `return _ok(classify.classify(text))` returns the label, the scores, `low_confidence` and `model_version`. This is the classifier from the ML track. It predicts complaint products such as "Credit card", not ticket categories such as "billing". Lesson 5 shows an agent noticing that.
+
+<Callout kind="note" title="Tools are the model's choice">
+  A tool is the only one of the three kinds the model picks by itself. That is why every tool's name and description are short and plain: they are the whole of what the model has to go on. A longer list of tools costs context on every request, which lesson 6 measures.
+</Callout>
+
+## How Go does it
+
+The Go tab above shows the same three tools through `mcp.AddTool`. Three things differ, and each exists to keep the two servers byte-for-byte alike.
+
+- Go builds the schema from a struct. `SearchIn` has the field `Limit *int` with the tag `jsonschema:"maximum results, 1 to 20 (default 5)"`. The pointer lets the code tell an absent `limit` from `0`, which Python gets from its default value.
+- Go counts characters with `utf8.RuneCountInString`, not `len`. A Go string's `len` counts bytes, and the limits are in characters, as Python's `len` counts them.
+- The tools return `any` and carry their `OutputSchema` explicitly, built by `outSchema[T]()`. The SDK's typed path would attach an empty structured value to an error result, and the contract says an error result has none.
+
+## Try it
+
+Run each command from the repo root, after the setup in lesson 1. All of them are free and use stdio.
+
+List the tools. You should see three, each with `"readOnlyHint": true`, and the schemas cut down to their shape:
+
+```bash
+.venv-mcp/bin/python mcp/python/client.py --stdio tools
+```
+
+Search for two tickets. Both come back with their text in `untrusted_body`. We got `t001` and `t007`:
+
+```bash
+.venv-mcp/bin/python mcp/python/client.py --stdio call search_tickets '{"query": "charged twice", "limit": 2}'
+```
+
+Break the rule. You should get `{"error": "limit must be 1 to 20"}`, not a crash:
+
+```bash
+.venv-mcp/bin/python mcp/python/client.py --stdio call search_tickets '{"query": "refund", "limit": 50}'
+```
+
+Ask for a ticket that does not exist. You should get `{"error": "unknown ticket: t999"}`:
+
+```bash
+.venv-mcp/bin/python mcp/python/client.py --stdio call get_ticket '{"id": "t999"}'
+```
+
+Classify some text. You should see a label with `"low_confidence": true`, the six scores, and `"model_version": "v1"`:
+
+```bash
+.venv-mcp/bin/python mcp/python/client.py --stdio call classify_complaint '{"text": "I was charged twice for my subscription"}'
+```
+
+Run the Go client against the same Python server and compare. The two clients print the same bytes for the same command, and the output of `discover` was identical when we compared the files:
+
+```bash
+cd mcp/go && go run ./client -stdio call get_ticket '{"id": "t999"}'
+```
+
+### The Inspector, in modern mode (optional)
+
+The Inspector can call any tool by hand. It needs Node 22.19 or later and the network. Always pass `--protocol-era modern`: its default is the legacy era, which would use the old handshake.
+
+```bash
+npx -y @modelcontextprotocol/inspector@2.12.0 --cli --protocol-era modern .venv-mcp/bin/python mcp/python/read_server.py --method tools/call --tool-name search_tickets --tool-arg query=refund --tool-arg limit=1
+```
+
+You should see one result for `t001`, with `isError` false, the text block, `structuredContent` and `_meta` holding the server's name, `lumen-read`.
