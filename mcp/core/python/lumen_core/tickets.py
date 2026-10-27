@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from . import DEFAULT_LIMIT, REPO_ROOT
 
@@ -26,13 +27,24 @@ def _hit(t: dict) -> dict:
 
 
 # ── 2. Search and get ───────────────────────────────────────────────────────
+# Python's str.lower() and str.split() are Unicode-aware; Go's differ in the corners. Both
+# cores use only ASCII rules so they agree byte for byte: A-Z -> a-z and nothing else, and
+# split on space, \t, \n, \r, \v, \f and nothing else (so \x1f or U+00A0 do not split).
+_ASCII_LOWER = {c: c + 32 for c in range(ord("A"), ord("Z") + 1)}
+_ASCII_WS = re.compile(r"[ \t\n\r\v\f]+")
+
+
+def ascii_lower(s: str) -> str:
+    return s.translate(_ASCII_LOWER)
+
+
 def search(query: str, limit: int = DEFAULT_LIMIT) -> list[dict]:
-    """Case-insensitive substring match per query word; score = number of words that hit.
+    """ASCII-case-insensitive substring match per query word; score = number of words that hit.
     Ties break by id ascending. Tickets with no hit are left out."""
-    words = query.lower().split()
+    words = [w for w in _ASCII_WS.split(ascii_lower(query)) if w]
     scored = []
     for t in load_tickets():
-        text = t["text"].lower()
+        text = ascii_lower(t["text"])
         n = sum(1 for w in words if w in text)
         if n:
             scored.append((-n, t["id"], t))

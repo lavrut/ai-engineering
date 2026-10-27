@@ -8,25 +8,32 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import threading
 
 from . import REPO_ROOT
 
 # ── 1. Loading the production model ─────────────────────────────────────────
 _SERVER_PATH = REPO_ROOT / "ml" / "serve" / "server.py"
 _cache: dict = {}
+_lock = threading.Lock()   # tool calls can run on worker threads: load the model once
 
 
 def _load() -> tuple:
     """Import ml/serve/server.py by path (it puts ml/python on sys.path itself), then load
     the production model once. ML_ROOT is honoured, as in the server."""
-    if not _cache:
-        spec = importlib.util.spec_from_file_location("ml_serve_server", _SERVER_PATH)
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules["ml_serve_server"] = mod
-        spec.loader.exec_module(mod)
-        _cache["server"] = mod
-        _cache["model"] = mod.load_production(mod.ml_root())
+    with _lock:
+        if not _cache:
+            _load_locked()
     return _cache["server"], _cache["model"]
+
+
+def _load_locked() -> None:
+    spec = importlib.util.spec_from_file_location("ml_serve_server", _SERVER_PATH)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["ml_serve_server"] = mod
+    spec.loader.exec_module(mod)
+    _cache["server"] = mod
+    _cache["model"] = mod.load_production(mod.ml_root())
 
 
 # ── 2. Classifying ──────────────────────────────────────────────────────────

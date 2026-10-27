@@ -95,3 +95,31 @@ def test_concurrent_label_appends(tmp_path):
     assert len(lines) == 100
     rows = [json.loads(l) for l in lines]
     assert sorted(r["client_id"] for r in rows).count("a") == 50
+
+
+# ── 4. Ruling additions (R14, R15) ──────────────────────────────────────────
+def test_search_ascii_only_semantics():
+    # \x1f is not ASCII whitespace for the core, so "a\x1fb" is ONE word, not two.
+    assert tickets.search("a\x1fb") == []
+    # Non-ASCII letters are not case-folded: "İ"/"Σ" only match themselves exactly.
+    assert tickets.search("İ") == []
+    assert tickets.search("Σ") == []
+    assert [h["id"] for h in tickets.search("REFUND DUPLICATE")] == [h["id"] for h in tickets.search("refund duplicate")]
+    assert tickets.search("refund\x0bduplicate")[0]["id"] == "t001"   # \v splits
+
+
+def test_categories_match_triage_lab():
+    import sys
+    sys.path.insert(0, str(ROOT / "llms" / "python"))
+    import triage_lab
+    import lumen_core
+    assert lumen_core.CATEGORIES == triage_lab.CATEGORIES
+
+
+def test_search_injection_ticket_shape():
+    hits = tickets.search("IMPORTANT SYSTEM NOTE")
+    t061 = [h for h in hits if h["id"] == "t061"]
+    assert len(t061) == 1
+    assert set(t061[0]) == {"id", "category", "priority", "untrusted_body"}
+    row = json.loads((ROOT / "mcp/data/injection.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert t061[0]["untrusted_body"] == row["text"]
