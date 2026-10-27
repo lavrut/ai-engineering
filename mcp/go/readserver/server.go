@@ -241,7 +241,7 @@ func NewReadServer() *mcp.Server {
 // ── 5. HTTP handler and security ────────────────────────────────────────────
 
 // NewHTTPHandler is the Streamable HTTP handler for a server listening on `port`: /mcp (Stateless) as an OAuth resource server for
-// auth.ReadResource with scope auth.ScopeRead, and the protected-resource metadata at auth.PRMPath. The
+// auth.ResourceURI(port) with scope auth.ScopeRead, and the protected-resource metadata at auth.PRMPath. The
 // order of checks (Host and Origin for every method -> body cap -> bearer token) is in auth.Handler. It
 // reads the signing key file (auth.LoadSigningKey) and returns its error, which says to start the
 // test AS first: there is no default key.
@@ -252,5 +252,5 @@ func NewHTTPHandler(s *mcp.Server, port int) (http.Handler, error) {
 	}
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s },
 		&mcp.StreamableHTTPOptions{Stateless: true, MaxRequestBodyBytes: core.MaxBodyBytes})
-	return auth.Handler(mcpHandler, auth.ReadResource, auth.ScopeRead, key, port), nil
+	return auth.Handler(mcpHandler, auth.ResourceURI(port), auth.ScopeRead, key, port), nil
 }

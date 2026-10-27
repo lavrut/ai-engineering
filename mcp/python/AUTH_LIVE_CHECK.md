@@ -41,7 +41,7 @@ The pre-registered public client `lumen-cli` (ruling R4, primary):
 
 ```sh
 .venv-mcp/bin/python mcp/python/auth_live_check.py --url http://127.0.0.1:8765/mcp \
-    --save-token /tmp/lumen-read.tok get_ticket '{"id": "t001"}'
+    --save-token ~/.lumen/read.tok get_ticket '{"id": "t001"}'
 ```
 
 Expected:
@@ -78,8 +78,8 @@ The `client_id` comes from the verified token, not from anything the client says
 Pass the token as a file, not on the command line (ruling R26).
 
 ```sh
-.venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8765/mcp --token-file /tmp/lumen-read.tok discover
-(cd mcp/go && go run ./client -url http://127.0.0.1:8765/mcp -token-file /tmp/lumen-read.tok discover)
+.venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8765/mcp --token-file ~/.lumen/read.tok discover
+(cd mcp/go && go run ./client -url http://127.0.0.1:8765/mcp -token-file ~/.lumen/read.tok discover)
 ```
 
 Both print the same bytes. `LUMEN_TOKEN` also works.
@@ -96,7 +96,7 @@ Send the lumen-read token to lumen-ops. Use `curl` here so that you can see the 
 
 ```sh
 curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8766/mcp \
-    -H "Authorization: Bearer $(cat /tmp/lumen-read.tok)" -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $(cat ~/.lumen/read.tok)" -H 'Content-Type: application/json' \
     -H 'Accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
@@ -107,8 +107,8 @@ The audience is checked before the scope (ruling R24). The token was issued for 
 Both clients fail too. They print nothing on stdout, and they print the same single line on stderr, then exit 1:
 
 ```sh
-.venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8766/mcp --token-file /tmp/lumen-read.tok tools
-(cd mcp/go && go run ./client -url http://127.0.0.1:8766/mcp -token-file /tmp/lumen-read.tok tools)
+.venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8766/mcp --token-file ~/.lumen/read.tok tools
+(cd mcp/go && go run ./client -url http://127.0.0.1:8766/mcp -token-file ~/.lumen/read.tok tools)
 ```
 
 ```
@@ -120,7 +120,7 @@ client: the server refused the request: HTTP 401 Unauthorized
 Stop the three processes, then:
 
 ```sh
-rm -f /tmp/lumen-read.tok /tmp/lumen-live-labels.jsonl
+rm -f ~/.lumen/read.tok /tmp/lumen-live-labels.jsonl
 ```
 
 Keep `mcp/data/dev-signing.key` for the next run, or delete it to rotate the key. Deleting it invalidates every token issued so far.

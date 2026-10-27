@@ -449,7 +449,7 @@ func TestDNSRebindingRefusedOverHTTP(t *testing.T) {
 	// R42, on a real server: Host and Origin both name the attacker's host. 403 even with a valid token.
 	ts := serveLocal(t, NewReadServer())
 	port := ts.Listener.Addr().(*net.TCPAddr).Port
-	token := readToken()
+	token := tok(auth.ScopeRead, auth.ResourceURI(port), "lumen-cli", "user-1") // R46: the audience names the port
 	at := func(h string) string { return fmt.Sprintf("%s:%d", h, port) }
 	for _, c := range []struct {
 		host, origin string
@@ -467,5 +467,47 @@ func TestDNSRebindingRefusedOverHTTP(t *testing.T) {
 		if got := rebindingStatus(t, ts, c.host, c.origin, token); got != c.want {
 			t.Errorf("Host %q Origin %q: %d, want %d", c.host, c.origin, got, c.want)
 		}
+	}
+}
+
+// R46: the canonical resource URI and the PRM follow the port the server listens on.
+func TestNonDefaultPortAudienceAndPRM(t *testing.T) {
+	const port = 18765
+	authtest.UseKey(t)
+	h, err := NewHTTPHandler(NewReadServer(), port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resource := auth.ResourceURI(port)
+	if resource != "http://127.0.0.1:18765/mcp" || auth.ResourceURI(DefaultPort) != auth.ReadResource {
+		t.Fatalf("ResourceURI: %q", resource)
+	}
+	do := func(method, url, token string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, url, strings.NewReader(listBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	if rec := do("POST", "http://127.0.0.1:18765/mcp", tok(auth.ScopeRead, resource, "lumen-cli", "user-1")); rec.Code != 200 {
+		t.Errorf("token for the port's own URI: got %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := do("POST", "http://127.0.0.1:18765/mcp", tok(auth.ScopeRead, auth.ReadResource, "lumen-cli", "user-1")); rec.Code != 401 {
+		t.Errorf("token for the default-port URI: got %d, want 401 (wrong audience)", rec.Code)
+	}
+	unauth := do("POST", "http://127.0.0.1:18765/mcp", "")
+	if want := `resource_metadata="http://127.0.0.1:18765/.well-known/oauth-protected-resource/mcp"`; unauth.Code != 401 || !strings.Contains(unauth.Header().Get("WWW-Authenticate"), want) {
+		t.Errorf("401 header: %d %q", unauth.Code, unauth.Header().Get("WWW-Authenticate"))
+	}
+	var prm struct {
+		Resource string `json:"resource"`
+	}
+	rec := do("GET", "http://127.0.0.1:18765/.well-known/oauth-protected-resource/mcp", "")
+	if err := json.Unmarshal(rec.Body.Bytes(), &prm); err != nil || prm.Resource != resource {
+		t.Errorf("PRM resource %q (%v), want %q", prm.Resource, err, resource)
 	}
 }

@@ -9,7 +9,7 @@ arguments, within five minutes, on a state this server issued and has not seen a
 Whether a human or a script said "yes" is the client's claim; `confirmed=True` records the claim.
 
 HTTP only by design (a write server is not a subprocess any host can spawn), and always as an OAuth
-resource server (scope tickets:write, audience http://127.0.0.1:8766/mcp; see resource_auth.py).
+resource server (scope tickets:write, audience http://127.0.0.1:<port>/mcp, 8766 by default; see resource_auth.py).
 The label row's client_id is the verified token's client_id. Tests use the in-memory server from
 build_ops_server(), which has no HTTP and so no bearer check.
 
@@ -43,8 +43,8 @@ from pydantic import BaseModel, ConfigDict, model_validator
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "core" / "python"))
 from lumen_core import CATEGORIES, LABELS_PATH, MAX_BODY_BYTES, tickets  # noqa: E402
 from lumen_core.labels import write_label  # noqa: E402
-from resource_auth import (OPS_RESOURCE, SCOPE_WRITE, LocalOnly, SigningKeyMissing,  # noqa: E402
-                           resource_server, transport_security)
+from resource_auth import (SCOPE_WRITE, LocalOnly, SigningKeyMissing,  # noqa: E402
+                           resource_server, resource_uri, transport_security)
 
 # ── 1. Configuration and helpers ────────────────────────────────────────────
 INSTRUCTIONS = (
@@ -193,8 +193,10 @@ def install_capture(mcp: MCPServer) -> None:
     mcp.middleware.insert(at, capture_wire_state)
 
 
-def build_ops_server(labels_path: Path = LABELS_PATH, *, auth: bool = False) -> MCPServer:
-    """auth=True makes it a resource server (required by build_http_app); in-memory tests use False."""
+def build_ops_server(labels_path: Path = LABELS_PATH, *, auth: bool = False, port: int = DEFAULT_PORT) -> MCPServer:
+    """auth=True makes it a resource server (required by build_http_app); in-memory tests use False.
+    `port` is the port it will listen on: its canonical resource URI (the token audience, and the PRM's
+    `resource`) is derived from it (R46)."""
     security = state_security()
     apps = build_apps()  # tools must be bound to it before the server consumes it, hence before MCPServer(...)
     spent = SpentStates()
@@ -226,7 +228,7 @@ def build_ops_server(labels_path: Path = LABELS_PATH, *, auth: bool = False) -> 
         return _ok(dict(out))
 
     mcp = MCPServer("lumen-ops", instructions=INSTRUCTIONS, request_state_security=security, extensions=[apps],
-                    **(resource_server(OPS_RESOURCE, SCOPE_WRITE) if auth else {}))
+                    **(resource_server(resource_uri(port), SCOPE_WRITE) if auth else {}))
     install_capture(mcp)
     return mcp
 
@@ -240,9 +242,12 @@ def build_http_app(mcp: MCPServer | None = None, port: int = DEFAULT_PORT):
     check, so a bad Host or Origin is 403 with or without a token, as in Go. The SDK's own check gets
     the same explicit lists. The body cap is passed explicitly. The PRM is served at
     /.well-known/oauth-protected-resource/mcp."""
-    mcp = mcp or build_ops_server(auth=True)
+    mcp = mcp or build_ops_server(auth=True, port=port)
     if mcp.settings.auth is None:
         raise ValueError("lumen-ops serves HTTP only with auth: build_ops_server(auth=True)")
+    if str(mcp.settings.auth.resource_server_url) != resource_uri(port):
+        raise ValueError(f"this server was built for {mcp.settings.auth.resource_server_url}, not port {port}: "
+                         "build_ops_server(auth=True, port=...) with the same port")
     app = mcp.streamable_http_app(host="127.0.0.1", max_request_body_size=MAX_BODY_BYTES,
                                   transport_security=transport_security(port))
     return LocalOnly(app, port)
@@ -256,7 +261,7 @@ def main() -> None:
     args = ap.parse_args()
     import uvicorn
     try:
-        app = build_http_app(build_ops_server(args.labels, auth=True), port=args.port)
+        app = build_http_app(build_ops_server(args.labels, auth=True, port=args.port), port=args.port)
     except SigningKeyMissing as e:  # no key file: say how to fix it, never fall back to a key
         raise SystemExit(f"ops_server: {e}") from None
     uvicorn.run(app, host="127.0.0.1", port=args.port)

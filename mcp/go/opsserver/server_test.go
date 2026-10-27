@@ -587,7 +587,7 @@ func TestLegacyClientFailsClosedOverStatelessHTTP(t *testing.T) {
 	var seen []asked
 	client := mcp.NewClient(&mcp.Implementation{Name: "legacy", Version: "0"},
 		&mcp.ClientOptions{ElicitationHandler: replying(accept, &seen)})
-	cs, err := client.Connect(context.Background(), transportAs(ts.URL, opsToken()),
+	cs, err := client.Connect(context.Background(), transportAs(ts.URL, opsTokenAt(ts)),
 		&mcp.ClientSessionOptions{ProtocolVersion: "2025-11-25"})
 	if err != nil {
 		t.Fatal(err)
@@ -613,7 +613,7 @@ func TestModernClientConfirmsOverHTTP(t *testing.T) {
 	var seen []asked
 	cs, err := mcp.NewClient(&mcp.Implementation{Name: "modern", Version: "0"},
 		&mcp.ClientOptions{ElicitationHandler: replying(accept, &seen)}).
-		Connect(context.Background(), transportAs(ts.URL, opsToken()), nil)
+		Connect(context.Background(), transportAs(ts.URL, opsTokenAt(ts)), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -753,7 +753,7 @@ func TestOpsClientIDFromToken(t *testing.T) {
 		t.Cleanup(func() { cs.Close() })
 		return cs
 	}
-	tok7 := tok(auth.ScopeWrite, auth.OpsResource, "lumen-test-client-7", "user-42")
+	tok7 := tok(auth.ScopeWrite, auth.ResourceURI(portOf(ts)), "lumen-test-client-7", "user-42")
 	res, err := connect(tok7, false).CallTool(context.Background(), &mcp.CallToolParams{Name: "label_ticket",
 		Arguments: map[string]any{"id": "t001", "label": "billing"}})
 	if err != nil || res.IsError {
@@ -772,7 +772,7 @@ func TestOpsClientIDFromToken(t *testing.T) {
 	if err := json.Unmarshal(raw, &st); err != nil || st.Sub != "user-42" || st.ClientID != "lumen-test-client-7" {
 		t.Fatalf("state %+v %v", st, err)
 	}
-	other := connect(tok(auth.ScopeWrite, auth.OpsResource, "someone-else", "user-43"), true)
+	other := connect(tok(auth.ScopeWrite, auth.ResourceURI(portOf(ts)), "someone-else", "user-43"), true)
 	wantDeclined(t, round(t, other, "t002", "bug", accept, state))
 	if rows := readRows(t, path); len(rows) != 1 {
 		t.Fatalf("another caller's answer wrote: %d rows", len(rows))
@@ -795,6 +795,13 @@ func TestGetWithBadOrigin403(t *testing.T) {
 
 // serveLocal starts a real HTTP server for s on a free 127.0.0.1 port, with the handler built for that
 // port (its Host allow-list names it, ruling R42), and returns it.
+func portOf(ts *httptest.Server) int { return ts.Listener.Addr().(*net.TCPAddr).Port }
+
+// opsTokenAt is lumen-ops's own token for a server served on ts's port (R46: the audience names it).
+func opsTokenAt(ts *httptest.Server) string {
+	return tok(auth.ScopeWrite, auth.ResourceURI(portOf(ts)), "lumen-cli", "user-1")
+}
+
 func serveLocal(t *testing.T, s *mcp.Server) *httptest.Server {
 	t.Helper()
 	authtest.UseKey(t)
@@ -836,7 +843,7 @@ func TestDNSRebindingRefusedOverHTTP(t *testing.T) {
 	// R42, on a real server: Host and Origin both name the attacker's host. 403 even with a valid token.
 	ts := serveLocal(t, NewOpsServer(labelsFile(t)))
 	port := ts.Listener.Addr().(*net.TCPAddr).Port
-	token := opsToken()
+	token := tok(auth.ScopeWrite, auth.ResourceURI(port), "lumen-cli", "user-1") // R46: the audience names the port
 	at := func(h string) string { return fmt.Sprintf("%s:%d", h, port) }
 	for _, c := range []struct {
 		host, origin string
@@ -854,5 +861,47 @@ func TestDNSRebindingRefusedOverHTTP(t *testing.T) {
 		if got := rebindingStatus(t, ts, c.host, c.origin, token); got != c.want {
 			t.Errorf("Host %q Origin %q: %d, want %d", c.host, c.origin, got, c.want)
 		}
+	}
+}
+
+// R46: the canonical resource URI and the PRM follow the port the server listens on.
+func TestNonDefaultPortAudienceAndPRM(t *testing.T) {
+	const port = 18766
+	authtest.UseKey(t)
+	h, err := NewHTTPHandler(NewOpsServer(filepath.Join(t.TempDir(), "labels.jsonl")), port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resource := auth.ResourceURI(port)
+	if resource != "http://127.0.0.1:18766/mcp" || auth.ResourceURI(DefaultPort) != auth.OpsResource {
+		t.Fatalf("ResourceURI: %q", resource)
+	}
+	do := func(method, url, token string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, url, strings.NewReader(listBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	if rec := do("POST", "http://127.0.0.1:18766/mcp", tok(auth.ScopeWrite, resource, "lumen-cli", "user-1")); rec.Code != 200 {
+		t.Errorf("token for the port's own URI: got %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := do("POST", "http://127.0.0.1:18766/mcp", tok(auth.ScopeWrite, auth.OpsResource, "lumen-cli", "user-1")); rec.Code != 401 {
+		t.Errorf("token for the default-port URI: got %d, want 401 (wrong audience)", rec.Code)
+	}
+	unauth := do("POST", "http://127.0.0.1:18766/mcp", "")
+	if want := `resource_metadata="http://127.0.0.1:18766/.well-known/oauth-protected-resource/mcp"`; unauth.Code != 401 || !strings.Contains(unauth.Header().Get("WWW-Authenticate"), want) {
+		t.Errorf("401 header: %d %q", unauth.Code, unauth.Header().Get("WWW-Authenticate"))
+	}
+	var prm struct {
+		Resource string `json:"resource"`
+	}
+	rec := do("GET", "http://127.0.0.1:18766/.well-known/oauth-protected-resource/mcp", "")
+	if err := json.Unmarshal(rec.Body.Bytes(), &prm); err != nil || prm.Resource != resource {
+		t.Errorf("PRM resource %q (%v), want %q", prm.Resource, err, resource)
 	}
 }

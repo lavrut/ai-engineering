@@ -3,6 +3,9 @@
     *** Never run this anywhere but 127.0.0.1, and never for real users. ***
     It AUTO-APPROVES every authorization request with no login page and one fixed test subject
     (TEST_SUBJECT = "user-1").
+    While it runs, any web page in the browser could register a client and obtain a token: it
+    auto-approves, Dynamic Client Registration is open, and /register and /token send CORS `*`. Only
+    the resource servers' Host and Origin checks (R42) stop such a token being used from a browser.
 
 The signing key: on first start it writes 32 random bytes (hex) to mcp/data/dev-signing.key, mode
 0600 and git-ignored (or to $LUMEN_SIGNING_KEY_FILE), and reuses that file afterwards. The resource
@@ -50,12 +53,13 @@ from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from pydantic import AnyUrl
 from starlette.applications import Starlette
 
-from resource_auth import (ISSUER, KEY_BYTES, OPS_RESOURCE, READ_RESOURCE, SCOPE_READ, SCOPE_WRITE,
-                           SigningKeyMissing, key_file, load_signing_key)
+from resource_auth import (ISSUER, KEY_BYTES, OPS_PORT, READ_PORT, SCOPE_READ, SCOPE_WRITE, SigningKeyMissing,
+                           key_file, load_signing_key, resource_uri)
 
 # ── 1. Configuration ────────────────────────────────────────────────────────
 HOST, PORT = "127.0.0.1", 9000
-RESOURCES = (READ_RESOURCE, OPS_RESOURCE)  # the only audiences this AS will put in a token
+RESOURCES = (resource_uri(READ_PORT), resource_uri(OPS_PORT))  # the only audiences this AS will put in a token
+# (default ports; main() takes --read-port / --ops-port for servers on other ports, R46)
 SCOPES = [SCOPE_READ, SCOPE_WRITE]
 TEST_SUBJECT = "user-1"  # TEST ONLY: every approval is for this one fixed user
 ACCESS_TTL = 600  # seconds
@@ -111,7 +115,8 @@ class TestOnlyProvider:
 
     __test__ = False  # not a pytest class
 
-    def __init__(self) -> None:
+    def __init__(self, resources: tuple[str, ...] = RESOURCES) -> None:
+        self.resources = resources  # the audiences this AS will put in a token
         self.clients: dict[str, OAuthClientInformationFull] = {LUMEN_CLI.client_id: LUMEN_CLI}
         self.codes: dict[str, AuthorizationCode] = {}
         self.refresh: dict[str, RefreshToken] = {}
@@ -123,7 +128,7 @@ class TestOnlyProvider:
         self.clients[client_info.client_id] = client_info
 
     async def authorize(self, client: OAuthClientInformationFull, params: AuthorizationParams) -> str:
-        if params.resource not in RESOURCES:
+        if params.resource not in self.resources:
             raise AuthorizeError("invalid_target", "resource must name lumen-read or lumen-ops (RFC 8707)")
         code = secrets.token_urlsafe(32)
         self.codes[code] = AuthorizationCode(
@@ -144,7 +149,7 @@ class TestOnlyProvider:
     async def exchange_authorization_code(self, client: OAuthClientInformationFull,
                                           authorization_code: AuthorizationCode) -> OAuthToken:
         self.codes.pop(authorization_code.code, None)  # single use
-        if authorization_code.resource not in RESOURCES:
+        if authorization_code.resource not in self.resources:
             raise TokenError("invalid_target", "resource is required")
         return self._issue(client.client_id, authorization_code.scopes, authorization_code.resource,
                            authorization_code.subject or TEST_SUBJECT)
@@ -159,7 +164,7 @@ class TestOnlyProvider:
     async def exchange_refresh_token(self, client: OAuthClientInformationFull, refresh_token: RefreshToken,
                                      scopes: list[str]) -> OAuthToken:
         self.refresh.pop(refresh_token.token, None)  # rotate
-        if refresh_token.resource not in RESOURCES:
+        if refresh_token.resource not in self.resources:
             raise TokenError("invalid_target", "resource is required")
         granted = [s for s in scopes if s in refresh_token.scopes] if scopes else refresh_token.scopes
         return self._issue(client.client_id, granted, refresh_token.resource, refresh_token.subject or TEST_SUBJECT)
@@ -249,14 +254,21 @@ def build_auth_app(provider: TestOnlyProvider | None = None) -> Starlette:
 
 # ── 5. Entry point ──────────────────────────────────────────────────────────
 def main() -> None:
+    import argparse
+
     import uvicorn
+    ap = argparse.ArgumentParser(description="TEST-ONLY authorization server (127.0.0.1 only)")
+    ap.add_argument("--read-port", type=int, default=READ_PORT, help="port lumen-read listens on (its audience)")
+    ap.add_argument("--ops-port", type=int, default=OPS_PORT, help="port lumen-ops listens on (its audience)")
+    args = ap.parse_args()
     try:
         ensure_signing_key()
     except SigningKeyMissing as e:
         raise SystemExit(f"auth_server: {e}") from None
     print(f"TEST-ONLY authorization server on {ISSUER} (auto-approves as {TEST_SUBJECT!r}); "
           f"signing key file: {key_file()}", file=sys.stderr)
-    uvicorn.run(build_auth_app(), host=HOST, port=PORT)
+    uvicorn.run(build_auth_app(TestOnlyProvider((resource_uri(args.read_port), resource_uri(args.ops_port)))),
+                host=HOST, port=PORT)
 
 
 if __name__ == "__main__":

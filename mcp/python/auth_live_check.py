@@ -4,7 +4,7 @@ against the local TEST-ONLY AS (127.0.0.1:9000), then calls one tool on a Lumen 
 The "browser" is headless: it GETs the /authorize URL, and the test AS auto-approves with a 302
 whose `code`, `state` and `iss` this script hands back to the SDK client. Steps and commands:
 mcp/python/AUTH_LIVE_CHECK.md. It never prints a token. With --save-token, the access token is
-written to a file (mode 0600) for the clients' --token-file / -token-file.
+written to a new file (mode 0600, never overwriting, e.g. ~/.lumen/read.tok) for the clients' --token-file / -token-file.
 
 Run:  python mcp/python/auth_live_check.py --url http://127.0.0.1:8765/mcp [--dcr] [--yes]
           [--save-token PATH] TOOL JSON_ARGS
@@ -89,10 +89,22 @@ async def run(url: str, dcr: bool, yes: bool, tool: str, args: dict, save: Path 
           f"sub={claims['sub']}")
     print("result:", "isError " + result.content[0].text if result.is_error else json.dumps(result.structured_content))
     if save is not None:
-        fd = os.open(save, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w") as f:
-            f.write(storage.tokens.access_token + "\n")
+        save_token_file(save, storage.tokens.access_token)
         print(f"access token saved to {save} (mode 0600)")
+
+
+def save_token_file(path: Path, token: str) -> None:
+    """Write the token to a NEW file, mode 0600. Refuses if the path exists (O_EXCL) and never follows
+    a symlink at the final component (O_NOFOLLOW), so a pre-planted file or link in a shared directory
+    such as /tmp cannot capture or redirect it. A missing parent directory is created at 0700."""
+    path = path.expanduser()
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    except FileExistsError:
+        raise SystemExit(f"{path} already exists; refusing to overwrite it. Remove it or pick another path.") from None
+    with os.fdopen(fd, "w") as f:
+        f.write(token + "\n")
 
 
 def main() -> None:
@@ -100,12 +112,15 @@ def main() -> None:
     ap.add_argument("--url", required=True, help="resource server, e.g. http://127.0.0.1:8765/mcp")
     ap.add_argument("--dcr", action="store_true", help="register dynamically instead of using lumen-cli")
     ap.add_argument("--yes", action="store_true", help="accept a confirmation question (label_ticket)")
-    ap.add_argument("--save-token", type=Path, help="write the access token to this file (mode 0600)")
+    ap.add_argument("--save-token", type=Path,
+                    help="write the access token to this NEW file (mode 0600; refuses if it exists), e.g. ~/.lumen/read.tok")
     ap.add_argument("tool")
     ap.add_argument("arguments", help="tool arguments as a JSON object")
     ns = ap.parse_args()
     if urlparse(ns.url).hostname != "127.0.0.1":
         raise SystemExit("this check talks to 127.0.0.1 only")
+    if ns.save_token is not None and (os.path.lexists(ns.save_token.expanduser())):
+        raise SystemExit(f"{ns.save_token} already exists; refusing to overwrite it. Remove it or pick another path.")
     asyncio.run(run(ns.url, ns.dcr, ns.yes, ns.tool, json.loads(ns.arguments), ns.save_token))
 
 

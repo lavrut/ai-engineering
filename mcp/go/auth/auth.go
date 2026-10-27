@@ -99,6 +99,11 @@ var ErrNoKey = errors.New("empty signing key")
 // (rulings R11, R42).
 var InspectorOrigins = []string{"http://127.0.0.1:6274", "http://localhost:6274"}
 
+// ResourceURI is a server's canonical resource URI (its token audience, and the `resource` of its
+// protected resource metadata) for the port it listens on (ruling R46). ReadResource and OpsResource
+// are this for the two default ports.
+func ResourceURI(port int) string { return fmt.Sprintf("http://127.0.0.1:%d/mcp", port) }
+
 // ── 2. Token verifier ───────────────────────────────────────────────────────
 func b64json(seg string, v any) error {
 	b, err := base64.RawURLEncoding.DecodeString(seg)

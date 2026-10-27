@@ -235,7 +235,7 @@ The first command runs once and exits. The other three are long-running servers:
 cd mcp/go && go run ./opsserver -labels /tmp/lumen-live-labels.jsonl       # lumen-ops (Go) on 127.0.0.1:8766, needs tickets:write
 ```
 
-The authorization server is for tests only: it approves every request at once for one fixed user. On its first start it writes a random signing key to `mcp/data/dev-signing.key` (mode 0600, git-ignored, never commit it). Both HTTP servers read that key and refuse to start without it; `LUMEN_SIGNING_KEY_FILE` moves it. Swap any server for its twin: `go run ./readserver -http`, or `.venv-mcp/bin/python mcp/python/ops_server.py --labels PATH`.
+The authorization server is for tests only: it approves every request at once for one fixed user, so while it runs any web page in your browser could register and obtain a token from it (the resource servers' Host and Origin checks stop such a token being used from a browser); run it only on 127.0.0.1 and only while learning. Servers on other ports: start the AS with `--read-port` / `--ops-port` to match. On its first start it writes a random signing key to `mcp/data/dev-signing.key` (mode 0600, git-ignored, never commit it). Both HTTP servers read that key and refuse to start without it; `LUMEN_SIGNING_KEY_FILE` moves it. Swap any server for its twin: `(cd mcp/go && go run ./readserver -http)`, or `.venv-mcp/bin/python mcp/python/ops_server.py --labels PATH`.
 
 ### Clients and auth
 
@@ -243,12 +243,12 @@ The Python and Go clients print the same bytes. Over HTTP the token goes in an `
 
 ```sh
 .venv-mcp/bin/python mcp/python/auth_live_check.py --url http://127.0.0.1:8765/mcp \
-    --save-token /tmp/lumen-read.tok get_ticket '{"id": "t001"}'
-.venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8765/mcp --token-file /tmp/lumen-read.tok call search_tickets '{"query": "charged twice", "limit": 1}'
-(cd mcp/go && go run ./client -url http://127.0.0.1:8765/mcp -token-file /tmp/lumen-read.tok call search_tickets '{"query": "charged twice", "limit": 1}')
+    --save-token ~/.lumen/read.tok get_ticket '{"id": "t001"}'
+.venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8765/mcp --token-file ~/.lumen/read.tok call search_tickets '{"query": "charged twice", "limit": 1}'
+(cd mcp/go && go run ./client -url http://127.0.0.1:8765/mcp -token-file ~/.lumen/read.tok call search_tickets '{"query": "charged twice", "limit": 1}')
 ```
 
-Stop the servers and `rm -f /tmp/lumen-read.tok /tmp/lumen-live-labels.jsonl` when done.
+Stop the servers and `rm -f ~/.lumen/read.tok /tmp/lumen-live-labels.jsonl` when done.
 
 ### The agent
 

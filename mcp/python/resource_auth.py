@@ -42,8 +42,17 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 # ── 1. Configuration ────────────────────────────────────────────────────────
 ISSUER = "http://127.0.0.1:9000"  # the local test AS (auth_server.py)
-READ_RESOURCE = "http://127.0.0.1:8765/mcp"  # lumen-read's canonical URI (the token audience)
-OPS_RESOURCE = "http://127.0.0.1:8766/mcp"  # lumen-ops's canonical URI
+READ_PORT, OPS_PORT = 8765, 8766  # the default ports
+
+
+def resource_uri(port: int) -> str:
+    """A server's canonical resource URI (the token audience, and the `resource` of its protected
+    resource metadata) for the port it listens on. Ruling R46: derived from --port, never fixed."""
+    return f"http://127.0.0.1:{port}/mcp"
+
+
+READ_RESOURCE = resource_uri(READ_PORT)  # lumen-read's canonical URI on its default port
+OPS_RESOURCE = resource_uri(OPS_PORT)  # lumen-ops's canonical URI on its default port
 SCOPE_READ = "tickets:read"
 SCOPE_WRITE = "tickets:write"
 LEEWAY_SECONDS = 30  # clock skew allowed on nbf / iat (never on exp: R29)

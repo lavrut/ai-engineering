@@ -4,7 +4,7 @@ Three tools, two resources and one prompt, all read-only. Ticket text is untrust
 it only ever leaves this server inside a field named `untrusted_body`. The Go server
 (mcp/go) answers the same shared contract, mcp/fixtures/contract.jsonl.
 
-Over HTTP it is an OAuth resource server (scope tickets:read, audience http://127.0.0.1:8765/mcp); see
+Over HTTP it is an OAuth resource server (scope tickets:read, audience http://127.0.0.1:<port>/mcp, 8765 by default); see
 resource_auth.py. Over stdio there is no OAuth: the host that spawns the process is the trust boundary.
 
 Run:  python mcp/python/read_server.py [--http] [--port 8765]
@@ -25,8 +25,8 @@ from mcp_types import INVALID_PARAMS, CallToolResult, TextContent, ToolAnnotatio
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "core" / "python"))
 from lumen_core import (DEFAULT_LIMIT, MAX_BODY_BYTES, MAX_LIMIT, MAX_QUERY_CHARS,  # noqa: E402
                         MAX_TEXT_CHARS, MIN_LIMIT, REPO_ROOT, classify, tickets)
-from resource_auth import (READ_RESOURCE, SCOPE_READ, LocalOnly, SigningKeyMissing,  # noqa: E402
-                           resource_server, transport_security)
+from resource_auth import (READ_PORT, SCOPE_READ, LocalOnly, SigningKeyMissing,  # noqa: E402
+                           resource_server, resource_uri, transport_security)
 
 # ── 1. Configuration and helpers ────────────────────────────────────────────
 INSTRUCTIONS = (
@@ -85,10 +85,12 @@ def eval_summary() -> dict:
                      for r in data["runs"]]}
 
 
-def build_read_server(*, auth: bool = False) -> MCPServer:
-    """auth=True makes it a resource server (needed for HTTP); stdio and in-memory tests use False."""
+def build_read_server(*, auth: bool = False, port: int = READ_PORT) -> MCPServer:
+    """auth=True makes it a resource server (needed for HTTP); stdio and in-memory tests use False.
+    `port` is the port it will listen on: its canonical resource URI (the token audience, and the
+    PRM's `resource`) is derived from it (R46)."""
     mcp = MCPServer("lumen-read", instructions=INSTRUCTIONS,
-                    **(resource_server(READ_RESOURCE, SCOPE_READ) if auth else {}))
+                    **(resource_server(resource_uri(port), SCOPE_READ) if auth else {}))
 
     # ── 2. Tools ────────────────────────────────────────────────────────────
     @mcp.tool(annotations=READ_ONLY)
@@ -152,7 +154,7 @@ def build_read_server(*, auth: bool = False) -> MCPServer:
 
 
 # ── 5. HTTP app and security ────────────────────────────────────────────────
-def build_http_app(mcp: MCPServer | None = None, port: int = 8765):
+def build_http_app(mcp: MCPServer | None = None, port: int = READ_PORT):
     """Streamable HTTP ASGI app, always behind bearer auth (refuses a server built without it), for
     a server listening on `port`. Ruling R42: LocalOnly, outermost, answers 403 on /mcp (every method)
     unless Host is 127.0.0.1:<port> or localhost:<port> and Origin is absent or one of the server's
@@ -160,9 +162,12 @@ def build_http_app(mcp: MCPServer | None = None, port: int = 8765):
     check, so a bad Host or Origin is 403 with or without a token, as in Go. The SDK's own check gets
     the same explicit lists. The body cap is passed explicitly. The PRM is served at
     /.well-known/oauth-protected-resource/mcp."""
-    mcp = mcp or build_read_server(auth=True)
+    mcp = mcp or build_read_server(auth=True, port=port)
     if mcp.settings.auth is None:
         raise ValueError("lumen-read serves HTTP only with auth: build_read_server(auth=True)")
+    if str(mcp.settings.auth.resource_server_url) != resource_uri(port):
+        raise ValueError(f"this server was built for {mcp.settings.auth.resource_server_url}, not port {port}: "
+                         "build_read_server(auth=True, port=...) with the same port")
     app = mcp.streamable_http_app(host="127.0.0.1", max_request_body_size=MAX_BODY_BYTES,
                                   transport_security=transport_security(port))
     return LocalOnly(app, port)
@@ -172,7 +177,7 @@ def build_http_app(mcp: MCPServer | None = None, port: int = 8765):
 def main() -> None:
     ap = argparse.ArgumentParser(description="lumen-read MCP server")
     ap.add_argument("--http", action="store_true", help="serve Streamable HTTP on 127.0.0.1 (default: stdio)")
-    ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--port", type=int, default=READ_PORT)
     args = ap.parse_args()
     if args.http:
         import uvicorn

@@ -44,7 +44,9 @@ Three parties take part:
 
 - The **resource server** is `lumen-read` (`http://127.0.0.1:8765/mcp`) or `lumen-ops` (`http://127.0.0.1:8766/mcp`).
 - The **client** is our client, or any MCP host.
-- The <Term t="authorization server" /> issues tokens. Ours is `mcp/python/auth_server.py` on `127.0.0.1:9000`. It is **test only**. It approves every request at once for one fixed user, `user-1`, with no login. A real one checks who the user is and asks for their consent.
+- The <Term t="authorization server" /> issues tokens. Ours is `mcp/python/auth_server.py` on `127.0.0.1:9000`. It is **test only**. It approves every request at once for one fixed user, `user-1`, with no login. A real one checks who the user is and asks for their consent. While it runs, any web page open in your browser could register a client and obtain a token from it, because it approves automatically, registration is open, and `/register` and `/token` allow any origin (CORS `*`). What stops such a token being used from a browser is the resource servers' Host and Origin checks (lesson 7). Never run it except on 127.0.0.1, and only while you are learning.
+
+A server's canonical resource URI, which is the audience a token must carry and the `resource` its metadata states, is derived from the port it listens on: `http://127.0.0.1:<port>/mcp`. Started with `--port 9100`, `lumen-read` accepts tokens for `http://127.0.0.1:9100/mcp` and no others. For the test AS to issue those, start it with `--read-port 9100` (and `--ops-port` for `lumen-ops`). The examples below use the default ports, 8765 and 8766.
 
 ### Discovery from a 401
 
@@ -170,22 +172,22 @@ The first prints `"resource":"http://127.0.0.1:8766/mcp"`, `"authorization_serve
 
 ```bash
 .venv-mcp/bin/python mcp/python/auth_live_check.py --url http://127.0.0.1:8765/mcp \
-    --save-token /tmp/lumen-read.tok get_ticket '{"id": "t001"}'
+    --save-token ~/.lumen/read.tok get_ticket '{"id": "t001"}'
 ```
 
-You should see `registration: pre-registered lumen-cli`, then `token claims: aud=http://127.0.0.1:8765/mcp scope=tickets:read client_id=lumen-cli sub=user-1`, then ticket `t001` under `untrusted_body`, and `access token saved to /tmp/lumen-read.tok (mode 0600)`. The token itself is never printed.
+You should see `registration: pre-registered lumen-cli`, then `token claims: aud=http://127.0.0.1:8765/mcp scope=tickets:read client_id=lumen-cli sub=user-1`, then ticket `t001` under `untrusted_body`, and `access token saved to` the full path of `~/.lumen/read.tok` `(mode 0600)`. The token itself is never printed. The script creates `~/.lumen` at mode 0700 if it is missing, opens the file so that it must be new, and refuses, saying so, if the file already exists or is a symlink. That is why the example does not use a fixed name in `/tmp`, where another user could plant a file first. Run `rm -f ~/.lumen/read.tok` before a second run.
 
 ### Use it from both clients
 
 ```bash
-.venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8765/mcp --token-file /tmp/lumen-read.tok call search_tickets '{"query": "charged twice", "limit": 1}'
-(cd mcp/go && go run ./client -url http://127.0.0.1:8765/mcp -token-file /tmp/lumen-read.tok call search_tickets '{"query": "charged twice", "limit": 1}')
+.venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8765/mcp --token-file ~/.lumen/read.tok call search_tickets '{"query": "charged twice", "limit": 1}'
+(cd mcp/go && go run ./client -url http://127.0.0.1:8765/mcp -token-file ~/.lumen/read.tok call search_tickets '{"query": "charged twice", "limit": 1}')
 ```
 
 Both print the same JSON: one result, `t001`, in `billing`. Now try the command-line flag, and send the output away so only the warning shows:
 
 ```bash
-.venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8765/mcp --token "$(cat /tmp/lumen-read.tok)" tools > /dev/null
+.venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8765/mcp --token "$(cat ~/.lumen/read.tok)" tools > /dev/null
 ```
 
 You should see `client: warning: a token on the command line is visible in the process list and shell history; use a token file or LUMEN_TOKEN`.
@@ -194,9 +196,9 @@ You should see `client: warning: a token on the command line is visible in the p
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8766/mcp \
-    -H "Authorization: Bearer $(cat /tmp/lumen-read.tok)" -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $(cat ~/.lumen/read.tok)" -H 'Content-Type: application/json' \
     -H 'Accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-.venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8766/mcp --token-file /tmp/lumen-read.tok tools
+.venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8766/mcp --token-file ~/.lumen/read.tok tools
 ```
 
 `curl` prints `401`, and the client prints `client: the server refused the request: HTTP 401 Unauthorized`. The token is genuine and unexpired, but it is not for `lumen-ops`.
@@ -226,7 +228,7 @@ We got `6 passed`.
 Stop the three servers with Ctrl-C, then:
 
 ```bash
-rm -f /tmp/lumen-read.tok /tmp/lumen-live-labels.jsonl
+rm -f ~/.lumen/read.tok /tmp/lumen-live-labels.jsonl
 ```
 
 Keep `mcp/data/dev-signing.key` for the next run, or delete it to change the key. Deleting it makes every token issued so far invalid. Never commit it.

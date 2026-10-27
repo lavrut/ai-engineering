@@ -62,7 +62,7 @@ def app_for(name: str, tmp_path: Path, port: int | None = None):
     port = port or int(SERVERS[name][2].split(":")[1])
     if name == "read":
         return read_server.build_http_app(port=port)
-    return ops_server.build_http_app(ops_server.build_ops_server(tmp_path / "labels.jsonl", auth=True), port=port)
+    return ops_server.build_http_app(ops_server.build_ops_server(tmp_path / "labels.jsonl", auth=True, port=port), port=port)
 
 
 @contextlib.contextmanager
@@ -275,10 +275,10 @@ def test_dns_rebinding_refused_over_real_http(name, tmp_path):
     """R42, on a real uvicorn server: a rebinding page's request names its own host in both Host and
     Origin. Both are checked against explicit allow-lists, never against each other, so it is 403
     even with a valid token. The server's own two local origins and the Inspector's two still work."""
-    resource, scope, _ = SERVERS[name]
-    token = mint_test_token(scope, resource)
+    _, scope, _ = SERVERS[name]
     with live(lambda port: app_for(name, tmp_path, port)) as url:
         port = url.rsplit(":", 1)[1]
+        token = mint_test_token(scope, resource_auth.resource_uri(int(port)))  # R46: the audience names the port
 
         def post(host: str, origin: str | None = None) -> int:
             extra = {"Origin": origin} if origin else {}
@@ -313,11 +313,11 @@ def test_get_with_bad_origin_403(name, tmp_path):
 def test_ops_client_id_from_token(tmp_path):
     """The label row's client_id is the verified token's client_id (not anything the client says)."""
     path = tmp_path / "labels.jsonl"
-    token = mint_test_token(SCOPE_WRITE, OPS_RESOURCE, client_id="lumen-test-client-7", sub="user-42")
     def app(port: int):
-        return ops_server.build_http_app(ops_server.build_ops_server(path, auth=True), port=port)
+        return ops_server.build_http_app(ops_server.build_ops_server(path, auth=True, port=port), port=port)
 
     async def go(url: str):
+        token = mint_test_token(SCOPE_WRITE, f"{url}/mcp", client_id="lumen-test-client-7", sub="user-42")
         target = lumen_client.http_target(f"{url}/mcp", token)
         async with lumen_client.connect(target, lumen_client.always(True)) as c:
             return await lumen_client.call(c, "label_ticket", {"id": "t001", "label": "billing"})
@@ -340,7 +340,7 @@ def test_verifier_fills_client_id_and_subject():
 
 def test_client_token_goes_in_the_header_only(tmp_path):
     """R19: --token becomes `Authorization: Bearer`, never part of the URL."""
-    token = mint_test_token(SCOPE_READ, READ_RESOURCE)
+    token = mint_test_token(SCOPE_READ, READ_RESOURCE)  # only the header handling is checked here
     target = lumen_client.http_target("http://127.0.0.1:8765/mcp", token)
     assert target.url == "http://127.0.0.1:8765/mcp" and token not in target.url
     assert target.headers == {"Authorization": f"Bearer {token}"}
@@ -351,6 +351,7 @@ def test_client_token_goes_in_the_header_only(tmp_path):
             return await lumen_client.list_tools(c)
 
     with live(lambda port: read_server.build_http_app(port=port)) as url:
+        token = mint_test_token(SCOPE_READ, f"{url}/mcp")
         ok = lumen_client.Refusal()
         tools = asyncio.run(go(f"{url}/mcp", token, ok))
         assert [t["name"] for t in tools] == ["classify_complaint", "get_ticket", "search_tickets"]
@@ -680,3 +681,44 @@ def test_token_from_another_key_is_401(tmp_path, monkeypatch):
 
 def test_key_file_is_git_ignored():
     assert "mcp/data/dev-signing.key" in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+
+# ── 7. A non-default port (R46) ─────────────────────────────────────────────
+NONDEFAULT = {"read": 18765, "ops": 18766}
+
+
+@pytest.mark.parametrize("name", ["read", "ops"])
+def test_nondefault_port_audience_and_prm(name, tmp_path):
+    """The canonical resource URI and the PRM follow --port. A token for the URI of the port the
+    server really listens on works; a token for the default-port URI is the wrong audience (401)."""
+    default_resource, scope, _ = SERVERS[name]
+    port = NONDEFAULT[name]
+    host, resource = f"127.0.0.1:{port}", resource_auth.resource_uri(port)
+    assert resource == f"http://127.0.0.1:{port}/mcp" and resource != default_resource
+    with TestClient(app_for(name, tmp_path, port), base_url=f"http://{host}") as c:
+        unauth = c.post("/mcp", content=DISCOVER, headers=headers(host))
+        assert unauth.status_code == 401
+        assert f'resource_metadata="http://{host}/.well-known/oauth-protected-resource/mcp"' in unauth.headers["www-authenticate"]
+        prm = c.get("/.well-known/oauth-protected-resource/mcp", headers={"Host": host}).json()
+        assert prm["resource"] == resource
+        assert c.post("/mcp", content=DISCOVER, headers=headers(host, mint_test_token(scope, resource))).status_code == 200
+        assert c.post("/mcp", content=DISCOVER, headers=headers(host, mint_test_token(scope, default_resource))).status_code == 401
+
+
+def test_building_a_server_for_one_port_and_serving_it_on_another_is_refused(tmp_path):
+    with pytest.raises(ValueError, match="not port 18765"):
+        read_server.build_http_app(read_server.build_read_server(auth=True), port=18765)
+    with pytest.raises(ValueError, match="not port 18766"):
+        ops_server.build_http_app(ops_server.build_ops_server(tmp_path / "l.jsonl", auth=True), port=18766)
+
+
+def test_test_as_mints_for_servers_on_other_ports():
+    """The test AS takes the audiences from --read-port/--ops-port; any other resource is invalid_target."""
+    custom = auth_server.TestOnlyProvider((resource_auth.resource_uri(18765), resource_auth.resource_uri(18766)))
+    assert custom.resources == ("http://127.0.0.1:18765/mcp", "http://127.0.0.1:18766/mcp")
+    assert auth_server.TestOnlyProvider().resources == (READ_RESOURCE, OPS_RESOURCE)
+    with TestClient(auth_server.build_auth_app(custom), base_url=ISSUER, follow_redirects=False) as c:
+        ok = _authorize(c, resource_auth.resource_uri(18765), SCOPE_READ)
+        assert ok.status_code == 302 and "code=" in ok.headers["location"]
+        bad = _authorize(c, READ_RESOURCE, SCOPE_READ)  # the default port is not served by this AS
+        assert "invalid_target" in (bad.headers.get("location", "") + bad.text)

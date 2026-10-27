@@ -1,5 +1,5 @@
 // The entry point: lumen-ops over Streamable HTTP on 127.0.0.1 only (no stdio, by design).
-// Always an OAuth resource server (tickets:write, audience http://127.0.0.1:8766/mcp).
+// Always an OAuth resource server (tickets:write, audience http://127.0.0.1:<port>/mcp, 8766 by default).
 //
 //	go run ./opsserver [-port 8766] [-labels PATH]
 package main

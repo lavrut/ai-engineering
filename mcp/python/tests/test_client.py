@@ -242,16 +242,18 @@ def http_url(tmp_path_factory):
         else:
             raise RuntimeError("read_server --http did not start")
         http_url.key = key
+        http_url.audience = f"http://127.0.0.1:{port}/mcp"
         yield f"http://127.0.0.1:{port}/mcp"
     finally:
         proc.terminate()
         proc.wait(timeout=10)
 
 
-def token_for(monkeypatch, scope: str = SCOPE_READ, audience: str = READ_RESOURCE) -> str:
-    """A token signed with the running server's key (lumen-read's own scope and audience by default)."""
+def token_for(monkeypatch, scope: str = SCOPE_READ, audience: str | None = None) -> str:
+    """A token signed with the running server's key (lumen-read's own scope and, by default, its audience
+    on the random port it runs on: R46)."""
     monkeypatch.setenv("LUMEN_SIGNING_KEY_FILE", str(http_url.key))
-    return mint_test_token(scope, audience)
+    return mint_test_token(scope, audience or http_url.audience)
 
 
 HTTP_COMMANDS = [("tools",), ("call", "search_tickets", '{"query": "refund duplicate", "limit": 3}')]
