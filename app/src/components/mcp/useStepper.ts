@@ -24,6 +24,7 @@ export function useStepper(count: number) {
     prev: () => go(at - 1),
     reset: () => {
       setAt(0);
+      if (document.activeElement === resetRef.current && count > 1) nextRef.current?.focus();
     },
     /** Arrow keys on the stepper's group. */
     onKeyDown: (e: KeyboardEvent) => {

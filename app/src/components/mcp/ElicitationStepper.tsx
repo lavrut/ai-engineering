@@ -64,7 +64,6 @@ export default function ElicitationStepper({ tool, arguments: args, note, paths 
       </h3>
       <p class="mc-live" aria-live="polite">
         Step {step.n} of {path.steps.length}: {step.title}. {step.summary}
-        {s.at >= s.last ? '' : ''}
       </p>
       <div class="mc-scroll mc-focus" role="region" aria-label="Message" tabIndex={0}>
         <pre class="mc-pre">

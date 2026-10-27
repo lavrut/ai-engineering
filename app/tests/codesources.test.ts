@@ -64,7 +64,7 @@ describe('code source registry', () => {
     const texts = sourceTexts(id);
     expect(texts.python).toBe(readFileSync(join(repo, info.python), 'utf8'));
     const goFiles = info.go ? [info.go, ...(info.goMore ?? [])] : [];
-    expect(texts.go).toBe(goFiles.length ? goFiles.map((f) => readFileSync(join(repo, f), 'utf8')).join('\n') : undefined);
+    expect(texts.go).toBe(goFiles.length ? goFiles.map((f, i) => { const t = readFileSync(join(repo, f), 'utf8'); return i === 0 ? t : t.slice(t.search(/^\/\/ ── \d+\./m)); }).join('\n') : undefined);
     expect(listSections(texts.python).length).toBeGreaterThan(0);
     if (texts.go) expect(listSections(texts.go).length).toBeGreaterThan(0);
   });
@@ -135,6 +135,24 @@ describe('code source registry', () => {
       expect(r.go).toContain('func main()');
       expect(resolveCode({ source: 'mcp-ops', section: 6 }).go).toContain('func main()');
       expect(fileName('mcp-read', 'go')).toBe('server.go');
+    });
+
+    it("does not leak main.go's package clause or imports into Go section 5", () => {
+      for (const source of ['mcp-read', 'mcp-ops'] as const) {
+        const go = resolveCode({ source, section: 5 }).go!;
+        expect(go, source).not.toContain('package main');
+        expect(go, source).not.toContain('import (');
+        expect(go.split('\n')[0]).toMatch(/^\/\/ ── 5\. HTTP handler and security/);
+        expect(resolveCode({ source, section: 6 }).go).toMatch(/^\/\/ ── 6\. Entry point/);
+      }
+    });
+
+    it('ends read section 4 with the factory return (the prompts section runs to the next marker)', () => {
+      const py = resolveCode({ source: 'mcp-read', section: 4 }).python.split('\n');
+      expect(py.at(-1)).toBe('return mcp');
+      const go = resolveCode({ source: 'mcp-read', section: 4 }).go!.split('\n');
+      expect(go.at(-1)).toBe('}');
+      expect(go.at(-2)).toBe('return s');
     });
 
     it('quotes the App (ops_server section 7) from mcp-app, Python only; mcp-ops needs pythonOnly for it', () => {

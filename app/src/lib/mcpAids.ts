@@ -323,7 +323,14 @@ export function hostReply(m: AppMessage) {
   if (m.method === 'tools/call') {
     return { jsonrpc: '2.0', id: m.id, result: { isError: true, content: [{ type: 'text', text: PREVIEW_REFUSAL }] } };
   }
-  return { jsonrpc: '2.0', id: m.id, result: {} };
+  if (m.method === 'ui/initialize') return { jsonrpc: '2.0', id: m.id, result: {} };
+  return { jsonrpc: '2.0', id: m.id, error: { code: -32601, message: 'Method not found' } };
+}
+
+export const LOG_LIMIT = 50;
+/** Append to the preview log, keeping the last LOG_LIMIT entries. */
+export function appendLog(log: string[], entry: string, limit = LOG_LIMIT): string[] {
+  return [...log, entry].slice(-limit);
 }
 
 /** One sentence about a message from the App, for the log and the live region. Fields are read as

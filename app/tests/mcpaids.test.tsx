@@ -14,6 +14,8 @@ import {
   describeAppMessage,
   elicitationStepperProps,
   filterRows,
+  LOG_LIMIT,
+  appendLog,
   hostReply,
   injectionLabProps,
   injectionSummary,
@@ -89,6 +91,15 @@ describe('McpMessageView', () => {
     expect(screen.getByRole('region', { name: 'Request' }).textContent).toContain('"method": "server/discover"');
     expect(screen.getByRole('region', { name: 'Result' }).textContent).toContain('"supportedVersions"');
     expect(screen.getByRole('region', { name: 'Request' }).getAttribute('tabindex')).toBe('0');
+  });
+
+  it('Reset moves focus to Next, so it is not left on a button that did nothing visible', () => {
+    render(<McpMessageView {...p} />);
+    fireEvent.click(button('Next'));
+    const reset = button('Reset');
+    reset.focus();
+    fireEvent.click(reset);
+    expect(document.activeElement).toBe(button('Next'));
   });
 
   it('steps by keyboard too: arrow keys on the pair move it', () => {
@@ -249,6 +260,9 @@ describe('stand-in host', () => {
   it('answers initialize with an empty result and refuses every tools/call', () => {
     expect(hostReply({ jsonrpc: '2.0', id: 1, method: 'ui/initialize' })).toEqual({ jsonrpc: '2.0', id: 1, result: {} });
     expect(hostReply({ jsonrpc: '2.0', method: 'ui/notifications/initialized' })).toBeNull();
+    for (const method of ['ping', 'resources/read', 'ui/open-link']) {
+      expect(hostReply({ jsonrpc: '2.0', id: 9, method })).toEqual({ jsonrpc: '2.0', id: 9, error: { code: -32601, message: 'Method not found' } });
+    }
     const r = hostReply({ jsonrpc: '2.0', id: 'a', method: 'tools/call', params: { name: 'label_ticket', arguments: { id: 't001', label: 'bug' } } });
     expect(r).toEqual({ jsonrpc: '2.0', id: 'a', result: { isError: true, content: [{ type: 'text', text: PREVIEW_REFUSAL }] } });
   });
@@ -314,6 +328,21 @@ describe('AppPreview', () => {
     await waitFor(() => expect(log.textContent).toContain('<b>t001</b>')); // the characters, not an element
     expect(log.querySelector('b')).toBeNull();
     expect(document.querySelector('[aria-live="polite"]')).toBeTruthy();
+  });
+
+  it('keeps only the last 50 log entries', async () => {
+    expect(LOG_LIMIT).toBe(50);
+    expect(appendLog(['a', 'b'], 'c', 2)).toEqual(['b', 'c']);
+    render(<AppPreview {...p} />);
+    const frame = screen.getByTitle(/Label a ticket App/) as HTMLIFrameElement;
+    Object.defineProperty(frame, 'contentWindow', { value: { postMessage: () => {} }, configurable: true });
+    for (let i = 0; i < 60; i++) {
+      window.dispatchEvent(new MessageEvent('message', { data: { jsonrpc: '2.0', method: `m${i}` }, source: frame.contentWindow as Window }));
+    }
+    await waitFor(() => expect(screen.getByRole('log').querySelectorAll('li')).toHaveLength(50));
+    const items = [...screen.getByRole('log').querySelectorAll('li')].map((li) => li.textContent);
+    expect(items[0]).toBe('The App sent m10.');
+    expect(items[49]).toBe('The App sent m59.');
   });
 
   it('sends the sample tool input when asked', () => {

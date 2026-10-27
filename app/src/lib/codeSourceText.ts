@@ -8,6 +8,13 @@ export type ResolvedCode = { python: string; go?: string };
 
 let texts: Record<string, string> | undefined;
 
+const FIRST_MARKER = /^[ \t]*(?:#|\/\/) ── \d+\./m;
+function fromFirstSection(text: string, path: string): string {
+  const at = text.search(FIRST_MARKER);
+  if (at === -1) throw new Error(`codeSourceText: ${path} has no numbered section`);
+  return text.slice(at);
+}
+
 /** The source files' text, read at build time (and in tests). */
 export function sourceTexts(id: CodeSourceId): { python: string; go?: string } {
   if (!texts) {
@@ -52,8 +59,10 @@ export function sourceTexts(id: CodeSourceId): { python: string; go?: string } {
     return t;
   };
   const info = CODE_SOURCES[id];
-  // Extra Go files follow the first, so section 6 (main.go) sits after section 5 (server.go).
-  const go = info.go ? [info.go, ...(info.goMore ?? [])].map(read).join('\n') : undefined;
+  // Extra Go files follow the first, so section 6 (main.go) sits after section 5 (server.go). Each
+  // extra file starts at its first section marker: its package clause and imports would otherwise
+  // end up inside the last section of the file before it.
+  const go = info.go ? [read(info.go), ...(info.goMore ?? []).map((f) => fromFirstSection(read(f), f))].join('\n') : undefined;
   return { python: read(info.python), go };
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import {
   APP_SANDBOX,
+  appendLog,
   describeAppMessage,
   hostReply,
   isAppMessage,
@@ -19,7 +20,8 @@ export default function AppPreview({ uri, mimeType, doc, bytes, description, sam
     const onMessage = (e: MessageEvent) => {
       const win = frame.current?.contentWindow;
       if (!win || e.source !== win || !isAppMessage(e.data)) return;
-      setLog((l) => [...l, describeAppMessage(e.data)]);
+      const line = describeAppMessage(e.data);
+      setLog((l) => appendLog(l, line));
       const reply = hostReply(e.data);
       if (reply) win.postMessage(reply, '*');
     };
@@ -29,7 +31,8 @@ export default function AppPreview({ uri, mimeType, doc, bytes, description, sam
 
   const send = () => {
     frame.current?.contentWindow?.postMessage(toolInputMessage(sample), '*');
-    setLog((l) => [...l, `The preview host sent the tool input: ${sample.name} for ${sample.id} with label ${sample.label}.`]);
+    const line = `The preview host sent the tool input: ${sample.name} for ${sample.id} with label ${sample.label}.`;
+    setLog((l) => appendLog(l, line));
   };
 
   return (
