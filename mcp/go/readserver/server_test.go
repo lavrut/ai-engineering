@@ -11,8 +11,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -248,7 +250,7 @@ func readToken() string { return tok(auth.ScopeRead, auth.ReadResource, "lumen-c
 func httpHandler(t *testing.T, s *mcp.Server) http.Handler {
 	t.Helper()
 	authtest.UseKey(t)
-	h, err := NewHTTPHandler(s)
+	h, err := NewHTTPHandler(s, DefaultPort)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -383,7 +385,7 @@ func TestProtectedResourceMetadata(t *testing.T) {
 }
 
 func TestGetWithBadOrigin403(t *testing.T) {
-	// R18: Origin is checked for every method, not only the unsafe ones (with a valid token, R9).
+	// R18: Origin is checked for every method, not only the unsafe ones (with a valid token).
 	h := httpHandler(t, NewReadServer())
 	for origin, bad := range map[string]bool{"http://evil.example": true, "http://127.0.0.1:6274": false} {
 		rec := httptest.NewRecorder()
@@ -395,11 +397,75 @@ func TestGetWithBadOrigin403(t *testing.T) {
 }
 
 func TestOriginCheckedBeforeAuth(t *testing.T) {
-	// R9 ordering, recorded: Go checks Origin first, so a bad Origin is 403 even with no token.
-	// (Python checks the token first: 401 there.)
+	// R42 ordering: Host and Origin are checked first, so a bad Origin is 403 even with no token.
+	// (Python now uses the same order.)
 	rec := httptest.NewRecorder()
 	httpHandler(t, NewReadServer()).ServeHTTP(rec, newReqAs("POST", strings.NewReader(listBody), "http://evil.example", ""))
 	if rec.Code != 403 {
 		t.Fatalf("got %d", rec.Code)
+	}
+}
+
+// serveLocal starts a real HTTP server for s on a free 127.0.0.1 port, with the handler built for that
+// port (its Host allow-list names it, ruling R42), and returns it.
+func serveLocal(t *testing.T, s *mcp.Server) *httptest.Server {
+	t.Helper()
+	authtest.UseKey(t)
+	ts := httptest.NewUnstartedServer(nil)
+	port := ts.Listener.Addr().(*net.TCPAddr).Port
+	h, err := NewHTTPHandler(s, port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts.Config.Handler = h
+	ts.Start()
+	t.Cleanup(ts.Close)
+	return ts
+}
+
+// rebindingStatus sends one tools/list to ts with the given Host and Origin and a valid token.
+func rebindingStatus(t *testing.T, ts *httptest.Server, host, origin, token string) int {
+	t.Helper()
+	req, err := http.NewRequest("POST", ts.URL+"/mcp", strings.NewReader(listBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Host = host
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Authorization", "Bearer "+token)
+	if origin != "" {
+		req.Header.Set("Origin", origin)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	return resp.StatusCode
+}
+
+func TestDNSRebindingRefusedOverHTTP(t *testing.T) {
+	// R42, on a real server: Host and Origin both name the attacker's host. 403 even with a valid token.
+	ts := serveLocal(t, NewReadServer())
+	port := ts.Listener.Addr().(*net.TCPAddr).Port
+	token := readToken()
+	at := func(h string) string { return fmt.Sprintf("%s:%d", h, port) }
+	for _, c := range []struct {
+		host, origin string
+		want         int
+	}{
+		{at("evil.invalid"), "http://" + at("evil.invalid"), 403},
+		{at("evil.invalid"), "", 403},
+		{at("127.0.0.1"), "http://" + at("evil.invalid"), 403},
+		{at("127.0.0.1"), "", 200},
+		{at("127.0.0.1"), "http://" + at("127.0.0.1"), 200},
+		{at("localhost"), "http://" + at("localhost"), 200},
+		{at("127.0.0.1"), "http://127.0.0.1:6274", 200},
+		{at("127.0.0.1"), "http://localhost:6274", 200},
+	} {
+		if got := rebindingStatus(t, ts, c.host, c.origin, token); got != c.want {
+			t.Errorf("Host %q Origin %q: %d, want %d", c.host, c.origin, got, c.want)
+		}
 	}
 }

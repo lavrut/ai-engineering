@@ -208,7 +208,7 @@ def test_origin_rejected_http():
         bad = c.post("/mcp", content=_discover(), headers={**HEADERS, "Origin": "http://evil.invalid"})
         local = c.post("/mcp", content=_discover(), headers={**HEADERS, "Origin": "http://127.0.0.1:6274"})
     assert bad.status_code == 403
-    assert local.status_code == 200  # the SDK allows any 127.0.0.1 origin (the Inspector UI)
+    assert local.status_code == 200  # the Inspector UI is on the explicit allow-list (R42)
 
 
 def test_body_cap():

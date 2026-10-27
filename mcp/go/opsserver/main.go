@@ -17,7 +17,7 @@ func main() {
 	labels := flag.String("labels", "", "append-only label file (default mcp/data/labels.jsonl)")
 	flag.Parse()
 	addr := fmt.Sprintf("127.0.0.1:%d", *port)
-	h, err := NewHTTPHandler(NewOpsServer(*labels))
+	h, err := NewHTTPHandler(NewOpsServer(*labels), *port)
 	if err != nil {
 		log.Fatalf("opsserver: %v", err) // no key file: never fall back to a default key
 	}

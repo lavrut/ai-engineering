@@ -25,7 +25,8 @@ from mcp_types import INVALID_PARAMS, CallToolResult, TextContent, ToolAnnotatio
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "core" / "python"))
 from lumen_core import (DEFAULT_LIMIT, MAX_BODY_BYTES, MAX_LIMIT, MAX_QUERY_CHARS,  # noqa: E402
                         MAX_TEXT_CHARS, MIN_LIMIT, REPO_ROOT, classify, tickets)
-from resource_auth import READ_RESOURCE, SCOPE_READ, SigningKeyMissing, resource_server  # noqa: E402
+from resource_auth import (READ_RESOURCE, SCOPE_READ, LocalOnly, SigningKeyMissing,  # noqa: E402
+                           resource_server, transport_security)
 
 # ── 1. Configuration and helpers ────────────────────────────────────────────
 INSTRUCTIONS = (
@@ -151,16 +152,20 @@ def build_read_server(*, auth: bool = False) -> MCPServer:
 
 
 # ── 5. HTTP app and security ────────────────────────────────────────────────
-def build_http_app(mcp: MCPServer | None = None):
-    """Streamable HTTP ASGI app, always behind bearer auth (refuses a server built without it).
-    host="127.0.0.1" turns on the SDK's DNS-rebinding protection (bad Host or Origin gets 403, for
-    every method); the body cap is passed explicitly. The PRM is served at
-    /.well-known/oauth-protected-resource/mcp. Order (ruling R9): the SDK checks the token before
-    the Origin, so a bad Origin with no token is 401 and with a valid token 403 (Go: 403 both ways)."""
+def build_http_app(mcp: MCPServer | None = None, port: int = 8765):
+    """Streamable HTTP ASGI app, always behind bearer auth (refuses a server built without it), for
+    a server listening on `port`. Ruling R42: LocalOnly, outermost, answers 403 on /mcp (every method)
+    unless Host is 127.0.0.1:<port> or localhost:<port> and Origin is absent or one of the server's
+    own two local origins or the Inspector's two; never "Origin == Host". It runs before the token
+    check, so a bad Host or Origin is 403 with or without a token, as in Go. The SDK's own check gets
+    the same explicit lists. The body cap is passed explicitly. The PRM is served at
+    /.well-known/oauth-protected-resource/mcp."""
     mcp = mcp or build_read_server(auth=True)
     if mcp.settings.auth is None:
         raise ValueError("lumen-read serves HTTP only with auth: build_read_server(auth=True)")
-    return mcp.streamable_http_app(host="127.0.0.1", max_request_body_size=MAX_BODY_BYTES)
+    app = mcp.streamable_http_app(host="127.0.0.1", max_request_body_size=MAX_BODY_BYTES,
+                                  transport_security=transport_security(port))
+    return LocalOnly(app, port)
 
 
 # ── 6. Entry point ──────────────────────────────────────────────────────────
@@ -172,7 +177,7 @@ def main() -> None:
     if args.http:
         import uvicorn
         try:
-            app = build_http_app()
+            app = build_http_app(port=args.port)
         except SigningKeyMissing as e:  # no key file: say how to fix it, never fall back to a key
             raise SystemExit(f"read_server: {e}") from None
         uvicorn.run(app, host="127.0.0.1", port=args.port)

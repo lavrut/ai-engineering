@@ -21,6 +21,7 @@ import time
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import httpx2
 import jwt
 import pytest
 from mcp.shared.exceptions import MCPError
@@ -56,10 +57,12 @@ def headers(host: str, token: str | None = None, **extra: str) -> dict:
     return h
 
 
-def app_for(name: str, tmp_path: Path):
+def app_for(name: str, tmp_path: Path, port: int | None = None):
+    """The server's HTTP app. `port` is the port it is served on (its Host allow-list); default its own."""
+    port = port or int(SERVERS[name][2].split(":")[1])
     if name == "read":
-        return read_server.build_http_app()
-    return ops_server.build_http_app(ops_server.build_ops_server(tmp_path / "labels.jsonl", auth=True))
+        return read_server.build_http_app(port=port)
+    return ops_server.build_http_app(ops_server.build_ops_server(tmp_path / "labels.jsonl", auth=True), port=port)
 
 
 @contextlib.contextmanager
@@ -86,11 +89,13 @@ def good_claims(name: str) -> dict:
 
 
 @contextlib.contextmanager
-def live(app):
-    """A real uvicorn server for `app` in a thread, on a free 127.0.0.1 port. Yields the base URL."""
+def live(make_app):
+    """A real uvicorn server in a thread, on a free 127.0.0.1 port. `make_app(port)` builds the app
+    for that port (its Host allow-list names it, ruling R42). Yields the base URL."""
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     port = sock.getsockname()[1]
+    app = make_app(port)
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
     thread.start()
@@ -253,16 +258,41 @@ def test_http_app_refuses_a_server_without_auth(tmp_path):
         read_server.build_http_app(read_server.build_read_server())
 
 
-# ── 3. Origin with auth (rulings R9 and R18) ───────────────────────────────
+# ── 3. Host and Origin (rulings R18 and R42) ────────────────────────────────
 @pytest.mark.parametrize("name", ["read", "ops"])
-def test_origin_403_with_valid_token(name, tmp_path):
-    """R9: a bad Origin is 403 when the token is good. Python runs auth first, so without a token
-    the same request is 401 (Go checks Origin first and answers 403 either way)."""
+def test_origin_403_with_or_without_token(name, tmp_path):
+    """R42: Host and Origin are checked before the token, as in Go, so a bad Origin is 403 with a
+    good token and without one (this replaces R9's 401 for the no-token case)."""
     resource, scope, _ = SERVERS[name]
     token = mint_test_token(scope, resource)
     assert discover(name, tmp_path, token, Origin="http://evil.invalid").status_code == 403
     assert discover(name, tmp_path, token, Origin="http://127.0.0.1:6274").status_code == 200
-    assert discover(name, tmp_path, None, Origin="http://evil.invalid").status_code == 401  # the ordering
+    assert discover(name, tmp_path, None, Origin="http://evil.invalid").status_code == 403
+
+
+@pytest.mark.parametrize("name", ["read", "ops"])
+def test_dns_rebinding_refused_over_real_http(name, tmp_path):
+    """R42, on a real uvicorn server: a rebinding page's request names its own host in both Host and
+    Origin. Both are checked against explicit allow-lists, never against each other, so it is 403
+    even with a valid token. The server's own two local origins and the Inspector's two still work."""
+    resource, scope, _ = SERVERS[name]
+    token = mint_test_token(scope, resource)
+    with live(lambda port: app_for(name, tmp_path, port)) as url:
+        port = url.rsplit(":", 1)[1]
+
+        def post(host: str, origin: str | None = None) -> int:
+            extra = {"Origin": origin} if origin else {}
+            return httpx2.post(f"{url}/mcp", content=DISCOVER, headers=headers(host, token, **extra)).status_code
+
+        assert post(f"evil.invalid:{port}", f"http://evil.invalid:{port}") == 403
+        assert post(f"evil.invalid:{port}") == 403
+        assert post(f"127.0.0.1:{port}", f"http://evil.invalid:{port}") == 403
+        assert post(f"127.0.0.1:{port}", "http://127.0.0.1:5555") == 403  # another local port is not trusted
+        assert post(f"127.0.0.1:{port}") == 200
+        for origin in (f"http://127.0.0.1:{port}", f"http://localhost:{port}", "http://127.0.0.1:6274",
+                       "http://localhost:6274"):
+            assert post(f"127.0.0.1:{port}", origin) == 200, origin
+        assert post(f"localhost:{port}", f"http://localhost:{port}") == 200
 
 
 @pytest.mark.parametrize("name", ["read", "ops"])
@@ -284,7 +314,8 @@ def test_ops_client_id_from_token(tmp_path):
     """The label row's client_id is the verified token's client_id (not anything the client says)."""
     path = tmp_path / "labels.jsonl"
     token = mint_test_token(SCOPE_WRITE, OPS_RESOURCE, client_id="lumen-test-client-7", sub="user-42")
-    app = ops_server.build_http_app(ops_server.build_ops_server(path, auth=True))
+    def app(port: int):
+        return ops_server.build_http_app(ops_server.build_ops_server(path, auth=True), port=port)
 
     async def go(url: str):
         target = lumen_client.http_target(f"{url}/mcp", token)
@@ -319,7 +350,7 @@ def test_client_token_goes_in_the_header_only(tmp_path):
         async with lumen_client.connect(lumen_client.http_target(url, tok), refusal=refusal) as c:
             return await lumen_client.list_tools(c)
 
-    with live(read_server.build_http_app()) as url:
+    with live(lambda port: read_server.build_http_app(port=port)) as url:
         ok = lumen_client.Refusal()
         tools = asyncio.run(go(f"{url}/mcp", token, ok))
         assert [t["name"] for t in tools] == ["classify_complaint", "get_ticket", "search_tickets"]

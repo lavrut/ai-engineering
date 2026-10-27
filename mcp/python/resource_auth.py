@@ -21,6 +21,12 @@ file (or the one named by LUMEN_SIGNING_KEY_FILE) and refuse to start without it
 
 The Go servers do the same in mcp/go/auth/auth.go, where the audience check lives in the verifier
 (ruling R7: the Go SDK's middleware does not check audience).
+
+Host and Origin (ruling R42, section 3): LocalOnly, the outermost layer on /mcp, checks both against
+explicit allow-lists (127.0.0.1:<port> and localhost:<port>; the server's own two local origins plus the
+Inspector's two) and answers 403, before any token is looked at, as Go does. Never "Origin == Host":
+a DNS-rebinding page sends its own host in both. The SDK's own check is configured with the same lists
+(no wildcards) as a second layer.
 """
 from __future__ import annotations
 
@@ -32,6 +38,7 @@ from pathlib import Path
 import jwt
 from mcp.server.auth.provider import AccessToken
 from mcp.server.auth.settings import AuthSettings
+from mcp.server.transport_security import TransportSecuritySettings
 
 # ── 1. Configuration ────────────────────────────────────────────────────────
 ISSUER = "http://127.0.0.1:9000"  # the local test AS (auth_server.py)
@@ -43,6 +50,8 @@ LEEWAY_SECONDS = 30  # clock skew allowed on nbf / iat (never on exp: R29)
 KEY_FILE_ENV = "LUMEN_SIGNING_KEY_FILE"
 DEFAULT_KEY_FILE = Path(__file__).resolve().parents[1] / "data" / "dev-signing.key"
 KEY_BYTES = 32
+# The only browser origins trusted besides the server's own two local ones (ruling R42; Go: auth.InspectorOrigins).
+INSPECTOR_ORIGINS = ("http://127.0.0.1:6274", "http://localhost:6274")
 
 
 class SigningKeyMissing(RuntimeError):
@@ -148,3 +157,46 @@ def resource_server(resource: str, scope: str) -> dict:
                              # Explicit: unset warns and means False.
                              validate_token_resource=True),
     }
+
+
+def local_hosts(port: int) -> list[str]:
+    """The Host values a request to this server may carry (ruling R42)."""
+    return [f"127.0.0.1:{port}", f"localhost:{port}"]
+
+
+def local_origins(port: int) -> list[str]:
+    """The browser origins this server trusts: its own two local ones and the Inspector's two."""
+    return [f"http://127.0.0.1:{port}", f"http://localhost:{port}", *INSPECTOR_ORIGINS]
+
+
+def transport_security(port: int) -> TransportSecuritySettings:
+    """The SDK's DNS-rebinding check with explicit lists instead of its default 127.0.0.1:* wildcards.
+    A second layer: LocalOnly has already refused anything these lists would."""
+    return TransportSecuritySettings(enable_dns_rebinding_protection=True, allowed_hosts=local_hosts(port),
+                                     allowed_origins=local_origins(port))
+
+
+class LocalOnly:
+    """ASGI middleware, outermost on /mcp (every method): 403 unless Host is one of local_hosts(port)
+    and Origin is absent (a non-browser client) or one of local_origins(port). Runs before the token
+    check, so the order matches Go's auth.Handler. The metadata path is public and not guarded."""
+
+    def __init__(self, app, port: int) -> None:
+        self.app, self.hosts, self.origins = app, set(local_hosts(port)), set(local_origins(port))
+
+    async def __call__(self, scope, receive, send) -> None:
+        path = scope.get("path", "")
+        if scope["type"] == "http" and (path == "/mcp" or path.startswith("/mcp/")):
+            headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
+            origin = headers.get("origin")
+            if headers.get("host") not in self.hosts:
+                return await _forbidden(send, b"forbidden host")
+            if origin is not None and origin not in self.origins:
+                return await _forbidden(send, b"forbidden origin")
+        await self.app(scope, receive, send)
+
+
+async def _forbidden(send, body: bytes) -> None:
+    await send({"type": "http.response.start", "status": 403,
+                "headers": [(b"content-type", b"text/plain; charset=utf-8"), (b"content-length", str(len(body)).encode())]})
+    await send({"type": "http.response.body", "body": body})

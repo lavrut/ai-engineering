@@ -95,7 +95,8 @@ func LoadSigningKey() ([]byte, error) {
 // ErrNoKey is what Verifier panics with when given an empty key: it never verifies without one.
 var ErrNoKey = errors.New("empty signing key")
 
-// InspectorOrigins are the only browser origins allowed besides the server's own (ruling R11).
+// InspectorOrigins are the only browser origins trusted besides the server's own two local ones
+// (rulings R11, R42).
 var InspectorOrigins = []string{"http://127.0.0.1:6274", "http://localhost:6274"}
 
 // ── 2. Token verifier ───────────────────────────────────────────────────────
@@ -186,18 +187,32 @@ func Verifier(resource string, key []byte) sdkauth.TokenVerifier {
 
 // ── 3. Resource-server handler ──────────────────────────────────────────────
 
-// CheckOrigin answers 403 to a request whose Origin is neither the server's own nor trusted, for
-// every method (ruling R18): http.CrossOriginProtection only gates unsafe methods, and a GET on
-// /mcp opens a stream. No Origin at all is a non-browser client and passes.
-func CheckOrigin(trusted []string, next http.Handler) http.Handler {
+// LocalHosts are the Host values a request to a server on `port` may carry (ruling R42).
+func LocalHosts(port int) []string {
+	return []string{fmt.Sprintf("127.0.0.1:%d", port), fmt.Sprintf("localhost:%d", port)}
+}
+
+// LocalOrigins are the browser origins a server on `port` trusts: its own two local ones and the
+// Inspector's two (ruling R42).
+func LocalOrigins(port int) []string {
+	return append([]string{fmt.Sprintf("http://127.0.0.1:%d", port), fmt.Sprintf("http://localhost:%d", port)},
+		InspectorOrigins...)
+}
+
+// CheckLocal answers 403 unless the Host header is one of `hosts` and the Origin header is absent (a
+// non-browser client) or one of `origins`, for every method (ruling R18: http.CrossOriginProtection
+// only gates unsafe methods, and a GET on /mcp opens a stream). Both are checked against explicit
+// lists, never against each other (ruling R42): a DNS-rebinding page sends its own name as Host and
+// as Origin, so "Origin == Host" would let it through.
+func CheckLocal(hosts, origins []string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if origin := r.Header.Get("Origin"); origin != "" {
-			u, err := url.Parse(origin)
-			own := err == nil && u.Scheme == "http" && u.Host == r.Host && u.Path == "" && u.RawQuery == ""
-			if !own && !slices.Contains(trusted, origin) {
-				http.Error(w, "forbidden origin", http.StatusForbidden)
-				return
-			}
+		if !slices.Contains(hosts, r.Host) {
+			http.Error(w, "forbidden host", http.StatusForbidden)
+			return
+		}
+		if origin := r.Header.Get("Origin"); origin != "" && !slices.Contains(origins, origin) {
+			http.Error(w, "forbidden origin", http.StatusForbidden)
+			return
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -256,14 +271,15 @@ func MetadataURL(resource string) string {
 }
 
 // Handler serves `mcpHandler` at /mcp as a resource server for `resource` (tokens signed with
-// `key`), and its metadata at PRMPath. Order on /mcp: Origin (403, every method) -> cross-origin
-// protection (403, unsafe methods, incl. Sec-Fetch-Site) -> body cap (413) -> bearer token -> MCP.
-// So a bad Origin or an oversized body is refused before any token is looked at (ruling R9 records
-// that Python checks the token first). Within the bearer step: the verifier (signature, time,
-// audience: 401) runs before the scope check (403), ruling R24.
-func Handler(mcpHandler http.Handler, resource, scope string, key []byte) http.Handler {
+// `key`), listening on `port`, and its metadata at PRMPath. Order on /mcp: Host and Origin against
+// explicit lists (403, every method, ruling R42) -> cross-origin protection (403, unsafe methods,
+// incl. Sec-Fetch-Site) -> body cap (413) -> bearer token -> MCP. So a bad Host, a bad Origin or an
+// oversized body is refused before any token is looked at; the Python servers use the same order.
+// Within the bearer step: the verifier (signature, time, audience: 401) runs before the scope check
+// (403), ruling R24.
+func Handler(mcpHandler http.Handler, resource, scope string, key []byte, port int) http.Handler {
 	cop := http.NewCrossOriginProtection()
-	for _, o := range InspectorOrigins {
+	for _, o := range LocalOrigins(port) { // CheckLocal already allowed these; the SDK guard must agree
 		if err := cop.AddTrustedOrigin(o); err != nil {
 			panic(err)
 		}
@@ -276,6 +292,6 @@ func Handler(mcpHandler http.Handler, resource, scope string, key []byte) http.H
 	mux.Handle(PRMPath, sdkauth.ProtectedResourceMetadataHandler(&oauthex.ProtectedResourceMetadata{
 		Resource: resource, AuthorizationServers: []string{Issuer},
 		ScopesSupported: []string{scope}, BearerMethodsSupported: []string{"header"}}))
-	mux.Handle("/mcp", CheckOrigin(InspectorOrigins, cop.Handler(CapBody(withErrorCodes(protect, mcpHandler)))))
+	mux.Handle("/mcp", CheckLocal(LocalHosts(port), LocalOrigins(port), cop.Handler(CapBody(withErrorCodes(protect, mcpHandler)))))
 	return mux
 }

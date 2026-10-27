@@ -17,12 +17,12 @@ import (
 // ── 6. Entry point ──────────────────────────────────────────────────────────
 func main() {
 	useHTTP := flag.Bool("http", false, "serve Streamable HTTP on 127.0.0.1 (default: stdio)")
-	port := flag.Int("port", 8765, "HTTP port")
+	port := flag.Int("port", DefaultPort, "HTTP port")
 	flag.Parse()
 	s := NewReadServer()
 	if *useHTTP {
 		addr := fmt.Sprintf("127.0.0.1:%d", *port)
-		h, err := NewHTTPHandler(s)
+		h, err := NewHTTPHandler(s, *port)
 		if err != nil {
 			log.Fatalf("readserver: %v", err) // no key file: never fall back to a default key
 		}

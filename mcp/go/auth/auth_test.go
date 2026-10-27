@@ -132,7 +132,7 @@ func do(h http.Handler, method, path, token, origin string) *httptest.ResponseRe
 
 func TestHandlerStatuses(t *testing.T) {
 	key := authtest.UseKey(t)
-	h := auth.Handler(okHandler, auth.OpsResource, auth.ScopeWrite, key)
+	h := auth.Handler(okHandler, auth.OpsResource, auth.ScopeWrite, key, 8766)
 	tok := authtest.Token(key, auth.ScopeWrite, auth.OpsResource, "lumen-cli", "user-1")
 	for name, c := range map[string]struct {
 		token, wantErr string
@@ -171,7 +171,7 @@ func TestHandlerStatuses(t *testing.T) {
 func TestOriginCheckedForEveryMethod(t *testing.T) {
 	key := authtest.UseKey(t)
 	// R18: http.CrossOriginProtection lets safe methods (GET, HEAD, OPTIONS) through; ours does not.
-	h := auth.Handler(okHandler, auth.OpsResource, auth.ScopeWrite, key)
+	h := auth.Handler(okHandler, auth.OpsResource, auth.ScopeWrite, key, 8766)
 	tok := authtest.Token(key, auth.ScopeWrite, auth.OpsResource, "lumen-cli", "user-1")
 	for _, m := range []string{"GET", "HEAD", "OPTIONS", "POST", "DELETE"} {
 		for _, token := range []string{tok, ""} { // Go checks Origin before auth: 403 with or without a token
@@ -193,9 +193,48 @@ func TestOriginCheckedForEveryMethod(t *testing.T) {
 	}
 }
 
+func TestHostAndOriginAllowLists(t *testing.T) {
+	// R42: Host and Origin are each checked against an explicit list, never against each other. A
+	// DNS-rebinding page sends its own name in both, so "Origin == Host" must not pass.
+	key := authtest.UseKey(t)
+	h := auth.Handler(okHandler, auth.OpsResource, auth.ScopeWrite, key, 8766)
+	tok := authtest.Token(key, auth.ScopeWrite, auth.OpsResource, "lumen-cli", "user-1")
+	try := func(host, origin string) int {
+		req := httptest.NewRequest("POST", "http://127.0.0.1:8766/mcp", strings.NewReader(`{}`))
+		req.Host = host
+		req.Header.Set("Authorization", "Bearer "+tok)
+		if origin != "" {
+			req.Header.Set("Origin", origin)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	for _, c := range []struct {
+		host, origin string
+		want         int
+	}{
+		{"evil.invalid:8766", "http://evil.invalid:8766", 403},
+		{"evil.invalid:8766", "", 403},
+		{"127.0.0.1:9999", "", 403},
+		{"127.0.0.1:8766", "http://evil.invalid:8766", 403},
+		{"localhost:8766", "http://127.0.0.1:9999", 403},
+		{"127.0.0.1:8766", "", 200},
+		{"localhost:8766", "", 200},
+		{"127.0.0.1:8766", "http://127.0.0.1:8766", 200},
+		{"127.0.0.1:8766", "http://localhost:8766", 200},
+		{"localhost:8766", "http://127.0.0.1:6274", 200},
+		{"127.0.0.1:8766", "http://localhost:6274", 200},
+	} {
+		if got := try(c.host, c.origin); got != c.want {
+			t.Errorf("Host %q Origin %q: %d, want %d", c.host, c.origin, got, c.want)
+		}
+	}
+}
+
 func TestProtectedResourceMetadata(t *testing.T) {
 	key := authtest.UseKey(t)
-	h := auth.Handler(okHandler, auth.ReadResource, auth.ScopeRead, key)
+	h := auth.Handler(okHandler, auth.ReadResource, auth.ScopeRead, key, 8766)
 	rec := do(h, "GET", "/.well-known/oauth-protected-resource/mcp", "", "")
 	var prm map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &prm); err != nil || rec.Code != 200 {
@@ -209,7 +248,7 @@ func TestProtectedResourceMetadata(t *testing.T) {
 
 func TestBodyCapBeforeAuth(t *testing.T) {
 	key := authtest.UseKey(t)
-	h := auth.Handler(okHandler, auth.OpsResource, auth.ScopeWrite, key)
+	h := auth.Handler(okHandler, auth.OpsResource, auth.ScopeWrite, key, 8766)
 	req := httptest.NewRequest("POST", "http://127.0.0.1:8766/mcp", strings.NewReader(strings.Repeat(" ", 131073)))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -264,7 +303,7 @@ func TestTokenFromAnotherKeyIs401(t *testing.T) {
 	old := authtest.UseKey(t)
 	tok := authtest.Token(old, auth.ScopeWrite, auth.OpsResource, "lumen-cli", "user-1")
 	key := authtest.UseKey(t) // the AS restarted with a new key file
-	if rec := do(auth.Handler(okHandler, auth.OpsResource, auth.ScopeWrite, key), "POST", "/mcp", tok, ""); rec.Code != 401 {
+	if rec := do(auth.Handler(okHandler, auth.OpsResource, auth.ScopeWrite, key, 8766), "POST", "/mcp", tok, ""); rec.Code != 401 {
 		t.Fatalf("got %d", rec.Code)
 	}
 }

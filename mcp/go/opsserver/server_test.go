@@ -11,7 +11,9 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -544,7 +546,7 @@ func opsToken() string { return tok(auth.ScopeWrite, auth.OpsResource, "lumen-cl
 func httpHandler(t *testing.T, s *mcp.Server) http.Handler {
 	t.Helper()
 	authtest.UseKey(t)
-	h, err := NewHTTPHandler(s)
+	h, err := NewHTTPHandler(s, DefaultPort)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -581,8 +583,7 @@ func TestLegacyClientFailsClosedOverStatelessHTTP(t *testing.T) {
 	// A 2025-11-25 client is willing to confirm, but a Stateless server has no channel to ask it
 	// mid-call. label_ticket fails closed with the fixed decline and writes nothing.
 	path := labelsFile(t)
-	ts := httptest.NewServer(httpHandler(t, NewOpsServer(path)))
-	defer ts.Close()
+	ts := serveLocal(t, NewOpsServer(path))
 	var seen []asked
 	client := mcp.NewClient(&mcp.Implementation{Name: "legacy", Version: "0"},
 		&mcp.ClientOptions{ElicitationHandler: replying(accept, &seen)})
@@ -608,8 +609,7 @@ func TestLegacyClientFailsClosedOverStatelessHTTP(t *testing.T) {
 
 func TestModernClientConfirmsOverHTTP(t *testing.T) {
 	path := labelsFile(t)
-	ts := httptest.NewServer(httpHandler(t, NewOpsServer(path)))
-	defer ts.Close()
+	ts := serveLocal(t, NewOpsServer(path))
 	var seen []asked
 	cs, err := mcp.NewClient(&mcp.Implementation{Name: "modern", Version: "0"},
 		&mcp.ClientOptions{ElicitationHandler: replying(accept, &seen)}).
@@ -738,8 +738,7 @@ func TestOpsClientIDFromToken(t *testing.T) {
 	// The label row's client_id, and the confirmation state's Sub and ClientID, come from the
 	// verified token. A state issued to one token is refused when answered with another.
 	path := labelsFile(t)
-	ts := httptest.NewServer(httpHandler(t, NewOpsServer(path)))
-	defer ts.Close()
+	ts := serveLocal(t, NewOpsServer(path))
 	connect := func(token string, manualRounds bool) *mcp.ClientSession {
 		var seen []asked
 		opts := &mcp.ClientOptions{ElicitationHandler: replying(accept, &seen)}
@@ -781,7 +780,7 @@ func TestOpsClientIDFromToken(t *testing.T) {
 }
 
 func TestGetWithBadOrigin403(t *testing.T) {
-	// R18: Origin is checked for every method (CrossOriginProtection alone passes GET). With a valid token (R9).
+	// R18: Origin is checked for every method (CrossOriginProtection alone passes GET). With a valid token.
 	h := httpHandler(t, NewOpsServer(labelsFile(t)))
 	if rec := send(h, "GET", "", "http://evil.example", opsToken()); rec.Code != 403 {
 		t.Errorf("GET bad Origin: %d", rec.Code)
@@ -790,6 +789,70 @@ func TestGetWithBadOrigin403(t *testing.T) {
 		t.Errorf("GET Inspector Origin: 403")
 	}
 	if rec := send(h, "POST", listBody, "http://evil.example", ""); rec.Code != 403 {
-		t.Errorf("R9 ordering: Go checks Origin before auth, want 403 without a token, got %d", rec.Code)
+		t.Errorf("R42 ordering: Origin is checked before auth, want 403 without a token, got %d", rec.Code)
+	}
+}
+
+// serveLocal starts a real HTTP server for s on a free 127.0.0.1 port, with the handler built for that
+// port (its Host allow-list names it, ruling R42), and returns it.
+func serveLocal(t *testing.T, s *mcp.Server) *httptest.Server {
+	t.Helper()
+	authtest.UseKey(t)
+	ts := httptest.NewUnstartedServer(nil)
+	port := ts.Listener.Addr().(*net.TCPAddr).Port
+	h, err := NewHTTPHandler(s, port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts.Config.Handler = h
+	ts.Start()
+	t.Cleanup(ts.Close)
+	return ts
+}
+
+// rebindingStatus sends one tools/list to ts with the given Host and Origin and a valid token.
+func rebindingStatus(t *testing.T, ts *httptest.Server, host, origin, token string) int {
+	t.Helper()
+	req, err := http.NewRequest("POST", ts.URL+"/mcp", strings.NewReader(listBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Host = host
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Authorization", "Bearer "+token)
+	if origin != "" {
+		req.Header.Set("Origin", origin)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	return resp.StatusCode
+}
+
+func TestDNSRebindingRefusedOverHTTP(t *testing.T) {
+	// R42, on a real server: Host and Origin both name the attacker's host. 403 even with a valid token.
+	ts := serveLocal(t, NewOpsServer(labelsFile(t)))
+	port := ts.Listener.Addr().(*net.TCPAddr).Port
+	token := opsToken()
+	at := func(h string) string { return fmt.Sprintf("%s:%d", h, port) }
+	for _, c := range []struct {
+		host, origin string
+		want         int
+	}{
+		{at("evil.invalid"), "http://" + at("evil.invalid"), 403},
+		{at("evil.invalid"), "", 403},
+		{at("127.0.0.1"), "http://" + at("evil.invalid"), 403},
+		{at("127.0.0.1"), "", 200},
+		{at("127.0.0.1"), "http://" + at("127.0.0.1"), 200},
+		{at("localhost"), "http://" + at("localhost"), 200},
+		{at("127.0.0.1"), "http://127.0.0.1:6274", 200},
+		{at("127.0.0.1"), "http://localhost:6274", 200},
+	} {
+		if got := rebindingStatus(t, ts, c.host, c.origin, token); got != c.want {
+			t.Errorf("Host %q Origin %q: %d, want %d", c.host, c.origin, got, c.want)
+		}
 	}
 }
