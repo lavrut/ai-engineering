@@ -132,6 +132,14 @@ export const glossary = {
     'The check a candidate model must pass before it replaces production; here, beat production’s macro-F1 by more than the noise band on data neither model trained on, with no category’s F1 below a floor.',
   rollback:
     'Making the previous production version production again, as a recorded registry move, when a promoted model turns out worse.',
+  'eval framework':
+    'A library that standardises the parts of an eval: the dataset format, how a model is called, the scorers, repeats and the log. You supply the data, prompts and graders.',
+  solver:
+    'In Inspect, the step that builds the request for one sample and calls the model. The lab’s section 4 is a solver.',
+  scorer:
+    'In Inspect, the function that grades one sample’s answer. Its metrics, such as accuracy and standard error, combine the grades into a score.',
+  epoch:
+    'One pass of an Inspect eval over every sample. Running three epochs repeats each sample three times, as the lab’s three reps do.',
 } as const satisfies Record<string, string>;
 
 export type GlossaryKey = keyof typeof glossary;

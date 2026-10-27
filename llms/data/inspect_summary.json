@@ -1,0 +1,131 @@
+{
+  "inspect_version": "0.3.285",
+  "lab": "llms/python/triage_lab.py",
+  "split": "all",
+  "runs": [
+    {
+      "id": "v1_basic",
+      "label": "v1_basic, all 60 tickets",
+      "task": "triage",
+      "epochs": 1,
+      "command": "inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v1_basic --log-dir llms/inspect/logs",
+      "lab_command": "python triage_lab.py run --prompt v1_basic --split all",
+      "rows": [
+        {
+          "metric": "category",
+          "lab": 0.9,
+          "inspect": 0.9,
+          "stderr": 0.0391,
+          "n": 60,
+          "match": true
+        },
+        {
+          "metric": "priority",
+          "lab": 0.7333,
+          "inspect": 0.7333,
+          "stderr": 0.0576,
+          "n": 60,
+          "match": true
+        }
+      ]
+    },
+    {
+      "id": "v2_rules",
+      "label": "v2_rules, 3 epochs, all 60 tickets",
+      "task": "triage",
+      "epochs": 3,
+      "command": "inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v2_rules --epochs 3 --log-dir llms/inspect/logs",
+      "lab_command": "python triage_lab.py run --prompt v2_rules --split all --reps 3",
+      "rows": [
+        {
+          "metric": "category",
+          "lab": 1.0,
+          "inspect": 1.0,
+          "stderr": 0.0,
+          "n": 60,
+          "match": true
+        },
+        {
+          "metric": "priority",
+          "lab": 0.9611,
+          "inspect": 0.9611,
+          "stderr": 0.0239,
+          "n": 60,
+          "match": true
+        }
+      ]
+    },
+    {
+      "id": "v3_examples",
+      "label": "v3_examples, all 60 tickets",
+      "task": "triage",
+      "epochs": 1,
+      "command": "inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v3_examples --log-dir llms/inspect/logs",
+      "lab_command": "python triage_lab.py run --prompt v3_examples --split all",
+      "rows": [
+        {
+          "metric": "category",
+          "lab": 1.0,
+          "inspect": 1.0,
+          "stderr": 0.0,
+          "n": 60,
+          "match": true
+        },
+        {
+          "metric": "priority",
+          "lab": 0.9667,
+          "inspect": 0.9667,
+          "stderr": 0.0234,
+          "n": 60,
+          "match": true
+        }
+      ]
+    },
+    {
+      "id": "judge",
+      "label": "judge, v2_rules rep-0 replies, 20 test tickets",
+      "task": "triage_judged",
+      "epochs": 1,
+      "command": "inspect eval llms/inspect/triage_inspect.py@triage_judged --model replay/claude-haiku-5-5 --model-role grader=replay/claude-opus-5-5 --log-dir llms/inspect/logs",
+      "lab_command": "python triage_lab.py judge --prompt v2_rules --split test --order after",
+      "rows": [
+        {
+          "metric": "addresses_issue",
+          "lab": 0.7,
+          "inspect": 0.7,
+          "stderr": 0.1051,
+          "n": 20,
+          "match": true
+        },
+        {
+          "metric": "tone",
+          "lab": 0.95,
+          "inspect": 0.95,
+          "stderr": 0.05,
+          "n": 20,
+          "match": true
+        },
+        {
+          "metric": "no_false_promises",
+          "lab": 0.95,
+          "inspect": 0.95,
+          "stderr": 0.05,
+          "n": 20,
+          "match": true
+        }
+      ]
+    }
+  ],
+  "framework_gives": [
+    "The dataset and sample format: tickets become samples with an input, a target and metadata.",
+    "Epochs and reducers: repeat each sample and combine the repeats into one score.",
+    "Scorers with metrics and stderr: accuracy and its standard error come with the scorer.",
+    "Logs and inspect view: every run is saved as a log you can open and browse."
+  ],
+  "we_still_own": [
+    "The replay keys: what makes a saved response match a request is our code, not Inspect's.",
+    "The cost estimate and the spend cap before any paid run.",
+    "The judge position check: does the verdict change when the rubric moves before the reply.",
+    "Deciding which numbers matter: which metric, which split, and how big a gap counts."
+  ]
+}

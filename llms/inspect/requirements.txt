@@ -1,0 +1,4 @@
+inspect-ai==0.3.285
+anthropic>=1.0
+pytest>=8
+brotli>=1.2  # older brotli makes every API call fail with "Connection error" under the SDK's HTTP client
