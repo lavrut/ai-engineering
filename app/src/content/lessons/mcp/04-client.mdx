@@ -1,0 +1,174 @@
+---
+track: mcp
+order: 4
+slug: client
+title: Writing a client
+goal: Connect a client to lumen-read over stdio, discover its tools, call them, handle an error result, and say what the client does when a server answers with an input-required result.
+minutes: 25
+quiz:
+  - question: The client passes an elicitation callback when it connects, even to lumen-read, which never asks a question. What does passing the callback do?
+    options:
+      - It makes the connection slower
+      - It declares in the client's capabilities that it can answer a confirmation question, which is the only reason a server like lumen-ops will ask one
+      - It lets the client write tickets
+      - It turns on logging
+    answer: 1
+    explanation: Capabilities travel on every request in this revision. A server that needs a person to confirm a write will only ask a client that said it can answer. With no callback the capability is absent, and the server has to refuse or find another way.
+  - question: The Python client and the Go client print byte-identical JSON for tools. The two SDKs describe schemas differently. What makes the output match?
+    options:
+      - The Go client calls the Python SDK
+      - Both clients cut each schema down to its shape (type, properties, required, items, additionalProperties) and print integral floats as integers, so SDK decoration never reaches the output
+      - The server sends different schemas to each language
+      - They do not match; only the tool names do
+    answer: 1
+    explanation: Python adds titles and definitions, and Go's struct cannot say a hint is absent, so each client normalises the same way. That makes the output comparable, which is what lets one contract test both servers.
+  - question: You run the client with --url against lumen-read and no token. What do you get, and what does it tell you?
+    options:
+      - The tool list, because discovery is public
+      - A one-line refusal, "HTTP 401 Unauthorized", because the server over HTTP is a resource server and checks a bearer token before it answers any request
+      - A hang, until the connection times out
+      - The tool list with ticket text hidden
+    answer: 1
+    explanation: Over HTTP, lumen-read only answers a request that carries a token issued for it. The client records the status of the refused request and says so in one line. Over stdio there is no token, because the host that starts the process is the trust boundary.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+A server waits to be asked. The program that asks is the client. In the last two lessons you used our client without reading it. Now you read it.
+
+`mcp/python/client.py` does one command per run and prints one JSON value:
+
+| Command | Does |
+|---|---|
+| `discover` | Lists the server's name, protocol version, instructions, tools, resources, resource templates and prompts |
+| `tools` | Lists each tool with its description, annotations and schemas |
+| `call NAME JSON` | Calls a tool |
+| `read URI` | Reads a resource |
+| `prompt NAME JSON` | Gets a prompt |
+
+Two flags choose the server: `--stdio` starts `read_server.py` as a child process, and `--url` talks to a Streamable HTTP endpoint. Everything after the connection is the same, which is the point of a protocol.
+
+### Discovery
+
+<Term t="discovery" /> is how a client learns what a server has. The client lists tools, resources, resource templates and prompts, and reads the server's name and `instructions`. In this revision a server can also answer `server/discover`, but a client does not have to use it. The SDK's client does the probing when it connects, and the result is the `protocol_version` the command prints.
+
+### Calls and errors
+
+A call has two ways to fail, and the client must tell them apart:
+
+- A **tool error** is a normal result with `isError: true` and a text message, such as `limit must be 1 to 20`. The model can read it. Our client prints it as `{"error": "..."}`.
+- A **protocol error** is a JSON-RPC error: an unknown method, bad parameters, or a missing resource. The SDK raises it, and the client turns it into a message.
+
+### When a server needs an answer
+
+A server in this revision cannot send the client a question. When `lumen-ops` needs a person to confirm a write, it answers the call with an <Term t="InputRequiredResult" /> that holds the question. The client asks, then sends the same call again with the answer attached. The SDK's `Client` runs those rounds. What the client supplies is the callback that produces the answer. Lesson 8 builds the server side, and lesson 5's agent uses a scripted answer.
+
+The client's own answer is only a claim. A server cannot tell a person from `--yes`. That is why a write needs more than a "yes" over the wire.
+
+### HTTP needs a token
+
+`lumen-read` over HTTP is an OAuth resource server: every request needs a bearer token issued for it. The client has flags for a token (`--token-file`, `--token` and the `LUMEN_TOKEN` environment variable), and sends it in an `Authorization: Bearer` header, never in the URL. Where tokens come from is lesson 9. Here you only need to see what happens without one.
+
+## See it
+
+Press **Next** through the client's five steps. Watch where the answerer sits: it hangs off the call step, not the connection, because a question can only come back as the answer to a call.
+
+<FlowDiagram diagram="mcp-client" />
+
+The diagram showed one command turning into a connection, a discovery, a call and one JSON value. The answerer only runs if a server asks.
+
+## The code
+
+Section 2 connects.
+
+<CodeTabs source="mcp-client" section={2} />
+
+- `HttpTarget(url, headers)` is a URL plus the headers every request carries. `http_target(url, token)` is the one place the HTTP path is built. With a token it adds `Authorization: Bearer ...`, and the URL stays exactly as given.
+- `callback = elicitation_callback(answer or deny)` is built first. Passing it to `Client(..., elicitation_callback=callback)` is what declares the elicitation capability.
+- `if isinstance(target, str) and target.startswith(("http://", "https://"))` sends a URL down the HTTP path. Anything else, such as `StdioServerParameters` or an in-process server in a test, goes to `Client(target, ...)`.
+- `http.event_hooks["response"].append(record)` remembers the status of the last non-2xx answer to a POST. A failed call can then say "HTTP 401 Unauthorized" instead of an SDK stack.
+- The comment on `connect` notes that the SDK follows a redirect only within the endpoint's own origin, so the headers never go elsewhere.
+
+Section 3 discovers.
+
+<CodeTabs source="mcp-client" section={3} />
+
+- `normalise_schema(schema, defs)` keeps only `type`, `properties`, `required`, `items` and `additionalProperties`. Everything else, such as `title`, `default` and `$defs`, is SDK decoration.
+- `if "$ref" in schema: return normalise_schema(defs[...], defs)` follows a reference, so a nested type prints in full.
+- `sorted(value)` on `required` and `sorted(t.name for t in tools.tools)` keep the output in a fixed order. Python and Go must print the same bytes.
+- `async def discover(client)` calls four list methods and reads `client.server_info`, `client.protocol_version` and `client.instructions` for the rest.
+
+Section 4 calls.
+
+<CodeTabs source="mcp-client" section={4} />
+
+- `result = await client.call_tool(name, arguments)` is the whole call. The SDK builds the request with the right `_meta`.
+- `if result.is_error:` takes the first text block as the message, or `<no text>` when there is none.
+- `return {"structured": result.structured_content}` is the success shape.
+- `except MCPError as e: return {"error": str(e)}` in `read` and `prompt` is where a protocol error becomes a message.
+
+Section 5 answers input-required rounds.
+
+<CodeTabs source="mcp-client" section={5} />
+
+- `async def deny(message) -> bool` is the default answer. A client with no way to ask declines.
+- `ask_terminal(...)` writes the question to stderr, so stdout stays clean JSON, and reads one line. Only `y` or `yes` accepts. If stdin is closed it declines, because nobody can answer.
+- `props = (params.requested_schema or {}).get("properties", {})` reads the form the server sent. The callback accepts only a form made of yes-or-no fields.
+- `if any(p.get("type") != "boolean" for p in props.values()): return ElicitResult(action="decline")` declines a form it cannot fill, rather than guessing.
+
+## How Go does it
+
+The Go tab has the same six sections, in the same order. It exists to prove that a second client, on the other SDK, reads the same servers the same way. Three differences are worth knowing.
+
+- Flags go before the command: `go run ./client -stdio discover`. Go's `flag` package stops at the first argument that is not a flag.
+- Go decodes every JSON number as a `float64`, so `1` and `1.0` look alike. The Python client has `canon`, which prints an integral float as an integer, so the two match.
+- Go's annotation struct cannot say a hint is absent, so both clients drop `readOnlyHint` and `idempotentHint` when they are false.
+
+## Try it
+
+Run these from the repo root. Everything here is free.
+
+Discover the server over stdio. You should see `"protocol_version": "2026-07-28"` and `"server": "lumen-read"`:
+
+```bash
+.venv-mcp/bin/python mcp/python/client.py --stdio discover
+```
+
+Call a tool, and then call it from Go. The two commands print the same bytes. We checked by piping both into `md5` and got `b0a7e0fab66d59fd1c32497fbabb1392` each time:
+
+```bash
+.venv-mcp/bin/python mcp/python/client.py --stdio call search_tickets '{"query": "charged twice", "limit": 2}'
+cd mcp/go && go run ./client -stdio call search_tickets '{"query": "charged twice", "limit": 2}'
+```
+
+### Try HTTP without a token
+
+This needs three terminals, all from the repo root. The first command starts the test authorization server. It is **test only** and it auto-approves every request, so it must stay on `127.0.0.1`. On its first start it writes `mcp/data/dev-signing.key`, which is git-ignored. The HTTP server reads the same key, and refuses to start without it.
+
+Terminal 1:
+
+```bash
+.venv-mcp/bin/python mcp/python/auth_server.py
+```
+
+Terminal 2 starts `lumen-read` over HTTP on `127.0.0.1:8765`:
+
+```bash
+.venv-mcp/bin/python mcp/python/read_server.py --http
+```
+
+Terminal 3 connects with no token. You should see one line, `client: the server refused the request: HTTP 401 Unauthorized`, and exit code 1. The Go client prints the same line:
+
+```bash
+.venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8765/mcp discover
+```
+
+```bash
+cd mcp/go && go run ./client -url http://127.0.0.1:8765/mcp discover
+```
+
+Stop both servers with Ctrl-C when you are done. Lesson 9 shows how to get a token that this server accepts.

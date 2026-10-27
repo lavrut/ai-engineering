@@ -1,0 +1,162 @@
+---
+track: mcp
+order: 5
+slug: agent
+title: An agent that uses MCP
+goal: Run the Track 1 harness on MCP tools by replaying a real recorded run, explain how an MCP tool becomes a harness tool, and read the cost estimate that comes before any paid recording.
+minutes: 30
+quiz:
+  - question: The harness calls Tool.fn from worker threads, and the MCP Client is async. How does agent.py join the two?
+    options:
+      - It rewrites the harness to be async
+      - A Bridge owns a private event loop on a daemon thread. One long-lived task opens every client and holds it, and each tool call is submitted to that loop and waited for
+      - It starts a new client for every tool call
+      - It runs the servers in separate processes and reads their output files
+    answer: 1
+    explanation: An MCP client must be opened and closed inside one task, so the bridge keeps one task alive for the whole session. The harness stays synchronous and unedited. Each call crosses over with run_coroutine_threadsafe and waits for the answer.
+  - question: In replay mode the model's answers come from a file, but the servers still run. Why keep the servers real?
+    options:
+      - Because the file does not hold tool results
+      - To get a faster replay
+      - So the lesson shows real tool results from the real code, and a change to a tool changes the request key and is caught, instead of a stale answer being played back
+      - Because replay mode cannot be turned off
+    answer: 2
+    explanation: Only the model costs money, so only the model is replayed. The key is a hash of the model, system prompt, messages and tools, so if a tool result or a tool description changes, the next request no longer matches and replay stops with an error that names the record command. It never calls the API as a fallback.
+  - question: In the recording, the model got the label "Credit reporting or other personal consumer reports" with low_confidence true for "I was charged twice". It said it would not route on it. What does this show about giving a model a tool?
+    options:
+      - The classifier is broken and should be removed
+      - A tool's result is evidence for the model to weigh, not an order. A well-described tool result lets the model notice that it does not fit the question
+      - Models always ignore low-confidence results
+      - Tools should hide their confidence from the model
+    answer: 1
+    explanation: The classifier predicts complaint products, not ticket categories, and the server's result says it was unsure. The model read both facts and reported the label as unreliable. The tool returned what it knew, and the judgement stayed with the model and the person.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+In the Harness track you built an agent loop: call the model, run the tools it asks for, send the results back, repeat. Its tools were Python functions in the harness. Here the harness does the same job on tools that live in MCP servers. The loop, the <Term t="permission gate" /> and the executor are `harness/python/harness.py`, imported and not edited.
+
+`mcp/python/agent.py` adds what an MCP host adds:
+
+- It connects to the servers. Here both servers run in memory, with the SDK's in-process client, so there is no network and no OAuth.
+- It turns each MCP tool into a harness `Tool`. A tool whose annotations do not say `readOnlyHint` is marked `needs_approval`, so it goes through the permission gate like any other write.
+- It puts each server's `instructions` into the system prompt.
+- It answers a server's confirmation round with a scripted answer, so a recorded run is repeatable.
+
+### What the model costs, and what it does not
+
+Only one thing in this lesson can cost money: the call to the model. So `agent.py` has two modes:
+
+- `--mode replay` is the default. The model's answers come from `mcp/data/recordings/lesson5.jsonl`. The servers really run. It is free, needs no key, and gives the same answer every time.
+- `--mode record` calls the Claude API. That **costs money**. It prints an estimate and a worst case, asks `y/N`, and stops once spending would pass `--max-cost`.
+
+A <Term t="recording" /> is a file of real model responses, one per call. The key of each line is a hash of the request: model, system prompt, messages and tools. A request that matches no line is a replay miss, and replay stops with an error that names the record command. Replay never falls back to a paid call.
+
+### The task
+
+The task is one sentence: "Find the duplicate-charge ticket and classify the complaint text 'I was charged twice'". The agent has only `lumen-read`, so all three tools are read-only and no approval is needed. The model is Claude Haiku 5.5.
+
+## See it
+
+The Loop simulator from the Harness track plays scripted scenarios written by hand. It cannot show this run, and showing a different scripted run beside a real one would blur which is which. So this lesson shows the recording itself, as a table. Watch the first row: the model asks for two tools in a single response.
+
+| Model call | Input tokens | Output tokens | Stop reason | What the model did |
+|---|---|---|---|---|
+| 1 | 779 | 172 | `tool_use` | Asked for `search_tickets({"query": "duplicate charge", "limit": 5})` and `classify_complaint({"text": "I was charged twice"})` in one response |
+| 2 | 1,646 | 223 | `end_turn` | Read both results and wrote the final answer |
+
+The harness ran both tools, put both results into the next request, and that is why call 2 has more input. The counts include the system prompt, the three tool definitions and, in call 2, everything said so far. Output tokens include a short thinking block.
+
+The final answer, as the replay prints it:
+
+> **Duplicate-charge ticket:** t001 (billing, high priority). Maria was charged $9.99 twice for Lumen Plus, both charges on the 3rd, and she asked for a refund of the duplicate.
+>
+> **Classification of "I was charged twice":** "Credit reporting or other personal consumer reports," but with low confidence (about 0.29, and the scores are close to Credit card at 0.27). That label doesn't fit a billing complaint, so I'd treat this result as unreliable rather than route on it.
+
+The table showed two model calls, two tool calls and one answer. The part to notice is the second paragraph. The classifier is the ML track's model. It predicts complaint products, not ticket categories, and it said `low_confidence: true`. The model put those two facts together and declined to rely on the label. This is a single recorded run. A live run could word it differently or choose differently.
+
+At Haiku 5.5's prices ($0.10 per million input tokens, $0.50 per million output, from the LLMs lab's price table), these two calls cost about $0.00044. That is 2,425 input tokens and 395 output tokens, taken from the recording.
+
+## The code
+
+Section 3 is the bridge between the two worlds. The harness runs tools from worker threads and expects a plain string back. The MCP client is async.
+
+<CodeTabs source="mcp-agent" section={3} />
+
+- `self._loop = asyncio.new_event_loop()` and `threading.Thread(..., daemon=True)` give the bridge a private event loop on its own thread.
+- `asyncio.run_coroutine_threadsafe(self._hold(), self._loop)` starts one long-lived task. `_hold` opens every client with an `AsyncExitStack`, then waits on `self._stop`. An MCP client must be opened and closed in the same task, so one task owns them all.
+- `def run(self, coro)` submits a coroutine to that loop from any thread and waits up to `CALL_TIMEOUT` (60 seconds) for the result.
+- `__exit__` sets the stop event so the clients close in their own task. If the clients are still opening, it cancels instead of waiting.
+
+Section 4 turns MCP tools into harness tools.
+
+<CodeTabs source="mcp-agent" section={4} />
+
+- `def carries_untrusted(value)` looks for an `untrusted_body` field anywhere in a result. Lesson 11 uses it.
+- `def taints(name, result)` says whether a result puts ticket text into the context. It fails closed: `search_tickets` and `get_ticket` always count, and so does any result with no structured content.
+- `def make_fn(bridge, server, name, session)` builds the function the harness will call. It runs `call_tool` on the bridge, notes whether the result was untrusted, and raises `ToolError` for an `isError` result so the harness hands the model an error.
+- `targets["read"] = (build_read_server(), deny)` opens the real server in memory. `lumen-read` never asks anything, so its answerer is `deny`.
+- `read_only = bool(t.annotations and t.annotations.read_only_hint)` reads the hint the server sent.
+- `harness.Tool(t.name, t.description or "", t.input_schema, make_fn(...), needs_approval=not read_only)` is the whole conversion: the MCP name, description and schema become the harness's.
+- `harness.REGISTRY.clear()` and `.update({t.name: t for t in session.tools})` make the MCP tools the whole registry for the session. The harness's own file tools are hidden and restored on exit. The registry is keyed by name, which matters in lesson 6.
+
+Section 6 is the model call, in replay and record.
+
+<CodeTabs source="mcp-agent" section={6} />
+
+- `request_key(model, system, messages, tools, overrides)` is the SHA-256 of the canonical JSON of those parts. No time, ids or usage go in, so the same request always gets the same key.
+- `block_dict(block)` keeps only the listed fields of each content block. An unknown block type raises, instead of guessing which of its fields are stable.
+- `find_recording(path, key)` returns the latest line with that key.
+- `raise ReplayMiss(f"no recording for model call {n} in {shown}. See the cost: ... Record it (paid; asks first): ...")` is the miss. It names both the free estimate command and the paid record command.
+- `if ledger.spent + worst > max_cost: raise CostLimit(...)` runs before every paid call. The worst case for one call is its request size in, and all of `MAX_TOKENS` out.
+- `client = client or client_factory()` creates the API client on the first paid call only, so replay and the estimate never make one.
+- `path.open("a")` appends each real response, with its key, scenario, model and usage. A recording is written by a real run and by nothing else.
+
+<Callout kind="go" title="No Go agent">
+  The agent is Python only, because the Track 1 harness is the Python one. The Go side of this track is the servers and the client. So there is no "How Go does it" section here.
+</Callout>
+
+## Try it
+
+### Replay the recorded run (free)
+
+From the repo root. This calls no API, needs no key and costs nothing. The servers run in memory:
+
+```bash
+.venv-mcp/bin/python mcp/python/agent.py --scenario lesson5
+```
+
+You should see the two tool calls, `search_tickets` with `"duplicate charge"` and `classify_complaint` with `"I was charged twice"`, then the final answer shown above. Run it twice: it is the same.
+
+### See a replay miss (free)
+
+Ask for a model that has no recording. Replay stops, names both commands, and calls nothing:
+
+```bash
+.venv-mcp/bin/python mcp/python/agent.py --scenario lesson5 --model claude-sonnet-5-5
+```
+
+You should see `agent: no recording for model call 1 in mcp/data/recordings/lesson5-sonnet-5-5.jsonl.` and then the dry-run command and the record command for that model. The exit code is 1.
+
+### Read the estimate (free)
+
+This prints what a new recording would cost. It creates no API client and calls nothing:
+
+```bash
+.venv-mcp/bin/python mcp/python/agent.py --scenario lesson5 --mode record --dry-run
+```
+
+We got: first request about 832 input tokens, typical `$0.0010` for 3 calls, and worst case `$0.0748` if all 10 allowed calls ran at the maximum. The real recording made 2 calls, not 3, and cost about $0.00044, so it came in under the typical figure. The worst case assumes up to 8,000 tokens of tool results on every round and 4,000 output tokens on every call.
+
+### Record a run (costs money)
+
+You do not need to run this. The recording is already in the repo. If you want your own, this command calls the Claude API and **costs money**. It needs `ANTHROPIC_API_KEY` in your environment. It prints the estimate above, asks `Make these paid calls? [y/N]`, and stops at the cap you give it. Read the estimate and answer `N` unless you accept the cost:
+
+```bash
+.venv-mcp/bin/python mcp/python/agent.py --scenario lesson5 --mode record --max-cost 10
+```
+
+A live run can answer differently, and it appends to the same recording file only for requests it has not already recorded.

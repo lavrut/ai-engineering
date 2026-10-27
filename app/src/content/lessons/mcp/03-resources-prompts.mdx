@@ -1,0 +1,147 @@
+---
+track: mcp
+order: 3
+slug: resources-prompts
+title: Resources and prompts
+goal: Read a ticket as a resource and a review prompt, and choose between a tool, a resource and a prompt for a given job.
+minutes: 20
+quiz:
+  - question: A host wants to show a ticket in a side panel the moment a person clicks it, with no model involved. Which kind of thing fits best?
+    options:
+      - A tool, because tools are the only way to get data
+      - A prompt, because it returns messages
+      - A resource, because the host reads it by address and decides when, with no model choosing
+      - None of them, because MCP cannot return data without a model
+    answer: 2
+    explanation: Resources are data the host reads by URI. The application decides what to read and when. A tool is for what the model decides to call, and a prompt is a template a person picks.
+  - question: The review_ticket prompt returns the instruction "Fetch it with the get_ticket tool", not the ticket's text. Why is the text left out?
+    options:
+      - Prompts are not allowed to contain text from tickets
+      - It keeps the instructions in one place that the server author controls, and the customer's words arrive later as tool data in untrusted_body, never mixed into the instruction
+      - The prompt would be too long
+      - The model cannot read tickets from prompts
+    answer: 1
+    explanation: Whatever a prompt returns becomes part of the user's side of the conversation. If a customer's words were pasted into it, they would look like the user's own instructions. Fetching them with a tool keeps them in a field the server labels as untrusted.
+  - question: A client reads lumen://tickets/t999, which does not exist. What does lumen-read return?
+    options:
+      - An empty resource with no contents
+      - A JSON-RPC error whose message says the ticket t999 is unknown
+      - A tool result with isError true
+      - The nearest ticket, t099
+    answer: 1
+    explanation: A missing resource is a protocol error, not a tool result, because nothing was called as a tool. Python and Go return the same message, which is what the shared contract compares. The error code is not the same in both. The spec says -32602, the Go server sends that, and the Python server's SDK sends -32603.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import McpMessageView from '../../../components/mcp/McpMessageView.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+Tools are not the only thing a server can offer. Two more kinds exist, and they answer a different question: who decides?
+
+### Resources
+
+An <Term t="MCP resource" /> is data with an address. The client lists them (`resources/list`) and reads one by its URI (`resources/read`). The application decides what to read. The model is not asked.
+
+`lumen-read` has two:
+
+- `lumen://reports/eval` is a fixed address. It holds the eval scores from the LLMs track, taken from `llms/data/inspect_summary.json`: four runs (`v1_basic`, `v2_rules`, `v3_examples` and `judge`) with each metric's lab score and Inspect score.
+- `lumen://tickets/{id}` is a <Term t="resource template" />: a pattern with a hole in it. `lumen://tickets/t001` is one ticket. Clients find templates with `resources/templates/list`.
+
+A resource carries a `mimeType`, here `application/json`, so a host knows how to show it. Results of reads also carry `ttlMs` and `cacheScope`, which tell a client how long it may keep the answer. Ours say `"ttlMs": 0` and `"cacheScope": "private"`: do not reuse it, and do not share it between users.
+
+A resource that does not exist is a protocol error with the message `unknown ticket: t999`. The 2026-07-28 revision gives that error the code -32602 (it was -32002). The Go server sends -32602. The Python server sends -32603, "internal error", because its SDK turns the `ResourceError` it raises into that code. We checked both. The shared contract compares the message and not the code, so the difference passes the tests, and a client that branches on the code would see it.
+
+### Prompts
+
+An <Term t="MCP prompt" /> is a template a person picks, such as a slash command in a chat app. The client lists them (`prompts/list`) and fetches one with its arguments (`prompts/get`). The result is a list of messages to put into the conversation.
+
+`lumen-read` has one, `review_ticket(id)`. It asks the model to fetch the ticket, check that its category and priority fit, and draft a short reply. It does not contain the ticket. The ticket arrives later, from the `get_ticket` tool, in `untrusted_body`. Keeping the customer's words out of the prompt means they never sit in the instruction itself.
+
+### Which one?
+
+| You want to… | Use | Because |
+|---|---|---|
+| let the model look something up or do something | a tool | the model chooses it, by name and description |
+| give the host data to show or attach | a resource | the application chooses it, by address |
+| hand a person a ready-made way to start a task | a prompt | the person chooses it, by name |
+
+The same ticket is both a tool (`get_ticket`) and a resource (`lumen://tickets/t001`). They return the same JSON from the same code. The difference is who is allowed to ask.
+
+## See it
+
+Use the same viewer as the last lesson, now on the last two steps. Watch `resources/read`, where the `contents` list has a `uri`, a `mimeType` and the ticket as a JSON string in `text`. Then watch `prompts/get`, where the result is a single user message.
+
+<McpMessageView />
+
+The resource result had no `structuredContent` and no `isError`: a resource is plain content, not a tool result. The prompt result was one `user` message that tells the model to call `get_ticket` and to treat `untrusted_body` as data.
+
+## The code
+
+Section 3 holds the resources.
+
+<CodeTabs source="mcp-read" section={3} />
+
+- `@mcp.resource("lumen://tickets/{id}", mime_type="application/json")` registers a template. The `{id}` in the address is passed to the function as `id`.
+- `return json.dumps(tickets.get(id), ensure_ascii=False)` returns the same ticket JSON that `get_ticket` does.
+- `raise ResourceError(err_unknown(id)) from None` turns a missing id into the fixed message. The client sees an error with that text. Over the in-memory client its code is -32603.
+- `@mcp.resource("lumen://reports/eval", ...)` has no hole in its address, so it is a plain resource.
+- `return json.dumps(eval_summary(), ensure_ascii=False)` reads the summary file on every call. The server keeps no copy.
+
+Section 4 holds the prompt.
+
+<CodeTabs source="mcp-read" section={4} />
+
+- `@mcp.prompt()` registers `review_ticket`. Its argument `id` becomes the prompt's one required argument.
+- `if not TICKET_ID.match(id)` rejects anything that is not `t` and three digits before the lookup runs, so the argument is never used as a path or a query.
+- `raise MCPError(INVALID_PARAMS, err_unknown(id))` is used instead of `ValueError`, because the SDK would wrap a `ValueError` and change the text.
+- `f"Review ticket {id}. Fetch it with the get_ticket tool. ..."` is the whole prompt. Only the validated id is inserted; no ticket text is.
+
+## How Go does it
+
+The Go tab shows the same two sections. The one thing worth reading is the error. The Go SDK has a ready-made "resource not found" error, but its message is the generic `Resource not found`. The contract needs `unknown ticket: t999`, so section 1 of the Go server defines `rpcError`, which builds a `jsonrpc.Error` with code `jsonrpc.CodeInvalidParams` (-32602) and the fixed text. The resource template and the prompt both use it. The message on the wire is the same as Python's. The code is not: Go sends -32602, the spec's code for a missing resource, where Python's SDK sends -32603.
+
+## Try it
+
+Run these from the repo root. All are free.
+
+Read one ticket as a resource. You should see `"mimeType": "application/json"` and the ticket under `json`:
+
+```bash
+.venv-mcp/bin/python mcp/python/client.py --stdio read lumen://tickets/t001
+```
+
+Read the eval report. You should see four runs: `v1_basic`, `v2_rules`, `v3_examples` and `judge`. For `v2_rules` the lab and Inspect scores match (`category` 1, `priority` 0.9611):
+
+```bash
+.venv-mcp/bin/python mcp/python/client.py --stdio read lumen://reports/eval
+```
+
+Read a ticket that is not there. You should see `{"error": "unknown ticket: t999"}` on stdout. A line from the SDK about the failed read also goes to stderr:
+
+```bash
+.venv-mcp/bin/python mcp/python/client.py --stdio read lumen://tickets/t999
+```
+
+Fetch the prompt. You should see one `user` message that starts `Review ticket t001.`:
+
+```bash
+.venv-mcp/bin/python mcp/python/client.py --stdio prompt review_ticket '{"id": "t001"}'
+```
+
+Give it a bad id. You should see `{"error": "unknown ticket: x"}`:
+
+```bash
+.venv-mcp/bin/python mcp/python/client.py --stdio prompt review_ticket '{"id": "x"}'
+```
+
+Last, look at the ticket that is a trap. `t061` is the test ticket for lesson 11. Fetch it and read `untrusted_body`: it holds a how-to question, then text that tells whoever reads it to relabel tickets. The server returns it exactly as written, inside the one field, and nothing in the structure of the result changes:
+
+```bash
+.venv-mcp/bin/python mcp/python/client.py --stdio call get_ticket '{"id": "t061"}'
+```
+
+<Callout kind="warning" title="A resource is also untrusted">
+  The ticket resource carries `untrusted_body` too. A host that attaches a resource to the model's context is putting a customer's words in front of it. The label on the field is the same in both places for that reason.
+</Callout>
