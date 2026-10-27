@@ -150,7 +150,11 @@ const css = `
 .il-choice legend { padding: 0 6px; font-family: var(--font-mono); font-size: var(--text-label); color: var(--muted); }
 .il-choice label { font-size: var(--text-small); color: var(--ink); cursor: pointer; min-height: 24px; }
 .il-choice input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.il-table td, .il-table th { font-size: var(--text-small); overflow-wrap: anywhere; }
+.il-table { min-width: 52rem; }
+.il-table td, .il-table th { font-size: var(--text-small); }
+.il-table th[scope="row"] { white-space: nowrap; }
+.il-table td:nth-child(2), .il-table td:nth-child(3), .il-table td:nth-child(4), .il-table td:nth-child(6), .il-table td:nth-child(7) { white-space: nowrap; }
+.il-table td:nth-child(5) { white-space: nowrap; }
 .il-table ul { margin: 0; padding-left: 1rem; font-family: var(--font-mono); }
 .il-readings { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
 .il-readings li { padding: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }

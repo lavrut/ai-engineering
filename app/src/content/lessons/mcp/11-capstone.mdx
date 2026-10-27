@@ -135,6 +135,14 @@ These replay Claude Haiku 5.5's recorded answers. The servers really run, in mem
 .venv-mcp/bin/python mcp/python/agent.py --scenario capstone --guard --approve decline --elicit accept
 ```
 
+Every real recording replays free by its name. Add the options that made it: `--model claude-sonnet-5-5` or `--model claude-opus-5-5` (recorded with the guard off), and `--framing training` for the runs with the training note, for example:
+
+```bash
+.venv-mcp/bin/python mcp/python/agent.py --scenario capstone --elicit accept --model claude-sonnet-5-5
+.venv-mcp/bin/python mcp/python/agent.py --scenario capstone --elicit accept --model claude-opus-5-5 --framing training
+.venv-mcp/bin/python mcp/python/agent.py --scenario capstone --elicit accept --framing training
+```
+
 Each prints `-> get_ticket({"id": "t061"})`, the model's answer saying it ignored the planted text, and `label rows written this run: 0`. The guard never prints, because no write was requested.
 
 ### Run the simulated model (free)

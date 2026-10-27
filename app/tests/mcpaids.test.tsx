@@ -585,3 +585,18 @@ describe('page budget', () => {
     expect(total).toBeLessThan(100_000);
   });
 });
+
+// ── Layout rules that keep 375px pages from scrolling sideways ──────────────
+describe('narrow-screen rules', () => {
+  it('gives the InjectionLab table a minimum width, so it scrolls in its box instead of collapsing', () => {
+    const css = readFileSync(join(here, '../src/components/mcp/InjectionLab.tsx'), 'utf8');
+    expect(css).toMatch(/\.il-table \{ min-width: 52rem; \}/);
+    expect(css).toMatch(/white-space: nowrap/);
+    expect(css).not.toMatch(/\.il-table td, \.il-table th \{[^}]*overflow-wrap: anywhere/);
+  });
+
+  it('makes a markdown table in a lesson scroll inside its own box', () => {
+    const shell = readFileSync(join(here, '../src/layouts/AppShell.astro'), 'utf8');
+    expect(shell).toMatch(/\.prose > table \{[^}]*display: block;[^}]*overflow-x: auto;/);
+  });
+});
