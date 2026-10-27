@@ -6,8 +6,8 @@ never from a server, so a server bug cannot write itself into the contract.
     python mcp/fixtures/gen_contract.py            # rewrite contract.jsonl
     python mcp/fixtures/gen_contract.py --check    # exit 1 if the file differs (CI / test)
 
-Task 7 adds the ops cases: write `ops_cases()` and append it in `build_cases()`.
-Compare rules for the Go side: mcp/fixtures/README.md.
+The ops cases (lumen-ops, `label_ticket`) carry an `answer`: what the test client replies if the
+server asks for confirmation. Compare rules and how to run an ops case: mcp/fixtures/README.md.
 """
 from __future__ import annotations
 
@@ -19,12 +19,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 OUT = Path(__file__).resolve().parent / "contract.jsonl"
 sys.path.insert(0, str(ROOT / "mcp" / "core" / "python"))
-from lumen_core import classify, tickets  # noqa: E402
+from lumen_core import CATEGORIES, classify, tickets  # noqa: E402
 
 # ── 1. Fixed texts (typed by hand, identical in Python and Go) ──────────────
 E_QUERY = "query must be 1 to 200 characters"
 E_LIMIT = "limit must be 1 to 20"
 E_TEXT = "text must be 1 to 20000 characters"
+E_LABEL = "label must be one of: billing, bug, account, how_to, feature_request, outage"
+E_DECLINED = "label not written: the user declined"
+assert E_LABEL == "label must be one of: " + ", ".join(CATEGORIES)  # typed by hand, but must match the core
 
 
 def e_unknown(id: str) -> str:
@@ -107,8 +110,57 @@ def read_cases() -> list[dict]:
     return cases
 
 
+# The confirmation lumen-ops asks for, in both languages: one form, one boolean. The schema is
+# exactly what the Python SDK sends for `class Confirm(BaseModel): confirm: bool` (it drops the
+# model's top-level title); Go writes the same map by hand.
+CONFIRM_SCHEMA = {"properties": {"confirm": {"title": "Confirm", "type": "boolean"}},
+                  "required": ["confirm"], "type": "object"}
+ACCEPT = {"action": "accept", "content": {"confirm": True}}
+
+
+def _asked(id: str, label: str) -> dict:
+    return {"message": f'Set ticket {id} to "{label}"?', "requestedSchema": CONFIRM_SCHEMA}
+
+
+def _row(id: str, label: str) -> dict:
+    """A written row minus `time` (the one field a contract cannot pin). In-process there is no auth: anonymous."""
+    return {"ticket_id": id, "label": label, "source": "agent", "client_id": "anonymous",
+            "model": None, "confirmed": True}
+
+
+def ops_cases() -> list[dict]:
+    """label_ticket cases. `answer` is the test client's reply to the elicitation (null: the server
+    must not ask at all). `expect` adds `asked` (the elicitation shown, or null) and `rows` (what was written)."""
+    cases: list[dict] = []
+
+    def label(name: str, id: str, lbl: str, answer: dict | None, result: dict, asked: bool, written: bool) -> None:
+        case = _case("ops", name, "tools/call", {"name": "label_ticket", "arguments": {"id": id, "label": lbl}},
+                     {**result, "asked": _asked(id, lbl) if asked else None, "rows": [_row(id, lbl)] if written else []})
+        case["answer"] = answer
+        cases.append(case)
+
+    def ok(id: str, lbl: str) -> dict:
+        tickets.get(id)  # the ticket must exist, or this expectation is wrong
+        return {"structured": {"ticket_id": id, "label": lbl, "written": True}}
+
+    declined = {"error": E_DECLINED}
+    label("ops_accept", "t001", "billing", ACCEPT, ok("t001", "billing"), asked=True, written=True)
+    label("ops_accept_t061", "t061", "bug", ACCEPT, ok("t061", "bug"), asked=True, written=True)
+    label("ops_accept_confirm_false", "t001", "bug", {"action": "accept", "content": {"confirm": False}},
+          declined, asked=True, written=False)
+    label("ops_decline", "t001", "outage", {"action": "decline"}, declined, asked=True, written=False)
+    label("ops_cancel", "t001", "account", {"action": "cancel"}, declined, asked=True, written=False)
+    # Validation comes first and asks nothing: the label, then the ticket id.
+    label("ops_bad_label", "t001", "spam", None, {"error": E_LABEL}, asked=False, written=False)
+    label("ops_label_case_sensitive", "t001", "Billing", None, {"error": E_LABEL}, asked=False, written=False)
+    label("ops_unknown_ticket", "t999", "billing", None, {"error": e_unknown("t999")}, asked=False, written=False)
+    label("ops_bad_ticket_id", "../etc", "billing", None, {"error": e_unknown("../etc")}, asked=False, written=False)
+    label("ops_bad_label_and_ticket", "t999", "spam", None, {"error": E_LABEL}, asked=False, written=False)
+    return cases
+
+
 def build_cases() -> list[dict]:
-    return read_cases()  # + ops_cases() in Task 7
+    return read_cases() + ops_cases()
 
 
 # ── 3. Writing and checking ─────────────────────────────────────────────────

@@ -6,7 +6,7 @@ and hand-typed error texts, not from a server. Edit the generator, never the JSO
 
 ## Line format
 
-`{"name", "server": "read"|"ops", "method", "params", "expect"}`, one JSON object per line, ASCII-escaped
+`{"name", "server": "read"|"ops", "method", "params", "expect"}` (ops cases add `answer`, below), one JSON object per line, ASCII-escaped
 (a literal nbsp, İ or Σ appears as `\u00a0`, `\u0130`, `\u03a3`; parse the line as JSON and you get the real character).
 
 ## Running a case
@@ -29,6 +29,31 @@ and hand-typed error texts, not from a server. Edit the generator, never the JSO
   - success: `{"contents": [{"role", "text"}]}`, one per message (text content).
   - failure: `{"error": <JSON-RPC error message>}`, as for resources.
 
+## Ops cases (`server: "ops"`, lumen-ops `label_ticket`)
+
+An ops case writes, so each one runs on a **fresh server** with a **fresh, empty labels file** (a temp path,
+never `mcp/data/labels.jsonl`). The case carries one more field:
+
+- `answer`: what the test client's elicitation handler replies if the server asks for confirmation:
+  `{"action": "accept", "content": {"confirm": true}}`, `{"action": "decline"}`, `{"action": "cancel"}`, ...
+  `null` means the server must not ask; if it does anyway, the handler records the question and declines,
+  and the recorded `asked` then fails the compare.
+
+Let the SDK client drive the rounds (Python `Client(..., elicitation_callback=...)`, Go
+`ClientOptions.ElicitationHandler`). Turn the outcome into the tools/call shape above (`structured` or `error`),
+plus two keys:
+
+- `asked`: the elicitation the handler was shown, `{"message", "requestedSchema"}`, or `null` if it was never
+  called. At most one question per case. Both servers send exactly
+  `Set ticket {id} to "{label}"?` and `{"type": "object", "properties": {"confirm": {"type": "boolean",
+  "title": "Confirm"}}, "required": ["confirm"]}`.
+- `rows`: every row in the labels file after the call, in file order, each **without its `time` key** (the one
+  field a contract cannot pin; tests check it separately). In-process there is no auth, so `client_id` is
+  `"anonymous"`.
+
+Replayed, forged and expired request states are not contract cases: the two SDKs answer them differently
+(Python: JSON-RPC error; Go: the fixed decline), so each language's own tests assert "no row written".
+
 ## Comparing
 
 - Deep equality on **parsed JSON**: object key order and whitespace do not matter; array order does.
@@ -40,4 +65,6 @@ and hand-typed error texts, not from a server. Edit the generator, never the JSO
 ## Fixed error texts
 
 `query must be 1 to 200 characters`, `limit must be 1 to 20`, `text must be 1 to 20000 characters`,
-`unknown ticket: {id}` (also for the resource, and for the prompt when the id is not `t` plus three digits or not a known ticket).
+`unknown ticket: {id}` (also for the resource, and for the prompt when the id is not `t` plus three digits or not a known ticket),
+`label must be one of: billing, bug, account, how_to, feature_request, outage`, `label not written: the user declined`.
+`label_ticket` checks the label first, then the ticket, and asks nothing when either is wrong.
