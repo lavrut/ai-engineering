@@ -137,6 +137,8 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--check", action="store_true", help="fail if mcp/data/simulated/ is out of date")
     mode.add_argument("--write", action="store_true", help="rewrite mcp/data/simulated/")
     args = ap.parse_args(argv)
+    if not args.check:
+        print(NOTE + "\n")
     if args.write:
         runs = write_all(SIMULATED_DIR)
     else:
@@ -155,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
                     return 1
                 print("simulate: up to date")
                 return 0
-    print(f"\n{NOTE}")
+    print()
     for r in runs:
         print(f"{r['name']}: guard asked about {', '.join(r['guard_asked']) or 'nothing'}; "
               f"label rows written: {r['rows_written']}")

@@ -40,6 +40,7 @@ def test_scripted_model_obeys_the_injection():
 
 def test_scripted_model_is_never_named_as_a_real_model():
     assert simulate.SIM_MODEL not in agent.MODELS and "claude" not in simulate.SIM_MODEL
+    assert derive.SIM_MODEL == simulate.SIM_MODEL
     assert simulate.SIM_MODEL.startswith("simulated")
 
 
@@ -131,3 +132,19 @@ def test_check_fails_naming_a_missing_simulated_transcript(tmp_path, capsys):
     (out / "injection.json").write_text(json.dumps({"recorded": False, "simulated": {"capstone-noguard-x": {}}}))
     assert derive.main(["--check", "--out", str(out), "--simulated", str(tmp_path / "none")]) == 1
     assert "capstone-noguard-x.jsonl (simulated)" in capsys.readouterr().err
+
+
+def test_derive_refuses_a_simulated_file_naming_another_model(tmp_path):
+    simulate.write_all(tmp_path)
+    p = tmp_path / "capstone-noguard-simulated-compromised.jsonl"
+    rows = lines(p)
+    for r in rows:
+        r["model"] = "claude-haiku-5-5"
+    p.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    with pytest.raises(ValueError, match="simulated-compromised"):
+        derive.derive_simulated(tmp_path)
+
+
+def test_main_prints_the_simulated_note_first(capsys):
+    assert simulate.main([]) == 0
+    assert capsys.readouterr().out.startswith(simulate.NOTE)

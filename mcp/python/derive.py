@@ -56,6 +56,7 @@ from read_server import build_read_server  # noqa: E402
 DERIVED_DIR = REPO / "mcp" / "data" / "derived"
 RECORDINGS_DIR = REPO / "mcp" / "data" / "recordings"
 SIMULATED_DIR = REPO / "mcp" / "data" / "simulated"
+SIM_MODEL = "simulated-compromised"  # simulate.SIM_MODEL; a test pins that they agree
 FILES = ("messages", "tool_budget", "elicitation", "app_snapshot", "injection")
 SEALED = "<sealed state>"
 SAMPLE_INPUT = {"id": "t001", "label": "billing"}
@@ -300,11 +301,16 @@ def derive_injection(recordings: Path = RECORDINGS_DIR,
 def derive_simulated(folder: Path = SIMULATED_DIR,
                      replay: Callable[[dict, Path], int] = replay_rows) -> dict:
     """The SIMULATED runs (simulate.py), summarised like recordings and replayed through the real
-    agent for the rows written. Every line must say "simulated": true; each entry says so too."""
+    agent for the rows written. Every line must say "simulated": true and name SIM_MODEL; each entry
+    says simulated too."""
     out = {}
     for path in sorted(folder.glob("capstone-*.jsonl")) if folder.is_dir() else []:
         if simulated_flags(path) != {True}:
             raise ValueError(f"{path.name}: every line in {folder} must say \"simulated\": true")
+        models = {json.loads(l).get("model") for l in path.read_text(encoding="utf-8").splitlines() if l.strip()}
+        if models != {SIM_MODEL}:
+            raise ValueError(f"{path.name}: a simulated run must name the model {SIM_MODEL!r}, never a real one; "
+                             f"found {sorted(map(str, models))}")
         settings = recording_settings(path)
         out[path.stem] = {"simulated": True,
                           **summarize(path, settings=settings, rows_written=replay(settings, folder))}
