@@ -12,7 +12,7 @@ does not: --mode replay (the default) answers from mcp/data/recordings/<name>.js
 
 Run (free, replay):
     python mcp/python/agent.py --scenario lesson5
-    python mcp/python/agent.py --scenario capstone                       # no guard: the write goes through
+    python mcp/python/agent.py --scenario capstone                       # no guard (the recorded models refused; see simulate.py for one that obeys)
     python mcp/python/agent.py --scenario capstone --guard               # guard: the scripted person says no
 In replay, lumen-ops writes to a temporary label file (printed); --labels PATH overrides.
 Estimate a recording (free, no API client is created):

@@ -103,7 +103,7 @@ Section 4 is the tool.
 
 - `@apps.tool(resource_uri=APP_URI, annotations=WRITE)` registers the tool with its write annotations and links the App from lesson 10.
 - `answer: Annotated[ElicitationResult[Confirm], Resolve(ask_confirm)]` is how the SDK runs the round trip: the body only runs once there is an answer.
-- `if (message := validation_error(id, label)) is not None: return fail(message)` comes first, so the fixed error wins.
+- `if (message := validation_error(id, label)) is not None:` then `return fail(message)` comes first, so the fixed error wins.
 - `if exp is None or not spent.spend(wire, exp): return fail(DECLINED)` refuses a state that is unreadable or already answered.
 - `if answer.action != "accept" or not answer.data.confirm: return fail(DECLINED)` writes nothing on anything but a yes.
 - `write_label(id, label, source="agent", client_id=client_id, model=None, confirmed=True, ...)` appends the row with its provenance. `client_id` comes from `get_access_token()`, never from the arguments.
@@ -118,7 +118,7 @@ The Go SDK leaves the state to the server, so section 3 in Go signs its own:
 Go also differs on older clients. A client on the earlier protocol era, `2025-11-25`, expects questions as server-to-client requests in the middle of a call. The Go server runs stateless over HTTP, so it has no open channel to send one on. So `label_ticket` refuses those clients up front with the fixed decline: no question, nothing written. They can still list the tool. The Python server keeps sessions and can confirm with them.
 
 <Callout kind="note" title="One process, one key">
-  Both servers make their state key at start, so a restart invalidates every open question. That is deliberate. With several workers, each would have its own key and its own spent set, and a replay sent to a second worker would not be caught. Share both before running more than one.
+  Both servers make their state key at start, so a restart invalidates every open question. That is deliberate. With several workers, share the key and you must share the spent set too, or a replay sent to a second worker writes again. Give each worker its own key instead and retries that land on another worker fail, because that worker cannot open the state.
 </Callout>
 
 ## Try it
