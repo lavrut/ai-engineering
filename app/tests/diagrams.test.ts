@@ -4,6 +4,10 @@ import { codeKey, validateDiagram, type Diagram } from '../src/lib/diagram';
 import { evalPipeline } from '../src/data/diagrams/eval-pipeline';
 import { inspectPipeline } from '../src/data/diagrams/inspect-pipeline';
 import { harnessFlow } from '../src/data/diagrams/harness-flow';
+import { mcpArchitecture } from '../src/data/diagrams/mcp-architecture';
+import { mcpClient } from '../src/data/diagrams/mcp-client';
+import { mcpHttp } from '../src/data/diagrams/mcp-http';
+import { mcpOauth } from '../src/data/diagrams/mcp-oauth';
 import { mlLoop } from '../src/data/diagrams/ml-loop';
 import { mlPipeline } from '../src/data/diagrams/ml-pipeline';
 import { requestResponse } from '../src/data/diagrams/request-response';
@@ -17,6 +21,10 @@ const all: [string, Diagram][] = [
   ['inspect-pipeline', inspectPipeline],
   ['ml-pipeline', mlPipeline],
   ['ml-loop', mlLoop],
+  ['mcp-architecture', mcpArchitecture],
+  ['mcp-client', mcpClient],
+  ['mcp-http', mcpHttp],
+  ['mcp-oauth', mcpOauth],
 ];
 
 describe('diagram data', () => {
@@ -101,6 +109,55 @@ describe('diagram data', () => {
     });
     expect(lab).toEqual([[2], [3, 4], [4], [5], [8, 9]]);
     expect(inspectPipeline.steps[3].caption).toContain('section 6');
+  });
+
+  // The MCP diagrams: each step links to a real section, and its caption ends by naming that same
+  // section ("In the code: section N."), so a renumbered file breaks the build, not the lesson.
+  describe('MCP diagrams', () => {
+    const mcp: [string, Diagram, Record<number, [string, number]>][] = [
+      ['mcp-architecture', mcpArchitecture, { 1: ['mcp-agent', 4], 2: ['mcp-client', 2], 3: ['mcp-read', 2], 4: ['mcp-read', 3], 5: ['mcp-ops', 2], 6: ['mcp-ops', 4] }],
+      ['mcp-client', mcpClient, { 1: ['mcp-client', 1], 2: ['mcp-client', 2], 3: ['mcp-client', 3], 4: ['mcp-client', 4], 5: ['mcp-client', 5] }],
+      ['mcp-http', mcpHttp, { 1: ['mcp-read', 5], 2: ['mcp-read', 5], 3: ['mcp-auth', 2], 4: ['mcp-auth', 3], 5: ['mcp-read', 5] }],
+      ['mcp-oauth', mcpOauth, { 1: ['mcp-auth', 3], 2: ['mcp-auth-server', 4], 3: ['mcp-auth-server', 3], 4: ['mcp-auth-server', 2], 5: ['mcp-auth', 1], 6: ['mcp-auth', 2] }],
+    ];
+
+    it.each(mcp)('%s: every step links to the pinned source and section', (_name, d, want) => {
+      expect(d.steps).toHaveLength(Object.keys(want).length);
+      const got = Object.fromEntries(d.steps.map((s) => [s.n, [s.code?.source, s.code?.section]]));
+      expect(got).toEqual(want);
+    });
+
+    it.each(mcp)('%s: every caption ends with "In the code: section N." matching its link', (_name, d) => {
+      for (const s of d.steps) {
+        const m = /In the code: section (\d+)\.$/.exec(s.caption);
+        expect(m, `step ${s.n} caption`).not.toBeNull();
+        expect(Number(m![1]), `step ${s.n}`).toBe(s.code!.section);
+      }
+    });
+
+    it.each(mcp)('%s: only known role tokens, and 5 or 6 steps', (_name, d) => {
+      const roles = new Set(['user', 'harness', 'model', 'tool', 'memory', 'logs', 'dataset', 'grader']);
+      for (const n of d.nodes) expect(roles.has(n.role), n.id).toBe(true);
+      expect(d.steps.length).toBeGreaterThanOrEqual(5);
+      expect(d.steps.length).toBeLessThanOrEqual(6);
+    });
+
+    it('mcp-architecture shows the model, agent, client, both servers and what they touch', () => {
+      expect(mcpArchitecture.nodes.map((n) => n.id)).toEqual(['model', 'agent', 'client', 'read', 'tickets', 'ops', 'labels']);
+      expect(mcpArchitecture.nodes.find((n) => n.id === 'read')?.label).toBe('lumen-read');
+      expect(mcpArchitecture.nodes.find((n) => n.id === 'ops')?.label).toBe('lumen-ops');
+    });
+
+    it('mcp-http says the Go and Python check orders differ, and names the 131,072-byte cap', () => {
+      expect(mcpHttp.steps[1].caption).toContain('131,072 bytes');
+      expect(mcpHttp.steps[4].caption).toContain('Python’s SDK checks the token before the Origin');
+    });
+
+    it('mcp-oauth uses the pre-registered client as the main path, and warns that the test server is not for real users', () => {
+      expect(mcpOauth.steps[1].caption).toContain('pre-registered public client lumen-cli is the main path');
+      expect(mcpOauth.steps[2].caption).toContain('PKCE (S256 only)');
+      expect(mcpOauth.steps[2].caption).toContain('127.0.0.1 and nothing else');
+    });
   });
 
   it.each(all)('%s: every highlighted node is reached by a highlighted edge', (_name, d) => {

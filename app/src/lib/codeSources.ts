@@ -23,13 +23,23 @@ export type CodeSourceId =
   | 'ml-serve'
   | 'ml-monitor'
   | 'ml-fetch'
-  | 'ml-llm';
+  | 'ml-llm'
+  | 'mcp-read'
+  | 'mcp-ops'
+  | 'mcp-client'
+  | 'mcp-auth'
+  | 'mcp-auth-server'
+  | 'mcp-app'
+  | 'mcp-agent';
 
 export type CodeSourceInfo = {
   /** Repo-relative path of the Python file. */
   python: string;
   /** Repo-relative path of the Go file; none means Python only. */
   go?: string;
+  /** More Go files whose text follows `go`, so one source reads as one file (lumen-read keeps sections 1-5 in
+   *  server.go and the entry point, section 6, in main.go). */
+  goMore?: string[];
   /** 'own': the Go file numbers its sections differently, so a quote must give goSection. */
   goSections?: 'own';
 };
@@ -46,6 +56,15 @@ export const CODE_SOURCES: Record<CodeSourceId, CodeSourceInfo> = {
   'ml-monitor': { python: 'ml/python/monitor.py', go: 'ml/go/drift.go', goSections: 'own' }, // drift
   'ml-fetch': { python: 'ml/data/fetch_sample.py' }, // the one-time CFPB fetch
   'ml-llm': { python: 'ml/python/compare_llm.py' }, // the Claude comparison
+  // MCP track. Python and Go number sections 1-6 alike, so none needs goSections: 'own'.
+  'mcp-read': { python: 'mcp/python/read_server.py', go: 'mcp/go/readserver/server.go', goMore: ['mcp/go/readserver/main.go'] }, // lumen-read
+  // ops_server.py also has section 7 (the App); Go has 1-6, so a quote of 7 uses mcp-app.
+  'mcp-ops': { python: 'mcp/python/ops_server.py', go: 'mcp/go/opsserver/server.go', goMore: ['mcp/go/opsserver/main.go'] }, // lumen-ops
+  'mcp-client': { python: 'mcp/python/client.py', go: 'mcp/go/client/main.go' }, // the client
+  'mcp-auth': { python: 'mcp/python/resource_auth.py', go: 'mcp/go/auth/auth.go' }, // the resource-server half of OAuth, sections 1-3
+  'mcp-auth-server': { python: 'mcp/python/auth_server.py' }, // the test authorization server, sections 1-5
+  'mcp-app': { python: 'mcp/python/ops_server.py' }, // section 7, the labelling App's resource (Python only)
+  'mcp-agent': { python: 'mcp/python/agent.py' }, // the harness driving the servers (Python only)
 };
 
 export const isSource = (id: string): id is CodeSourceId => Object.hasOwn(CODE_SOURCES, id);

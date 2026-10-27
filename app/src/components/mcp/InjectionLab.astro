@@ -1,0 +1,10 @@
+---
+// Build-time wrapper: passes injection.json's recordings (one row each; 1.5 KB for the two real
+// ones), or the record commands when nothing is recorded.
+import InjectionLabIsland from './InjectionLab.tsx';
+import { injectionLabProps, loadMcpData } from '../../lib/mcpData';
+
+const props = injectionLabProps(loadMcpData().injection);
+---
+
+<InjectionLabIsland client:visible {...props} />

@@ -1,0 +1,9 @@
+---
+// Build-time wrapper: passes tool_budget.json (two servers, 0.5 KB).
+import ToolBudgetIsland from './ToolBudget.tsx';
+import { loadMcpData, toolBudgetProps } from '../../lib/mcpData';
+
+const props = toolBudgetProps(loadMcpData().toolBudget);
+---
+
+<ToolBudgetIsland client:visible {...props} />

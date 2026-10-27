@@ -1,0 +1,10 @@
+---
+// Build-time wrapper: passes messages.json's five request/result pairs from the real lumen-read
+// (mcp/data/derived, about 15 KB as text).
+import McpMessageViewIsland from './McpMessageView.tsx';
+import { loadMcpData, messageViewProps } from '../../lib/mcpData';
+
+const props = messageViewProps(loadMcpData().messages);
+---
+
+<McpMessageViewIsland client:visible {...props} />

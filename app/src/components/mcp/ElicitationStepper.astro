@@ -1,0 +1,10 @@
+---
+// Build-time wrapper: passes elicitation.json's accept and decline runs of label_ticket on the real
+// lumen-ops (two exchanges each, 7 KB).
+import ElicitationStepperIsland from './ElicitationStepper.tsx';
+import { elicitationStepperProps, loadMcpData } from '../../lib/mcpData';
+
+const props = elicitationStepperProps(loadMcpData().elicitation);
+---
+
+<ElicitationStepperIsland client:visible {...props} />
