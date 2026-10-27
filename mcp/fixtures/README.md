@@ -68,3 +68,12 @@ Replayed, forged and expired request states are not contract cases: the two SDKs
 `unknown ticket: {id}` (also for the resource, and for the prompt when the id is not `t` plus three digits or not a known ticket),
 `label must be one of: billing, bug, account, how_to, feature_request, outage`, `label not written: the user declined`.
 `label_ticket` checks the label first, then the ticket, and asks nothing when either is wrong.
+
+## Known difference: the labelling App (Python only)
+
+`lumen-ops` in Python serves the labelling MCP App: a `ui://lumen/label.html` resource (mime
+`text/html;profile=mcp-app`) and `_meta.ui.resourceUri` on `label_ticket`'s `tools/list` entry. Go does not
+(spec and ruling R6: the App is Python-only), so `tools/list` and `resources/list` differ between the two
+`lumen-ops` servers by that App-only metadata. The contract cases only call tools and read resources and never
+compare `tools/list` or `_meta`, so they are unaffected; `label_ticket`'s inputs, outputs, errors and elicitation
+are identical in both languages.

@@ -30,6 +30,7 @@ from typing import Annotated, Any, TypedDict
 
 import anyio.to_thread
 from mcp.server import MCPServer
+from mcp.server.apps import Apps, ResourceCsp
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.context import CallNext, HandlerResult, ServerRequestContext
 from mcp.server.elicitation import DeclinedElicitation, ElicitationResult
@@ -194,13 +195,11 @@ def install_capture(mcp: MCPServer) -> None:
 def build_ops_server(labels_path: Path = LABELS_PATH, *, auth: bool = False) -> MCPServer:
     """auth=True makes it a resource server (required by build_http_app); in-memory tests use False."""
     security = state_security()
-    mcp = MCPServer("lumen-ops", instructions=INSTRUCTIONS, request_state_security=security,
-                    **(resource_server(OPS_RESOURCE, SCOPE_WRITE) if auth else {}))
-    install_capture(mcp)
+    apps = build_apps()  # tools must be bound to it before the server consumes it, hence before MCPServer(...)
     spent = SpentStates()
 
     # ── 4. Tools ────────────────────────────────────────────────────────────
-    @mcp.tool(annotations=WRITE)
+    @apps.tool(resource_uri=APP_URI, annotations=WRITE)
     async def label_ticket(id: str, label: str,
                            answer: Annotated[ElicitationResult[Confirm], Resolve(ask_confirm)],
                            ctx: Context) -> Annotated[CallToolResult, LabelOut]:
@@ -225,6 +224,9 @@ def build_ops_server(labels_path: Path = LABELS_PATH, *, auth: bool = False) -> 
         out: LabelOut = {"ticket_id": id, "label": label, "written": True}
         return _ok(dict(out))
 
+    mcp = MCPServer("lumen-ops", instructions=INSTRUCTIONS, request_state_security=security, extensions=[apps],
+                    **(resource_server(OPS_RESOURCE, SCOPE_WRITE) if auth else {}))
+    install_capture(mcp)
     return mcp
 
 
@@ -241,7 +243,28 @@ def build_http_app(mcp: MCPServer | None = None):
     return mcp.streamable_http_app(host="127.0.0.1", max_request_body_size=MAX_BODY_BYTES)
 
 
-# ── 6. Entry point ──────────────────────────────────────────────────────────
+# ── 6. The labelling App ────────────────────────────────────────────────────
+APP_URI = "ui://lumen/label.html"
+APP_PATH = Path(__file__).resolve().parent / "app" / "label.html"
+
+
+def build_apps() -> Apps:
+    """The MCP Apps extension carrying one resource: the labelling page, served as
+    text/html;profile=mcp-app. The page is plain HTML/CSS/JS (no build step, no external origins), so
+    the CSP is the empty ResourceCsp: nothing is allowed to connect, load or frame from elsewhere.
+
+    Confirmation stays server-side. The page's Confirm button only asks the host to run tools/call on
+    label_ticket; the server then runs its own elicitation round, single-use state and auth exactly as
+    for any other client. An App button therefore never bypasses confirmation (and, as everywhere here,
+    the elicitation answer is asserted by the client, not proof of a human)."""
+    apps = Apps()
+    apps.add_html_resource(APP_URI, APP_PATH.read_text(encoding="utf-8"), name="label", title="Label a ticket",
+                           csp=ResourceCsp(connect_domains=[], resource_domains=[], frame_domains=[],
+                                           base_uri_domains=[]))
+    return apps
+
+
+# ── 7. Entry point ──────────────────────────────────────────────────────────
 def main() -> None:
     ap = argparse.ArgumentParser(description="lumen-ops MCP server (Streamable HTTP on 127.0.0.1 only)")
     ap.add_argument("--port", type=int, default=DEFAULT_PORT)

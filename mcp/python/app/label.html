@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Label a ticket</title>
+<style>
+  :root { --bg: #ffffff; --fg: #1a1a1a; --muted: #555555; --line: #767676; --accent: #0b57d0; --accent-fg: #ffffff; --ok: #0a5c2e; --bad: #8c1d18; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1b1b1d; --fg: #ececec; --muted: #b0b0b0; --line: #8a8a8a; --accent: #8ab4f8; --accent-fg: #101010; --ok: #7ed9a0; --bad: #ff9c94; }
+  }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+  h1 { font-size: 1.1rem; margin: 0 0 12px; }
+  dl { margin: 0 0 12px; display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; }
+  dt { color: var(--muted); }
+  dd { margin: 0; font-weight: 600; }
+  label { display: block; margin-bottom: 4px; }
+  select, button { font: inherit; padding: 8px 12px; border: 2px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); }
+  button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .row { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+  #status { margin-top: 12px; min-height: 1.5em; padding: 4px 0; }
+  #status[data-kind="ok"]::before { content: "Done: "; color: var(--ok); font-weight: 700; }
+  #status[data-kind="error"]::before { content: "Error: "; color: var(--bad); font-weight: 700; }
+  #status[data-kind="wait"]::before { content: "Working: "; font-weight: 700; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Label a ticket</h1>
+  <dl>
+    <dt>Ticket</dt><dd id="ticket">(waiting for the host)</dd>
+    <dt>Proposed label</dt><dd id="proposed">(none)</dd>
+  </dl>
+  <label for="category">Category</label>
+  <select id="category" name="category">
+    <option value="billing">billing</option>
+    <option value="bug">bug</option>
+    <option value="account">account</option>
+    <option value="how_to">how_to</option>
+    <option value="feature_request">feature_request</option>
+    <option value="outage">outage</option>
+  </select>
+  <div class="row">
+    <button type="button" id="confirm" class="primary" disabled>Confirm</button>
+    <button type="button" id="cancel" disabled>Cancel</button>
+  </div>
+  <p id="status" role="status" aria-live="polite"></p>
+</main>
+<script>
+"use strict";
+// The host<->App protocol is JSON-RPC 2.0 over postMessage (MCP Apps, spec version 2026-01-26).
+// Nothing is bundled: this speaks the handful of methods it needs directly.
+//
+// Confirm does NOT write anything itself. It asks the host to run tools/call on label_ticket, and
+// the server then runs its own elicitation round (the host shows the user the question). A button in
+// this page therefore never bypasses the server's confirmation.
+var PROTOCOL_VERSION = "2026-01-26";
+var TOOL = "label_ticket";
+var nextId = 1;
+var pending = {};
+var ticketId = null;
+var busy = false;
+var el = {
+  ticket: document.getElementById("ticket"), proposed: document.getElementById("proposed"),
+  category: document.getElementById("category"), confirm: document.getElementById("confirm"),
+  cancel: document.getElementById("cancel"), status: document.getElementById("status")
+};
+
+function send(msg) {
+  // The host's origin is not known to a sandboxed page, so the target is "*"; incoming messages are
+  // accepted only from window.parent.
+  window.parent.postMessage(msg, "*");
+}
+function request(method, params) {
+  return new Promise(function (resolve, reject) {
+    var id = nextId++;
+    pending[id] = { resolve: resolve, reject: reject };
+    send({ jsonrpc: "2.0", id: id, method: method, params: params });
+  });
+}
+function notify(method, params) { send({ jsonrpc: "2.0", method: method, params: params }); }
+function say(kind, text) { el.status.dataset.kind = kind; el.status.textContent = text; }
+function setBusy(b) {
+  busy = b;
+  el.confirm.disabled = b || ticketId === null;
+  el.cancel.disabled = b || ticketId === null;
+  el.category.disabled = b;
+}
+function resultText(result) {
+  var c = result && result.content && result.content[0];
+  return c && typeof c.text === "string" ? c.text : "";
+}
+
+function onToolInput(params) {
+  var args = (params && params.arguments) || {};
+  if (typeof args.id !== "string") return;
+  ticketId = args.id;
+  el.ticket.textContent = args.id;
+  if (typeof args.label === "string") {
+    el.proposed.textContent = args.label;
+    for (var i = 0; i < el.category.options.length; i++) {
+      if (el.category.options[i].value === args.label) el.category.selectedIndex = i;
+    }
+  }
+  setBusy(false);
+  say("", "Choose a category, then Confirm. The server will ask you to confirm again before it writes.");
+}
+function onToolResult(params) {
+  if (!params) return;
+  if (params.isError) say("error", resultText(params) || "The tool reported an error.");
+  else if (params.structuredContent && params.structuredContent.written) {
+    say("ok", "Ticket " + params.structuredContent.ticket_id + " labelled " + params.structuredContent.label + ".");
+  }
+}
+
+el.confirm.addEventListener("click", function () {
+  if (busy || ticketId === null) return;
+  setBusy(true);
+  say("wait", "Waiting for you to confirm in the host...");
+  request("tools/call", { name: TOOL, arguments: { id: ticketId, label: el.category.value } })
+    .then(function (result) {
+      if (result && result.isError) say("error", resultText(result) || "The label was not written.");
+      else onToolResult(result);
+    })
+    .catch(function (e) { say("error", (e && e.message) || "The call failed."); })
+    .then(function () { setBusy(false); });
+});
+el.cancel.addEventListener("click", function () {
+  ticketId = null;
+  setBusy(true);
+  say("", "Cancelled. Nothing was written.");
+});
+
+window.addEventListener("message", function (event) {
+  if (event.source !== window.parent) return;
+  var m = event.data;
+  if (!m || m.jsonrpc !== "2.0") return;
+  if (m.method === undefined && m.id !== undefined && pending[m.id]) {  // a response to our request
+    var p = pending[m.id];
+    delete pending[m.id];
+    if (m.error) p.reject(new Error(m.error.message || "request failed")); else p.resolve(m.result);
+    return;
+  }
+  if (m.method === "ui/notifications/tool-input") onToolInput(m.params);
+  else if (m.method === "ui/notifications/tool-result") onToolResult(m.params);
+  else if (m.method === "ping" && m.id !== undefined) send({ jsonrpc: "2.0", id: m.id, result: {} });
+  else if (m.method === "ui/resource-teardown" && m.id !== undefined) send({ jsonrpc: "2.0", id: m.id, result: {} });
+});
+
+request("ui/initialize", {
+  appInfo: { name: "lumen-label", version: "1.0.0" }, appCapabilities: {}, protocolVersion: PROTOCOL_VERSION
+}).then(function () { notify("ui/notifications/initialized", {}); })
+  .catch(function () { say("error", "Could not reach the host."); });
+</script>
+</body>
+</html>
