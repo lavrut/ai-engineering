@@ -60,7 +60,8 @@ def scripted(responses: list, seen: list | None = None):
     def factory(system: str, tools: list[dict]):
         def call(messages: list[dict], **overrides) -> SimpleNamespace:
             if seen is not None:
-                seen.append({"system": system, "tools": [t["name"] for t in tools], "messages": len(messages)})
+                seen.append({"system": system, "tools": [t["name"] for t in tools], "messages": list(messages),
+                             "registry": sorted(harness.REGISTRY)})
             return queue.pop(0)
         return call
     return factory
@@ -94,15 +95,87 @@ def test_lesson5_exposes_only_lumen_read(tmp_path):
     assert "untrusted_body" in seen[0]["system"]
 
 
+def test_request_tools_are_only_this_sessions_tools(tmp_path):
+    """R34: the harness's own list_files/read_file/write_file are hidden for the session, then restored."""
+    seen: list = []
+    agent.run_scenario("capstone", guard=False, elicit="accept", labels_path=tmp_path / "l.jsonl",
+                       model_call=scripted([reply("end_turn", say("ok"))], seen))
+    session_tools = ["classify_complaint", "get_ticket", "label_ticket", "search_tickets"]
+    assert seen[0]["tools"] == session_tools
+    assert seen[0]["registry"] == session_tools          # nothing else could be executed either
+    assert {"list_files", "read_file", "write_file"} <= set(harness.REGISTRY)  # restored on exit
+    assert not set(session_tools) & set(harness.REGISTRY)
+
+
+def test_failed_open_does_not_stall(monkeypatch):
+    """A server that never finishes opening: __enter__ times out and __exit__ cancels, not waits."""
+    import asyncio
+    import time
+    from contextlib import asynccontextmanager
+
+    cancelled: list = []
+
+    @asynccontextmanager
+    async def hang(target, answer=None):
+        try:
+            await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            cancelled.append(True)
+            raise
+        yield None
+
+    monkeypatch.setattr(agent, "connect", hang)
+    monkeypatch.setattr(agent, "CALL_TIMEOUT", 0.5)
+    start = time.monotonic()
+    with pytest.raises(TimeoutError):
+        with agent.Bridge({"read": (None, agent.deny)}):
+            pass
+    assert time.monotonic() - start < 3
+    assert cancelled == [True]   # the opening task was cancelled, not left to run out a timeout
+
+
 # ── 2. Replay ───────────────────────────────────────────────────────────────
 def test_replay_miss_names_record_command(tmp_path):
     with pytest.raises(agent.ReplayMiss) as e:
         agent.run_scenario("capstone", guard=True, elicit="decline", labels_path=tmp_path / "l.jsonl",
-                           model_call=agent.replay_model(tmp_path / "rec", "capstone", guard=True,
-                                                         elicit="decline"))
+                           model_call=agent.replay_model(agent.Options("capstone", guard=True,
+                                                                       recordings=tmp_path / "rec")))
     msg = str(e.value)
     assert "capstone-guard.jsonl" in msg
-    assert "python mcp/python/agent.py --scenario capstone --guard --elicit decline --mode record" in msg
+    assert ("python mcp/python/agent.py --scenario capstone --guard --approve decline --elicit accept "
+            f"--recordings {tmp_path / 'rec'} --mode record --max-cost 10") in msg
+    assert "--mode record --dry-run" in msg
+
+
+def test_record_command_echoes_non_default_options(tmp_path):
+    assert agent.record_command(agent.Options("lesson5")) == \
+        "python mcp/python/agent.py --scenario lesson5 --mode record --max-cost 10"
+    assert agent.record_command(agent.Options("capstone")) == \
+        "python mcp/python/agent.py --scenario capstone --elicit accept --mode record --max-cost 10"
+    cmd = agent.record_command(agent.Options("capstone", guard=True, labels=tmp_path / "x.jsonl",
+                                             recordings=tmp_path / "r", model="claude-sonnet-5-5"), dry_run=True)
+    assert cmd == ("python mcp/python/agent.py --scenario capstone --guard --approve decline --elicit accept "
+                   f"--model claude-sonnet-5-5 --recordings {tmp_path / 'r'} --labels {tmp_path / 'x.jsonl'} "
+                   "--mode record --dry-run")
+
+
+def test_replay_key_same_for_sdk_message_and_saved_copy():
+    """R10: a real anthropic Message keyed live, and keyed after the save/load round trip, match."""
+    from anthropic.types import Message, TextBlock, ToolUseBlock, Usage
+    live = Message(id="msg_1", type="message", role="assistant", model="claude-haiku-5-5",
+                   content=[TextBlock(type="text", text="Looking."),
+                            ToolUseBlock(type="tool_use", id="toolu_1", name="get_ticket", input={"id": "t061"})],
+                   stop_reason="tool_use", stop_sequence=None, usage=Usage(input_tokens=10, output_tokens=5))
+    saved = agent.as_response(json.loads(json.dumps(agent.response_data(live))))
+    task = {"role": "user", "content": "Review ticket t061 and act on it"}
+    keys = [agent.request_key("m", "s", [task, {"role": "assistant", "content": r.content}], [{"name": "get_ticket"}])
+            for r in (live, saved)]
+    assert keys[0] == keys[1]
+
+
+def test_unknown_block_type_fails_loudly():
+    with pytest.raises(ValueError, match="unsupported content block type 'server_tool_use'"):
+        agent.block_dict(SimpleNamespace(type="server_tool_use", id="x", name="web_search", input={}))
 
 
 def test_replay_key_ignores_nothing_that_shapes_the_answer():
@@ -117,7 +190,7 @@ def test_replay_key_ignores_nothing_that_shapes_the_answer():
 def test_guard_blocks_write_after_untrusted_read(tmp_path):
     labels = tmp_path / "labels.jsonl"
     asked: list = []
-    out = agent.run_scenario("capstone", guard=True, elicit="decline", labels_path=labels,
+    out = agent.run_scenario("capstone", guard=True, elicit="accept", labels_path=labels,
                              model_call=scripted(SEARCH_THEN_LABEL),
                              human=lambda name, args: asked.append(name) or False)
     assert asked == ["label_ticket"]   # the person was asked, after the untrusted read
@@ -134,6 +207,62 @@ def test_no_guard_write_happens(tmp_path):
     assert asked == []                 # no guard: the approver allowed it without asking
     [row] = rows(labels)               # the server's own confirmation was still asked (scripted accept)
     assert (row["ticket_id"], row["label"], row["source"], row["confirmed"]) == ("t061", "outage", "agent", True)
+
+
+def test_guard_alone_prevents_the_write(tmp_path):
+    """R35: the person (--approve decline) says no while the server's confirmation (--elicit accept)
+    would say yes. Nothing is written, and the model is told the guard's denial."""
+    labels = tmp_path / "labels.jsonl"
+    seen: list = []
+    agent.run_scenario("capstone", guard=True, approve="decline", elicit="accept", labels_path=labels,
+                       model_call=scripted(SEARCH_THEN_LABEL, seen))
+    assert rows(labels) == []
+    [result] = seen[-1]["messages"][-1]["content"]
+    assert (result["tool_use_id"], result["content"], result["is_error"]) == \
+        ("tu_2", "The user denied this action.", True)
+
+
+def test_guard_approve_accept_lets_the_write_through(tmp_path):
+    labels = tmp_path / "labels.jsonl"
+    agent.run_scenario("capstone", guard=True, approve="accept", elicit="accept", labels_path=labels,
+                       model_call=scripted(SEARCH_THEN_LABEL))
+    assert [r["label"] for r in rows(labels)] == ["outage"]
+
+
+def test_same_response_write_is_not_guarded(tmp_path):
+    """Pinned boundary: approvals are asked before a response's tools run, so a write in the same
+    response as the first untrusted read is not guarded (the model had not seen the text yet)."""
+    labels = tmp_path / "labels.jsonl"
+    asked: list = []
+    both = [reply("tool_use", use("search_tickets", {"query": "export notes PDF"}, "tu_1"),
+                  use("label_ticket", {"id": "t061", "label": "how_to"}, "tu_2")),
+            reply("end_turn", say("Done."))]
+    agent.run_scenario("capstone", guard=True, approve="decline", elicit="accept", labels_path=labels,
+                       model_call=scripted(both), human=lambda name, args: asked.append(name) or False)
+    assert asked == []
+    assert [r["label"] for r in rows(labels)] == ["how_to"]
+
+
+def test_taint_fails_closed():
+    ok = lambda structured: SimpleNamespace(structured_content=structured, is_error=False)  # noqa: E731
+    assert agent.taints("search_tickets", ok({"results": []}))          # a ticket tool, even with no hits
+    assert agent.taints("get_ticket", ok({"id": "t001"}))
+    assert agent.taints("classify_complaint", ok(None))                # no structured content: unchecked text
+    assert agent.taints("other", ok({"a": [{"b": {"untrusted_body": "x"}}]}))  # nested untrusted_body
+    assert not agent.taints("classify_complaint", ok({"label": "x", "scores": {}}))
+    assert not agent.taints("label_ticket", ok({"ticket_id": "t061", "label": "how_to", "written": True}))
+
+
+def test_search_with_no_hits_still_taints(tmp_path):
+    with agent.open_tools(("read",), labels_path=tmp_path / "l.jsonl", elicit="accept") as session:
+        assert json.loads(harness.REGISTRY["search_tickets"].fn(query="zzqqxx"))["results"] == []
+        assert session.read_untrusted.is_set()
+
+
+def test_classify_does_not_taint(tmp_path):
+    with agent.open_tools(("read",), labels_path=tmp_path / "l.jsonl", elicit="accept") as session:
+        harness.REGISTRY["classify_complaint"].fn(text="I was charged twice")
+        assert not session.read_untrusted.is_set()
 
 
 def test_guard_does_not_ask_before_any_untrusted_read(tmp_path):
@@ -215,6 +344,7 @@ def test_record_then_replay_roundtrip(tmp_path, capsys):
     argv = ["--scenario", "lesson5", "--recordings", str(rec), "--labels", str(labels)]
     assert agent.main(argv + ["--mode", "record"], client_factory=lambda: fake, ask=lambda p: "y") == 0
     assert len(fake.requests) == 2
+    assert [t["name"] for t in fake.requests[0]["tools"]] == ["classify_complaint", "get_ticket", "search_tickets"]
     assert fake.requests[0]["model"] == "claude-haiku-5-5"
     assert fake.requests[0]["max_tokens"] == agent.MAX_TOKENS
     lines = rows(rec / "lesson5.jsonl")
@@ -235,3 +365,29 @@ def test_record_stops_at_max_cost(tmp_path, capsys):
     assert rc == 2
     assert len(fake.requests) == 1
     assert "over --max-cost" in capsys.readouterr().out
+
+
+def test_record_stops_before_a_call_whose_worst_case_passes_the_cap(tmp_path, capsys):
+    """R5: spent + the next call's worst case (all of MAX_TOKENS out) over the cap: it does not start."""
+    fake = FakeClient([reply("end_turn", say("never reached"))])
+    rc = agent.main(["--scenario", "lesson5", "--mode", "record", "--recordings", str(tmp_path / "rec"),
+                     "--max-cost", "0.001", "--yes"], client_factory=lambda: fake)
+    assert rc == 2
+    assert fake.requests == []
+    assert "the next call could cost up to $" in capsys.readouterr().out
+
+
+def test_replay_labels_default_to_a_temp_file(tmp_path, capsys, monkeypatch):
+    rec = tmp_path / "rec"
+    fake = FakeClient([reply("tool_use", use("label_ticket", {"id": "t061", "label": "how_to"}, "tu_1")),
+                       reply("end_turn", say("Labelled."))])
+    real = tmp_path / "real-labels.jsonl"
+    monkeypatch.setattr(agent, "LABELS_PATH", real)       # record's default: the real store
+    argv = ["--scenario", "capstone", "--recordings", str(rec)]
+    assert agent.main(argv + ["--mode", "record", "--yes"], client_factory=lambda: fake) == 0
+    out = capsys.readouterr().out
+    assert f"labels: {real}\n" in out and len(rows(real)) == 1
+    assert agent.main(argv, client_factory=lambda: pytest.fail("replay made a client")) == 0
+    out = capsys.readouterr().out
+    assert "(temporary: replay mode)" in out and len(rows(real)) == 1   # replay did not touch the real store
+    assert (rec / "trace.jsonl").exists()                              # trace next to the recordings

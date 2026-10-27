@@ -12,8 +12,9 @@ does not: --mode replay (the default) answers from mcp/data/recordings/<name>.js
 
 Run (free, replay):
     python mcp/python/agent.py --scenario lesson5
-    python mcp/python/agent.py --scenario capstone                       # no guard: elicitation accept
-    python mcp/python/agent.py --scenario capstone --guard               # guard: the scripted human declines
+    python mcp/python/agent.py --scenario capstone                       # no guard: the write goes through
+    python mcp/python/agent.py --scenario capstone --guard               # guard: the scripted person says no
+In replay, lumen-ops writes to a temporary label file (printed); --labels PATH overrides.
 Estimate a recording (free, no API client is created):
     python mcp/python/agent.py --scenario capstone --guard --mode record --dry-run
 Record (paid: prints the estimate, asks y/N, stops at --max-cost; ANTHROPIC_API_KEY from the environment):
@@ -28,6 +29,7 @@ import hashlib
 import json
 import os
 import sys
+import tempfile
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import AsyncExitStack, contextmanager
@@ -74,6 +76,31 @@ SCENARIOS: dict[str, Scenario] = {
 }
 
 
+@dataclass(frozen=True)
+class Options:
+    """One run's settings. Two scripted answers, kept apart (ruling R35): `approve` is the person the
+    guard asks (section 5); `elicit` is the answer to lumen-ops' own confirmation round."""
+    scenario: str
+    guard: bool = False
+    approve: str = "decline"
+    elicit: str = "accept"
+    model: str = MODEL
+    recordings: Path = RECORDINGS_DIR
+    labels: Path | None = None  # None: replay uses a temporary file, record uses mcp/data/labels.jsonl
+
+    @property
+    def writes(self) -> bool:
+        return "ops" in SCENARIOS[self.scenario].servers
+
+    @property
+    def name(self) -> str:
+        return recording_name(self.scenario, self.guard)
+
+    @property
+    def path(self) -> Path:
+        return Path(self.recordings) / f"{self.name}.jsonl"
+
+
 def recording_name(scenario: str, guard: bool) -> str:
     """lesson5 has no write tool, so the guard cannot change it; capstone is recorded both ways."""
     if "ops" not in SCENARIOS[scenario].servers:
@@ -81,17 +108,16 @@ def recording_name(scenario: str, guard: bool) -> str:
     return f"{scenario}-{'guard' if guard else 'noguard'}"
 
 
-def default_elicit(guard: bool) -> str:
-    """The scripted human: accepts in the unguarded run (the attack demo), declines in the guarded one."""
-    return "decline" if guard else "accept"
-
-
-def record_command(scenario: str, guard: bool, elicit: str, model: str = MODEL, dry_run: bool = False) -> str:
-    parts = ["python mcp/python/agent.py", f"--scenario {scenario}"]
-    if "ops" in SCENARIOS[scenario].servers:
-        parts += ["--guard"] if guard else []
-        parts += [f"--elicit {elicit}"]
-    parts += [f"--model {model}"] if model != MODEL else []
+def record_command(opts: Options, dry_run: bool = False) -> str:
+    """The command that records (or, with dry_run, estimates) exactly this run, non-default options included."""
+    parts = ["python mcp/python/agent.py", f"--scenario {opts.scenario}"]
+    if opts.writes:
+        parts += [f"--guard --approve {opts.approve}"] if opts.guard else []
+        parts += [f"--elicit {opts.elicit}"]
+    parts += [f"--model {opts.model}"] if opts.model != MODEL else []
+    if Path(opts.recordings).resolve() != RECORDINGS_DIR:
+        parts += [f"--recordings {opts.recordings}"]
+    parts += [f"--labels {opts.labels}"] if opts.labels is not None else []
     parts += ["--mode record", "--dry-run" if dry_run else f"--max-cost {MAX_COST:g}"]
     return " ".join(parts)
 
@@ -153,13 +179,13 @@ class Bridge:
         return asyncio.run_coroutine_threadsafe(coro, self._loop).result(timeout=CALL_TIMEOUT)
 
     def __exit__(self, *exc: Any) -> None:
-        if self._stop is not None:
-            self._loop.call_soon_threadsafe(self._stop.set)
-        if self._held is not None:
-            try:
-                self._held.result(timeout=CALL_TIMEOUT)
-            except BaseException:  # noqa: BLE001 - closing: an open failure was already raised
-                pass
+        if self._held is not None and not self._held.done():
+            opened = self._opened.done() and self._opened.exception() is None
+            if opened and self._stop is not None:
+                self._loop.call_soon_threadsafe(self._stop.set)  # close the clients in their own task
+            else:
+                self._held.cancel()  # still opening (hung or failed): cancel rather than wait
+            concurrent.futures.wait([self._held], timeout=CALL_TIMEOUT)
         self._loop.call_soon_threadsafe(self._loop.stop)
         self._thread.join(timeout=CALL_TIMEOUT)
         self._loop.close()
@@ -187,6 +213,17 @@ def carries_untrusted(value: Any) -> bool:
     return False
 
 
+UNTRUSTED_TOOLS = {"search_tickets", "get_ticket"}  # their results are ticket text, even when empty
+
+
+def taints(name: str, result: Any) -> bool:
+    """Does this tool result put untrusted text into the context? Fails closed: a ticket tool always
+    does, so does any result without structured content (its text is unchecked), and so does any
+    structured result with an untrusted_body anywhere in it."""
+    return (name in UNTRUSTED_TOOLS or result.structured_content is None
+            or carries_untrusted(result.structured_content))
+
+
 def result_text(result: Any) -> str:
     """Structured content as canonical JSON (stable, so replay keys match), else the text blocks."""
     if result.structured_content is not None and not result.is_error:
@@ -197,10 +234,10 @@ def result_text(result: Any) -> str:
 def make_fn(bridge: Bridge, server: str, name: str, session: Session) -> Callable[..., str]:
     def fn(**arguments: Any) -> str:
         result = bridge.run(bridge.clients[server].call_tool(name, arguments))
+        if taints(name, result):
+            session.read_untrusted.set()
         if result.is_error:
             raise ToolError(result_text(result))
-        if carries_untrusted(result.structured_content):
-            session.read_untrusted.set()
         return result_text(result)
     return fn
 
@@ -210,9 +247,10 @@ SERVER_NAMES = {"read": "lumen-read", "ops": "lumen-ops"}
 
 @contextmanager
 def open_tools(servers: tuple[str, ...], *, labels_path: Path, elicit: str) -> Iterator[Session]:
-    """Open the in-memory servers and register each MCP tool in harness.REGISTRY (ruling R1: added at
-    runtime, harness.py untouched). A tool not marked readOnlyHint needs approval, so label_ticket
-    goes through the harness's permission gate. The entries are removed again on exit."""
+    """Open the in-memory servers and make their tools the whole of harness.REGISTRY (rulings R1, R34:
+    changed at runtime, harness.py untouched). The harness's own tools (list_files, read_file,
+    write_file) are hidden for the session and restored on exit. A tool not marked readOnlyHint needs
+    approval, so label_ticket goes through the harness's permission gate."""
     harness = load_harness()
     targets: dict[str, tuple[Any, Answerer]] = {}
     if "read" in servers:
@@ -229,23 +267,25 @@ def open_tools(servers: tuple[str, ...], *, labels_path: Path, elicit: str) -> I
                                                   make_fn(bridge, server, t.name, session),
                                                   needs_approval=not read_only))
         session.tools.sort(key=lambda t: t.name)
-        before = {t.name: harness.REGISTRY.get(t.name) for t in session.tools}
+        saved = dict(harness.REGISTRY)
+        harness.REGISTRY.clear()
         harness.REGISTRY.update({t.name: t for t in session.tools})
         try:
             yield session
         finally:
-            for name, old in before.items():
-                if old is None:
-                    harness.REGISTRY.pop(name, None)
-                else:
-                    harness.REGISTRY[name] = old
+            harness.REGISTRY.clear()
+            harness.REGISTRY.update(saved)
 
 
 # ── 5. The untrusted-read rule (--guard) ────────────────────────────────────
 # Ticket text is written by customers, and t061 carries an instruction aimed at the agent. A model
 # that has read it may act on it. The rule: once any tool result in this turn carried
-# untrusted_body, a write (a tool that needs approval) goes ahead only on a person's yes.
+# untrusted text (section 4, taints), a write (a tool that needs approval) goes ahead only on a
+# person's yes.
 def needs_human(tool: Any, *, read_untrusted: bool, guard: bool) -> bool:
+    """A write requested after untrusted text entered the context needs a yes. The harness asks for
+    every approval in a response before it runs any of that response's tools, so a write requested
+    in the same response as the first untrusted read is not guarded: the model had not seen the text."""
     return guard and read_untrusted and tool.needs_approval
 
 
@@ -264,10 +304,10 @@ def make_approver(session: Session, *, guard: bool,
     return approver
 
 
-def scripted_human(elicit: str) -> Callable[[str, dict], bool]:
-    """The person the guard asks, scripted with the same answer as the server's confirmation."""
+def scripted_human(approve: str) -> Callable[[str, dict], bool]:
+    """The person the guard asks, scripted by --approve (separate from the server's --elicit)."""
     def human(name: str, args: dict) -> bool:
-        allowed = elicit == "accept"
+        allowed = approve == "accept"
         print(f"  ! guard: untrusted ticket text was read this turn; asking the person about "
               f"{name}({json.dumps(args)[:120]}) -> {'yes' if allowed else 'no'} (scripted)")
         load_harness().emit("permission", tool=name, allowed=allowed, guard=True)
@@ -281,7 +321,7 @@ class ReplayMiss(Exception):
 
 
 class CostLimit(Exception):
-    """Record mode spent more than --max-cost (or made MAX_CALLS calls); no further call starts."""
+    """The next record-mode call could pass --max-cost (or MAX_CALLS calls were made); it does not start."""
 
 
 ModelCall = Callable[[str, list[dict]], Callable[..., Any]]  # (system, tools) -> call(messages, **overrides)
@@ -292,11 +332,13 @@ BLOCK_FIELDS = {"text": ("text",), "tool_use": ("id", "name", "input"),
 
 
 def block_dict(block: Any) -> dict:
+    """Only the listed fields, so SDK extras (caller, citations: None, ...) never reach a key. An
+    unknown block type fails loudly instead of guessing which of its fields are stable."""
     if isinstance(block, dict):
         return block
     fields = BLOCK_FIELDS.get(block.type)
     if fields is None:
-        return block.model_dump(mode="json", exclude_none=True) if hasattr(block, "model_dump") else dict(vars(block))
+        raise ValueError(f"unsupported content block type {block.type!r}: add its fields to BLOCK_FIELDS")
     return {"type": block.type, **{f: getattr(block, f) for f in fields}}
 
 
@@ -317,6 +359,12 @@ def request_key(model: str, system: str, messages: list[dict], tools: list[dict]
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def response_data(response: Any) -> dict:
+    """What a recording line saves of one API response."""
+    return {"content": [block_dict(b) for b in response.content], "stop_reason": response.stop_reason,
+            "usage": {"input_tokens": response.usage.input_tokens, "output_tokens": response.usage.output_tokens}}
+
+
 def as_response(data: dict) -> SimpleNamespace:
     """A saved response in the shape run_agent reads: .content blocks, .stop_reason, .usage."""
     return SimpleNamespace(content=[SimpleNamespace(**b) for b in data["content"]],
@@ -333,8 +381,8 @@ def find_recording(path: Path, key: str) -> dict | None:
     return None
 
 
-def replay_model(recordings: Path, scenario: str, *, guard: bool, elicit: str, model: str = MODEL) -> ModelCall:
-    path = Path(recordings) / f"{recording_name(scenario, guard)}.jsonl"
+def replay_model(opts: Options) -> ModelCall:
+    path, model = opts.path, opts.model
 
     def factory(system: str, tools: list[dict]) -> Callable[..., Any]:
         n = 0
@@ -346,8 +394,8 @@ def replay_model(recordings: Path, scenario: str, *, guard: bool, elicit: str, m
             if line is None:
                 shown = path.relative_to(REPO) if path.is_relative_to(REPO) else path
                 raise ReplayMiss(f"no recording for model call {n} in {shown}. "
-                                 f"See the cost: {record_command(scenario, guard, elicit, model, dry_run=True)} "
-                                 f"Record it (paid; asks first): {record_command(scenario, guard, elicit, model)}")
+                                 f"See the cost: {record_command(opts, dry_run=True)} "
+                                 f"Record it (paid; asks first): {record_command(opts)}")
             return as_response(line["response"])
         return call
     return factory
@@ -359,11 +407,18 @@ class Ledger:
     spent: float = 0.0
 
 
-def record_model(recordings: Path, scenario: str, *, guard: bool, elicit: str, model: str,
-                 client_factory: Callable[[], Any], max_cost: float, ledger: Ledger) -> ModelCall:
+def worst_call_cost(model: str, params: dict) -> float:
+    """The most one call could cost: its request size (CHARS_PER_TOKEN, plus the tool-use prompt) in,
+    and all of MAX_TOKENS out."""
+    tokens_in = len(json.dumps(params, ensure_ascii=False)) // CHARS_PER_TOKEN + TOOL_USE_TOKENS
+    return call_cost(model, tokens_in, MAX_TOKENS)
+
+
+def record_model(opts: Options, *, client_factory: Callable[[], Any], max_cost: float, ledger: Ledger) -> ModelCall:
     """Call the API and append each response to the recording. A request already recorded is
-    replayed instead (never pay twice). The client is created on the first paid call only."""
-    path = Path(recordings) / f"{recording_name(scenario, guard)}.jsonl"
+    replayed instead (never pay twice). Before each paid call: stop if spent + that call's worst case
+    would pass max_cost. The client is created on the first paid call only."""
+    path, model = opts.path, opts.model
 
     def factory(system: str, tools: list[dict]) -> Callable[..., Any]:
         client = None
@@ -373,24 +428,23 @@ def record_model(recordings: Path, scenario: str, *, guard: bool, elicit: str, m
             key = request_key(model, system, messages, tools, overrides)
             if (saved := find_recording(path, key)) is not None:
                 return as_response(saved["response"])
-            if ledger.spent > max_cost:
-                raise CostLimit(f"spent ${ledger.spent:.4f}, over --max-cost {max_cost:g}")
             if ledger.calls >= MAX_CALLS:
                 raise CostLimit(f"made {MAX_CALLS} paid calls (MAX_CALLS); spent ${ledger.spent:.4f}")
-            client = client or client_factory()
             params = {"model": model, "max_tokens": MAX_TOKENS, "system": system, "tools": tools,
                       "messages": plain_messages(messages), **overrides}
-            response = client.messages.create(**params)
-            data = {"content": [block_dict(b) for b in response.content], "stop_reason": response.stop_reason,
-                    "usage": {"input_tokens": response.usage.input_tokens,
-                              "output_tokens": response.usage.output_tokens}}
+            worst = worst_call_cost(model, params)
+            if ledger.spent + worst > max_cost:
+                raise CostLimit(f"spent ${ledger.spent:.4f}; the next call could cost up to ${worst:.4f}, "
+                                f"over --max-cost {max_cost:g}")
+            client = client or client_factory()
+            data = response_data(client.messages.create(**params))
             ledger.calls += 1
             ledger.spent += call_cost(model, data["usage"]["input_tokens"], data["usage"]["output_tokens"])
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps({"key": key, "scenario": recording_name(scenario, guard), "call": ledger.calls,
-                                    "model": model, "guard": guard, "elicit": elicit, "response": data},
-                                   ensure_ascii=False) + "\n")
+                f.write(json.dumps({"key": key, "scenario": opts.name, "call": ledger.calls, "model": model,
+                                    "guard": opts.guard, "approve": opts.approve, "elicit": opts.elicit,
+                                    "response": data}, ensure_ascii=False) + "\n")
             return as_response(data)
         return call
     return factory
@@ -444,18 +498,19 @@ def estimate(scenario: str, model: str = MODEL) -> dict:
             "worst": worst, "worst_last_input": first + (MAX_CALLS - 1) * worst_growth}
 
 
-def print_estimate(name: str, scenario: str, model: str, guard: bool, elicit: str, cap: float) -> dict:
-    e = estimate(scenario, model)
-    servers = " + ".join(SERVER_NAMES[s] for s in SCENARIOS[scenario].servers)
-    writes = "ops" in SCENARIOS[scenario].servers
-    setting = f", guard {'on' if guard else 'off'}, elicitation {elicit}" if writes else ""
-    print(f"Recording {name}: {model}, {servers}{setting}")
+def print_estimate(opts: Options, cap: float) -> dict:
+    e = estimate(opts.scenario, opts.model)
+    servers = " + ".join(SERVER_NAMES[s] for s in SCENARIOS[opts.scenario].servers)
+    guard = f"guard on (approve {opts.approve})" if opts.guard else "guard off"
+    setting = f", {guard}, elicitation {opts.elicit}" if opts.writes else ""
+    print(f"Recording {opts.name}: {opts.model}, {servers}{setting}")
     print(f"  first request ~{e['first']:,} input tokens (system, {e['tools']} tools and task at "
           f"{CHARS_PER_TOKEN} characters per token, plus {TOOL_USE_TOKENS} for the API's tool-use prompt)")
     print(f"  typical: {e['calls']} calls, ~{e['first']:,} to ~{e['first'] + (e['calls'] - 1) * EST_GROWTH:,} "
           f"input and ~{EST_OUTPUT} output tokens each   ${e['typical']:.4f}")
-    print(f"  worst:  {MAX_CALLS} calls (MAX_CALLS), up to {e['worst_last_input']:,} input and {MAX_TOKENS:,} "
-          f"output tokens (MAX_TOKENS) each   ${e['worst']:.4f}")
+    print(f"  worst:  MAX_CALLS = {MAX_CALLS} calls, assuming up to {WORST_RESULT_TOKENS:,} tool-result tokens "
+          f"per round: up to {e['worst_last_input']:,} input and {MAX_TOKENS:,} output tokens (MAX_TOKENS) "
+          f"each   ${e['worst']:.4f}")
     print(f"Estimated cost ${e['typical']:.4f} (worst case ${e['worst']:.4f} if every call uses max_tokens "
           f"and the call limit). Cap: ${cap:.2f}.")
     if e["worst"] > cap:
@@ -482,14 +537,14 @@ def confirmed(yes: bool, ask: Callable[[str], str]) -> bool:
 
 # ── 8. Running a scenario ───────────────────────────────────────────────────
 def run_scenario(scenario: str, *, guard: bool, elicit: str, labels_path: Path, model_call: ModelCall,
-                 human: Callable[[str, dict], bool] | None = None) -> str:
+                 approve: str = "decline", human: Callable[[str, dict], bool] | None = None) -> str:
     """One turn of the harness loop on a scenario's task, with that scenario's servers. The
     untrusted-read flag starts clear: it covers this turn only."""
     harness = load_harness()
     spec = SCENARIOS[scenario]
     with open_tools(spec.servers, labels_path=labels_path, elicit=elicit) as session:
         call = model_call(system_prompt(session.instructions), [t.schema() for t in session.tools])
-        approver = make_approver(session, guard=guard, human=human or scripted_human(elicit))
+        approver = make_approver(session, guard=guard, human=human or scripted_human(approve))
         return harness.run_agent(spec.task, call=call, approver=approver)
 
 
@@ -498,15 +553,17 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description="The harness agent on the Lumen MCP servers (replay by default).")
     ap.add_argument("--scenario", required=True, choices=sorted(SCENARIOS))
     ap.add_argument("--guard", action="store_true", help="a write after an untrusted read needs a person's yes")
-    ap.add_argument("--elicit", choices=["accept", "decline"],
-                    help="the scripted answer to lumen-ops' confirmation (and to the guard's question); "
-                         "default: accept, or decline with --guard")
+    ap.add_argument("--approve", choices=["accept", "decline"], default="decline",
+                    help="the scripted person's answer when the guard asks (default: decline)")
+    ap.add_argument("--elicit", choices=["accept", "decline"], default="accept",
+                    help="the scripted answer to lumen-ops' own confirmation round (default: accept)")
     ap.add_argument("--mode", choices=["replay", "record"], default="replay")
     ap.add_argument("--model", default=MODEL)
     ap.add_argument("--max-cost", type=float, default=MAX_COST, help="record mode stops past this many dollars")
     ap.add_argument("--dry-run", action="store_true", help="print the record estimate and exit; calls nothing")
     ap.add_argument("--yes", action="store_true", help="approve the paid calls without asking")
-    ap.add_argument("--labels", type=Path, default=LABELS_PATH, help="lumen-ops' append-only label file")
+    ap.add_argument("--labels", type=Path, default=None,
+                    help="lumen-ops' label file (default: a temporary file in replay, mcp/data/labels.jsonl in record)")
     ap.add_argument("--recordings", type=Path, default=RECORDINGS_DIR)
     return ap
 
@@ -518,10 +575,11 @@ def _rows(path: Path) -> int:
 def main(argv: list[str] | None = None, *, client_factory: Callable[[], Any] = anthropic_client,
          ask: Callable[[str], str] = terminal_ask) -> int:
     args = build_parser().parse_args(argv)
-    elicit = args.elicit or default_elicit(args.guard)
-    name = recording_name(args.scenario, args.guard)
+    opts = Options(args.scenario, guard=args.guard, approve=args.approve, elicit=args.elicit, model=args.model,
+                   recordings=args.recordings, labels=args.labels)
+    ledger = None
     if args.dry_run or args.mode == "record":
-        print_estimate(name, args.scenario, args.model, args.guard, elicit, args.max_cost)
+        print_estimate(opts, args.max_cost)
         if args.dry_run:
             print("Dry run: nothing was called.")
             return 0
@@ -531,26 +589,35 @@ def main(argv: list[str] | None = None, *, client_factory: Callable[[], Any] = a
         if not confirmed(args.yes, ask):
             return 1
         ledger = Ledger()
-        model_call = record_model(args.recordings, args.scenario, guard=args.guard, elicit=elicit,
-                                  model=args.model, client_factory=client_factory, max_cost=args.max_cost,
-                                  ledger=ledger)
+        model_call = record_model(opts, client_factory=client_factory, max_cost=args.max_cost, ledger=ledger)
+        labels = args.labels or LABELS_PATH
     else:
-        ledger = None
-        model_call = replay_model(args.recordings, args.scenario, guard=args.guard, elicit=elicit, model=args.model)
+        model_call = replay_model(opts)
+        labels = args.labels or Path(tempfile.mkdtemp(prefix="lumen-agent-")) / "labels.jsonl"
+    if opts.writes:
+        print(f"labels: {labels}" + ("  (temporary: replay mode)" if args.labels is None and ledger is None else ""))
 
-    before = _rows(args.labels)
+    harness = load_harness()
+    trace_was = harness.TRACE_FILE
+    trace_dir = Path(args.recordings)
+    if not trace_dir.is_dir():
+        trace_dir = Path(tempfile.mkdtemp(prefix="lumen-agent-"))
+    harness.TRACE_FILE = trace_dir / "trace.jsonl"  # next to the recordings (git-ignored), else a temp dir
+    before = _rows(labels)
     try:
-        answer = run_scenario(args.scenario, guard=args.guard, elicit=elicit, labels_path=args.labels,
-                              model_call=model_call)
+        answer = run_scenario(args.scenario, guard=args.guard, approve=args.approve, elicit=args.elicit,
+                              labels_path=labels, model_call=model_call)
     except ReplayMiss as e:
         print(f"agent: {e}", file=sys.stderr)
         return 1
     except CostLimit as e:
         print(f"Stopped: {e}. Finished calls are saved.")
         return 2
+    finally:
+        harness.TRACE_FILE = trace_was
     print("\nagent >", answer)
-    if "ops" in SCENARIOS[args.scenario].servers:
-        print(f"label rows written this run: {_rows(args.labels) - before} ({args.labels})")
+    if opts.writes:
+        print(f"label rows written this run: {_rows(labels) - before} ({labels})")
     if ledger is not None:
         print(f"paid calls {ledger.calls}, spent ${ledger.spent:.4f}")
     return 0
