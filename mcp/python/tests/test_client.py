@@ -26,7 +26,7 @@ from pydantic import BaseModel
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import client as lumen_client  # noqa: E402
 from auth_server import mint_test_token  # noqa: E402
-from resource_auth import READ_RESOURCE, SCOPE_READ  # noqa: E402
+from resource_auth import OPS_RESOURCE, READ_RESOURCE, SCOPE_READ, SCOPE_WRITE  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 CLIENT_PY = ROOT / "mcp" / "python" / "client.py"
@@ -318,10 +318,24 @@ def test_token_sources_and_warning_match_in_both_clients(go_client, http_url, mo
         go = run_go(go_client, "-url", http_url, *go_args, "tools", env=env)
         assert (py.returncode == 0) is ok and (go.returncode == 0) is ok, (py_args, py.stderr, go.stderr)
         assert py.stdout == go.stdout
-        if ok:
-            assert py.stderr == go.stderr == (WARNING if warns else "")
-        else:
-            assert py.stderr.startswith(WARNING) is warns and go.stderr.startswith(WARNING) is warns
+        want = (WARNING if warns else "") + ("" if ok else REFUSED_401)
+        assert py.stderr == go.stderr == want, (py_args, py.stderr, go.stderr)
+
+
+REFUSED_401 = "client: the server refused the request: HTTP 401 Unauthorized\n"
+REFUSED_403 = "client: the server refused the request: HTTP 403 Forbidden\n"
+
+
+def test_refusal_is_one_line_in_both_clients(go_client, http_url, monkeypatch):
+    """A 401 or 403 is one stderr line naming the HTTP status, identical in both clients (no traceback)."""
+    for env, want in [(clean_env(), REFUSED_401),  # no token
+                      (clean_env(LUMEN_TOKEN=token_for(monkeypatch, scope=SCOPE_WRITE)), REFUSED_403),  # wrong scope
+                      (clean_env(LUMEN_TOKEN=token_for(monkeypatch, audience=OPS_RESOURCE)), REFUSED_401)]:  # audience
+        py = run_py("--url", http_url, "tools", env=env)
+        go = run_go(go_client, "-url", http_url, "tools", env=env)
+        assert py.returncode == go.returncode == 1
+        assert py.stdout == go.stdout == ""
+        assert py.stderr == go.stderr == want, (py.stderr[-300:], go.stderr)
 
 
 def test_token_file_errors_match_in_both_clients(go_client, http_url, tmp_path):

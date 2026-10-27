@@ -49,12 +49,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"unicode/utf16"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -103,17 +105,63 @@ func stdioCommand() (*exec.Cmd, error) {
 
 // ── 2. Connecting (stdio / HTTP) ────────────────────────────────────────────
 
-// bearer sets `Authorization: Bearer <token>` on every request it carries.
+// bearer sets `Authorization: Bearer <token>` only on requests to the endpoint's own origin (same
+// scheme and host:port). A token is good for one server; it must never reach anyone else.
 type bearer struct {
-	token string
-	next  http.RoundTripper
+	token  string
+	origin *neturl.URL // the endpoint: only Scheme and Host are compared
+	next   http.RoundTripper
 }
 
 func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.URL.Scheme != b.origin.Scheme || r.URL.Host != b.origin.Host {
+		return b.next.RoundTrip(r) // another origin: no credential
+	}
 	r = r.Clone(r.Context()) // a RoundTripper must not modify the caller's request
 	r.Header.Set("Authorization", "Bearer "+b.token)
 	return b.next.RoundTrip(r)
 }
+
+// refusal remembers the last non-2xx answer the server gave to a POST (an MCP message), so a failed
+// call can say why in one line: refusalLine. The Python client prints the same line.
+type refusal struct {
+	mu     sync.Mutex
+	status int
+}
+
+func (r *refusal) get() int {
+	if r == nil {
+		return 0
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.status
+}
+
+func refusalLine(status int) string {
+	return fmt.Sprintf("client: the server refused the request: HTTP %d %s", status, http.StatusText(status))
+}
+
+// recordRefusals is the RoundTripper that fills a refusal.
+type recordRefusals struct {
+	rec  *refusal
+	next http.RoundTripper
+}
+
+func (t recordRefusals) RoundTrip(r *http.Request) (*http.Response, error) {
+	resp, err := t.next.RoundTrip(r)
+	if err == nil && r.Method == http.MethodPost && resp.StatusCode >= 300 {
+		t.rec.mu.Lock()
+		t.rec.status = resp.StatusCode
+		t.rec.mu.Unlock()
+	}
+	return resp, err
+}
+
+// noRedirects makes the HTTP client return a redirect as it is instead of following it (the
+// Python SDK's client does the same: follow_redirects=False). A 3xx then fails the MCP request,
+// and the token is never replayed to the redirect's target.
+func noRedirects(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 
 // tokenFlagWarning is printed (to stderr) whenever -token is given. The Python client prints the same line.
 const tokenFlagWarning = "client: warning: a token on the command line is visible in the process list and shell " +
@@ -141,9 +189,10 @@ func resolveToken(tokenFile, token, env string) (string, bool, error) {
 }
 
 // newTransport is the one place the transport is built. With a token, the HTTP client sends
-// `Authorization: Bearer <token>` on every request; the URL is left exactly as given (a token never
-// goes in it). A token with -stdio is refused: it is an HTTP credential.
-func newTransport(stdio bool, url, token string) (mcp.Transport, error) {
+// `Authorization: Bearer <token>` on requests to the endpoint's origin only; the URL is left exactly
+// as given (a token never goes in it). Redirects are never followed. rec (may be nil) records a
+// refusal. A token with -stdio is refused: it is an HTTP credential.
+func newTransport(stdio bool, url, token string, rec *refusal) (mcp.Transport, error) {
 	if stdio {
 		if token != "" {
 			return nil, errors.New("a token needs --url / -url")
@@ -154,11 +203,19 @@ func newTransport(stdio bool, url, token string) (mcp.Transport, error) {
 		}
 		return &mcp.CommandTransport{Command: cmd}, nil
 	}
-	t := &mcp.StreamableClientTransport{Endpoint: url}
-	if token != "" {
-		t.HTTPClient = &http.Client{Transport: bearer{token, http.DefaultTransport}}
+	origin, err := neturl.Parse(url)
+	if err != nil || origin.Host == "" {
+		return nil, fmt.Errorf("not an http(s) URL: %s", url)
 	}
-	return t, nil
+	var rt http.RoundTripper = http.DefaultTransport
+	if token != "" {
+		rt = bearer{token, origin, rt}
+	}
+	if rec != nil {
+		rt = recordRefusals{rec, rt}
+	}
+	return &mcp.StreamableClientTransport{Endpoint: url,
+		HTTPClient: &http.Client{Transport: rt, CheckRedirect: noRedirects}}, nil
 }
 
 // connect opens a session. Setting ElicitationHandler is what declares the elicitation capability,
@@ -560,19 +617,29 @@ func main() {
 		}
 		token = t
 	}
-	transport, err := newTransport(*stdio, *url, token)
+	rec := &refusal{}
+	transport, err := newTransport(*stdio, *url, token, rec)
 	if err != nil {
+		fail(err)
+	}
+	// A failure the server explained with an HTTP status (401, 403, 413, a redirect...) is said in
+	// one line, the same line the Python client prints; anything else as the error itself.
+	failCall := func(err error) {
+		if status := rec.get(); status != 0 {
+			fmt.Fprintln(os.Stderr, refusalLine(status))
+			os.Exit(1)
+		}
 		fail(err)
 	}
 	ctx := context.Background()
 	cs, err := connect(ctx, transport, answer)
 	if err != nil {
-		fail(err)
+		failCall(err)
 	}
 	defer cs.Close()
 	result, err := run(ctx, cs, flag.Arg(0), flag.Args()[1:])
 	if err != nil {
-		fail(err)
+		failCall(err)
 	}
 	fmt.Println(dump(result))
 }

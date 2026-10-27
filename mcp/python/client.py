@@ -43,6 +43,7 @@ import os
 import sys
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Awaitable, Callable, TextIO
 
@@ -81,16 +82,36 @@ def http_target(url: str, token: str | None = None) -> Any:
     return HttpTarget(url, {"Authorization": f"Bearer {token}"})
 
 
+@dataclass
+class Refusal:
+    """The last non-2xx answer the server gave to a POST (an MCP message), so a failed call can
+    say why in one line (refusal_line). The Go client records and prints the same."""
+    status: int | None = None
+
+
+def refusal_line(status: int) -> str:
+    return f"client: the server refused the request: HTTP {status} {HTTPStatus(status).phrase}"
+
+
 @asynccontextmanager
-async def connect(target: Any, answer: "Answerer | None" = None):
+async def connect(target: Any, answer: "Answerer | None" = None, refusal: Refusal | None = None):
     """Open a Client on a StdioServerParameters, an http(s) URL, an HttpTarget, or (in tests) an
     in-process server. The elicitation callback is what declares the `elicitation` capability, so
-    a server's confirmation step only runs when the client can answer it."""
+    a server's confirmation step only runs when the client can answer it. Over HTTP, `refusal`
+    (if given) records a non-2xx answer. Redirects: the SDK follows one only within the endpoint's
+    origin (the client itself has follow_redirects=False), so the headers never go elsewhere."""
     callback = elicitation_callback(answer or deny)
+    if isinstance(target, str) and target.startswith(("http://", "https://")):
+        target = HttpTarget(target, {})
     if isinstance(target, HttpTarget):
         # The SDK's own factory (MCP timeouts), from a private module verified on mcp==2.3.0.
         from mcp.shared._httpx_utils import create_mcp_http_client
         async with create_mcp_http_client(headers=target.headers) as http:
+            if refusal is not None:
+                async def record(response) -> None:
+                    if response.request.method == "POST" and response.status_code >= 300:
+                        refusal.status = response.status_code
+                http.event_hooks["response"].append(record)
             async with Client(streamable_http_client(target.url, http_client=http),
                               elicitation_callback=callback) as client:
                 yield client
@@ -353,11 +374,31 @@ async def amain(argv: list[str]) -> None:
             if warn:
                 print(TOKEN_FLAG_WARNING, file=sys.stderr)
         check_args(ns.command, ns.args)
-        async with connect(stdio_params() if ns.stdio else http_target(ns.url, token), answer) as client:
+    except UsageError as e:
+        print(f"client: {e}", file=sys.stderr)
+        raise SystemExit(1)
+    refusal = Refusal()
+    try:
+        async with connect(stdio_params() if ns.stdio else http_target(ns.url, token), answer, refusal) as client:
             print(dump(await run(client, ns.command, ns.args)))
     except UsageError as e:
         print(f"client: {e}", file=sys.stderr)
         raise SystemExit(1)
+    except Exception as e:  # noqa: BLE001 - the SDK raises ExceptionGroups; say it in one line
+        # A failure the server explained with an HTTP status (401, 403, 413, a redirect...) is said
+        # in one line, the same line the Go client prints; anything else as its innermost error.
+        if refusal.status is not None:
+            print(refusal_line(refusal.status), file=sys.stderr)
+        else:
+            print(f"client: {innermost(e)}", file=sys.stderr)
+        raise SystemExit(1)
+
+
+def innermost(e: BaseException) -> BaseException:
+    """The first leaf of a (nested) exception group."""
+    while isinstance(e, BaseExceptionGroup) and e.exceptions:
+        e = e.exceptions[0]
+    return e
 
 
 if __name__ == "__main__":

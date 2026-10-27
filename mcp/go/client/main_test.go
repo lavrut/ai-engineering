@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -205,7 +206,7 @@ func TestURLSmoke(t *testing.T) {
 	if !strings.HasPrefix(srv.URL, "http://127.0.0.1:") {
 		t.Fatalf("test server not on 127.0.0.1: %s", srv.URL)
 	}
-	transport, err := newTransport(false, srv.URL, "")
+	transport, err := newTransport(false, srv.URL, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +240,7 @@ func TestTokenSentAsBearerHeaderOnly(t *testing.T) {
 		inner.ServeHTTP(w, r)
 	}))
 	defer srv.Close()
-	transport, err := newTransport(false, srv.URL+"/mcp", token)
+	transport, err := newTransport(false, srv.URL+"/mcp", token, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,10 +263,81 @@ func TestTokenSentAsBearerHeaderOnly(t *testing.T) {
 			t.Errorf("request %d: Authorization %q, URL %q", i, auths[i], urls[i])
 		}
 	}
-	if _, err := newTransport(true, "", token); err == nil {
+	if _, err := newTransport(true, "", token, nil); err == nil {
 		t.Error("-token with -stdio must be refused")
 	}
 }
+
+func TestTokenNeverLeavesTheEndpointOrigin(t *testing.T) {
+	// A server that answers every request with a 307 to another origin (a different port: the
+	// "third party"). The third party must never see the Authorization header, and the client must
+	// not follow the redirect at all.
+	const token = "SECRET-TOKEN"
+	var mu sync.Mutex
+	var thirdPartyAuth []string
+	third := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		thirdPartyAuth = append(thirdPartyAuth, r.Header.Get("Authorization"))
+		mu.Unlock()
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	defer third.Close()
+	// localhost vs 127.0.0.1 and a different port: a different origin either way.
+	target := strings.Replace(third.URL, "127.0.0.1", "localhost", 1) + "/mcp"
+	var endpointAuth []string
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		endpointAuth = append(endpointAuth, r.Header.Get("Authorization"))
+		mu.Unlock()
+		http.Redirect(w, r, target, http.StatusTemporaryRedirect)
+	}))
+	defer redirector.Close()
+	rec := &refusal{}
+	transport, err := newTransport(false, redirector.URL+"/mcp", token, rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := connect(context.Background(), transport, always(false)); err == nil {
+		t.Fatal("a redirected endpoint must fail the connection")
+	}
+	if rec.get() != http.StatusTemporaryRedirect ||
+		refusalLine(rec.get()) != "client: the server refused the request: HTTP 307 Temporary Redirect" {
+		t.Errorf("refusal %d", rec.get())
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(thirdPartyAuth) != 0 {
+		t.Fatalf("the redirect was followed: third party saw %q", thirdPartyAuth)
+	}
+	if len(endpointAuth) == 0 || endpointAuth[0] != "Bearer "+token {
+		t.Fatalf("the endpoint itself must get the token: %q", endpointAuth)
+	}
+}
+
+func TestBearerOnlyForTheEndpointOrigin(t *testing.T) {
+	// Even if something did send a request elsewhere through this client, no header is added.
+	var seen []string
+	rt := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		seen = append(seen, r.URL.String()+" "+r.Header.Get("Authorization"))
+		return &http.Response{StatusCode: 200, Body: http.NoBody, Request: r}, nil
+	})
+	origin, _ := url.Parse("http://127.0.0.1:8765/mcp")
+	b := bearer{"T", origin, rt}
+	for _, u := range []string{"http://127.0.0.1:8765/mcp", "http://127.0.0.1:8766/mcp",
+		"http://localhost:8765/mcp", "https://127.0.0.1:8765/mcp", "http://evil.example/mcp"} {
+		req, _ := http.NewRequest("GET", u, nil)
+		b.RoundTrip(req)
+	}
+	want := []string{"http://127.0.0.1:8765/mcp Bearer T", "http://127.0.0.1:8766/mcp ",
+		"http://localhost:8765/mcp ", "https://127.0.0.1:8765/mcp ", "http://evil.example/mcp "}
+	if !reflect.DeepEqual(seen, want) {
+		t.Fatalf("got %q", seen)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func TestResolveTokenPrecedence(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "t.tok")
