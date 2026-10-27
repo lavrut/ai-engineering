@@ -1,0 +1,10 @@
+mcp==2.3.0
+anthropic>=1.0
+pytest>=8
+brotli>=1.2
+# lumen_core.classify imports ml/serve/server.py (FastAPI) and ml/python/train.py, which
+# import numpy, scipy and scikit-learn at module level. Pins match ml/python/requirements.txt.
+scikit-learn==1.8.0
+numpy==2.5.4
+scipy==1.17.1
+fastapi>=0.110

@@ -16,3 +16,5 @@ harness/python/compact_demo.py
 llms/inspect/logs/
 *.egg-info/
 logs/
+.venv-mcp/
+mcp/data/labels.jsonl
