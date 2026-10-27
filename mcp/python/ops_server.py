@@ -8,8 +8,10 @@ What the confirmation proves: only that the retry came from the same caller, for
 arguments, within five minutes, on a state this server issued and has not seen answered before.
 Whether a human or a script said "yes" is the client's claim; `confirmed=True` records the claim.
 
-HTTP only by design (a write server is not a subprocess any host can spawn). Tests use the
-in-memory server from build_ops_server().
+HTTP only by design (a write server is not a subprocess any host can spawn), and always as an OAuth
+resource server (scope tickets:write, audience http://127.0.0.1:8766/mcp; see resource_auth.py).
+The label row's client_id is the verified token's client_id. Tests use the in-memory server from
+build_ops_server(), which has no HTTP and so no bearer check.
 
 Run:  python mcp/python/ops_server.py [--port 8766] [--labels PATH]
 """
@@ -31,14 +33,16 @@ from mcp.server import MCPServer
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.context import CallNext, HandlerResult, ServerRequestContext
 from mcp.server.elicitation import DeclinedElicitation, ElicitationResult
+from mcp.server.mcpserver.context import Context
 from mcp.server.mcpserver.resolve import Elicit, Resolve
 from mcp.server.request_state import RequestStateBoundary, RequestStateSecurity
 from mcp_types import CallToolResult, TextContent, ToolAnnotations
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "core" / "python"))
 from lumen_core import CATEGORIES, LABELS_PATH, MAX_BODY_BYTES, tickets  # noqa: E402
 from lumen_core.labels import write_label  # noqa: E402
+from resource_auth import OPS_RESOURCE, SCOPE_WRITE, resource_server  # noqa: E402
 
 # ── 1. Configuration and helpers ────────────────────────────────────────────
 INSTRUCTIONS = (
@@ -47,7 +51,8 @@ INSTRUCTIONS = (
 )
 DEFAULT_PORT = 8766
 STATE_TTL_SECONDS = 300  # a confirmation round must finish within five minutes
-ANONYMOUS = "anonymous"  # client_id when no token identifies the caller (auth arrives in Task 8)
+PRUNE_MARGIN_SECONDS = 60  # a spent state is forgotten only this long after its own expiry
+ANONYMOUS = "anonymous"  # client_id when no token identifies the caller (in-memory tests only)
 # Appending a label changes data but destroys nothing; it is not idempotent (each call adds a row).
 WRITE = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False)
 
@@ -91,9 +96,16 @@ def validation_error(id: str, label: str) -> str | None:
 
 # ── 2. The confirmation question ────────────────────────────────────────────
 class Confirm(BaseModel):
-    """The form: one boolean. strict, so "yes" or 1 is not taken for true."""
+    """The form: one boolean. Only the JSON boolean true confirms: anything else ("yes", 1, null)
+    is read as false, so the tool answers with the fixed decline text, as the Go server does,
+    instead of failing schema validation. The schema the user sees is unchanged: a boolean."""
     model_config = ConfigDict(strict=True)
     confirm: bool
+
+    @field_validator("confirm", mode="before")
+    @classmethod
+    def only_true_confirms(cls, v: object) -> bool:
+        return v is True
 
 
 def ask_confirm(id: str, label: str) -> Elicit[Confirm] | DeclinedElicitation:
@@ -108,25 +120,26 @@ def ask_confirm(id: str, label: str) -> Elicit[Confirm] | DeclinedElicitation:
 # The SDK seals requestState (AES-256-GCM) and checks expiry, tool, arguments, audience and
 # caller, but a sealed state stays valid for its whole TTL: sending the same accepted retry
 # twice would write twice. So the server spends each state the first time an answer for it
-# reaches the tool body, and remembers it for one TTL (after that the SDK rejects it as expired).
+# reaches the tool body, and remembers it until the state's own expiry (plus a margin): after
+# that the SDK rejects the state as expired, on the same wall clock (time.time) used here.
 class SpentStates:
-    """Digests of answered states, each kept for `ttl` seconds. In memory, one process: a
-    multi-worker deployment would need a shared store (and shared state keys) instead."""
+    """Digests of answered states, each kept until its state's `exp` + `margin`. In memory, one
+    process: a multi-worker deployment would need a shared store (and shared state keys) instead."""
 
-    def __init__(self, ttl: float = STATE_TTL_SECONDS, clock: Callable[[], float] = time.monotonic) -> None:
-        self._ttl, self._clock = ttl, clock
-        self._seen: dict[str, float] = {}
+    def __init__(self, margin: float = PRUNE_MARGIN_SECONDS, clock: Callable[[], float] = time.time) -> None:
+        self._margin, self._clock = margin, clock
+        self._seen: dict[str, float] = {}  # digest -> the state's own exp
         self._lock = threading.Lock()
 
-    def spend(self, state: str) -> bool:
-        """True the first time a state is spent; False for every replay within the TTL."""
+    def spend(self, state: str, expires_at: float) -> bool:
+        """True the first time a state is spent; False for every replay while it is remembered."""
         key = hashlib.sha256(state.encode()).hexdigest()
-        now = self._clock()
         with self._lock:
-            self._seen = {k: t for k, t in self._seen.items() if now - t <= self._ttl}
+            now = self._clock()
+            self._seen = {k: exp for k, exp in self._seen.items() if now <= exp + self._margin}
             if key in self._seen:
                 return False
-            self._seen[key] = now
+            self._seen[key] = expires_at
             return True
 
     def __len__(self) -> int:
@@ -153,30 +166,54 @@ def state_security() -> RequestStateSecurity:
     return RequestStateSecurity.ephemeral(ttl=STATE_TTL_SECONDS)
 
 
-def build_ops_server(labels_path: Path = LABELS_PATH) -> MCPServer:
-    mcp = MCPServer("lumen-ops", instructions=INSTRUCTIONS, request_state_security=state_security())
-    # Middleware the caller adds runs inside the state boundary (it sees plaintext), so this one
-    # goes in just before the boundary, where the sealed token is still on the request.
-    boundary = next(i for i, m in enumerate(mcp.middleware) if isinstance(m, RequestStateBoundary))
-    mcp.middleware.insert(boundary, capture_wire_state)
+def state_expiry(security: RequestStateSecurity, wire: str) -> float | None:
+    """The `exp` the SDK sealed into this state, or None if it does not open. The boundary has
+    already verified the state by the time the tool runs; this only reads its expiry."""
+    try:
+        exp = json.loads(security.codec.unseal(wire))["exp"]
+    except Exception:  # noqa: BLE001 - any failure: no expiry, so the caller refuses
+        return None
+    return float(exp) if isinstance(exp, int | float) else None
+
+
+def install_capture(mcp: MCPServer) -> None:
+    """Put capture_wire_state immediately before the SDK's RequestStateBoundary (ruling R21).
+    Middleware added the usual way runs inside the boundary and sees only plaintext. If the
+    boundary is not there (a later SDK moved it), refuse to build: fail closed, loudly."""
+    at = next((i for i, m in enumerate(mcp.middleware) if isinstance(m, RequestStateBoundary)), None)
+    if at is None:
+        raise RuntimeError("RequestStateBoundary not found: replay guard cannot be installed")
+    mcp.middleware.insert(at, capture_wire_state)
+
+
+def build_ops_server(labels_path: Path = LABELS_PATH, *, auth: bool = False) -> MCPServer:
+    """auth=True makes it a resource server (required by build_http_app); in-memory tests use False."""
+    security = state_security()
+    mcp = MCPServer("lumen-ops", instructions=INSTRUCTIONS, request_state_security=security,
+                    **(resource_server(OPS_RESOURCE, SCOPE_WRITE) if auth else {}))
+    install_capture(mcp)
     spent = SpentStates()
 
     # ── 4. Tools ────────────────────────────────────────────────────────────
     @mcp.tool(annotations=WRITE)
     async def label_ticket(id: str, label: str,
                            answer: Annotated[ElicitationResult[Confirm], Resolve(ask_confirm)],
-                           ) -> Annotated[CallToolResult, LabelOut]:
+                           ctx: Context) -> Annotated[CallToolResult, LabelOut]:
         """Label a ticket with one of the six categories. Asks the user to confirm; writes only on yes."""
         if (message := validation_error(id, label)) is not None:  # checked first, so the fixed text wins
             return fail(message)
-        state = _wire_state.get()
-        # None only when no state was echoed: a legacy-era client, answered mid-call by a real
-        # elicitation/create (a 2026-07-28 client with no state is asked again, never reaches here).
-        if state is not None and not spent.spend(state):
-            return fail(DECLINED)  # a replay of an answered round: nothing written
+        wire = _wire_state.get()
+        # A 2026-07-28 answer arrives with a requestState (ctx.request_state: the boundary's
+        # plaintext). It must be spent here, which needs the sealed token the capture saw; if the
+        # capture saw none, refuse rather than treat the round as stateless (R23.2). No state on
+        # either side: a legacy-era client, answered mid-call by a real elicitation/create.
+        if ctx.request_state is not None or wire is not None:
+            exp = state_expiry(security, wire) if wire is not None else None
+            if exp is None or not spent.spend(wire, exp):
+                return fail(DECLINED)  # unseen, unreadable or already answered: nothing written
         if answer.action != "accept" or not answer.data.confirm:
             return fail(DECLINED)
-        token = get_access_token()  # None in-process and until Task 8 adds auth
+        token = get_access_token()  # None only in-process (no HTTP, no bearer check)
         client_id = token.client_id if token is not None and token.client_id else ANONYMOUS
         await anyio.to_thread.run_sync(lambda: write_label(
             id, label, source="agent", client_id=client_id, model=None, confirmed=True, path=labels_path))
@@ -188,9 +225,14 @@ def build_ops_server(labels_path: Path = LABELS_PATH) -> MCPServer:
 
 # ── 5. HTTP app and security ────────────────────────────────────────────────
 def build_http_app(mcp: MCPServer | None = None):
-    """Streamable HTTP ASGI app. host="127.0.0.1" turns on the SDK's DNS-rebinding protection
-    (bad Host or Origin gets 403); the body cap is passed explicitly. No auth yet: Task 8 adds it."""
-    mcp = mcp or build_ops_server()
+    """Streamable HTTP ASGI app, always behind bearer auth (refuses a server built without it).
+    host="127.0.0.1" turns on the SDK's DNS-rebinding protection (bad Host or Origin gets 403, for
+    every method); the body cap is passed explicitly. The PRM is served at
+    /.well-known/oauth-protected-resource/mcp. Order (ruling R9): the SDK checks the token before
+    the Origin, so a bad Origin with no token is 401 and with a valid token 403 (Go: 403 both ways)."""
+    mcp = mcp or build_ops_server(auth=True)
+    if mcp.settings.auth is None:
+        raise ValueError("lumen-ops serves HTTP only with auth: build_ops_server(auth=True)")
     return mcp.streamable_http_app(host="127.0.0.1", max_request_body_size=MAX_BODY_BYTES)
 
 
@@ -201,7 +243,7 @@ def main() -> None:
     ap.add_argument("--labels", type=Path, default=LABELS_PATH, help="append-only label file")
     args = ap.parse_args()
     import uvicorn
-    uvicorn.run(build_http_app(build_ops_server(args.labels)), host="127.0.0.1", port=args.port)
+    uvicorn.run(build_http_app(build_ops_server(args.labels, auth=True)), host="127.0.0.1", port=args.port)
 
 
 if __name__ == "__main__":

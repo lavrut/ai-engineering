@@ -4,6 +4,9 @@ Three tools, two resources and one prompt, all read-only. Ticket text is untrust
 it only ever leaves this server inside a field named `untrusted_body`. The Go server
 (mcp/go) answers the same shared contract, mcp/fixtures/contract.jsonl.
 
+Over HTTP it is an OAuth resource server (scope tickets:read, audience http://127.0.0.1:8765/mcp); see
+resource_auth.py. Over stdio there is no OAuth: the host that spawns the process is the trust boundary.
+
 Run:  python mcp/python/read_server.py [--http] [--port 8765]
 """
 from __future__ import annotations
@@ -23,6 +26,7 @@ from mcp_types import INVALID_PARAMS, CallToolResult, TextContent, ToolAnnotatio
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "core" / "python"))
 from lumen_core import (DEFAULT_LIMIT, MAX_BODY_BYTES, MAX_LIMIT, MAX_QUERY_CHARS,  # noqa: E402
                         MAX_TEXT_CHARS, MIN_LIMIT, REPO_ROOT, classify, tickets)
+from resource_auth import READ_RESOURCE, SCOPE_READ, resource_server  # noqa: E402
 
 # ── 1. Configuration and helpers ────────────────────────────────────────────
 INSTRUCTIONS = (
@@ -81,8 +85,10 @@ def eval_summary() -> dict:
                      for r in data["runs"]]}
 
 
-def build_read_server() -> MCPServer:
-    mcp = MCPServer("lumen-read", instructions=INSTRUCTIONS)
+def build_read_server(*, auth: bool = False) -> MCPServer:
+    """auth=True makes it a resource server (needed for HTTP); stdio and in-memory tests use False."""
+    mcp = MCPServer("lumen-read", instructions=INSTRUCTIONS,
+                    **(resource_server(READ_RESOURCE, SCOPE_READ) if auth else {}))
 
     # ── 2. Tools ────────────────────────────────────────────────────────────
     @mcp.tool(annotations=READ_ONLY)
@@ -147,9 +153,14 @@ def build_read_server() -> MCPServer:
 
 # ── 5. HTTP app and security ────────────────────────────────────────────────
 def build_http_app(mcp: MCPServer | None = None):
-    """Streamable HTTP ASGI app. host="127.0.0.1" turns on the SDK's DNS-rebinding protection
-    (bad Host or Origin gets 403); the body cap is passed explicitly. No auth yet: Task 8 adds it."""
-    mcp = mcp or build_read_server()
+    """Streamable HTTP ASGI app, always behind bearer auth (refuses a server built without it).
+    host="127.0.0.1" turns on the SDK's DNS-rebinding protection (bad Host or Origin gets 403, for
+    every method); the body cap is passed explicitly. The PRM is served at
+    /.well-known/oauth-protected-resource/mcp. Order (ruling R9): the SDK checks the token before
+    the Origin, so a bad Origin with no token is 401 and with a valid token 403 (Go: 403 both ways)."""
+    mcp = mcp or build_read_server(auth=True)
+    if mcp.settings.auth is None:
+        raise ValueError("lumen-read serves HTTP only with auth: build_read_server(auth=True)")
     return mcp.streamable_http_app(host="127.0.0.1", max_request_body_size=MAX_BODY_BYTES)
 
 

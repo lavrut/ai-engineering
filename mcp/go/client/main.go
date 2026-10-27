@@ -1,8 +1,9 @@
 // Lumen MCP client (Go): discover, list tools, call tools, read resources, get prompts.
 //
-//	go run ./client (-stdio | -url URL) [-yes | -no] <command> [args]
+//	go run ./client (-stdio | -url URL [-token TOKEN]) [-yes | -no] <command> [args]
 //	  -stdio  spawn mcp/python/read_server.py (python from $LUMEN_PYTHON, else .venv-mcp, else python3)
 //	  -url    talk to a Streamable HTTP server, e.g. http://127.0.0.1:8765/mcp
+//	  -token  an OAuth access token for that server, sent as `Authorization: Bearer` (never in the URL)
 //	  -yes    answer every input-required (elicitation) round "accept" without asking
 //	  -no     answer every round "decline" without asking
 //	  (neither) ask on the terminal: the prompt goes to stderr, the answer is read from stdin (y/N)
@@ -42,6 +43,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -96,18 +98,37 @@ func stdioCommand() (*exec.Cmd, error) {
 
 // ── 2. Connecting (stdio / HTTP) ────────────────────────────────────────────
 
-// newTransport is the one place the transport is built. Task 8 adds `-token` here: wrap the
-// StreamableClientTransport's HTTPClient in a RoundTripper that sets `Authorization: Bearer <token>`
-// (never a token in the URL).
-func newTransport(stdio bool, url string) (mcp.Transport, error) {
+// bearer sets `Authorization: Bearer <token>` on every request it carries.
+type bearer struct {
+	token string
+	next  http.RoundTripper
+}
+
+func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context()) // a RoundTripper must not modify the caller's request
+	r.Header.Set("Authorization", "Bearer "+b.token)
+	return b.next.RoundTrip(r)
+}
+
+// newTransport is the one place the transport is built. With a token, the HTTP client sends
+// `Authorization: Bearer <token>` on every request; the URL is left exactly as given (a token never
+// goes in it). A token with -stdio is refused: it is an HTTP credential.
+func newTransport(stdio bool, url, token string) (mcp.Transport, error) {
 	if stdio {
+		if token != "" {
+			return nil, errors.New("-token needs -url")
+		}
 		cmd, err := stdioCommand()
 		if err != nil {
 			return nil, err
 		}
 		return &mcp.CommandTransport{Command: cmd}, nil
 	}
-	return &mcp.StreamableClientTransport{Endpoint: url}, nil
+	t := &mcp.StreamableClientTransport{Endpoint: url}
+	if token != "" {
+		t.HTTPClient = &http.Client{Transport: bearer{token, http.DefaultTransport}}
+	}
+	return t, nil
 }
 
 // connect opens a session. Setting ElicitationHandler is what declares the elicitation capability,
@@ -476,6 +497,7 @@ func run(ctx context.Context, cs *mcp.ClientSession, command string, args []stri
 func main() {
 	stdio := flag.Bool("stdio", false, "spawn read_server.py and use stdio")
 	url := flag.String("url", "", "Streamable HTTP endpoint, e.g. http://127.0.0.1:8765/mcp")
+	token := flag.String("token", "", "OAuth access token for -url, sent as Authorization: Bearer")
 	yes := flag.Bool("yes", false, "accept input-required rounds")
 	no := flag.Bool("no", false, "decline input-required rounds")
 	flag.Parse()
@@ -484,7 +506,7 @@ func main() {
 		os.Exit(1)
 	}
 	if flag.NArg() < 1 || *stdio == (*url != "") || (*yes && *no) {
-		fmt.Fprintln(os.Stderr, "usage: client (-stdio | -url URL) [-yes | -no] discover|tools|call NAME JSON|read URI|prompt NAME JSON")
+		fmt.Fprintln(os.Stderr, "usage: client (-stdio | -url URL [-token TOKEN]) [-yes | -no] discover|tools|call NAME JSON|read URI|prompt NAME JSON")
 		os.Exit(2)
 	}
 	answer := askTerminal(os.Stdin, os.Stderr)
@@ -493,7 +515,7 @@ func main() {
 	} else if *no {
 		answer = always(false)
 	}
-	transport, err := newTransport(*stdio, *url)
+	transport, err := newTransport(*stdio, *url, *token)
 	if err != nil {
 		fail(err)
 	}

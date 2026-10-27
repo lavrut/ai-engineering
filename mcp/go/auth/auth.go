@@ -1,0 +1,192 @@
+// Package auth is the resource-server half of OAuth for lumen-read (HTTP) and lumen-ops (Go), plus
+// the HTTP guards both servers share.
+//
+// Both servers are OAuth 2.1 resource servers: they never issue tokens, they only check them. A
+// token is accepted when it is signed by the test AS (mcp/python/auth_server.py), unexpired, from
+// the expected issuer, and its audience (RFC 8707) names this server's canonical URI. Then the SDK
+// middleware checks the scope (403 if missing). A missing or rejected token is 401 with
+// `WWW-Authenticate: Bearer resource_metadata="..."`. No token is ever passed on to anything else.
+//
+// The audience check lives in the verifier (ruling R7): the Go SDK's RequireBearerToken checks
+// scopes and expiry but not audience. The Python servers do the same in mcp/python/resource_auth.py,
+// and the numbered sections match it.
+package auth
+
+import (
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/url"
+	"slices"
+	"strings"
+	"time"
+
+	sdkauth "github.com/modelcontextprotocol/go-sdk/auth"
+	"github.com/modelcontextprotocol/go-sdk/oauthex"
+
+	"lumen-mcp/core"
+)
+
+// ── 1. Configuration ────────────────────────────────────────────────────────
+const (
+	Issuer       = "http://127.0.0.1:9000"     // the local test AS
+	ReadResource = "http://127.0.0.1:8765/mcp" // lumen-read's canonical URI (the token audience)
+	OpsResource  = "http://127.0.0.1:8766/mcp" // lumen-ops's canonical URI
+	ScopeRead    = "tickets:read"
+	ScopeWrite   = "tickets:write"
+	PRMPath      = "/.well-known/oauth-protected-resource/mcp" // RFC 9728, path-aware for /mcp
+	Leeway       = 30 * time.Second                            // clock skew allowed on exp / nbf / iat
+)
+
+// TestSigningKey is the TEST-ONLY HS256 key shared with the test AS (resource_auth.TEST_SIGNING_KEY
+// in Python holds the same string). It is public: anyone who reads it can mint tokens, which is
+// acceptable only for a loopback lab. Production uses an asymmetric key (RS256/ES256) published by
+// the AS as a JWKS, so resource servers hold no secret at all.
+const TestSigningKey = "lumen-TEST-ONLY-hs256-key-public-do-not-use-in-production"
+
+// InspectorOrigins are the only browser origins allowed besides the server's own (ruling R11).
+var InspectorOrigins = []string{"http://127.0.0.1:6274", "http://localhost:6274"}
+
+// ── 2. Token verifier ───────────────────────────────────────────────────────
+func b64json(seg string, v any) error {
+	b, err := base64.RawURLEncoding.DecodeString(seg)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, v)
+}
+
+// audiences reads `aud`: RFC 7519 allows a string or an array of strings.
+func audiences(raw json.RawMessage) ([]string, bool) {
+	var many []string
+	if json.Unmarshal(raw, &many) == nil {
+		return many, true
+	}
+	var one string
+	if json.Unmarshal(raw, &one) == nil {
+		return []string{one}, true
+	}
+	return nil, false
+}
+
+// Verifier checks an HS256 access token from the test AS for `resource`: signature, issuer,
+// exp/nbf/iat (with Leeway), audience, and that it names a subject and a client. Any failure wraps
+// ErrInvalidToken, so RequireBearerToken answers 401. On success, TokenInfo.UserID is the token's
+// `sub` and Extra["client_id"] its `client_id`: the only identity the tools trust.
+func Verifier(resource string) sdkauth.TokenVerifier {
+	return func(_ context.Context, token string, _ *http.Request) (*sdkauth.TokenInfo, error) {
+		invalid := func(why string) (*sdkauth.TokenInfo, error) {
+			return nil, fmt.Errorf("%w: %s", sdkauth.ErrInvalidToken, why)
+		}
+		p := strings.Split(token, ".")
+		if len(p) != 3 {
+			return invalid("malformed")
+		}
+		var hdr struct {
+			Alg string `json:"alg"`
+		}
+		if b64json(p[0], &hdr) != nil || hdr.Alg != "HS256" { // never "none", never another algorithm
+			return invalid("algorithm")
+		}
+		mac := hmac.New(sha256.New, []byte(TestSigningKey))
+		mac.Write([]byte(p[0] + "." + p[1]))
+		sig, err := base64.RawURLEncoding.DecodeString(p[2])
+		if err != nil || !hmac.Equal(sig, mac.Sum(nil)) {
+			return invalid("signature")
+		}
+		var c struct {
+			Iss      string          `json:"iss"`
+			Aud      json.RawMessage `json:"aud"`
+			Sub      string          `json:"sub"`
+			ClientID string          `json:"client_id"`
+			Scope    string          `json:"scope"`
+			Exp      int64           `json:"exp"`
+			Nbf      int64           `json:"nbf"`
+			Iat      int64           `json:"iat"`
+		}
+		if b64json(p[1], &c) != nil || c.Iss != Issuer || c.Sub == "" || c.ClientID == "" {
+			return invalid("claims")
+		}
+		now, skew := time.Now().Unix(), int64(Leeway/time.Second)
+		// Checked here, not left to the middleware: it checks scope before expiry, which would make
+		// an expired token with the wrong scope a 403 instead of a 401.
+		if c.Exp == 0 || now > c.Exp+skew || (c.Nbf != 0 && now+skew < c.Nbf) || (c.Iat != 0 && now+skew < c.Iat) {
+			return invalid("expired or not yet valid")
+		}
+		auds, ok := audiences(c.Aud)
+		if !ok || !oauthex.MatchesResource(auds, resource) { // R7: the audience, in the verifier
+			return invalid(fmt.Sprintf("audience %v is not %s", auds, resource))
+		}
+		return &sdkauth.TokenInfo{Scopes: strings.Fields(c.Scope), Expiration: time.Unix(c.Exp, 0), UserID: c.Sub,
+			Extra: map[string]any{"client_id": c.ClientID}}, nil
+	}
+}
+
+// ── 3. Resource-server handler ──────────────────────────────────────────────
+
+// CheckOrigin answers 403 to a request whose Origin is neither the server's own nor trusted, for
+// every method (ruling R18): http.CrossOriginProtection only gates unsafe methods, and a GET on
+// /mcp opens a stream. No Origin at all is a non-browser client and passes.
+func CheckOrigin(trusted []string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if origin := r.Header.Get("Origin"); origin != "" {
+			u, err := url.Parse(origin)
+			own := err == nil && u.Scheme == "http" && u.Host == r.Host && u.Path == "" && u.RawQuery == ""
+			if !own && !slices.Contains(trusted, origin) {
+				http.Error(w, "forbidden origin", http.StatusForbidden)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// CapBody answers 413 for a body over core.MaxBodyBytes, by Content-Length first and then while
+// reading (MaxBytesReader also bounds chunked bodies).
+func CapBody(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.ContentLength > core.MaxBodyBytes {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, core.MaxBodyBytes)
+		next.ServeHTTP(w, r)
+	})
+}
+
+// MetadataURL is where `resource` serves its protected-resource metadata.
+func MetadataURL(resource string) string {
+	u, err := url.Parse(resource)
+	if err != nil {
+		panic(err)
+	}
+	return u.Scheme + "://" + u.Host + PRMPath
+}
+
+// Handler serves `mcpHandler` at /mcp as a resource server for `resource`, and its metadata at
+// PRMPath. Order on /mcp: Origin (403, every method) -> cross-origin protection (403, unsafe
+// methods, incl. Sec-Fetch-Site) -> body cap (413) -> bearer token (401 / 403) -> MCP. So a bad
+// Origin or an oversized body is refused before any token is looked at (ruling R9 records that
+// Python checks the token first).
+func Handler(mcpHandler http.Handler, resource, scope string) http.Handler {
+	cop := http.NewCrossOriginProtection()
+	for _, o := range InspectorOrigins {
+		if err := cop.AddTrustedOrigin(o); err != nil {
+			panic(err)
+		}
+	}
+	protect := sdkauth.RequireBearerToken(Verifier(resource), &sdkauth.RequireBearerTokenOptions{
+		ResourceMetadataURL: MetadataURL(resource),
+		Scopes:              []string{scope},
+	})
+	mux := http.NewServeMux()
+	mux.Handle(PRMPath, sdkauth.ProtectedResourceMetadataHandler(&oauthex.ProtectedResourceMetadata{
+		Resource: resource, AuthorizationServers: []string{Issuer},
+		ScopesSupported: []string{scope}, BearerMethodsSupported: []string{"header"}}))
+	mux.Handle("/mcp", CheckOrigin(InspectorOrigins, cop.Handler(CapBody(protect(mcpHandler)))))
+	return mux
+}

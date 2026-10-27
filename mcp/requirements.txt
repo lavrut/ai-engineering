@@ -3,6 +3,8 @@ mcp==2.3.0
 anthropic>=1.0
 pytest>=8
 brotli>=1.2
+# Imported directly by resource_auth.py / auth_server.py (HS256 test tokens); already a dependency of mcp.
+PyJWT>=2.10
 # lumen_core.classify imports ml/serve/server.py (FastAPI) and ml/python/train.py, which
 # import numpy, scipy and scikit-learn at module level. Pins match ml/python/requirements.txt.
 scikit-learn==1.8.0

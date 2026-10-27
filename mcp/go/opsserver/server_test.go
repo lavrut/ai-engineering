@@ -2,8 +2,9 @@ package main
 
 // Test transport: the in-memory transport (mcp.NewInMemoryTransports) runs the server and a real Go
 // client in-process for the contract and the confirmation tests. The legacy-era test and the HTTP
-// hardening tests use the real Stateless HTTP handler (httptest), because that is where ruling R6
-// and the Origin/body-cap checks live. Every test writes to a t.TempDir() labels file.
+// hardening and authorization tests use the real Stateless HTTP handler (httptest), because that is
+// where ruling R6, the Origin/body-cap checks and the bearer check live; they carry a token from
+// authtest (lumen-ops's own unless a test says otherwise). Every test writes to a t.TempDir() labels file.
 
 import (
 	"bufio"
@@ -17,11 +18,14 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"lumen-mcp/auth"
+	"lumen-mcp/auth/authtest"
 	"lumen-mcp/core"
 )
 
@@ -325,15 +329,71 @@ func TestNonBooleanConfirmWritesNothing(t *testing.T) {
 	}
 }
 
-func TestSpentStatesExpire(t *testing.T) {
+func TestSpentStatesPruneByTheStatesOwnExpiry(t *testing.T) {
+	// R23.3: an entry is dropped only after its own state's expiry plus a margin, never earlier.
 	clock := time.Unix(1000, 0)
-	s := newSpentStates(StateTTL, func() time.Time { return clock })
-	if StateTTL != 5*time.Minute || !s.spend("a") || s.spend("a") {
+	s := newSpentStates(func() time.Time { return clock })
+	if StateTTL != 5*time.Minute || PruneMargin <= 0 {
+		t.Fatalf("StateTTL %v PruneMargin %v", StateTTL, PruneMargin)
+	}
+	expA := clock.Add(StateTTL)
+	if !s.spend("a", expA) || s.spend("a", expA) {
 		t.Fatal("first spend must succeed, the replay must not")
 	}
-	clock = clock.Add(StateTTL + time.Second) // by now verifyState rejects "a" as expired anyway
-	if !s.spend("b") || s.size() != 1 {
-		t.Fatalf("expired entries must be pruned: size %d", s.size())
+	clock = expA.Add(PruneMargin) // inside the margin: still remembered
+	if !s.spend("b", clock.Add(StateTTL)) || s.spend("a", expA) || s.size() != 2 {
+		t.Fatalf("a must be kept until exp + margin: size %d", s.size())
+	}
+	clock = expA.Add(PruneMargin + time.Second) // verify rejects "a" as expired anyway
+	if !s.spend("c", clock.Add(StateTTL)) || s.size() != 2 {
+		t.Fatalf("a must be pruned: size %d", s.size())
+	}
+}
+
+func TestSpentStatesFollowEachStatesExpiry(t *testing.T) {
+	clock := time.Unix(1000, 0)
+	s := newSpentStates(func() time.Time { return clock })
+	s.spend("late", clock.Add(5*time.Second)) // spent near the end of its life
+	s.spend("early", clock.Add(StateTTL))
+	clock = clock.Add(5*time.Second + PruneMargin + time.Second)
+	s.spend("x", clock.Add(StateTTL))
+	if s.spend("early", time.Time{}) || s.size() != 2 {
+		t.Fatalf("late must be pruned, early kept: size %d", s.size())
+	}
+}
+
+func TestConcurrentRetriesWriteOnce(t *testing.T) {
+	// R23.5: N identical accepted retries in flight at once write exactly one row (run with -race).
+	path := labelsFile(t)
+	cs := manual(t, NewOpsServer(path))
+	state := round1(t, cs, "t006", "account")
+	const n = 20
+	var wg sync.WaitGroup
+	results := make([]*mcp.CallToolResult, n)
+	errs := make([]error, n)
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results[i], errs[i] = cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "label_ticket",
+				Arguments: map[string]any{"id": "t006", "label": "account"}, RequestState: state,
+				InputResponses: mcp.InputResponseMap{"confirm": accept}})
+		}()
+	}
+	wg.Wait()
+	written := 0
+	for i := range n {
+		if errs[i] != nil {
+			t.Fatalf("retry %d: %v", i, errs[i])
+		}
+		if !results[i].IsError {
+			written++
+		} else if textOf(results[i]) != Declined {
+			t.Errorf("retry %d: %q", i, textOf(results[i]))
+		}
+	}
+	if rows := readRows(t, path); written != 1 || len(rows) != 1 {
+		t.Fatalf("want exactly 1 write, got %d results ok and %d rows", written, len(rows))
 	}
 }
 
@@ -477,6 +537,26 @@ func TestContractOps(t *testing.T) {
 }
 
 // ── 5. HTTP: the legacy era (ruling R6) and the hardening ───────────────────
+// opsToken is the HTTP fixture token: lumen-ops's own scope and audience.
+var opsToken = authtest.Token(auth.ScopeWrite, auth.OpsResource, "lumen-cli", "user-1")
+
+// bearer adds `Authorization: Bearer <token>` to every request (what the client's -token does).
+type bearer struct {
+	token string
+	next  http.RoundTripper
+}
+
+func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	r.Header.Set("Authorization", "Bearer "+b.token)
+	return b.next.RoundTrip(r)
+}
+
+func transportAs(url, token string) *mcp.StreamableClientTransport {
+	return &mcp.StreamableClientTransport{Endpoint: url + "/mcp",
+		HTTPClient: &http.Client{Transport: bearer{token, http.DefaultTransport}}}
+}
+
 func TestLegacyClientFailsClosedOverStatelessHTTP(t *testing.T) {
 	// A 2025-11-25 client is willing to confirm, but a Stateless server has no channel to ask it
 	// mid-call. label_ticket fails closed with the fixed decline and writes nothing.
@@ -486,7 +566,7 @@ func TestLegacyClientFailsClosedOverStatelessHTTP(t *testing.T) {
 	var seen []asked
 	client := mcp.NewClient(&mcp.Implementation{Name: "legacy", Version: "0"},
 		&mcp.ClientOptions{ElicitationHandler: replying(accept, &seen)})
-	cs, err := client.Connect(context.Background(), &mcp.StreamableClientTransport{Endpoint: ts.URL + "/mcp"},
+	cs, err := client.Connect(context.Background(), transportAs(ts.URL, opsToken),
 		&mcp.ClientSessionOptions{ProtocolVersion: "2025-11-25"})
 	if err != nil {
 		t.Fatal(err)
@@ -513,7 +593,7 @@ func TestModernClientConfirmsOverHTTP(t *testing.T) {
 	var seen []asked
 	cs, err := mcp.NewClient(&mcp.Implementation{Name: "modern", Version: "0"},
 		&mcp.ClientOptions{ElicitationHandler: replying(accept, &seen)}).
-		Connect(context.Background(), &mcp.StreamableClientTransport{Endpoint: ts.URL + "/mcp"}, nil)
+		Connect(context.Background(), transportAs(ts.URL, opsToken), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -530,16 +610,23 @@ func TestModernClientConfirmsOverHTTP(t *testing.T) {
 
 const listBody = `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
 
-func post(h http.Handler, body, origin string) int {
-	req := httptest.NewRequest("POST", "http://127.0.0.1:8766/mcp", strings.NewReader(body))
+func send(h http.Handler, method, body, origin, token string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, "http://127.0.0.1:8766/mcp", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	if origin != "" {
 		req.Header.Set("Origin", origin)
 	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	return rec.Code
+	return rec
+}
+
+func post(h http.Handler, body, origin string) int {
+	return send(h, "POST", body, origin, opsToken).Code
 }
 
 func TestOriginRejected(t *testing.T) {
@@ -570,5 +657,118 @@ func TestBodyCap(t *testing.T) {
 func TestDefaultPort(t *testing.T) {
 	if DefaultPort != 8766 {
 		t.Errorf("DefaultPort %d", DefaultPort)
+	}
+}
+
+// ── 6. Authorization (lumen-ops is a resource server) ───────────────────────
+func TestNoToken401WithMetadata(t *testing.T) {
+	rec := send(NewHTTPHandler(NewOpsServer(labelsFile(t))), "POST", listBody, "", "")
+	want := `resource_metadata="http://127.0.0.1:8766/.well-known/oauth-protected-resource/mcp"`
+	if rec.Code != 401 || !strings.Contains(rec.Header().Get("WWW-Authenticate"), want) {
+		t.Fatalf("got %d %q", rec.Code, rec.Header().Get("WWW-Authenticate"))
+	}
+}
+
+func TestRightTokenOK(t *testing.T) {
+	if got := post(NewHTTPHandler(NewOpsServer(labelsFile(t))), listBody, ""); got != 200 {
+		t.Fatalf("got %d", got)
+	}
+}
+
+func TestWrongAudience401(t *testing.T) {
+	h := NewHTTPHandler(NewOpsServer(labelsFile(t)))
+	for _, aud := range []string{auth.ReadResource, "http://127.0.0.1:9999/mcp"} {
+		if rec := send(h, "POST", listBody, "", authtest.Token(auth.ScopeWrite, aud, "lumen-cli", "user-1")); rec.Code != 401 {
+			t.Errorf("aud %s: got %d", aud, rec.Code)
+		}
+	}
+}
+
+func TestWrongScope403(t *testing.T) {
+	h := NewHTTPHandler(NewOpsServer(labelsFile(t)))
+	for _, scope := range []string{auth.ScopeRead, "", "tickets:admin"} {
+		rec := send(h, "POST", listBody, "", authtest.Token(scope, auth.OpsResource, "lumen-cli", "user-1"))
+		if rec.Code != 403 || !strings.Contains(rec.Header().Get("WWW-Authenticate"), "resource_metadata=") {
+			t.Errorf("scope %q: got %d", scope, rec.Code)
+		}
+	}
+}
+
+func TestCrossServerTokenRejected(t *testing.T) {
+	// Review focus 3. The audience is checked while verifying the token (R7) and the scope only on a
+	// token that verified, so lumen-read's own token is 401 here (audience), with or without a forged
+	// write scope; a token for this audience that lacks tickets:write is 403 (scope).
+	h := NewHTTPHandler(NewOpsServer(labelsFile(t)))
+	for name, c := range map[string]struct {
+		token string
+		want  int
+	}{
+		"read_token":            {authtest.Token(auth.ScopeRead, auth.ReadResource, "lumen-cli", "user-1"), 401},
+		"forged_scope_read_aud": {authtest.Token(auth.ScopeWrite, auth.ReadResource, "lumen-cli", "user-1"), 401},
+		"ops_aud_read_scope":    {authtest.Token(auth.ScopeRead, auth.OpsResource, "lumen-cli", "user-1"), 403},
+	} {
+		if rec := send(h, "POST", listBody, "", c.token); rec.Code != c.want {
+			t.Errorf("%s: got %d, want %d", name, rec.Code, c.want)
+		}
+	}
+}
+
+func TestOpsClientIDFromToken(t *testing.T) {
+	// The label row's client_id, and the confirmation state's Sub and ClientID, come from the
+	// verified token. A state issued to one token is refused when answered with another.
+	path := labelsFile(t)
+	ts := httptest.NewServer(NewHTTPHandler(NewOpsServer(path)))
+	defer ts.Close()
+	connect := func(token string, manualRounds bool) *mcp.ClientSession {
+		var seen []asked
+		opts := &mcp.ClientOptions{ElicitationHandler: replying(accept, &seen)}
+		if manualRounds {
+			opts.MultiRoundTrip = &mcp.MultiRoundTripOptions{Disabled: true}
+		}
+		cs, err := mcp.NewClient(&mcp.Implementation{Name: "id", Version: "0"}, opts).
+			Connect(context.Background(), transportAs(ts.URL, token), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { cs.Close() })
+		return cs
+	}
+	tok7 := authtest.Token(auth.ScopeWrite, auth.OpsResource, "lumen-test-client-7", "user-42")
+	res, err := connect(tok7, false).CallTool(context.Background(), &mcp.CallToolParams{Name: "label_ticket",
+		Arguments: map[string]any{"id": "t001", "label": "billing"}})
+	if err != nil || res.IsError {
+		t.Fatalf("err %v res %+v", err, res)
+	}
+	rows := readRows(t, path)
+	if len(rows) != 1 || rows[0]["client_id"] != "lumen-test-client-7" {
+		t.Fatalf("rows %v", rows)
+	}
+	// The state binds the token's subject and client.
+	cs7 := connect(tok7, true)
+	state := round1(t, cs7, "t002", "bug")
+	payload, _, _ := strings.Cut(state, ".")
+	raw, _ := base64.RawURLEncoding.DecodeString(payload)
+	var st confirmState
+	if err := json.Unmarshal(raw, &st); err != nil || st.Sub != "user-42" || st.ClientID != "lumen-test-client-7" {
+		t.Fatalf("state %+v %v", st, err)
+	}
+	other := connect(authtest.Token(auth.ScopeWrite, auth.OpsResource, "someone-else", "user-43"), true)
+	wantDeclined(t, round(t, other, "t002", "bug", accept, state))
+	if rows := readRows(t, path); len(rows) != 1 {
+		t.Fatalf("another caller's answer wrote: %d rows", len(rows))
+	}
+}
+
+func TestGetWithBadOrigin403(t *testing.T) {
+	// R18: Origin is checked for every method (CrossOriginProtection alone passes GET). With a valid token (R9).
+	h := NewHTTPHandler(NewOpsServer(labelsFile(t)))
+	if rec := send(h, "GET", "", "http://evil.example", opsToken); rec.Code != 403 {
+		t.Errorf("GET bad Origin: %d", rec.Code)
+	}
+	if rec := send(h, "GET", "", "http://127.0.0.1:6274", opsToken); rec.Code == 403 {
+		t.Errorf("GET Inspector Origin: 403")
+	}
+	if rec := send(h, "POST", listBody, "http://evil.example", ""); rec.Code != 403 {
+		t.Errorf("R9 ordering: Go checks Origin before auth, want 403 without a token, got %d", rec.Code)
 	}
 }

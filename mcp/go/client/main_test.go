@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -202,7 +203,7 @@ func TestURLSmoke(t *testing.T) {
 	if !strings.HasPrefix(srv.URL, "http://127.0.0.1:") {
 		t.Fatalf("test server not on 127.0.0.1: %s", srv.URL)
 	}
-	transport, err := newTransport(false, srv.URL)
+	transport, err := newTransport(false, srv.URL, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,6 +220,48 @@ func TestURLSmoke(t *testing.T) {
 	got, err := run(ctx, cs, "call", []string{"echo", `{"id": "t9"}`})
 	if err != nil || !reflect.DeepEqual(got, map[string]any{"structured": map[string]any{"id": "t9"}}) {
 		t.Fatalf("call: %v %v", got, err)
+	}
+}
+
+func TestTokenSentAsBearerHeaderOnly(t *testing.T) {
+	// R19: -token becomes `Authorization: Bearer <token>` on every request, never part of the URL.
+	const token = "tok-123.abc"
+	inner := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return plainServer() },
+		&mcp.StreamableHTTPOptions{Stateless: true})
+	var mu sync.Mutex
+	var auths, urls []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		auths, urls = append(auths, r.Header.Get("Authorization")), append(urls, r.URL.String())
+		mu.Unlock()
+		inner.ServeHTTP(w, r)
+	}))
+	defer srv.Close()
+	transport, err := newTransport(false, srv.URL+"/mcp", token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	cs, err := connect(ctx, transport, always(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(ctx, cs, "tools", nil); err != nil {
+		t.Fatal(err)
+	}
+	cs.Close()
+	mu.Lock()
+	defer mu.Unlock()
+	if len(auths) == 0 {
+		t.Fatal("no requests seen")
+	}
+	for i := range auths {
+		if auths[i] != "Bearer "+token || strings.Contains(urls[i], token) {
+			t.Errorf("request %d: Authorization %q, URL %q", i, auths[i], urls[i])
+		}
+	}
+	if _, err := newTransport(true, "", token); err == nil {
+		t.Error("-token with -stdio must be refused")
 	}
 }
 

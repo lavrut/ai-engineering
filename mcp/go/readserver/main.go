@@ -1,4 +1,5 @@
 // The entry point: lumen-read over stdio (default) or Streamable HTTP on 127.0.0.1.
+// Over HTTP it is an OAuth resource server (tickets:read, audience http://127.0.0.1:8765/mcp).
 //
 //	go run ./readserver [-http] [-port 8765]
 package main

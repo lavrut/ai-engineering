@@ -1,8 +1,10 @@
 """Lumen MCP client (Python): discover, list tools, call tools, read resources, get prompts.
 
-Usage:  python mcp/python/client.py (--stdio | --url URL) [--yes | --no] <command>
+Usage:  python mcp/python/client.py (--stdio | --url URL [--token TOKEN]) [--yes | --no] <command>
           --stdio   spawn mcp/python/read_server.py and talk over stdio
           --url     talk to a Streamable HTTP server, e.g. http://127.0.0.1:8765/mcp
+          --token   an OAuth access token for that server, sent as `Authorization: Bearer` on every
+                    request (never in the URL). Only with --url.
           --yes     answer every input-required (elicitation) round "accept" without asking
           --no      answer every round "decline" without asking
           (neither) ask on the terminal: the prompt goes to stderr, the answer is read from stdin (y/N)
@@ -35,10 +37,12 @@ import asyncio
 import json
 import sys
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Awaitable, Callable, TextIO
 
 from mcp import Client, StdioServerParameters
+from mcp.client.streamable_http import streamable_http_client
 from mcp.shared.exceptions import MCPError
 from mcp_types import ElicitResult
 
@@ -57,18 +61,36 @@ def stdio_params() -> StdioServerParameters:
 
 
 # ── 2. Connecting (stdio / HTTP) ────────────────────────────────────────────
-def http_target(url: str) -> Any:
-    """The one place the HTTP path is built. Task 8 adds `--token` here: pass a Streamable HTTP
-    transport whose httpx client sends `Authorization: Bearer <token>` (never a token in the URL)."""
-    return url
+@dataclass(frozen=True)
+class HttpTarget:
+    """A Streamable HTTP endpoint plus the headers every request carries."""
+    url: str
+    headers: dict[str, str]
+
+
+def http_target(url: str, token: str | None = None) -> Any:
+    """The one place the HTTP path is built. With a token, every request carries
+    `Authorization: Bearer <token>`; the URL is left exactly as given (a token never goes in it)."""
+    if token is None:
+        return url
+    return HttpTarget(url, {"Authorization": f"Bearer {token}"})
 
 
 @asynccontextmanager
 async def connect(target: Any, answer: "Answerer | None" = None):
-    """Open a Client on a StdioServerParameters, an http(s) URL, or (in tests) an in-process server.
-    The elicitation callback is what declares the `elicitation` capability, so a server's
-    confirmation step only runs when the client can answer it."""
-    async with Client(target, elicitation_callback=elicitation_callback(answer or deny)) as client:
+    """Open a Client on a StdioServerParameters, an http(s) URL, an HttpTarget, or (in tests) an
+    in-process server. The elicitation callback is what declares the `elicitation` capability, so
+    a server's confirmation step only runs when the client can answer it."""
+    callback = elicitation_callback(answer or deny)
+    if isinstance(target, HttpTarget):
+        # The SDK's own factory (MCP timeouts), from a private module verified on mcp==2.3.0.
+        from mcp.shared._httpx_utils import create_mcp_http_client
+        async with create_mcp_http_client(headers=target.headers) as http:
+            async with Client(streamable_http_client(target.url, http_client=http),
+                              elicitation_callback=callback) as client:
+                yield client
+        return
+    async with Client(target, elicitation_callback=callback) as client:
         yield client
 
 
@@ -285,16 +307,19 @@ async def amain(argv: list[str]) -> None:
     where = ap.add_mutually_exclusive_group(required=True)
     where.add_argument("--stdio", action="store_true", help="spawn read_server.py and use stdio")
     where.add_argument("--url", help="Streamable HTTP endpoint, e.g. http://127.0.0.1:8765/mcp")
+    ap.add_argument("--token", help="OAuth access token for --url, sent as Authorization: Bearer")
     yn = ap.add_mutually_exclusive_group()
     yn.add_argument("--yes", action="store_true", help="accept input-required rounds")
     yn.add_argument("--no", action="store_true", help="decline input-required rounds")
     ap.add_argument("command", choices=["discover", "tools", "call", "read", "prompt"])
     ap.add_argument("args", nargs="*")
     ns = ap.parse_args(argv)
+    if ns.token is not None and ns.url is None:
+        ap.error("--token needs --url")
     answer = always(True) if ns.yes else always(False) if ns.no else ask_terminal()
     try:
         check_args(ns.command, ns.args)
-        async with connect(stdio_params() if ns.stdio else http_target(ns.url), answer) as client:
+        async with connect(stdio_params() if ns.stdio else http_target(ns.url, ns.token), answer) as client:
             print(dump(await run(client, ns.command, ns.args)))
     except UsageError as e:
         print(f"client: {e}", file=sys.stderr)

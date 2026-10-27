@@ -25,6 +25,8 @@ from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import client as lumen_client  # noqa: E402
+from auth_server import mint_test_token  # noqa: E402
+from resource_auth import READ_RESOURCE, SCOPE_READ  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 CLIENT_PY = ROOT / "mcp" / "python" / "client.py"
@@ -242,11 +244,13 @@ def http_url():
 
 
 HTTP_COMMANDS = [("tools",), ("call", "search_tickets", '{"query": "refund duplicate", "limit": 3}')]
+# lumen-read over HTTP is a resource server since Task 8: the fixture token is its own (R19: --token).
+TOKEN = mint_test_token(SCOPE_READ, READ_RESOURCE)
 
 
 @pytest.mark.parametrize("command", HTTP_COMMANDS)
 def test_python_client_url_matches_stdio(http_url, command):
-    over_http = subprocess.run([sys.executable, str(CLIENT_PY), "--url", http_url, *command],
+    over_http = subprocess.run([sys.executable, str(CLIENT_PY), "--url", http_url, "--token", TOKEN, *command],
                                capture_output=True, text=True, check=True, cwd=ROOT).stdout
     over_stdio = subprocess.run([sys.executable, str(CLIENT_PY), "--stdio", *command],
                                 capture_output=True, text=True, check=True, cwd=ROOT).stdout
@@ -257,11 +261,28 @@ def test_python_client_url_matches_stdio(http_url, command):
 
 @pytest.mark.parametrize("command", HTTP_COMMANDS)
 def test_go_client_url_same_output(go_client, http_url, command):
-    py = subprocess.run([sys.executable, str(CLIENT_PY), "--url", http_url, *command],
+    py = subprocess.run([sys.executable, str(CLIENT_PY), "--url", http_url, "--token", TOKEN, *command],
                         capture_output=True, text=True, check=True, cwd=ROOT).stdout
-    go = subprocess.run([str(go_client), "-url", http_url, *command],
+    go = subprocess.run([str(go_client), "-url", http_url, "-token", TOKEN, *command],
                         capture_output=True, text=True, check=True, cwd=ROOT).stdout
     assert go == py
+
+
+def test_url_without_token_fails_in_both_clients(go_client, http_url):
+    """No token, no access: both clients exit non-zero against the resource server (401)."""
+    py = subprocess.run([sys.executable, str(CLIENT_PY), "--url", http_url, "tools"],
+                        capture_output=True, text=True, cwd=ROOT)
+    go = subprocess.run([str(go_client), "-url", http_url, "tools"], capture_output=True, text=True, cwd=ROOT)
+    assert py.returncode != 0 and py.stdout == ""
+    assert go.returncode != 0 and go.stdout == ""
+
+
+def test_token_needs_url_in_both_clients(go_client):
+    """--token is an HTTP credential; with --stdio it is a usage error, never silently dropped."""
+    py = subprocess.run([sys.executable, str(CLIENT_PY), "--stdio", "--token", "x", "tools"],
+                        capture_output=True, text=True, cwd=ROOT)
+    go = subprocess.run([str(go_client), "-stdio", "-token", "x", "tools"], capture_output=True, text=True, cwd=ROOT)
+    assert py.returncode != 0 and go.returncode != 0
 
 
 # ── 5. Edge cases (identical in both clients) ───────────────────────────────

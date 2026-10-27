@@ -21,6 +21,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"lumen-mcp/auth"
 	"lumen-mcp/core"
 )
 
@@ -236,34 +237,12 @@ func NewReadServer() *mcp.Server {
 }
 
 // ── 5. HTTP handler and security ────────────────────────────────────────────
-// capBody answers 413 for a body over the cap, by Content-Length first and then while reading
-// (MaxBytesReader also bounds chunked bodies).
-func capBody(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.ContentLength > core.MaxBodyBytes {
-			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
-			return
-		}
-		r.Body = http.MaxBytesReader(w, r.Body, core.MaxBodyBytes)
-		next.ServeHTTP(w, r)
-	})
-}
 
-// TrustedOrigins are the only browser origins allowed besides the server's own: the Inspector web UI.
-var TrustedOrigins = []string{"http://127.0.0.1:6274", "http://localhost:6274"}
-
-// NewHTTPHandler is the Streamable HTTP handler for /mcp: Stateless, Origin check first (403), then
-// the body cap (413). No auth yet: Task 8 adds it.
+// NewHTTPHandler is the Streamable HTTP handler: /mcp (Stateless) as an OAuth resource server for
+// auth.ReadResource with scope auth.ScopeRead, and the protected-resource metadata at auth.PRMPath. The
+// order of checks (Origin for every method -> body cap -> bearer token) is in auth.Handler.
 func NewHTTPHandler(s *mcp.Server) http.Handler {
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s },
 		&mcp.StreamableHTTPOptions{Stateless: true, MaxRequestBodyBytes: core.MaxBodyBytes})
-	cop := http.NewCrossOriginProtection()
-	for _, o := range TrustedOrigins {
-		if err := cop.AddTrustedOrigin(o); err != nil {
-			panic(err)
-		}
-	}
-	mux := http.NewServeMux()
-	mux.Handle("/mcp", cop.Handler(capBody(mcpHandler)))
-	return mux
+	return auth.Handler(mcpHandler, auth.ReadResource, auth.ScopeRead)
 }

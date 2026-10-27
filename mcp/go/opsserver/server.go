@@ -10,8 +10,10 @@
 // arguments, within five minutes, on a state this server signed and has not seen answered before.
 // Whether a human or a script said "yes" is the client's claim; confirmed=true records the claim.
 //
-// HTTP only by design (a write server is not a subprocess any host can spawn). Tests use the
-// in-memory transport against NewOpsServer.
+// HTTP only by design (a write server is not a subprocess any host can spawn), and always as an OAuth
+// resource server (scope tickets:write, audience http://127.0.0.1:8766/mcp; see mcp/go/auth). The
+// label row's client_id is the verified token's client_id. Tests use the in-memory transport
+// against NewOpsServer, which has no HTTP and so no bearer check.
 package main
 
 import (
@@ -32,6 +34,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"lumen-mcp/auth"
 	"lumen-mcp/core"
 )
 
@@ -41,10 +44,11 @@ const Instructions = "Lumen ticket labelling. label_ticket writes a label only a
 
 const (
 	DefaultPort = 8766
-	StateTTL    = 5 * time.Minute // a confirmation round must finish within five minutes
-	anonymous   = "anonymous"     // client_id when no token identifies the caller (auth arrives in Task 8)
-	confirmKey  = "confirm"       // the input request's id in InputRequests / InputResponses
-	modernEra   = "2026-07-28"    // the first protocol version with input_required results
+	StateTTL    = 5 * time.Minute  // a confirmation round must finish within five minutes
+	PruneMargin = 60 * time.Second // a spent state is forgotten only this long after its own expiry
+	anonymous   = "anonymous"      // client_id when no token identifies the caller (in-memory tests only)
+	confirmKey  = "confirm"        // the input request's id in InputRequests / InputResponses
+	modernEra   = "2026-07-28"     // the first protocol version with input_required results
 )
 
 // The fixed error texts. Identical in the Python server; the contract pins them.
@@ -123,34 +127,35 @@ type confirmState struct {
 	Nonce                    string
 }
 
-// spentStates holds the MAC of every state that has been answered, each for one TTL. A valid
-// signature alone would let the same accepted retry write twice; this makes a state single-use.
-// In memory, one process: a multi-instance deployment would need a shared store and key.
+// spentStates holds the MAC of every state that has been answered, each until that state's own
+// expiry plus PruneMargin, on the same clock verify uses: by the time an entry goes, verify already
+// rejects the state as expired. A valid signature alone would let the same accepted retry write
+// twice; this makes a state single-use. In memory, one process: a multi-instance deployment would
+// need a shared store and key.
 type spentStates struct {
 	mu   sync.Mutex
-	ttl  time.Duration
 	now  func() time.Time
-	seen map[string]time.Time
+	seen map[string]time.Time // MAC -> the state's own expiry
 }
 
-func newSpentStates(ttl time.Duration, now func() time.Time) *spentStates {
-	return &spentStates{ttl: ttl, now: now, seen: map[string]time.Time{}}
+func newSpentStates(now func() time.Time) *spentStates {
+	return &spentStates{now: now, seen: map[string]time.Time{}}
 }
 
-// spend is true the first time a MAC is spent and false for every replay within the TTL.
-func (s *spentStates) spend(mac string) bool {
+// spend is true the first time a MAC is spent and false for every replay while it is remembered.
+func (s *spentStates) spend(mac string, expires time.Time) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
-	for k, t := range s.seen {
-		if now.Sub(t) > s.ttl {
+	for k, exp := range s.seen {
+		if now.After(exp.Add(PruneMargin)) {
 			delete(s.seen, k)
 		}
 	}
 	if _, dup := s.seen[mac]; dup {
 		return false
 	}
-	s.seen[mac] = now
+	s.seen[mac] = expires
 	return true
 }
 
@@ -178,7 +183,7 @@ func newOps(labelsPath string) *ops {
 		panic(err)
 	}
 	o := &ops{labelsPath: labelsPath, key: key, now: time.Now}
-	o.spent = newSpentStates(StateTTL, func() time.Time { return o.now() })
+	o.spent = newSpentStates(func() time.Time { return o.now() })
 	return o
 }
 
@@ -189,36 +194,38 @@ func (o *ops) sign(s confirmState) string {
 	return base64.RawURLEncoding.EncodeToString(payload) + "." + base64.RawURLEncoding.EncodeToString(m.Sum(nil))
 }
 
-// verify returns the state's MAC when it is ours, unmodified, for this caller and these
+// verify returns the state's MAC and expiry when it is ours, unmodified, for this caller and these
 // arguments, and younger than StateTTL; "" for anything else.
-func (o *ops) verify(raw string, want confirmState) string {
+func (o *ops) verify(raw string, want confirmState) (string, time.Time) {
 	p64, s64, found := strings.Cut(raw, ".")
 	if !found {
-		return ""
+		return "", time.Time{}
 	}
 	payload, err1 := base64.RawURLEncoding.DecodeString(p64)
 	sig, err2 := base64.RawURLEncoding.DecodeString(s64)
 	if err1 != nil || err2 != nil {
-		return ""
+		return "", time.Time{}
 	}
 	m := hmac.New(sha256.New, o.key)
 	m.Write(payload)
 	if !hmac.Equal(sig, m.Sum(nil)) {
-		return ""
+		return "", time.Time{}
 	}
 	var got confirmState
 	if json.Unmarshal(payload, &got) != nil {
-		return ""
+		return "", time.Time{}
 	}
-	age := o.now().Sub(time.Unix(got.Iat, 0))
+	issued := time.Unix(got.Iat, 0)
+	age := o.now().Sub(issued)
 	if got.Sub != want.Sub || got.ClientID != want.ClientID || got.ID != want.ID || got.Label != want.Label ||
 		age < 0 || age > StateTTL {
-		return ""
+		return "", time.Time{}
 	}
-	return s64
+	return s64, issued.Add(StateTTL)
 }
 
-// caller is who is asking: the token's subject and client, or anonymous without auth.
+// caller is who is asking: the verified token's subject (TokenInfo.UserID, the `sub` claim) and
+// client (TokenInfo.Extra["client_id"]), both filled by auth.Verifier. Anonymous only in-memory.
 func caller(req *mcp.CallToolRequest) (sub, clientID string) {
 	clientID = anonymous
 	if req.Extra != nil && req.Extra.TokenInfo != nil {
@@ -280,8 +287,8 @@ func (o *ops) server() *mcp.Server {
 				RequestState: o.sign(want)}, nil, nil
 		}
 		// Round 2: fail closed on any bad, foreign, stale or already-answered state.
-		mac := o.verify(req.Params.RequestState, want)
-		if mac == "" || !o.spent.spend(mac) {
+		mac, expires := o.verify(req.Params.RequestState, want)
+		if mac == "" || !o.spent.spend(mac, expires) {
 			return fail(Declined), nil, nil
 		}
 		er, _ := resp.(*mcp.ElicitResult)
@@ -299,34 +306,12 @@ func (o *ops) server() *mcp.Server {
 }
 
 // ── 5. HTTP handler and security ────────────────────────────────────────────
-// capBody answers 413 for a body over the cap, by Content-Length first and then while reading
-// (MaxBytesReader also bounds chunked bodies).
-func capBody(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.ContentLength > core.MaxBodyBytes {
-			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
-			return
-		}
-		r.Body = http.MaxBytesReader(w, r.Body, core.MaxBodyBytes)
-		next.ServeHTTP(w, r)
-	})
-}
 
-// TrustedOrigins are the only browser origins allowed besides the server's own: the Inspector web UI.
-var TrustedOrigins = []string{"http://127.0.0.1:6274", "http://localhost:6274"}
-
-// NewHTTPHandler is the Streamable HTTP handler for /mcp: Stateless, Origin check first (403), then
-// the body cap (413). No auth yet: Task 8 adds it.
+// NewHTTPHandler is the Streamable HTTP handler: /mcp (Stateless) as an OAuth resource server for
+// auth.OpsResource with scope auth.ScopeWrite, and the protected-resource metadata at auth.PRMPath. The
+// order of checks (Origin for every method -> body cap -> bearer token) is in auth.Handler.
 func NewHTTPHandler(s *mcp.Server) http.Handler {
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s },
 		&mcp.StreamableHTTPOptions{Stateless: true, MaxRequestBodyBytes: core.MaxBodyBytes})
-	cop := http.NewCrossOriginProtection()
-	for _, o := range TrustedOrigins {
-		if err := cop.AddTrustedOrigin(o); err != nil {
-			panic(err)
-		}
-	}
-	mux := http.NewServeMux()
-	mux.Handle("/mcp", cop.Handler(capBody(mcpHandler)))
-	return mux
+	return auth.Handler(mcpHandler, auth.OpsResource, auth.ScopeWrite)
 }

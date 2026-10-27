@@ -21,9 +21,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ops_server  # noqa: E402
 from lumen_core import LABELS_PATH  # noqa: E402
-from ops_server import (DECLINED, ERR_LABEL, STATE_TTL_SECONDS, SpentStates, build_http_app,  # noqa: E402
-                        build_ops_server)
+from mcp.server.request_state import RequestStateBoundary  # noqa: E402
+from ops_server import (DECLINED, ERR_LABEL, PRUNE_MARGIN_SECONDS, STATE_TTL_SECONDS, SpentStates,  # noqa: E402
+                        build_http_app, build_ops_server, capture_wire_state)
 from test_read_server import deep_equal  # noqa: E402
+from auth_server import mint_test_token  # noqa: E402
+from resource_auth import OPS_RESOURCE, SCOPE_WRITE  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 CONTRACT = ROOT / "mcp" / "fixtures" / "contract.jsonl"
@@ -98,11 +101,12 @@ def test_label_unknown_ticket(tmp_path):
 
 
 def test_accept_with_non_boolean_confirm_writes_nothing(tmp_path):
-    """Confirm is strict: "yes" or 1 is not true (pydantic's lax mode would have coerced them)."""
+    """Only the JSON boolean true confirms: "yes", "true", 1 and null read as "no", and the answer is
+    the fixed decline text, as in Go (R23.4), not an SDK schema error."""
     path = tmp_path / "labels.jsonl"
-    for bad in ("yes", "true", 1):
+    for bad in ("yes", "true", 1, None):
         r, _ = call(path, {"id": "t001", "label": "bug"}, ElicitResult(action="accept", content={"confirm": bad}))
-        assert r.is_error
+        assert r.is_error and r.content[0].text == DECLINED, (bad, r.content[0].text)
     assert rows(path) == []
 
 
@@ -228,21 +232,97 @@ def test_declined_state_cannot_be_reanswered(tmp_path):
     assert rows(path) == []
 
 
-def test_spent_states_expire_after_ttl():
+def test_spent_states_prune_by_the_states_own_expiry():
+    """R23.3: an entry is dropped only after its own state's exp (+ a margin), on the same wall
+    clock the SDK uses to reject an expired state. Never earlier, so a replay can't slip through."""
     now = [1000.0]
-    spent = SpentStates(ttl=STATE_TTL_SECONDS, clock=lambda: now[0])
-    assert STATE_TTL_SECONDS == 300
-    assert spent.spend("s1") is True
-    assert spent.spend("s1") is False
-    now[0] += STATE_TTL_SECONDS + 1  # by now the SDK rejects the state as expired anyway
-    assert spent.spend("s2") is True
-    assert len(spent) == 1  # s1 was pruned: memory stays bounded
+    spent = SpentStates(clock=lambda: now[0])
+    assert STATE_TTL_SECONDS == 300 and PRUNE_MARGIN_SECONDS > 0
+    exp1 = now[0] + STATE_TTL_SECONDS
+    assert spent.spend("s1", exp1) is True
+    assert spent.spend("s1", exp1) is False
+    now[0] = exp1 + PRUNE_MARGIN_SECONDS  # still inside the margin: kept
+    assert spent.spend("s2", now[0] + STATE_TTL_SECONDS) is True
+    assert spent.spend("s1", exp1) is False and len(spent) == 2
+    now[0] = exp1 + PRUNE_MARGIN_SECONDS + 1  # past exp + margin: the SDK rejects s1 anyway
+    assert spent.spend("s3", now[0] + STATE_TTL_SECONDS) is True
+    assert len(spent) == 2  # s1 was pruned (s2, s3 kept): memory stays bounded
+
+
+def test_spent_states_follow_each_states_expiry_not_spend_time():
+    """A state spent late in its life is pruned soon after; one spent early stays until its own exp."""
+    now = [1000.0]
+    spent = SpentStates(clock=lambda: now[0])
+    spent.spend("late", now[0] + 5)  # expires 5 s from now
+    spent.spend("early", now[0] + STATE_TTL_SECONDS)
+    now[0] += 5 + PRUNE_MARGIN_SECONDS + 1
+    spent.spend("x", now[0] + STATE_TTL_SECONDS)
+    assert spent.spend("early", 0) is False  # still remembered
+    assert len(spent) == 2  # "late" is gone; "early" and "x" remain
 
 
 def test_state_ttl_is_five_minutes(tmp_path):
     """The sealed state carries exp = iat + 300 s (the SDK default is 600)."""
     sec = ops_server.state_security()
     assert sec.ttl == STATE_TTL_SECONDS == 300
+
+
+def test_concurrent_identical_retries_write_once(tmp_path):
+    """R23.5: N identical accepted retries in flight at once write exactly one row."""
+    path = tmp_path / "labels.jsonl"
+    args = {"id": "t006", "label": "account"}
+    n = 20
+
+    async def go():
+        async with Client(build_ops_server(path), elicitation_callback=answering(ACCEPT, [])) as c:
+            r1 = await _round1(c, args)
+            retry = dict(input_responses=_accept_all(r1), request_state=r1.request_state)
+            return await asyncio.gather(*(c.session.call_tool("label_ticket", args, **retry) for _ in range(n)))
+
+    results = asyncio.run(go())
+    assert sum(not r.is_error for r in results) == 1
+    assert all(r.content[0].text == DECLINED for r in results if r.is_error)
+    assert len(rows(path)) == 1
+
+
+def test_capture_sits_just_before_the_boundary():
+    """R21/R23.1: the capture must see the sealed wire token, so it runs immediately before the
+    SDK's RequestStateBoundary (which replaces the token with plaintext)."""
+    mw = build_ops_server().middleware
+    boundary = next(i for i, m in enumerate(mw) if isinstance(m, RequestStateBoundary))
+    assert boundary >= 1
+    assert getattr(mw[boundary - 1], "__name__", "") == capture_wire_state.__name__
+    assert sum(getattr(m, "__name__", "") == capture_wire_state.__name__ for m in mw) == 1
+
+
+def test_build_fails_when_the_boundary_is_missing(monkeypatch):
+    """R23.1: if a later SDK moves or renames the boundary, the build fails loudly (fail closed)."""
+    class NotTheBoundary:
+        pass
+
+    monkeypatch.setattr(ops_server, "RequestStateBoundary", NotTheBoundary)
+    with pytest.raises(RuntimeError) as e:
+        build_ops_server()
+    assert str(e.value) == "RequestStateBoundary not found: replay guard cannot be installed"
+
+
+def test_state_the_capture_did_not_see_writes_nothing(tmp_path):
+    """R23.2: a round 2 that carried a requestState the capture never saw is refused, not treated
+    as a legacy (stateless) answer. Simulated by removing the capture middleware."""
+    path = tmp_path / "labels.jsonl"
+    args = {"id": "t007", "label": "bug"}
+    mcp = build_ops_server(path)
+    mcp.middleware[:] = [m for m in mcp.middleware if getattr(m, "__name__", "") != capture_wire_state.__name__]
+
+    async def go():
+        async with Client(mcp, elicitation_callback=answering(ACCEPT, [])) as c:
+            r1 = await _round1(c, args)
+            return await c.session.call_tool("label_ticket", args, input_responses=_accept_all(r1),
+                                             request_state=r1.request_state)
+
+    r = asyncio.run(go())
+    assert r.is_error and r.content[0].text == DECLINED
+    assert rows(path) == []
 
 
 # ── 3. Shared contract (the Go server must pass the same file) ──────────────
@@ -276,8 +356,11 @@ def test_contract_ops(tmp_path):
 
 # ── 4. HTTP app and security (same hardening as lumen-read) ─────────────────
 META = {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientCapabilities": {}}
+# HTTP needs a token since Task 8: the fixture token is lumen-ops's own (tickets:write, aud = ops URI).
+TOKEN = mint_test_token(SCOPE_WRITE, OPS_RESOURCE)
 HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json",
-           "Host": "127.0.0.1:8766", "MCP-Protocol-Version": "2026-07-28", "Mcp-Method": "server/discover"}
+           "Host": "127.0.0.1:8766", "MCP-Protocol-Version": "2026-07-28", "Mcp-Method": "server/discover",
+           "Authorization": f"Bearer {TOKEN}"}
 
 
 def _discover(pad: int = 0) -> bytes:
@@ -288,7 +371,8 @@ def _discover(pad: int = 0) -> bytes:
 
 
 def _http(tmp_path) -> TestClient:
-    return TestClient(build_http_app(build_ops_server(tmp_path / "labels.jsonl")), base_url="http://127.0.0.1:8766")
+    return TestClient(build_http_app(build_ops_server(tmp_path / "labels.jsonl", auth=True)),
+                      base_url="http://127.0.0.1:8766")
 
 
 def test_server_discover(tmp_path):

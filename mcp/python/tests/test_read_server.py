@@ -15,6 +15,8 @@ from starlette.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from read_server import build_http_app, build_read_server  # noqa: E402
+from auth_server import mint_test_token  # noqa: E402
+from resource_auth import READ_RESOURCE, SCOPE_READ  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 CONTRACT = ROOT / "mcp" / "fixtures" / "contract.jsonl"
@@ -171,8 +173,11 @@ def test_tool_error_text_is_not_prefixed():
 
 # ── 3. HTTP app and security ────────────────────────────────────────────────
 META = {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientCapabilities": {}}
+# HTTP needs a token since Task 8: the fixture token is lumen-read's own (tickets:read, aud = read URI).
+TOKEN = mint_test_token(SCOPE_READ, READ_RESOURCE)
 HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json",
-           "Host": "127.0.0.1:8765", "MCP-Protocol-Version": "2026-07-28", "Mcp-Method": "server/discover"}
+           "Host": "127.0.0.1:8765", "MCP-Protocol-Version": "2026-07-28", "Mcp-Method": "server/discover",
+           "Authorization": f"Bearer {TOKEN}"}
 
 
 def _discover(pad: int = 0) -> bytes:
