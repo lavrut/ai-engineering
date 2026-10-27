@@ -19,6 +19,18 @@
 //	call NAME JSON    {"structured": ...} or {"error": text}        (shapes of mcp/fixtures/README.md)
 //	read URI          {"contents": [{"uri", "mimeType", "json"}]} or {"error": message}
 //	prompt NAME JSON  {"contents": [{"role", "text"}]} or {"error": message}
+//
+// An error result with no text content prints {"error": "<no text>"}. A resource entry whose text is
+// not JSON prints {"uri", "mimeType", "text"} instead of "json". Prompt arguments must be JSON strings
+// (else exit 1).
+//
+// Normalisations both clients apply so the output is identical (the Go side does the work here, the
+// Python side does the same in mcp/python/client.py):
+//  1. Schema decoration is stripped (normaliseSchema): only type / properties / required / items /
+//     additionalProperties survive, $ref is resolved, "null" leaves type unions.
+//  2. Annotation hints readOnlyHint / idempotentHint are dropped when false (Go's struct cannot say "absent").
+//  3. Integral floats print as integers: Go decodes every number to float64 and prints 1.0 as 1, and the
+//     Python client converts to match.
 package main
 
 import (
@@ -83,6 +95,20 @@ func stdioCommand() (*exec.Cmd, error) {
 }
 
 // ── 2. Connecting (stdio / HTTP) ────────────────────────────────────────────
+
+// newTransport is the one place the transport is built. Task 8 adds `-token` here: wrap the
+// StreamableClientTransport's HTTPClient in a RoundTripper that sets `Authorization: Bearer <token>`
+// (never a token in the URL).
+func newTransport(stdio bool, url string) (mcp.Transport, error) {
+	if stdio {
+		cmd, err := stdioCommand()
+		if err != nil {
+			return nil, err
+		}
+		return &mcp.CommandTransport{Command: cmd}, nil
+	}
+	return &mcp.StreamableClientTransport{Endpoint: url}, nil
+}
 
 // connect opens a session. Setting ElicitationHandler is what declares the elicitation capability,
 // so a server's confirmation step only runs when the client can answer it.
@@ -264,13 +290,21 @@ func rpcMessage(err error) (any, error) {
 	return nil, err
 }
 
+const noText = "<no text>"
+
 func call(ctx context.Context, cs *mcp.ClientSession, name string, arguments map[string]any) (any, error) {
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: arguments})
 	if err != nil {
 		return nil, err
 	}
 	if res.IsError {
-		return map[string]any{"error": res.Content[0].(*mcp.TextContent).Text}, nil
+		message := noText
+		if len(res.Content) > 0 {
+			if tc, ok := res.Content[0].(*mcp.TextContent); ok {
+				message = tc.Text
+			}
+		}
+		return map[string]any{"error": message}, nil
 	}
 	return map[string]any{"structured": generic(res.StructuredContent)}, nil
 }
@@ -282,19 +316,31 @@ func read(ctx context.Context, cs *mcp.ClientSession, uri string) (any, error) {
 	}
 	contents := []any{}
 	for _, c := range res.Contents {
+		entry := map[string]any{"uri": c.URI, "mimeType": c.MIMEType}
 		var j any
 		if err := json.Unmarshal([]byte(c.Text), &j); err != nil {
-			return nil, fmt.Errorf("resource text is not JSON: %w", err)
+			entry["text"] = c.Text
+		} else {
+			entry["json"] = j
 		}
-		contents = append(contents, map[string]any{"uri": c.URI, "mimeType": c.MIMEType, "json": j})
+		contents = append(contents, entry)
 	}
 	return map[string]any{"contents": contents}, nil
 }
 
 func prompt(ctx context.Context, cs *mcp.ClientSession, name string, arguments map[string]any) (any, error) {
 	args := map[string]string{}
-	for k, v := range arguments {
-		args[k] = fmt.Sprint(v)
+	keys := make([]string, 0, len(arguments))
+	for k := range arguments {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		s, ok := arguments[k].(string)
+		if !ok {
+			return nil, fmt.Errorf("prompt arguments must be strings: %s", k)
+		}
+		args[k] = s
 	}
 	res, err := cs.GetPrompt(ctx, &mcp.GetPromptParams{Name: name, Arguments: args})
 	if err != nil {
@@ -302,7 +348,11 @@ func prompt(ctx context.Context, cs *mcp.ClientSession, name string, arguments m
 	}
 	contents := []any{}
 	for _, m := range res.Messages {
-		contents = append(contents, map[string]any{"role": string(m.Role), "text": m.Content.(*mcp.TextContent).Text})
+		var text any
+		if tc, ok := m.Content.(*mcp.TextContent); ok {
+			text = tc.Text
+		}
+		contents = append(contents, map[string]any{"role": string(m.Role), "text": text})
 	}
 	return map[string]any{"contents": contents}, nil
 }
@@ -383,8 +433,8 @@ func dump(v any) string {
 func parseObject(args []string, i int) (map[string]any, error) {
 	obj := map[string]any{}
 	if len(args) > i {
-		if err := json.Unmarshal([]byte(args[i]), &obj); err != nil {
-			return nil, fmt.Errorf("arguments are not a JSON object: %w", err)
+		if err := json.Unmarshal([]byte(args[i]), &obj); err != nil || obj == nil {
+			return nil, errors.New("arguments are not a JSON object")
 		}
 	}
 	return obj, nil
@@ -443,15 +493,9 @@ func main() {
 	} else if *no {
 		answer = always(false)
 	}
-	var transport mcp.Transport
-	if *stdio {
-		cmd, err := stdioCommand()
-		if err != nil {
-			fail(err)
-		}
-		transport = &mcp.CommandTransport{Command: cmd}
-	} else {
-		transport = &mcp.StreamableClientTransport{Endpoint: *url}
+	transport, err := newTransport(*stdio, *url)
+	if err != nil {
+		fail(err)
 	}
 	ctx := context.Background()
 	cs, err := connect(ctx, transport, answer)

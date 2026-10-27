@@ -18,6 +18,15 @@ The Go client (mcp/go/client) prints the same bytes for the same command:
   call NAME JSON    {"structured": ...} or {"error": text}        (shapes of mcp/fixtures/README.md)
   read URI          {"contents": [{"uri", "mimeType", "json"}]} or {"error": message}
   prompt NAME JSON  {"contents": [{"role", "text"}]} or {"error": message}
+  An error result with no text content prints {"error": "<no text>"}. A resource entry whose text is not JSON
+  prints {"uri", "mimeType", "text"} instead of "json". Prompt arguments must be JSON strings (else exit 1).
+
+Normalisations both clients apply so the output is identical (the Python side does the work here, the Go
+side does the same in mcp/go/client/main.go):
+  1. Schema decoration is stripped (normalise_schema): only type / properties / required / items /
+     additionalProperties survive, $ref is resolved, "null" leaves type unions.
+  2. Annotation hints readOnlyHint / idempotentHint are dropped when false (Go's struct cannot say "absent").
+  3. Integral floats print as integers (canon): 1.0 becomes 1, because Go decodes every number to float64.
 """
 from __future__ import annotations
 
@@ -48,6 +57,12 @@ def stdio_params() -> StdioServerParameters:
 
 
 # ── 2. Connecting (stdio / HTTP) ────────────────────────────────────────────
+def http_target(url: str) -> Any:
+    """The one place the HTTP path is built. Task 8 adds `--token` here: pass a Streamable HTTP
+    transport whose httpx client sends `Authorization: Bearer <token>` (never a token in the URL)."""
+    return url
+
+
 @asynccontextmanager
 async def connect(target: Any, answer: "Answerer | None" = None):
     """Open a Client on a StdioServerParameters, an http(s) URL, or (in tests) an in-process server.
@@ -125,11 +140,26 @@ async def list_tools(client: Client) -> list[dict]:
 
 
 # ── 4. Calls, resources and prompts ─────────────────────────────────────────
+NO_TEXT = "<no text>"
+
+
 async def call(client: Client, name: str, arguments: dict) -> dict:
     result = await client.call_tool(name, arguments)
     if result.is_error:
-        return {"error": result.content[0].text}
+        texts = [getattr(c, "text", None) for c in result.content]
+        return {"error": texts[0] if texts and isinstance(texts[0], str) else NO_TEXT}
     return {"structured": result.structured_content}
+
+
+def resource_entry(c: Any) -> dict:
+    """{"uri", "mimeType", "json"}; a non-JSON (or non-text) body prints "text" instead of "json"."""
+    entry = {"uri": str(c.uri), "mimeType": c.mime_type}
+    text = getattr(c, "text", None)
+    try:
+        entry["json"] = json.loads(text)
+    except (TypeError, ValueError):
+        entry["text"] = text
+    return entry
 
 
 async def read(client: Client, uri: str) -> dict:
@@ -137,8 +167,7 @@ async def read(client: Client, uri: str) -> dict:
         result = await client.read_resource(uri)
     except MCPError as e:
         return {"error": str(e)}
-    return {"contents": [{"uri": str(c.uri), "mimeType": c.mime_type, "json": json.loads(c.text)}
-                         for c in result.contents]}
+    return {"contents": [resource_entry(c) for c in result.contents]}
 
 
 async def prompt(client: Client, name: str, arguments: dict) -> dict:
@@ -146,7 +175,7 @@ async def prompt(client: Client, name: str, arguments: dict) -> dict:
         result = await client.get_prompt(name, arguments)
     except MCPError as e:
         return {"error": str(e)}
-    return {"contents": [{"role": m.role, "text": m.content.text} for m in result.messages]}
+    return {"contents": [{"role": m.role, "text": getattr(m.content, "text", None)} for m in result.messages]}
 
 
 # ── 5. Answering input-required rounds ──────────────────────────────────────
@@ -169,7 +198,9 @@ def always(value: bool) -> Answerer:
 def ask_terminal(stdin: TextIO | None = None, stderr: TextIO | None = None) -> Answerer:
     """Prompt on stderr (stdout stays clean JSON), read the answer from stdin. Only y/yes accepts."""
     async def answer(message: str) -> bool:
-        err, inp = stderr or sys.stderr, stdin or sys.stdin
+        err, inp = stderr or sys.stderr, stdin if stdin is not None else sys.stdin
+        if inp is None:  # stdin is closed: nobody can answer, so decline
+            return False
         err.write(f"{message} [y/N] ")
         err.flush()
         line = await asyncio.to_thread(inp.readline)
@@ -206,17 +237,46 @@ def dump(value: Any) -> str:
     return json.dumps(canon(value), sort_keys=True, indent=2, ensure_ascii=True)
 
 
+class UsageError(Exception):
+    pass
+
+
+def json_object(args: list[str], i: int) -> dict:
+    if len(args) <= i:
+        return {}
+    try:
+        obj = json.loads(args[i])
+    except ValueError:
+        obj = None
+    if not isinstance(obj, dict):
+        raise UsageError("arguments are not a JSON object")
+    return obj
+
+
+def check_args(command: str, args: list[str]) -> None:
+    """Reject bad arguments before connecting (an error raised inside the client's task group
+    would surface as an ExceptionGroup, not a clean usage message)."""
+    need = {"call": 1, "prompt": 1, "read": 1}.get(command, 0)
+    if len(args) < need:
+        raise UsageError(f"{command} needs {need} argument(s)")
+    if command in ("call", "prompt"):
+        arguments = json_object(args, 1)
+        bad = sorted(k for k, v in arguments.items() if command == "prompt" and not isinstance(v, str))
+        if bad:
+            raise UsageError(f"prompt arguments must be strings: {bad[0]}")
+
+
 async def run(client: Client, command: str, args: list[str]) -> Any:
     if command == "discover":
         return await discover(client)
     if command == "tools":
         return await list_tools(client)
     if command == "call":
-        return await call(client, args[0], json.loads(args[1]) if len(args) > 1 else {})
+        return await call(client, args[0], json_object(args, 1))
     if command == "read":
         return await read(client, args[0])
     if command == "prompt":
-        return await prompt(client, args[0], json.loads(args[1]) if len(args) > 1 else {})
+        return await prompt(client, args[0], json_object(args, 1))
     raise SystemExit(f"unknown command: {command}")
 
 
@@ -232,8 +292,13 @@ async def amain(argv: list[str]) -> None:
     ap.add_argument("args", nargs="*")
     ns = ap.parse_args(argv)
     answer = always(True) if ns.yes else always(False) if ns.no else ask_terminal()
-    async with connect(stdio_params() if ns.stdio else ns.url, answer) as client:
-        print(dump(await run(client, ns.command, ns.args)))
+    try:
+        check_args(ns.command, ns.args)
+        async with connect(stdio_params() if ns.stdio else http_target(ns.url), answer) as client:
+            print(dump(await run(client, ns.command, ns.args)))
+    except UsageError as e:
+        print(f"client: {e}", file=sys.stderr)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

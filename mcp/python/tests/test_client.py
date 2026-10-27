@@ -214,3 +214,99 @@ def test_unanswerable_form_is_declined():
 
     result = run(lumen_client.elicitation_callback(lumen_client.always(True))(None, Params()))
     assert result.action == "decline"
+
+
+# ── 4. HTTP (--url) ─────────────────────────────────────────────────────────
+@pytest.fixture(scope="module")
+def http_url():
+    import socket
+    import time
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    proc = subprocess.Popen([sys.executable, str(ROOT / "mcp" / "python" / "read_server.py"), "--http",
+                             "--port", str(port)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=ROOT)
+    try:
+        for _ in range(100):
+            try:
+                socket.create_connection(("127.0.0.1", port), timeout=0.2).close()
+                break
+            except OSError:
+                time.sleep(0.2)
+        else:
+            raise RuntimeError("read_server --http did not start")
+        yield f"http://127.0.0.1:{port}/mcp"
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)
+
+
+HTTP_COMMANDS = [("tools",), ("call", "search_tickets", '{"query": "refund duplicate", "limit": 3}')]
+
+
+@pytest.mark.parametrize("command", HTTP_COMMANDS)
+def test_python_client_url_matches_stdio(http_url, command):
+    over_http = subprocess.run([sys.executable, str(CLIENT_PY), "--url", http_url, *command],
+                               capture_output=True, text=True, check=True, cwd=ROOT).stdout
+    over_stdio = subprocess.run([sys.executable, str(CLIENT_PY), "--stdio", *command],
+                                capture_output=True, text=True, check=True, cwd=ROOT).stdout
+    assert over_http == over_stdio
+    if command[0] == "tools":
+        assert [t["name"] for t in json.loads(over_http)] == ["classify_complaint", "get_ticket", "search_tickets"]
+
+
+@pytest.mark.parametrize("command", HTTP_COMMANDS)
+def test_go_client_url_same_output(go_client, http_url, command):
+    py = subprocess.run([sys.executable, str(CLIENT_PY), "--url", http_url, *command],
+                        capture_output=True, text=True, check=True, cwd=ROOT).stdout
+    go = subprocess.run([str(go_client), "-url", http_url, *command],
+                        capture_output=True, text=True, check=True, cwd=ROOT).stdout
+    assert go == py
+
+
+# ── 5. Edge cases (identical in both clients) ───────────────────────────────
+def test_closed_stdin_declines(monkeypatch):
+    monkeypatch.setattr(sys, "stdin", None)
+    err = io.StringIO()
+    assert run(lumen_client.ask_terminal(stderr=err)("ok?")) is False
+
+
+def test_error_result_without_text_prints_no_text():
+    from types import SimpleNamespace
+
+    class Fake:
+        def __init__(self, content):
+            self.content = content
+
+        async def call_tool(self, name, arguments):
+            return SimpleNamespace(is_error=True, content=self.content, structured_content=None)
+
+    image = SimpleNamespace(type="image")
+    assert run(lumen_client.call(Fake([]), "t", {})) == {"error": "<no text>"}
+    assert run(lumen_client.call(Fake([image]), "t", {})) == {"error": "<no text>"}
+
+
+def test_non_json_resource_prints_text():
+    from types import SimpleNamespace
+    c = SimpleNamespace(uri="x://y", mime_type="text/plain", text="not json")
+    assert lumen_client.resource_entry(c) == {"uri": "x://y", "mimeType": "text/plain", "text": "not json"}
+
+
+USAGE_CASES = [
+    (("call",), "client: call needs 1 argument(s)"),
+    (("read",), "client: read needs 1 argument(s)"),
+    (("prompt",), "client: prompt needs 1 argument(s)"),
+    (("call", "get_ticket", "[1]"), "client: arguments are not a JSON object"),
+    (("call", "get_ticket", "nope"), "client: arguments are not a JSON object"),
+    (("prompt", "review_ticket", '{"id": 1}'), "client: prompt arguments must be strings: id"),
+]
+
+
+@pytest.mark.parametrize("command,message", USAGE_CASES)
+def test_usage_errors_match_in_both_clients(go_client, command, message):
+    env = {**os.environ, "LUMEN_PYTHON": sys.executable}
+    py = subprocess.run([sys.executable, str(CLIENT_PY), "--stdio", *command],
+                        capture_output=True, text=True, env=env, cwd=ROOT)
+    go = subprocess.run([str(go_client), "-stdio", *command], capture_output=True, text=True, env=env, cwd=ROOT)
+    for r in (py, go):
+        assert r.returncode == 1 and r.stdout == "" and r.stderr.strip() == message

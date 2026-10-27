@@ -9,6 +9,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
@@ -165,5 +167,82 @@ func TestDumpIsAsciiSortedAndIndented(t *testing.T) {
 	want := "{\n  \"a\": [\n    1\n  ],\n  \"b\": \"caf\\u00e9 \\ud83d\\ude00 <&>\"\n}"
 	if got != want {
 		t.Fatalf("got %s\nwant %s", got, want)
+	}
+}
+
+// ── 2. HTTP (-url) ──────────────────────────────────────────────────────────
+
+// plainServer has a tool that answers with the structured result, a tool whose error has no content,
+// a resource whose text is not JSON, and a prompt that takes one argument.
+func plainServer() *mcp.Server {
+	s := mcp.NewServer(&mcp.Implementation{Name: "plain", Version: "0"}, nil)
+	mcp.AddTool(s, &mcp.Tool{Name: "echo", Description: "echoes the id"},
+		func(ctx context.Context, req *mcp.CallToolRequest, in labelIn) (*mcp.CallToolResult, any, error) {
+			return nil, map[string]any{"id": in.ID}, nil
+		})
+	s.AddTool(&mcp.Tool{Name: "silent_fail", InputSchema: map[string]any{"type": "object"}},
+		func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return &mcp.CallToolResult{IsError: true}, nil
+		})
+	s.AddResource(&mcp.Resource{URI: "plain://doc", Name: "doc", MIMEType: "text/plain"},
+		func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+			return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{URI: "plain://doc", MIMEType: "text/plain", Text: "not json"}}}, nil
+		})
+	s.AddPrompt(&mcp.Prompt{Name: "p", Arguments: []*mcp.PromptArgument{{Name: "id"}}},
+		func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			return &mcp.GetPromptResult{Messages: []*mcp.PromptMessage{{Role: "user", Content: &mcp.TextContent{Text: "hi " + req.Params.Arguments["id"]}}}}, nil
+		})
+	return s
+}
+
+func TestURLSmoke(t *testing.T) {
+	srv := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return plainServer() },
+		&mcp.StreamableHTTPOptions{Stateless: true}))
+	defer srv.Close()
+	if !strings.HasPrefix(srv.URL, "http://127.0.0.1:") {
+		t.Fatalf("test server not on 127.0.0.1: %s", srv.URL)
+	}
+	transport, err := newTransport(false, srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	cs, err := connect(ctx, transport, always(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+	tools, err := run(ctx, cs, "tools", nil)
+	if err != nil || len(tools.([]any)) != 2 {
+		t.Fatalf("tools: %v %v", tools, err)
+	}
+	got, err := run(ctx, cs, "call", []string{"echo", `{"id": "t9"}`})
+	if err != nil || !reflect.DeepEqual(got, map[string]any{"structured": map[string]any{"id": "t9"}}) {
+		t.Fatalf("call: %v %v", got, err)
+	}
+}
+
+// ── 4. Edge cases ───────────────────────────────────────────────────────────
+func TestEdgeCases(t *testing.T) {
+	ctx := context.Background()
+	cs := session(t, plainServer(), always(false))
+	if got, _ := call(ctx, cs, "silent_fail", map[string]any{}); !reflect.DeepEqual(got, map[string]any{"error": "<no text>"}) {
+		t.Errorf("empty error content: %v", got)
+	}
+	got, _ := read(ctx, cs, "plain://doc")
+	entry := got.(map[string]any)["contents"].([]any)[0]
+	if !reflect.DeepEqual(entry, map[string]any{"uri": "plain://doc", "mimeType": "text/plain", "text": "not json"}) {
+		t.Errorf("non-JSON resource: %v", entry)
+	}
+	if _, err := prompt(ctx, cs, "p", map[string]any{"id": 1}); err == nil || err.Error() != "prompt arguments must be strings: id" {
+		t.Errorf("non-string prompt argument: %v", err)
+	}
+	if _, err := run(ctx, cs, "call", nil); err == nil || err.Error() != "call needs 1 argument(s)" {
+		t.Errorf("missing args: %v", err)
+	}
+	for _, bad := range []string{"[1]", "null", "nope"} {
+		if _, err := parseObject([]string{bad}, 0); err == nil || err.Error() != "arguments are not a JSON object" {
+			t.Errorf("%s: %v", bad, err)
+		}
 	}
 }
