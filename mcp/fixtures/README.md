@@ -7,7 +7,7 @@ and hand-typed error texts, not from a server. Edit the generator, never the JSO
 ## Line format
 
 `{"name", "server": "read"|"ops", "method", "params", "expect"}`, one JSON object per line, ASCII-escaped
-(a literal nbsp, İ or Σ appears as ` `, `İ`, `Σ`; parse the line as JSON and you get the real character).
+(a literal nbsp, İ or Σ appears as `\u00a0`, `\u0130`, `\u03a3`; parse the line as JSON and you get the real character).
 
 ## Running a case
 
@@ -32,7 +32,7 @@ and hand-typed error texts, not from a server. Edit the generator, never the JSO
 ## Comparing
 
 - Deep equality on **parsed JSON**: object key order and whitespace do not matter; array order does.
-- Numbers: floats compare with an **absolute tolerance of 1e-9** (ruling R16, the same as the Task 3 parity rule); integers and everything else exactly. `true` is not `1`.
+- Numbers: floats compare with an **absolute tolerance of 1e-9** (ruling R16, the same as the Task 3 parity rule); integers and everything else exactly. `true` is not `1`. `1` and `1.0` compare equal (both are the number one once parsed).
 - `results` is always an array: `[]` when nothing matches, **never `null`** (so Go must initialise the slice).
 - Strings compare exactly, code point for code point. Lengths in the limits are counted in **characters (code points)**, not bytes.
 - Search uses ASCII-only rules: lowercase A-Z only, split on space, `\t`, `\n`, `\r`, `\v`, `\f` only. `\x1f` and nbsp do not split; `İ` and `Σ` are not case-folded.

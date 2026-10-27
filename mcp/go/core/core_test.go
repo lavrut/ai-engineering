@@ -247,3 +247,32 @@ func TestConcurrentLabelAppends(t *testing.T) {
 		t.Fatalf("counts %v", count)
 	}
 }
+
+// ── 6. Search is ASCII-only (R15) ───────────────────────────────────────────
+func TestSearchASCIIOnly(t *testing.T) {
+	ids := func(q string) []string {
+		hits, err := Search(q, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := []string{}
+		for _, h := range hits {
+			out = append(out, h.ID)
+		}
+		return out
+	}
+	for _, q := range []string{"   ", "a\x1fb", "refund\x1fduplicate", "refund duplicate", "İ", "Σ"} {
+		if got := ids(q); len(got) != 0 {
+			t.Errorf("query %q: want no hits, got %v", q, got)
+		}
+	}
+	// \v and \f split; upper case folds.
+	for _, q := range []string{"refund\vduplicate", "refund\fduplicate", "REFUND DUPLICATE", "refund\tduplicate\n"} {
+		if got := ids(q); len(got) == 0 || got[0] != "t001" {
+			t.Errorf("query %q: want t001 first, got %v", q, got)
+		}
+	}
+	if asciiLower("ABCİΣz") != "abcİΣz" {
+		t.Error("asciiLower folded a non-ASCII letter")
+	}
+}

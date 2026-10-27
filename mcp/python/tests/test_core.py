@@ -135,7 +135,10 @@ def test_classify_load_failure_leaves_cache_empty(monkeypatch):
     monkeypatch.setattr(classify.importlib.util, "module_from_spec", lambda spec: mod)
     monkeypatch.setattr(classify.importlib.util, "spec_from_file_location",
                         lambda *a, **k: type("S", (), {"loader": type("L", (), {"exec_module": lambda self, m: None})()})())
-    with pytest.raises(RuntimeError):
-        classify._load()
-    assert classify._cache == {}
-    classify._cache.update(saved)
+    try:
+        with pytest.raises(RuntimeError):
+            classify._load()
+        assert classify._cache == {}
+    finally:
+        classify._cache.clear()
+        classify._cache.update(saved)

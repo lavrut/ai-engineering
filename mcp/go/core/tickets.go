@@ -90,21 +90,44 @@ func LoadTickets() ([]Ticket, error) {
 }
 
 // ── 3. Search and get ───────────────────────────────────────────────────────
-// Search: case-insensitive substring match per query word; score = number of words that
+// asciiLower lowercases A-Z only, like Python's ascii_lower. strings.ToLower would fold
+// non-ASCII letters (İ, Σ) and the contract pins that it must not.
+func asciiLower(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			b[i] = c + 'a' - 'A'
+		}
+	}
+	return string(b)
+}
+
+// asciiFields splits on space, \t, \n, \r, \v, \f only (strings.Fields also splits on nbsp, U+0085...).
+func asciiFields(s string) []string {
+	return strings.FieldsFunc(s, func(r rune) bool {
+		switch r {
+		case ' ', '\t', '\n', '\r', '\v', '\f':
+			return true
+		}
+		return false
+	})
+}
+
+// Search: ASCII-case-insensitive substring match per query word; score = number of words that
 // hit. Ties break by id ascending. Tickets with no hit are left out.
 func Search(query string, limit int) ([]Hit, error) {
 	ts, err := LoadTickets()
 	if err != nil {
 		return nil, err
 	}
-	words := strings.Fields(strings.ToLower(query))
+	words := asciiFields(asciiLower(query))
 	type scored struct {
 		n int
 		t Ticket
 	}
 	var ss []scored
 	for _, t := range ts {
-		text := strings.ToLower(t.Text)
+		text := asciiLower(t.Text)
 		n := 0
 		for _, w := range words {
 			if strings.Contains(text, w) {
