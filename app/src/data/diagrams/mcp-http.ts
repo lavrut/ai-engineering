@@ -1,8 +1,8 @@
 import type { Diagram } from '../../lib/diagram';
 
 // Layout (default node 150x56). Row 1 is Go's order of checks: client, Host and Origin, body cap,
-// token, handler. The resource metadata sits under the token check. Python's SDK checks the token
-// before the Origin; step 5 says so. Code links: mcp/python/read_server.py section 5 and
+// token, handler. The resource metadata sits under the token check. Both languages check Host and
+// Origin first (ruling R42); Python's SDK checks the body cap after the token, and step 5 says so. Code links: mcp/python/read_server.py section 5 and
 // mcp/go/readserver/server.go section 5 for the HTTP app, and mcp/python/resource_auth.py with
 // mcp/go/auth/auth.go for the token.
 export const mcpHttp: Diagram = {
@@ -30,14 +30,14 @@ export const mcpHttp: Diagram = {
       n: 1,
       highlight: ['client', 'e-client-origin', 'origin'],
       caption:
-        'Each POST to /mcp stands alone: the servers are stateless. They bind 127.0.0.1 only, and a request with a bad Host or Origin gets 403, for every method. In the code: section 5.',
+        'The servers bind 127.0.0.1 only. The Host must be 127.0.0.1:port or localhost:port, and an Origin, if sent, one of the server’s own two local origins or the Inspector’s two. Anything else is 403, for every method, before any token is read. In the code: section 5.',
       code: { file: 'python', section: 5, source: 'mcp-read' },
     },
     {
       n: 2,
       highlight: ['origin', 'e-origin-cap', 'cap'],
       caption:
-        'A body over 131,072 bytes is refused before it is read in full. Go answers 413; both servers set the same cap. In the code: section 5.',
+        'A body over 131,072 bytes is refused with 413 before it is read in full. Both servers set the same cap; Go checks it before the token, Python after. In the code: section 5.',
       code: { file: 'python', section: 5, source: 'mcp-read' },
     },
     {
@@ -58,7 +58,7 @@ export const mcpHttp: Diagram = {
       n: 5,
       highlight: ['token', 'e-token-handler', 'handler'],
       caption:
-        'Only a request that passes every check reaches the handler. The order differs by language: Go checks Origin, then the body cap, then the token; Python’s SDK checks the token before the Origin, so a bad Origin with no token is 401 in Python and 403 in Go. In the code: section 5.',
+        'Only a request that passes every check reaches the handler. Go runs it stateless; Python keeps a session only for a client that opens one with the old handshake. One order differs: an oversized body with no token is 413 in Go and 401 in Python. In the code: section 5.',
       code: { file: 'python', section: 5, source: 'mcp-read' },
     },
   ],

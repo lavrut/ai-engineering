@@ -16,19 +16,19 @@ quiz:
     explanation: The spec says a resource server must check that a token was issued for it. Both servers check the audience while verifying the token, before the scope check, so the answer is 401 whatever scopes the token carries. A 403 is kept for a token that is for this server but lacks the scope.
   - question: How does a client with no token learn which authorization server to ask, and which scope it needs?
     options:
-      - It is configured by hand for every server
       - The server's 401 carries a WWW-Authenticate header naming its protected resource metadata. That document lists the authorization server and the scopes
+      - It is configured by hand for every server
       - It asks the model
       - It tries every authorization server it knows
-    answer: 1
+    answer: 0
     explanation: The 401 points to the metadata, the metadata points to the authorization server, and that server's own metadata gives the endpoints. The client discovers each step from the one before, starting from nothing but the server's URL.
   - question: lumen-ops needs data from another API that also uses OAuth. Why must it not forward the token the client sent it?
     options:
       - Forwarding is slower
-      - That token's audience is lumen-ops. Passing it on would let the other API be called with the user's authority by a server the user never authorised for it, and the other API could not tell who really asked
       - Tokens cannot be copied
       - The other API would reject every forwarded token anyway, so it is harmless
-    answer: 1
+      - That token's audience is lumen-ops. Passing it on would let the other API be called with the user's authority by a server the user never authorised for it, and the other API could not tell who really asked
+    answer: 3
     explanation: A token is for one audience. A server that forwards it turns itself into a way to spend the user's permission somewhere else, which is the confused-deputy problem. A server that needs another API gets its own token for that API, and the Lumen servers call no other API at all.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';

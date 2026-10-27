@@ -16,19 +16,19 @@ quiz:
     explanation: Annotations are hints for the host's interface. A host may ignore them, and a server cannot trust a client's description of itself. lumen-ops puts the confirmation in its own code, so the write happens on the server's terms whatever the host does.
   - question: A client sends the same accepted retry twice, with the same requestState. What happens, and why?
     options:
-      - Two rows are written, because both retries are valid
       - One row is written. The server records each state the first time any answer for it arrives, and refuses that state afterwards
+      - Two rows are written, because both retries are valid
       - Neither is written, because duplicates are always refused
       - The second one asks the question again
-    answer: 1
+    answer: 0
     explanation: A sealed or signed state stays valid for its whole five minutes, so a signature alone would let it be used twice. The server keeps a set of spent states and spends each one on its first answer of any kind. A declined state can never be replayed as an accept.
   - question: A row in labels.jsonl says source "agent" and confirmed true. Which statement is correct?
     options:
       - A person checked the label, so it can go into the eval set
-      - The client that held the token claimed a yes. The row is never eligible for an eval or training set, because an agent row records a claim, not a checked label
       - The model chose the label without any confirmation
       - confirmed true means the label is correct
-    answer: 1
+      - The client that held the token claimed a yes. The row is never eligible for an eval or training set, because an agent row records a claim, not a checked label
+    answer: 3
     explanation: The server cannot tell a person from a script that answers yes. confirmed records what the client said, and source records that the write came through an agent. eligible_for_eval accepts only human, confirmed rows, and a test pins that.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -127,10 +127,10 @@ Run these from the repo root. Everything here is free and runs in memory, with n
 
 ### Confirm and decline
 
-Save this as `try_confirm.py` in the repo root. It labels ticket `t001` twice, once answering yes and once answering no, then prints the rows:
+Save this as `/tmp/try_confirm.py`, outside the repo, so nothing is left behind in it. It labels ticket `t001` twice, once answering yes and once answering no, then prints the rows:
 
 ```python
-"""Label a ticket through lumen-ops in memory: once answering yes, once answering no. Run from the repo root."""
+"""Label a ticket through lumen-ops in memory: once answering yes, once answering no. Run it from the repo root."""
 import asyncio
 import json
 import sys
@@ -169,7 +169,7 @@ asyncio.run(main())
 ```
 
 ```bash
-.venv-mcp/bin/python try_confirm.py
+.venv-mcp/bin/python /tmp/try_confirm.py
 ```
 
 You should see the question twice, then `result: {'ticket_id': 't001', 'label': 'billing', 'written': True}` for the yes and `result: label not written: the user declined` for the no. Then one row only, with `'source': 'agent'`, `'client_id': 'anonymous'` (no token in memory), `'model': None`, `'confirmed': True`, and `eligible for eval: False`.

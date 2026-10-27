@@ -171,7 +171,7 @@ export const glossary = {
   recording:
     'A file of real model responses, one per call, keyed by a hash of the request, so a run can be replayed for free and give the same answer.',
   'DNS rebinding':
-    'An attack where a web page’s domain is made to point at 127.0.0.1, so the browser sends the page’s requests to a server on your own machine. Checking the Host and Origin headers defeats it.',
+    'An attack where a web page’s domain is made to point at 127.0.0.1, so the browser sends the page’s requests to a server on your own machine, with the page’s own name as Host and Origin. Checking each header against a fixed list of local names defeats it; comparing them with each other does not.',
   'bearer token':
     'A token sent in an Authorization: Bearer header. Whoever holds it can use it, so it is kept out of URLs and logs and is only good for one server.',
   elicitation:

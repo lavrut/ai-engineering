@@ -226,6 +226,8 @@ python3 -m venv .venv-mcp && .venv-mcp/bin/pip install -r mcp/requirements.txt
 
 ### The servers
 
+The first command runs once and exits. The other three are long-running servers: start each in its own terminal, from the repo root, and stop it with Ctrl-C.
+
 ```sh
 .venv-mcp/bin/python mcp/python/client.py --stdio discover                  # lumen-read over stdio (no auth)
 .venv-mcp/bin/python mcp/python/auth_server.py                             # TEST-ONLY authorization server on :9000
@@ -272,7 +274,7 @@ No test calls the Claude API. The model is a fake or a recording.
 
 ```sh
 .venv-mcp/bin/python -m pytest mcp/python/tests -q
-cd mcp/go && go test -race ./...
+(cd mcp/go && go test -race ./...)
 .venv-mcp/bin/python mcp/fixtures/gen_contract.py --check   # the shared contract is up to date
 .venv-mcp/bin/python mcp/python/derive.py --check           # the lesson data matches the real servers and recordings
 .venv-mcp/bin/python mcp/python/simulate.py --check         # the simulated transcripts match the real agent

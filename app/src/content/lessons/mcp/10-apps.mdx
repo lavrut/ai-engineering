@@ -18,17 +18,17 @@ quiz:
     options:
       - The App, which writes the row itself
       - The host, which writes the row because the user pressed a button
-      - Nothing yet. The App asks the host to call label_ticket, and the server runs its own confirmation round first. A row is written only after an accepted answer
       - The model, after reading the App's state
-    answer: 2
+      - Nothing yet. The App asks the host to call label_ticket, and the server runs its own confirmation round first. A row is written only after an accepted answer
+    answer: 3
     explanation: The App only sends a tools/call request to the host. That call reaches lumen-ops like any other, with its token and its confirmation question. A button in a page is never a way around the server.
   - question: The App's resource declares an empty Content Security Policy for connections, resources and frames. What does that mean for the page?
     options:
-      - It can load any script it needs
       - It loads nothing from any other origin and cannot connect anywhere. Everything it needs is inline, and it talks only to its host
+      - It can load any script it needs
       - It cannot run any script
       - It has no effect; hosts ignore it
-    answer: 1
+    answer: 0
     explanation: A host renders an App in a sandboxed frame and applies the declared policy. With every list empty, the page cannot fetch, load or frame anything from elsewhere. Its only channel is postMessage to the host.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -92,10 +92,10 @@ Run these from the repo root. Everything here is free and runs in memory.
 
 ### Find the App as a host does
 
-Save this as `try_app.py` in the repo root. It lists the tool, follows its link, and reads the page:
+Save this as `/tmp/try_app.py`, outside the repo, so nothing is left behind in it. It lists the tool, follows its link, and reads the page:
 
 ```python
-"""Find the labelling App the way a host does: from the tool's _meta, then read it. Run from the repo root."""
+"""Find the labelling App the way a host does: from the tool's _meta, then read it. Run it from the repo root."""
 import asyncio
 import sys
 import tempfile
@@ -122,7 +122,7 @@ asyncio.run(main())
 ```
 
 ```bash
-.venv-mcp/bin/python try_app.py
+.venv-mcp/bin/python /tmp/try_app.py
 ```
 
 You should see `tool: label_ticket -> App: ui://lumen/label.html`, `mime type: text/html;profile=mcp-app`, the four empty CSP lists, and `html: 7051 bytes; starts <!doctype html>`.

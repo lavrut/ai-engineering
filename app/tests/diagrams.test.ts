@@ -148,9 +148,12 @@ describe('diagram data', () => {
       expect(mcpArchitecture.nodes.find((n) => n.id === 'ops')?.label).toBe('lumen-ops');
     });
 
-    it('mcp-http says the Go and Python check orders differ, and names the 131,072-byte cap', () => {
+    it('mcp-http names the explicit Host and Origin lists, the 131,072-byte cap and the one order that differs', () => {
+      expect(mcpHttp.steps[0].caption).toContain('127.0.0.1:port or localhost:port');
+      expect(mcpHttp.steps[0].caption).toContain('before any token is read');
+      expect(mcpHttp.steps[0].caption).not.toMatch(/stateless/);
       expect(mcpHttp.steps[1].caption).toContain('131,072 bytes');
-      expect(mcpHttp.steps[4].caption).toContain('Python’s SDK checks the token before the Origin');
+      expect(mcpHttp.steps[4].caption).toContain('413 in Go and 401 in Python');
     });
 
     it('mcp-oauth uses the pre-registered client as the main path, and warns that the test server is not for real users', () => {

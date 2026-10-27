@@ -199,7 +199,7 @@ Every lesson follows `docs/STYLE.md`. "How Go does it" appears where Go differs;
 ## 11. Cost and setup
 
 - **Free**, apart from the two optional, approved recordings (expected under $1 in total, $10 cap).
-- **Setup:** a venv at `.venv-mcp` with the pinned packages; Go 1.22+; Node 22.19+ only for the optional Inspector and the App reference host.
+- **Setup:** a venv at `.venv-mcp` with the pinned packages; Go 1.27.2 (`mcp/go/go.mod`); Node 22.19+ only for the optional Inspector and the App reference host.
 - Claude Desktop and Claude Code are optional and use the learner's own accounts.
 
 ## 12. Open items
