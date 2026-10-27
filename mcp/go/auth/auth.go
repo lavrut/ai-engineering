@@ -49,7 +49,7 @@ const (
 	ScopeRead    = "tickets:read"
 	ScopeWrite   = "tickets:write"
 	PRMPath      = "/.well-known/oauth-protected-resource/mcp" // RFC 9728, path-aware for /mcp
-	Leeway       = 30 * time.Second                            // clock skew allowed on exp / nbf / iat
+	Leeway       = 30 * time.Second                            // clock skew allowed on nbf / iat (never on exp: R29)
 )
 
 const (
@@ -107,21 +107,24 @@ func b64json(seg string, v any) error {
 	return json.Unmarshal(b, v)
 }
 
-// audiences reads `aud`: RFC 7519 allows a string or an array of strings.
-func audiences(raw json.RawMessage) ([]string, bool) {
-	var many []string
-	if json.Unmarshal(raw, &many) == nil {
-		return many, true
-	}
+// audience reads `aud`: RFC 7519 allows a string or an array of strings. We accept a string or a
+// one-entry array (ruling R30): a token for several resources is one any of them could replay to
+// the others.
+func audience(raw json.RawMessage) (string, bool) {
 	var one string
-	if json.Unmarshal(raw, &one) == nil {
-		return []string{one}, true
+	if json.Unmarshal(raw, &one) == nil && one != "" {
+		return one, true
 	}
-	return nil, false
+	var many []string
+	if json.Unmarshal(raw, &many) == nil && len(many) == 1 && many[0] != "" {
+		return many[0], true
+	}
+	return "", false
 }
 
 // Verifier checks an HS256 access token from the test AS for `resource`, signed with `key`:
-// signature, issuer, exp/nbf/iat (with Leeway), audience, and that it names a subject and a client.
+// signature, issuer, exp (strict, no leeway: R29), nbf/iat (with Leeway: an AS clock slightly ahead
+// must not make a fresh token unusable), audience, and that it names a subject and a client.
 // Any failure wraps ErrInvalidToken, so RequireBearerToken answers 401. On success, TokenInfo.UserID
 // is the token's `sub` and Extra["client_id"] its `client_id`: the only identity the tools trust.
 func Verifier(resource string, key []byte) sdkauth.TokenVerifier {
@@ -163,15 +166,18 @@ func Verifier(resource string, key []byte) sdkauth.TokenVerifier {
 		}
 		now, skew := time.Now().Unix(), int64(Leeway/time.Second)
 		// Checked here, not left to the middleware: it checks scope before expiry, which would make
-		// an expired token with the wrong scope a 403 instead of a 401.
-		if c.Exp == 0 || now > c.Exp+skew || (c.Nbf != 0 && now+skew < c.Nbf) || (c.Iat != 0 && now+skew < c.Iat) {
+		// an expired token with the wrong scope a 403 instead of a 401. exp is strict (as PyJWT with
+		// leeway 0: valid while now < exp); nbf and iat get the skew.
+		if c.Exp == 0 || now >= c.Exp || (c.Nbf != 0 && now+skew < c.Nbf) || (c.Iat != 0 && now+skew < c.Iat) {
 			return invalid("expired or not yet valid")
 		}
 		// R7 + R24: the audience is checked here, while verifying, so a token for another server is
 		// 401 before RequireBearerToken ever looks at its scopes (the 403 check comes after).
-		auds, ok := audiences(c.Aud)
-		if !ok || !oauthex.MatchesResource(auds, resource) {
-			return invalid(fmt.Sprintf("audience %v is not %s", auds, resource))
+		// R31: Go compares exactly except for a trailing slash (oauthex.MatchesResource); the Python
+		// SDK compares URL-normalised. Both accept our canonical URIs and nothing else of note.
+		aud, ok := audience(c.Aud)
+		if !ok || !oauthex.MatchesResource([]string{aud}, resource) {
+			return invalid(fmt.Sprintf("audience %q is not %s", aud, resource))
 		}
 		return &sdkauth.TokenInfo{Scopes: strings.Fields(c.Scope), Expiration: time.Unix(c.Exp, 0), UserID: c.Sub,
 			Extra: map[string]any{"client_id": c.ClientID}}, nil
@@ -210,6 +216,36 @@ func CapBody(next http.Handler) http.Handler {
 	})
 }
 
+// withErrorCodes adds the RFC 6750 `error` parameter to the WWW-Authenticate header that the SDK's
+// RequireBearerToken writes (it names only resource_metadata and scope): insufficient_scope on a
+// 403, invalid_token on a 401 for a request that did present a token. A request with no token
+// gets no error code (RFC 6750 §3.1). Only the middleware's own rejections pass through the
+// wrapper: the MCP handler is called with the original ResponseWriter, so streaming is untouched.
+func withErrorCodes(protect func(http.Handler) http.Handler, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		inner := http.HandlerFunc(func(_ http.ResponseWriter, r2 *http.Request) { next.ServeHTTP(w, r2) })
+		protect(inner).ServeHTTP(&errorCodeWriter{ResponseWriter: w, presented: r.Header.Get("Authorization") != ""}, r)
+	})
+}
+
+type errorCodeWriter struct {
+	http.ResponseWriter
+	presented bool
+}
+
+func (e *errorCodeWriter) WriteHeader(code int) {
+	h := e.Header()
+	if v := h.Get("WWW-Authenticate"); strings.HasPrefix(v, "Bearer ") {
+		switch {
+		case code == http.StatusForbidden:
+			h.Set("WWW-Authenticate", `Bearer error="insufficient_scope", `+strings.TrimPrefix(v, "Bearer "))
+		case code == http.StatusUnauthorized && e.presented:
+			h.Set("WWW-Authenticate", `Bearer error="invalid_token", `+strings.TrimPrefix(v, "Bearer "))
+		}
+	}
+	e.ResponseWriter.WriteHeader(code)
+}
+
 // MetadataURL is where `resource` serves its protected-resource metadata.
 func MetadataURL(resource string) string {
 	u, err := url.Parse(resource)
@@ -240,6 +276,6 @@ func Handler(mcpHandler http.Handler, resource, scope string, key []byte) http.H
 	mux.Handle(PRMPath, sdkauth.ProtectedResourceMetadataHandler(&oauthex.ProtectedResourceMetadata{
 		Resource: resource, AuthorizationServers: []string{Issuer},
 		ScopesSupported: []string{scope}, BearerMethodsSupported: []string{"header"}}))
-	mux.Handle("/mcp", CheckOrigin(InspectorOrigins, cop.Handler(CapBody(protect(mcpHandler)))))
+	mux.Handle("/mcp", CheckOrigin(InspectorOrigins, cop.Handler(CapBody(withErrorCodes(protect, mcpHandler)))))
 	return mux
 }

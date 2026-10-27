@@ -23,6 +23,7 @@ from urllib.parse import parse_qs, urlparse
 
 import jwt
 import pytest
+from mcp.shared.exceptions import MCPError
 import uvicorn
 from starlette.testclient import TestClient
 
@@ -143,12 +144,14 @@ def test_right_token_ok(name, tmp_path):
 def test_wrong_audience_401(name, tmp_path):
     resource, scope, _ = SERVERS[name]
     other = OPS_RESOURCE if resource == READ_RESOURCE else READ_RESOURCE
-    for aud in (other, "http://127.0.0.1:9999/mcp", [other], [other, "http://x.invalid/mcp"]):
+    # R30: a list with more than one entry is refused even when it names this server.
+    for aud in (other, "http://127.0.0.1:9999/mcp", [other], [other, "http://x.invalid/mcp"],
+                [other, resource], [resource, resource], [], ""):
         r = discover(name, tmp_path, signed({**good_claims(name), "aud": aud}))
         assert r.status_code == 401, aud
         assert "resource_metadata=" in r.headers["www-authenticate"]
-    # A list that names this server is fine (RFC 7519: aud may be an array).
-    assert discover(name, tmp_path, signed({**good_claims(name), "aud": [other, resource]})).status_code == 200
+    # A one-entry list naming this server is fine (RFC 7519: aud may be an array).
+    assert discover(name, tmp_path, signed({**good_claims(name), "aud": [resource]})).status_code == 200
 
 
 @pytest.mark.parametrize("name", ["read", "ops"])
@@ -169,7 +172,11 @@ def test_invalid_tokens_401(name, tmp_path):
         "garbage": "not-a-jwt",
         "wrong_key": signed(base, key=secrets.token_bytes(32)),
         "expired": signed({**base, "iat": now - 4000, "exp": now - 3600}),
+        "expired_10s": signed({**base, "exp": now - 10}),  # R29: no leeway on exp
         "not_yet_valid": signed({**base, "nbf": now + 3600}),
+        "iat_future": signed({**base, "iat": now + 3600}),
+        "no_sub": signed({k: v for k, v in base.items() if k != "sub"}),
+        "empty_sub": signed({**base, "sub": ""}),
         "wrong_issuer": signed({**base, "iss": "http://127.0.0.1:9001"}),
         "no_exp": signed({k: v for k, v in base.items() if k != "exp"}),
         "no_aud": signed({k: v for k, v in base.items() if k != "aud"}),
@@ -180,6 +187,21 @@ def test_invalid_tokens_401(name, tmp_path):
         r = discover(name, tmp_path, token)
         assert r.status_code == 401, case
         assert "resource_metadata=" in r.headers["www-authenticate"], case
+
+
+@pytest.mark.parametrize("name", ["read", "ops"])
+def test_clock_skew_only_on_nbf_and_iat(name, tmp_path):
+    """R29: nbf / iat up to 30 s in the future are tolerated (AS clock ahead); exp never is."""
+    now = int(time.time())
+    base = good_claims(name)
+    assert discover(name, tmp_path, signed({**base, "nbf": now + 20, "iat": now + 20})).status_code == 200
+    assert discover(name, tmp_path, signed({**base, "exp": now - 10})).status_code == 401
+    assert discover(name, tmp_path, signed({**base, "exp": now + 10})).status_code == 200
+
+
+def test_verifier_refuses_an_empty_key():
+    with pytest.raises(ValueError, match="empty signing key"):
+        resource_auth.JWTVerifier(READ_RESOURCE, key=b"")
 
 
 @pytest.mark.parametrize("name", ["read", "ops"])
@@ -293,15 +315,21 @@ def test_client_token_goes_in_the_header_only(tmp_path):
     assert target.headers == {"Authorization": f"Bearer {token}"}
     assert lumen_client.http_target("http://127.0.0.1:8765/mcp", None) == "http://127.0.0.1:8765/mcp"
 
-    async def go(url: str, tok: str | None):
-        async with lumen_client.connect(lumen_client.http_target(url, tok)) as c:
+    async def go(url: str, tok: str | None, refusal: lumen_client.Refusal):
+        async with lumen_client.connect(lumen_client.http_target(url, tok), refusal=refusal) as c:
             return await lumen_client.list_tools(c)
 
     with live(read_server.build_http_app()) as url:
-        tools = asyncio.run(go(f"{url}/mcp", token))
+        ok = lumen_client.Refusal()
+        tools = asyncio.run(go(f"{url}/mcp", token, ok))
         assert [t["name"] for t in tools] == ["classify_complaint", "get_ticket", "search_tickets"]
-        with pytest.raises(BaseException):  # no token: the server answers 401 and the client fails
-            asyncio.run(go(f"{url}/mcp", None))
+        assert ok.status is None
+        refused = lumen_client.Refusal()
+        with pytest.raises(Exception) as e:  # no token: the server answers 401 and the client fails
+            asyncio.run(go(f"{url}/mcp", None, refused))
+    assert isinstance(lumen_client.innermost(e.value), MCPError)
+    assert refused.status == 401
+    assert lumen_client.refusal_line(401) == "client: the server refused the request: HTTP 401 Unauthorized"
 
 
 # ── 5. The test authorization server ────────────────────────────────────────
@@ -394,6 +422,106 @@ def test_as_requires_a_known_resource(resource):
     assert q["error"] == ["invalid_target"] and "code" not in q
 
 
+def _code(c: TestClient, resource: str = READ_RESOURCE, scope: str = SCOPE_READ) -> str:
+    return parse_qs(urlparse(_authorize(c, resource, scope).headers["location"]).query)["code"][0]
+
+
+def _redeem(c: TestClient, code: str, **over):
+    data = {"grant_type": "authorization_code", "code": code, "redirect_uri": REDIRECT, "client_id": "lumen-cli",
+            "code_verifier": VERIFIER, **over}
+    return c.post("/token", data={k: v for k, v in data.items() if v is not None})
+
+
+def test_as_plain_pkce_refused():
+    """Only S256: a `plain` challenge (the verifier itself) gets no code."""
+    with _as() as c:
+        r = c.get("/authorize", follow_redirects=False, params={
+            "response_type": "code", "client_id": "lumen-cli", "redirect_uri": REDIRECT, "code_challenge": VERIFIER,
+            "code_challenge_method": "plain", "state": "s", "scope": SCOPE_READ, "resource": READ_RESOURCE})
+    q = parse_qs(urlparse(r.headers["location"]).query)
+    assert q["error"] == ["invalid_request"] and "code" not in q
+
+
+@pytest.mark.parametrize("redirect", ["http://127.0.0.1:33419/callback", "http://127.0.0.1:33418/callback/",
+                                      "http://localhost:33418/callback", "https://127.0.0.1:33418/callback"])
+def test_as_redirect_uri_must_match_exactly(redirect):
+    """Port, trailing slash, localhost vs 127.0.0.1, scheme: any difference is refused, and the AS
+    answers itself (400) instead of redirecting to the unregistered URI."""
+    with _as() as c:
+        r = c.get("/authorize", follow_redirects=False, params={
+            "response_type": "code", "client_id": "lumen-cli", "redirect_uri": redirect, "code_challenge": CHALLENGE,
+            "code_challenge_method": "S256", "state": "s", "scope": SCOPE_READ, "resource": READ_RESOURCE})
+    assert r.status_code == 400 and r.json()["error"] == "invalid_request"
+
+
+def test_as_redirect_mismatch_at_token():
+    with _as() as c:
+        r = _redeem(c, _code(c), redirect_uri="http://127.0.0.1:33418/other")
+    assert r.status_code == 400 and r.json()["error"] == "invalid_request"
+
+
+def test_as_code_from_another_client_is_invalid_grant():
+    """A code issued to lumen-cli, presented by another (registered) client: invalid_grant, and burned."""
+    with _as() as c:
+        other = c.post("/register", json={"redirect_uris": [REDIRECT], "token_endpoint_auth_method": "none",
+                                          "grant_types": ["authorization_code"], "response_types": ["code"],
+                                          "scope": SCOPE_READ}).json()["client_id"]
+        code = _code(c)
+        stolen = _redeem(c, code, client_id=other)
+        after = _redeem(c, code)
+    assert stolen.status_code == 400 and stolen.json()["error"] == "invalid_grant"
+    assert after.status_code == 400 and after.json()["error"] == "invalid_grant"
+
+
+def test_as_failed_pkce_burns_the_code():
+    """A wrong verifier fails, and the right one cannot be tried afterwards: no guessing."""
+    with _as() as c:
+        code = _code(c)
+        guess = _redeem(c, code, code_verifier="x" * 50)
+        right = _redeem(c, code)
+    assert guess.status_code == 400 and guess.json()["error"] == "invalid_grant"
+    assert right.status_code == 400 and right.json()["error"] == "invalid_grant"
+
+
+def test_as_code_expires():
+    provider = auth_server.TestOnlyProvider()
+    with TestClient(auth_server.build_auth_app(provider), base_url=ISSUER) as c:
+        code = _code(c)
+        provider.codes[code].expires_at = time.time() - 1
+        r = _redeem(c, code)
+    assert r.status_code == 400 and r.json()["error"] == "invalid_grant"
+
+
+def test_as_token_resource_must_match_the_code():
+    """RFC 8707: the resource at /token must be the code's. A different one is invalid_target and
+    burns the code; the same one (or none) is fine."""
+    with _as() as c:
+        code = _code(c)
+        r = _redeem(c, code, resource=OPS_RESOURCE)
+        after = _redeem(c, code, resource=READ_RESOURCE)
+        ok = _redeem(c, _code(c), resource=READ_RESOURCE)
+    assert r.status_code == 400 and r.json()["error"] == "invalid_target"
+    assert after.status_code == 400  # burned
+    assert ok.status_code == 200
+    claims = jwt.decode(ok.json()["access_token"], load_signing_key(), algorithms=["HS256"], audience=READ_RESOURCE)
+    assert claims["aud"] == READ_RESOURCE
+
+
+def test_as_refresh_resource_must_match_and_tokens_expire():
+    provider = auth_server.TestOnlyProvider()
+    with TestClient(auth_server.build_auth_app(provider), base_url=ISSUER) as c:
+        rt = _redeem(c, _code(c)).json()["refresh_token"]
+        assert provider.refresh[rt].expires_at is not None
+        assert provider.refresh[rt].expires_at > time.time() + auth_server.REFRESH_TTL - 60
+        wrong = c.post("/token", data={"grant_type": "refresh_token", "refresh_token": rt, "client_id": "lumen-cli",
+                                       "resource": OPS_RESOURCE})
+        assert wrong.status_code == 400 and wrong.json()["error"] == "invalid_target"
+        rt2 = _redeem(c, _code(c)).json()["refresh_token"]
+        provider.refresh[rt2].expires_at = int(time.time()) - 1
+        old = c.post("/token", data={"grant_type": "refresh_token", "refresh_token": rt2, "client_id": "lumen-cli"})
+    assert old.status_code == 400 and old.json()["error"] == "invalid_grant"
+
+
 def test_as_unknown_client_rejected():
     with _as() as c:
         r = _authorize(c, READ_RESOURCE, SCOPE_READ, client_id="nobody")
@@ -455,6 +583,18 @@ def test_as_generates_the_key_on_first_start(tmp_path):
     assert re.fullmatch(r"[0-9a-f]{64}\n", text)  # the format Go reads too
     assert auth_server.ensure_signing_key(path) == key  # a second start reuses it
     assert bytes.fromhex(text.strip()) == key
+
+
+def test_concurrent_first_starts_agree_on_one_complete_key(tmp_path):
+    """Item 8: many AS starts at once. Each gets the same full key (written to a temp file, then
+    linked into place: a reader never sees a partial file), and no temp file is left behind."""
+    import concurrent.futures
+    path = tmp_path / "data" / "dev-signing.key"
+    with concurrent.futures.ThreadPoolExecutor(16) as pool:
+        keys = list(pool.map(lambda _: auth_server.ensure_signing_key(path), range(64)))
+    assert len(set(keys)) == 1 and len(keys[0]) == 32
+    assert sorted(x.name for x in path.parent.iterdir()) == ["dev-signing.key"]
+    assert path.stat().st_mode & 0o777 == 0o600
 
 
 def test_keys_differ_per_generation(tmp_path):

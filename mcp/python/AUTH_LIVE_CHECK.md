@@ -104,10 +104,15 @@ The command prints `401`. The response's `WWW-Authenticate` header names `resour
 
 The audience is checked before the scope (ruling R24). The token was issued for `http://127.0.0.1:8765/mcp`, so at lumen-ops it is an invalid token, whatever its scope says.
 
-The clients fail too, and print nothing on stdout, with this command:
+Both clients fail too. They print nothing on stdout, and they print the same single line on stderr, then exit 1:
 
 ```sh
 .venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8766/mcp --token-file /tmp/lumen-read.tok tools
+(cd mcp/go && go run ./client -url http://127.0.0.1:8766/mcp -token-file /tmp/lumen-read.tok tools)
+```
+
+```
+client: the server refused the request: HTTP 401 Unauthorized
 ```
 
 ## 6. Clean up

@@ -708,8 +708,9 @@ func TestWrongScope403(t *testing.T) {
 	h := httpHandler(t, NewOpsServer(labelsFile(t)))
 	for _, scope := range []string{auth.ScopeRead, "", "tickets:admin"} {
 		rec := send(h, "POST", listBody, "", tok(scope, auth.OpsResource, "lumen-cli", "user-1"))
-		if rec.Code != 403 || !strings.Contains(rec.Header().Get("WWW-Authenticate"), "resource_metadata=") {
-			t.Errorf("scope %q: got %d", scope, rec.Code)
+		wa := rec.Header().Get("WWW-Authenticate")
+		if rec.Code != 403 || !strings.Contains(wa, "resource_metadata=") || !strings.Contains(wa, `error="insufficient_scope"`) {
+			t.Errorf("scope %q: got %d %q", scope, rec.Code, wa)
 		}
 	}
 }

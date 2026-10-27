@@ -18,7 +18,11 @@ What it does do properly, because that is what the lessons teach:
   - Audience binding (RFC 8707): /authorize must name a resource this AS serves (lumen-read or
     lumen-ops); the access token's `aud` is that resource, so a token is good for one server only.
   - RFC 9207: the redirect carries `iss`, which the SDK client checks.
-  - Codes are single-use and short-lived; refresh tokens rotate and keep the code's audience.
+  - The /token request's `resource`, when sent, must equal the one the code (or refresh token) was
+    issued for, else invalid_target (the SDK parses it but does not compare it: _guard_token_resource).
+  - Codes are single-use, short-lived, bound to their client, and burned by ANY redemption attempt,
+    including a failed PKCE check or a wrong redirect_uri. Refresh tokens rotate, expire, and keep
+    the code's audience.
 
 It is built from the SDK's own routes (mcp.server.auth.routes.create_auth_routes): metadata at
 /.well-known/oauth-authorization-server, /authorize, /token and /register. mint_test_token() is a
@@ -28,11 +32,14 @@ Run:  python mcp/python/auth_server.py      (serves http://127.0.0.1:9000)
 """
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import sys
+import tempfile
 import time
 from pathlib import Path
+from urllib.parse import parse_qs
 
 import jwt
 from mcp.server.auth.provider import (AccessToken, AuthorizationCode, AuthorizationParams, AuthorizeError,
@@ -53,6 +60,8 @@ SCOPES = [SCOPE_READ, SCOPE_WRITE]
 TEST_SUBJECT = "user-1"  # TEST ONLY: every approval is for this one fixed user
 ACCESS_TTL = 600  # seconds
 CODE_TTL = 300
+REFRESH_TTL = 24 * 3600
+MAX_TOKEN_REQUEST = 16 * 1024  # bytes: a /token form is a few hundred
 CLI_REDIRECT = "http://127.0.0.1:33418/callback"  # redirect URIs match exactly, port included
 
 # The pre-registered public client (R4 primary): no secret, so PKCE is what protects the code.
@@ -65,16 +74,24 @@ LUMEN_CLI = OAuthClientInformationFull(
 # ── 2. Signing key and tokens ───────────────────────────────────────────────
 def ensure_signing_key(path: Path | None = None) -> bytes:
     """Create the key file on first start (32 random bytes as hex, mode 0600), or load it.
-    O_EXCL: two AS processes starting at once cannot both write one."""
+    The key is written in full to a temp file in the same directory (mkstemp: mode 0600), then
+    hard-linked into place. os.link fails if the file exists, so two AS processes starting at once
+    cannot both create one, and no reader ever sees a partly written file."""
     path = path or key_file()
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".dev-signing.", suffix=".tmp")
         try:
-            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        except FileExistsError:
-            return load_signing_key(path)
-        with os.fdopen(fd, "w", encoding="ascii") as f:
-            f.write(secrets.token_hex(KEY_BYTES) + "\n")
+            with os.fdopen(fd, "w", encoding="ascii") as f:
+                f.write(secrets.token_hex(KEY_BYTES) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+            try:
+                os.link(tmp, path)
+            except FileExistsError:
+                pass  # another process won the race: use its key
+        finally:
+            os.unlink(tmp)
     return load_signing_key(path)
 
 
@@ -118,7 +135,10 @@ class TestOnlyProvider:
         return construct_redirect_uri(str(params.redirect_uri), code=code, state=params.state, iss=ISSUER)
 
     async def load_authorization_code(self, client: OAuthClientInformationFull, authorization_code: str):
-        code = self.codes.get(authorization_code)
+        # The SDK calls this BEFORE it checks expiry, redirect_uri and PKCE. Popping here makes every
+        # redemption attempt burn the code, so a failed one (a guessed verifier, another client)
+        # cannot be retried. A code presented by another client is invalid_grant.
+        code = self.codes.pop(authorization_code, None)
         return code if code is not None and code.client_id == client.client_id else None
 
     async def exchange_authorization_code(self, client: OAuthClientInformationFull,
@@ -131,6 +151,9 @@ class TestOnlyProvider:
 
     async def load_refresh_token(self, client: OAuthClientInformationFull, refresh_token: str):
         rt = self.refresh.get(refresh_token)
+        if rt is not None and rt.expires_at is not None and rt.expires_at < time.time():
+            self.refresh.pop(refresh_token, None)
+            return None  # expired: invalid_grant (the SDK checks expires_at too)
         return rt if rt is not None and rt.client_id == client.client_id else None
 
     async def exchange_refresh_token(self, client: OAuthClientInformationFull, refresh_token: RefreshToken,
@@ -152,12 +175,61 @@ class TestOnlyProvider:
         scope = " ".join(scopes)
         rt = secrets.token_urlsafe(32)
         self.refresh[rt] = RefreshToken(token=rt, client_id=client_id, scopes=scopes, resource=resource,
-                                        subject=subject)
+                                        subject=subject, expires_at=int(time.time()) + REFRESH_TTL)
         return OAuthToken(access_token=mint_test_token(scope, resource, client_id=client_id, sub=subject),
                           token_type="Bearer", expires_in=ACCESS_TTL, scope=scope or None, refresh_token=rt)
 
 
 # ── 4. The app ──────────────────────────────────────────────────────────────
+def _guard_token_resource(app, provider: TestOnlyProvider):
+    """ASGI wrapper for /token (RFC 8707 §2.2). The SDK parses `resource` there but never compares
+    it with the grant, and the provider never sees it. This reads the form, and when `resource` is
+    present but differs from the code's (or refresh token's) resource, answers invalid_target and
+    burns the grant. Otherwise it replays the body to the SDK handler unchanged."""
+    async def guarded(scope, receive, send):
+        if scope["type"] != "http" or scope["method"] != "POST":
+            return await app(scope, receive, send)
+        body, more = b"", True
+        while more:
+            message = await receive()
+            body += message.get("body", b"")
+            more = message.get("more_body", False)
+            if len(body) > MAX_TOKEN_REQUEST:
+                return await _json(send, 413, {"error": "invalid_request", "error_description": "too large"})
+        form = {k: v[0] for k, v in parse_qs(body.decode("latin-1")).items()}
+        wanted = form.get("resource")
+        if wanted is not None:
+            grant = None
+            if form.get("grant_type") == "authorization_code":
+                grant = provider.codes.get(form.get("code", ""))
+                pool, key = provider.codes, form.get("code", "")
+            elif form.get("grant_type") == "refresh_token":
+                grant = provider.refresh.get(form.get("refresh_token", ""))
+                pool, key = provider.refresh, form.get("refresh_token", "")
+            if grant is not None and grant.resource != wanted:
+                pool.pop(key, None)  # misuse burns the grant
+                return await _json(send, 400, {"error": "invalid_target",
+                                               "error_description": "resource does not match the grant"})
+        sent = False
+
+        async def replay():
+            nonlocal sent
+            if sent:
+                return await receive()
+            sent = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        return await app(scope, replay, send)
+    return guarded
+
+
+async def _json(send, status: int, payload: dict) -> None:
+    raw = json.dumps(payload).encode()
+    await send({"type": "http.response.start", "status": status,
+                "headers": [(b"content-type", b"application/json"), (b"cache-control", b"no-store"),
+                            (b"content-length", str(len(raw)).encode())]})
+    await send({"type": "http.response.body", "body": raw})
+
+
 def build_auth_app(provider: TestOnlyProvider | None = None) -> Starlette:
     """The SDK's AS routes around the in-memory provider. Registration (DCR) is on. Raises
     SigningKeyMissing when there is no key file (main() creates it first)."""
@@ -165,9 +237,13 @@ def build_auth_app(provider: TestOnlyProvider | None = None) -> Starlette:
     # AnyHttpUrl("http://127.0.0.1:9000") would render with a trailing "/" and the SDK client would
     # reject the metadata ("issuer mismatch"); AuthSettings keeps the empty path.
     issuer = AuthSettings(issuer_url=ISSUER, resource_server_url=None).issuer_url
-    routes = create_auth_routes(provider or TestOnlyProvider(), issuer_url=issuer,
+    provider = provider or TestOnlyProvider()
+    routes = create_auth_routes(provider, issuer_url=issuer,
                                 client_registration_options=ClientRegistrationOptions(
                                     enabled=True, valid_scopes=SCOPES, default_scopes=SCOPES))
+    for route in routes:
+        if getattr(route, "path", "") == "/token":
+            route.app = _guard_token_resource(route.app, provider)
     return Starlette(routes=routes)
 
 

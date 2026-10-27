@@ -70,6 +70,13 @@ func TestVerifierRejects(t *testing.T) {
 		"other_audience": authtest.Sign(key, with(base, "aud", auth.ReadResource)),
 		"aud_list_other": authtest.Sign(key, with(base, "aud", []string{auth.ReadResource, "http://x.invalid/mcp"})),
 		"aud_number":     authtest.Sign(key, with(base, "aud", 7)),
+		// R30: more than one audience is refused even when one of them is this server.
+		"aud_list_two":  authtest.Sign(key, with(base, "aud", []string{auth.ReadResource, auth.OpsResource})),
+		"aud_list_same": authtest.Sign(key, with(base, "aud", []string{auth.OpsResource, auth.OpsResource})),
+		"aud_list_none": authtest.Sign(key, with(base, "aud", []string{})),
+		"aud_empty":     authtest.Sign(key, with(base, "aud", "")),
+		// R29: no leeway on exp.
+		"expired_10s": authtest.Sign(key, with(base, "exp", now-10)),
 	}
 	v := auth.Verifier(auth.OpsResource, key)
 	for name, tok := range cases {
@@ -77,10 +84,29 @@ func TestVerifierRejects(t *testing.T) {
 			t.Errorf("%s: want ErrInvalidToken (401), got %v", name, err)
 		}
 	}
-	// RFC 7519: aud may be a list; one entry naming this server is enough. A trailing slash is ignored.
-	for _, aud := range []any{[]string{auth.ReadResource, auth.OpsResource}, auth.OpsResource + "/"} {
+	// RFC 7519: aud may be a one-entry list. A trailing slash is ignored.
+	for _, aud := range []any{[]string{auth.OpsResource}, auth.OpsResource + "/"} {
 		if _, err := v(context.Background(), authtest.Sign(key, with(base, "aud", aud)), nil); err != nil {
 			t.Errorf("aud %v: %v", aud, err)
+		}
+	}
+}
+
+func TestClockSkewOnlyOnNbfAndIat(t *testing.T) {
+	key := authtest.UseKey(t)
+	v := auth.Verifier(auth.OpsResource, key)
+	now := time.Now().Unix()
+	base := good(auth.OpsResource, auth.ScopeWrite)
+	for name, c := range map[string]struct {
+		claims map[string]any
+		ok     bool
+	}{
+		"nbf_iat_20s_ahead": {with(with(base, "nbf", now+20), "iat", now+20), true},
+		"exp_10s_ago":       {with(base, "exp", now-10), false},
+		"exp_in_10s":        {with(base, "exp", now+10), true},
+	} {
+		if _, err := v(context.Background(), authtest.Sign(key, c.claims), nil); (err == nil) != c.ok {
+			t.Errorf("%s: err %v", name, err)
 		}
 	}
 }
@@ -108,6 +134,21 @@ func TestHandlerStatuses(t *testing.T) {
 	key := authtest.UseKey(t)
 	h := auth.Handler(okHandler, auth.OpsResource, auth.ScopeWrite, key)
 	tok := authtest.Token(key, auth.ScopeWrite, auth.OpsResource, "lumen-cli", "user-1")
+	for name, c := range map[string]struct {
+		token, wantErr string
+		code           int
+	}{
+		"none":        {"", "", 401}, // RFC 6750 §3.1: no error code when no token was sent
+		"bad":         {"garbage", `error="invalid_token"`, 401},
+		"wrong_scope": {authtest.Token(key, auth.ScopeRead, auth.OpsResource, "c", "u"), `error="insufficient_scope"`, 403},
+	} {
+		rec := do(h, "POST", "/mcp", c.token, "")
+		wa := rec.Header().Get("WWW-Authenticate")
+		if rec.Code != c.code || !strings.HasPrefix(wa, "Bearer ") || !strings.Contains(wa, "resource_metadata=") ||
+			(c.wantErr != "" && !strings.Contains(wa, c.wantErr)) || (c.wantErr == "" && strings.Contains(wa, "error=")) {
+			t.Errorf("%s: %d %q", name, rec.Code, wa)
+		}
+	}
 	if rec := do(h, "POST", "/mcp", tok, ""); rec.Code != 200 || rec.Body.String() != "lumen-cli" {
 		t.Errorf("good token: %d %q", rec.Code, rec.Body.String())
 	}

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import os
 import stat
+import time
 from pathlib import Path
 
 import jwt
@@ -38,7 +39,7 @@ READ_RESOURCE = "http://127.0.0.1:8765/mcp"  # lumen-read's canonical URI (the t
 OPS_RESOURCE = "http://127.0.0.1:8766/mcp"  # lumen-ops's canonical URI
 SCOPE_READ = "tickets:read"
 SCOPE_WRITE = "tickets:write"
-LEEWAY_SECONDS = 30  # clock skew allowed on exp / nbf / iat
+LEEWAY_SECONDS = 30  # clock skew allowed on nbf / iat (never on exp: R29)
 KEY_FILE_ENV = "LUMEN_SIGNING_KEY_FILE"
 DEFAULT_KEY_FILE = Path(__file__).resolve().parents[1] / "data" / "dev-signing.key"
 KEY_BYTES = 32
@@ -79,39 +80,58 @@ def load_signing_key(path: Path | None = None) -> bytes:
 # ── 2. Token verifier ───────────────────────────────────────────────────────
 class JWTVerifier:
     """Verify an HS256 access token from the test AS (check 1 of 3). Returns None (the SDK answers
-    401) for any token that is malformed, badly signed, from another issuer, expired or not yet
-    valid, or that lacks a client_id, subject or audience. The key is read once, at construction,
-    so a server without a key file fails at startup, not on its first request."""
+    401) for any token that is malformed, badly signed, from another issuer, expired, not yet
+    valid, or issued in the future, or that lacks a client_id, subject or audience, or whose
+    audience lists more than one resource (ruling R30). The key is read once, at construction, so a
+    server without a key file fails at startup, not on its first request.
+
+    Time (ruling R29): `exp` is strict, with no leeway: a token is dead the second it expires.
+    `nbf` and `iat` allow LEEWAY_SECONDS of clock skew, because an AS clock running slightly ahead
+    must not make a fresh token unusable."""
 
     def __init__(self, resource: str, key: bytes | None = None) -> None:
         self.resource = resource
         self._key = key if key is not None else load_signing_key()
+        if not self._key:
+            raise ValueError("empty signing key")  # never verify without one (Go: auth.ErrNoKey)
 
     async def verify_token(self, token: str) -> AccessToken | None:
         try:
-            claims = jwt.decode(token, self._key, algorithms=["HS256"], issuer=ISSUER, leeway=LEEWAY_SECONDS,
-                                options={"verify_aud": False, "require": ["exp", "iss", "aud", "sub"]})
+            # leeway=0 makes exp strict; nbf and iat are checked below with the skew.
+            claims = jwt.decode(token, self._key, algorithms=["HS256"], issuer=ISSUER, leeway=0,
+                                options={"verify_aud": False, "verify_nbf": False, "verify_iat": False,
+                                         "require": ["exp", "iss", "aud", "sub"]})
         except jwt.PyJWTError:
             return None
+        now = time.time()
+        for claim in ("nbf", "iat"):
+            value = claims.get(claim)
+            if value is not None and (not isinstance(value, int | float) or now + LEEWAY_SECONDS < value):
+                return None  # not yet valid / issued in the future
         client_id, subject = claims.get("client_id"), claims.get("sub")
         if not isinstance(client_id, str) or not client_id or not isinstance(subject, str) or not subject:
             return None
         scope = claims.get("scope", "")
         if not isinstance(scope, str):
             return None
+        resource = self._resource(claims["aud"])
+        if resource is None:
+            return None
         return AccessToken(token=token, client_id=client_id, scopes=scope.split(), expires_at=int(claims["exp"]),
-                           resource=self._resource(claims["aud"]), subject=subject, claims={"iss": claims["iss"]})
+                           resource=resource, subject=subject, claims={"iss": claims["iss"]})
 
-    def _resource(self, aud: object) -> str | None:
-        """RFC 7519: aud is a string or a list of strings. Report the entry naming this server if
-        there is one, else what the token names. The SDK makes the decision (check 2,
-        validate_token_resource) while authenticating the request, before any scope is looked at."""
-        if isinstance(aud, str):
+    @staticmethod
+    def _resource(aud: object) -> str | None:
+        """RFC 7519 allows aud as a string or a list. We accept a string or a one-entry list (R30):
+        a token for several resources is a token any of them could replay to the others. The
+        verifier only REPORTS the audience; the SDK decides (check 2, validate_token_resource),
+        while authenticating the request, before any scope is looked at.
+        R31: the SDK compares URL-normalised (scheme/host case, trailing slash); Go compares exactly
+        except for a trailing slash (oauthex.MatchesResource). Both accept our canonical URIs."""
+        if isinstance(aud, str) and aud:
             return aud
-        if isinstance(aud, list) and all(isinstance(a, str) for a in aud):
-            if self.resource in aud:
-                return self.resource
-            return aud[0] if aud else None
+        if isinstance(aud, list) and len(aud) == 1 and isinstance(aud[0], str) and aud[0]:
+            return aud[0]
         return None
 
 
