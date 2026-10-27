@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
+import subprocess
 import sys
 from pathlib import Path
 
@@ -42,16 +44,46 @@ async def _run_case(client: Client, case: dict) -> dict:
         return {"contents": [{"uri": str(c.uri), "mimeType": c.mime_type, "json": json.loads(c.text)}
                              for c in r.contents]}
     if m == "prompts/get":
-        r = await client.get_prompt(p["name"], p["arguments"])
+        try:
+            r = await client.get_prompt(p["name"], p["arguments"])
+        except MCPError as e:
+            return {"error": str(e)}
         return {"contents": [{"role": x.role, "text": x.content.text} for x in r.messages]}
     raise AssertionError(f"unknown method {m}")
 
 
+def deep_equal(a, b, tol: float = 1e-9) -> bool:
+    """Deep equality on parsed JSON; floats compare with an absolute tolerance (ruling R16)."""
+    if isinstance(a, bool) or isinstance(b, bool):
+        return a is b
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return math.isclose(a, b, rel_tol=0, abs_tol=tol)
+    if isinstance(a, dict) and isinstance(b, dict):
+        return a.keys() == b.keys() and all(deep_equal(a[k], b[k], tol) for k in a)
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(deep_equal(x, y, tol) for x, y in zip(a, b))
+    return a == b
+
+
+def test_deep_equal_tolerance():
+    assert deep_equal({"s": [0.5]}, {"s": [0.5 + 1e-10]})
+    assert not deep_equal({"s": [0.5]}, {"s": [0.5 + 1e-8]})
+    assert not deep_equal({"a": None}, {"a": []})
+    assert not deep_equal(True, 1)
+
+
+def test_contract_file_is_current():
+    """contract.jsonl must be exactly what mcp/fixtures/gen_contract.py writes."""
+    r = subprocess.run([sys.executable, str(ROOT / "mcp/fixtures/gen_contract.py"), "--check"],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+
+
 def test_contract_has_cases():
     names = [c["name"] for c in _read_cases()]
-    assert len(names) == len(set(names)) >= 25
+    assert len(names) == len(set(names)) >= 30
     assert {"search_injection_t061", "get_t061_verbatim", "resource_eval_report", "prompt_review_ticket",
-            "get_unknown", "search_query_201", "search_limit_21", "classify_20001"} <= set(names)
+            "get_unknown", "search_whitespace_only", "prompt_unknown_ticket", "search_query_201", "search_limit_21", "classify_20001"} <= set(names)
 
 
 def test_contract_read():
@@ -63,7 +95,7 @@ def test_contract_read():
         return out
 
     for name, want, got in asyncio.run(go()):
-        assert got == want, name
+        assert deep_equal(got, want), name
 
 
 # ── 2. Tool metadata and untrusted text ─────────────────────────────────────
@@ -107,6 +139,25 @@ def test_t061_stays_in_untrusted_body():
     assert not r.is_error
     assert r.structured_content["untrusted_body"] == row["text"]
     assert set(r.structured_content) == {"id", "category", "priority", "untrusted_body"}
+
+
+def test_ticket_text_only_in_untrusted_body_everywhere():
+    """get_ticket and the ticket resource carry text only under untrusted_body, and the text block is the same JSON."""
+    async def go():
+        async with Client(build_read_server()) as client:
+            tool = await client.call_tool("get_ticket", {"id": "t061"})
+            res = await client.read_resource("lumen://tickets/t061")
+            return tool, res
+
+    row = json.loads((ROOT / "mcp/data/injection.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    tool, res = asyncio.run(go())
+    assert json.loads(tool.content[0].text) == tool.structured_content
+    doc = json.loads(res.contents[0].text)
+    for got in (tool.structured_content, doc):
+        assert set(got) == {"id", "category", "priority", "untrusted_body"}
+        assert got["untrusted_body"] == row["text"]
+        assert all(v != row["text"] for k, v in got.items() if k != "untrusted_body")
+        assert row["text"] not in json.dumps({k: v for k, v in got.items() if k != "untrusted_body"})
 
 
 def test_tool_error_text_is_not_prefixed():

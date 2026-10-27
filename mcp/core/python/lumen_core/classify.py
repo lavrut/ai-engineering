@@ -32,8 +32,8 @@ def _load_locked() -> None:
     mod = importlib.util.module_from_spec(spec)
     sys.modules["ml_serve_server"] = mod
     spec.loader.exec_module(mod)
-    _cache["server"] = mod
-    _cache["model"] = mod.load_production(mod.ml_root())
+    model = mod.load_production(mod.ml_root())   # may raise: fill the cache only once both succeed
+    _cache["server"], _cache["model"] = mod, model
 
 
 # ── 2. Classifying ──────────────────────────────────────────────────────────

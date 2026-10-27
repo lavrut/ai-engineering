@@ -123,3 +123,19 @@ def test_search_injection_ticket_shape():
     assert set(t061[0]) == {"id", "category", "priority", "untrusted_body"}
     row = json.loads((ROOT / "mcp/data/injection.jsonl").read_text(encoding="utf-8").splitlines()[0])
     assert t061[0]["untrusted_body"] == row["text"]
+
+
+def test_classify_load_failure_leaves_cache_empty(monkeypatch):
+    """If load_production raises, nothing is cached, so the next call retries cleanly."""
+    classify.classify("warm up")           # make sure ml_serve_server is importable
+    saved = dict(classify._cache)
+    classify._cache.clear()
+    mod = saved["server"]
+    monkeypatch.setattr(mod, "load_production", lambda root: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(classify.importlib.util, "module_from_spec", lambda spec: mod)
+    monkeypatch.setattr(classify.importlib.util, "spec_from_file_location",
+                        lambda *a, **k: type("S", (), {"loader": type("L", (), {"exec_module": lambda self, m: None})()})())
+    with pytest.raises(RuntimeError):
+        classify._load()
+    assert classify._cache == {}
+    classify._cache.update(saved)
