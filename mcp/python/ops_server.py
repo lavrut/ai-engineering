@@ -243,7 +243,21 @@ def build_http_app(mcp: MCPServer | None = None):
     return mcp.streamable_http_app(host="127.0.0.1", max_request_body_size=MAX_BODY_BYTES)
 
 
-# ── 6. The labelling App ────────────────────────────────────────────────────
+# ── 6. Entry point ──────────────────────────────────────────────────────────
+def main() -> None:
+    ap = argparse.ArgumentParser(description="lumen-ops MCP server (Streamable HTTP on 127.0.0.1 only)")
+    ap.add_argument("--port", type=int, default=DEFAULT_PORT)
+    ap.add_argument("--labels", type=Path, default=LABELS_PATH, help="append-only label file")
+    args = ap.parse_args()
+    import uvicorn
+    try:
+        app = build_http_app(build_ops_server(args.labels, auth=True))
+    except SigningKeyMissing as e:  # no key file: say how to fix it, never fall back to a key
+        raise SystemExit(f"ops_server: {e}") from None
+    uvicorn.run(app, host="127.0.0.1", port=args.port)
+
+
+# ── 7. The labelling App ────────────────────────────────────────────────────
 APP_URI = "ui://lumen/label.html"
 APP_PATH = Path(__file__).resolve().parent / "app" / "label.html"
 
@@ -262,20 +276,6 @@ def build_apps() -> Apps:
                            csp=ResourceCsp(connect_domains=[], resource_domains=[], frame_domains=[],
                                            base_uri_domains=[]))
     return apps
-
-
-# ── 7. Entry point ──────────────────────────────────────────────────────────
-def main() -> None:
-    ap = argparse.ArgumentParser(description="lumen-ops MCP server (Streamable HTTP on 127.0.0.1 only)")
-    ap.add_argument("--port", type=int, default=DEFAULT_PORT)
-    ap.add_argument("--labels", type=Path, default=LABELS_PATH, help="append-only label file")
-    args = ap.parse_args()
-    import uvicorn
-    try:
-        app = build_http_app(build_ops_server(args.labels, auth=True))
-    except SigningKeyMissing as e:  # no key file: say how to fix it, never fall back to a key
-        raise SystemExit(f"ops_server: {e}") from None
-    uvicorn.run(app, host="127.0.0.1", port=args.port)
 
 
 if __name__ == "__main__":
