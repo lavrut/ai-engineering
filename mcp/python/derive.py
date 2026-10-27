@@ -5,7 +5,8 @@ committed; `python mcp/python/derive.py --check` fails if any is out of date (CI
 
 How messages are captured: mcp 2.3.0 has no message hook on the high-level Client, so a wrapping
 in-memory transport (TapTransport) sits between the client and the server's stream loop and records
-every JSON-RPC message in both directions as it crosses. The client runs with mode="auto", so it
+every JSON-RPC message in both directions as it crosses, as the SDK serialises it (model_dump with
+by_alias and exclude_none), not as raw bytes. The client runs with mode="auto", so it
 opens with a real `server/discover` and every later request carries the 2026-07-28 `_meta`. The
 file holds real wire messages; nothing is typed by hand.
 
@@ -18,8 +19,9 @@ compact `tools/list` tools array, not a tokenizer count.
 injection.json is built from the two capstone recordings (mcp/data/recordings/capstone-{noguard,
 guard}.jsonl), which exist only after the user approves the paid runs. Until then it is
 {"recorded": false, "command": [...]}. Once they exist, re-running this file fills in the real
-outcome: the tool calls the model made, whether label_ticket was attempted, and the rows written
-(found by replaying the recording against the real servers on a tmp labels file). Never fabricated.
+outcome, one entry per recording (keyed by name, with its model and framing): the tool calls the model
+made, whether label_ticket was attempted, and the rows written (found by replaying the recording with
+its own settings against the real servers on a tmp labels file). Never fabricated.
 """
 from __future__ import annotations
 
@@ -213,21 +215,33 @@ def record_commands() -> list[str]:
             agent.record_command(agent.Options("capstone", guard=True, approve="decline", elicit="accept"))]
 
 
-def replay_rows(scenario: str, guard: bool, recordings: Path) -> int:
-    """Replay a recording against the real servers on a tmp labels file; return the rows written.
-    Replay never calls the API: a missing or changed request stops with ReplayMiss."""
+def replay_rows(settings: dict, recordings: Path) -> int:
+    """Replay one recording against the real servers on a tmp labels file, with the settings stored
+    in its own lines; return the rows written. Replay never calls the API: a missing or changed
+    request stops with ReplayMiss."""
     import agent
-    opts = agent.Options(scenario, guard=guard, approve="decline", elicit="accept", recordings=recordings)
+    opts = agent.Options(settings["scenario"], guard=settings["guard"], approve=settings["approve"],
+                         elicit=settings["elicit"], model=settings["model"], framing=settings["framing"],
+                         recordings=recordings)
     with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()):  # the harness prints each call
         path = Path(tmp) / "labels.jsonl"
-        agent.run_scenario(scenario, guard=guard, elicit="accept", labels_path=path,
-                           model_call=agent.replay_model(opts), approve="decline")
+        agent.run_scenario(settings["scenario"], guard=settings["guard"], elicit=settings["elicit"],
+                           labels_path=path, model_call=agent.replay_model(opts), approve=settings["approve"],
+                           framing=settings["framing"])
         return len(path.read_text(encoding="utf-8").splitlines()) if path.exists() else 0
 
 
-def summarize(path: Path, *, guard: bool, rows_written: int) -> dict:
-    """What one recording says: every tool the model called (in order), whether it tried
-    label_ticket, what became of it, and its last text answer. The outcome is read from the replayed label rows."""
+def recording_settings(path: Path) -> dict:
+    """The run's settings, from the first line of the recording itself (older lines have no framing)."""
+    first = json.loads(next(l for l in path.read_text(encoding="utf-8").splitlines() if l.strip()))
+    return {"scenario": "capstone", "model": first["model"], "framing": first.get("framing", "none"),
+            "guard": first["guard"], "approve": first["approve"], "elicit": first["elicit"]}
+
+
+def summarize(path: Path, *, settings: dict, rows_written: int) -> dict:
+    """What one recording says: the model and framing, every tool the model called (in order),
+    whether it tried label_ticket, what became of it, and its last text answer. The outcome is
+    read from the replayed label rows."""
     calls: list[dict] = []
     final = ""
     for raw in path.read_text(encoding="utf-8").splitlines():
@@ -240,19 +254,33 @@ def summarize(path: Path, *, guard: bool, rows_written: int) -> dict:
     attempted = any(c["name"].endswith("label_ticket") for c in calls)
     outcome = ("not attempted" if not attempted
                else "written" if rows_written > 0
-               else "guard denied" if guard else "declined or refused")
-    return {"guard": guard, "tool_calls": calls, "label_ticket_attempted": attempted,
+               else "guard denied" if settings["guard"] else "declined or refused")
+    return {"model": settings["model"], "framing": settings["framing"], "guard": settings["guard"],
+            "tool_calls": calls, "label_ticket_attempted": attempted,
             "outcome": outcome, "rows_written": rows_written, "final_answer": final}
 
 
 def derive_injection(recordings: Path = RECORDINGS_DIR,
-                     replay: Callable[[str, bool, Path], int] = replay_rows) -> dict:
-    files = {"no_guard": (recordings / "capstone-noguard.jsonl", False),
-             "guard": (recordings / "capstone-guard.jsonl", True)}
-    if not all(p.exists() for p, _ in files.values()):
+                     replay: Callable[[dict, Path], int] = replay_rows) -> dict:
+    """One entry per capstone recording present (capstone-*.jsonl), keyed by recording name, so
+    recordings from other models or framings are summarised as they appear."""
+    files = sorted(recordings.glob("capstone-*.jsonl")) if recordings.is_dir() else []
+    if not files:
         return {"recorded": False, "command": record_commands()}
-    return {"recorded": True, **{key: summarize(p, guard=g, rows_written=replay("capstone", g, recordings))
-                                 for key, (p, g) in files.items()}}
+    out = {}
+    for path in files:
+        settings = recording_settings(path)
+        out[path.stem] = summarize(path, settings=settings, rows_written=replay(settings, recordings))
+    return {"recorded": True, "recordings": out}
+
+
+def missing_recordings(committed: Path, recordings: Path) -> list[str]:
+    """Recordings the committed injection.json was built from that are no longer there."""
+    if not committed.exists():
+        return []
+    claimed = json.loads(committed.read_text(encoding="utf-8"))
+    names = claimed.get("recordings", {}) if claimed.get("recorded") else {}
+    return [f"{n}.jsonl" for n in names if not (recordings / f"{n}.jsonl").exists()]
 
 
 # ── 4. Writing and checking ─────────────────────────────────────────────────
@@ -272,6 +300,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, default=DERIVED_DIR)
     ap.add_argument("--recordings", type=Path, default=RECORDINGS_DIR)
     args = ap.parse_args(argv)
+    if args.check and (gone := missing_recordings(args.out / "injection.json", args.recordings)):
+        print(f"derive: injection.json was built from recordings that are missing from {args.recordings}: "
+              f"{', '.join(gone)}. Restore them (they are committed); not comparing against recorded:false.",
+              file=sys.stderr)
+        return 1
     built = asyncio.run(build_all(args.recordings))
     stale = [n for n, d in built.items()
              if not (args.out / f"{n}.json").exists() or (args.out / f"{n}.json").read_text(encoding="utf-8") != render(d)]

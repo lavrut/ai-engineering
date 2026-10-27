@@ -76,41 +76,86 @@ def test_injection_not_recorded_without_recordings(built):
 def test_no_volatile_values(built):
     text = json.dumps(built)
     assert "+00:00" not in text and '"time"' not in text
+    for part in ("/Users", "/private", "/tmp/"):
+        assert part not in text
+
+
+def test_committed_files_are_clean():
+    for name in NAMES:
+        text = (DERIVED / f"{name}.json").read_text(encoding="utf-8")
+        for part in ("/Users", "/private", "/tmp/", "+00:00"):
+            assert part not in text, (name, part)
+    state_values = []
+    def walk(v):
+        if isinstance(v, dict):
+            for k, x in v.items():
+                state_values.append(x) if k == "requestState" else walk(x)
+        elif isinstance(v, list):
+            for x in v:
+                walk(x)
+    walk(json.loads((DERIVED / "elicitation.json").read_text(encoding="utf-8")))
+    walk(json.loads((DERIVED / "messages.json").read_text(encoding="utf-8")))
+    assert state_values and all(x == derive.SEALED for x in state_values)
 
 
 def test_derive_is_deterministic(built, tmp_path):
     again = asyncio.run(derive.build_all(tmp_path))
-    assert derive.render(again["messages"]) == derive.render(built["messages"])
-    assert derive.render(again["elicitation"]) == derive.render(built["elicitation"])
+    for name in ("messages", "elicitation", "tool_budget", "app_snapshot"):
+        assert derive.render(again[name]) == derive.render(built[name]), name
 
 
-# ── The recorded=true path, on a TEST FIXTURE (not a real recording) ────────
-def _fixture_line(blocks: list[dict]) -> str:
-    return json.dumps({"key": "fixture", "response": {"content": blocks, "stop_reason": "tool_use", "usage": {}}})
+# ── The recorded=true path, on TEST FIXTURES (not real recordings) ──────────
+def _line(blocks: list[dict], **extra) -> str:
+    return json.dumps({"key": "fixture", "model": "fixture-model", "guard": False, "approve": "decline",
+                       "elicit": "accept", **extra,
+                       "response": {"content": blocks, "stop_reason": "tool_use", "usage": {}}})
+
+
+def _use(n, i):
+    return {"type": "tool_use", "id": "x", "name": n, "input": i}
 
 
 def test_injection_recorded_path_with_fixture_recordings(tmp_path):
-    use = lambda n, i: {"type": "tool_use", "id": "x", "name": n, "input": i}  # noqa: E731
-    (tmp_path / "capstone-noguard.jsonl").write_text(
-        _fixture_line([use("get_ticket", {"id": "t061"})]) + "\n"
-        + _fixture_line([use("label_ticket", {"id": "t061", "label": "bug"})]) + "\n", encoding="utf-8")
+    get, label = _use("get_ticket", {"id": "t061"}), _use("label_ticket", {"id": "t061", "label": "bug"})
+    (tmp_path / "capstone-noguard.jsonl").write_text(_line([get]) + "\n" + _line([label]) + "\n", encoding="utf-8")
     (tmp_path / "capstone-guard.jsonl").write_text(
-        _fixture_line([use("get_ticket", {"id": "t061"})]) + "\n"
-        + _fixture_line([use("label_ticket", {"id": "t061", "label": "bug"})]) + "\n", encoding="utf-8")
-    inj = derive.derive_injection(tmp_path, replay=lambda scenario, guard, d: 0 if guard else 1)
+        _line([get], guard=True) + "\n" + _line([label], guard=True) + "\n", encoding="utf-8")
+    (tmp_path / "capstone-guard-other-training.jsonl").write_text(
+        _line([get], guard=True, model="other", framing="training") + "\n", encoding="utf-8")
+    seen = []
+
+    def fake_replay(settings, recordings):
+        seen.append(settings)
+        return 0 if settings["guard"] else 1
+    inj = derive.derive_injection(tmp_path, replay=fake_replay)
     assert inj["recorded"] is True
-    ng, g = inj["no_guard"], inj["guard"]
+    r = inj["recordings"]
+    assert sorted(r) == ["capstone-guard", "capstone-guard-other-training", "capstone-noguard"]
+    ng, g, o = r["capstone-noguard"], r["capstone-guard"], r["capstone-guard-other-training"]
     assert [c["name"] for c in ng["tool_calls"]] == ["get_ticket", "label_ticket"]
     assert ng["label_ticket_attempted"] and ng["outcome"] == "written" and ng["rows_written"] == 1
-    assert g["label_ticket_attempted"] and g["outcome"] == "guard denied" and g["rows_written"] == 0
+    assert g["outcome"] == "guard denied" and g["rows_written"] == 0
+    assert (ng["model"], ng["framing"]) == ("fixture-model", "none")
+    assert (o["model"], o["framing"]) == ("other", "training") and o["outcome"] == "not attempted"
+    # replayed with each recording's own settings, not a hard-coded approve
+    assert {s["guard"] for s in seen} == {True, False}
+    assert all(s["approve"] == "decline" and s["elicit"] == "accept" for s in seen)
 
 
 def test_summarize_not_attempted(tmp_path):
     p = tmp_path / "r.jsonl"
-    p.write_text(_fixture_line([{"type": "text", "text": "done"}]) + "\n", encoding="utf-8")
-    s = derive.summarize(p, guard=True, rows_written=0)
+    p.write_text(_line([{"type": "text", "text": "done"}]) + "\n", encoding="utf-8")
+    s = derive.summarize(p, settings=derive.recording_settings(p), rows_written=0)
     assert s["outcome"] == "not attempted" and not s["label_ticket_attempted"]
     assert s["final_answer"] == "done"
+
+
+def test_committed_injection_matches_real_recordings():
+    inj = json.loads((DERIVED / "injection.json").read_text(encoding="utf-8"))
+    assert inj["recorded"] is True
+    for name, entry in inj["recordings"].items():
+        assert (derive.RECORDINGS_DIR / f"{name}.jsonl").exists()
+        assert entry["model"] and entry["framing"]
 
 
 # ── --check ─────────────────────────────────────────────────────────────────
@@ -121,3 +166,12 @@ def test_committed_files_are_up_to_date():
 def test_check_fails_when_stale(tmp_path, capsys):
     assert derive.main(["--check", "--out", str(tmp_path)]) == 1  # nothing there yet
     assert "stale or missing" in capsys.readouterr().err
+
+
+def test_check_fails_naming_a_missing_recording(tmp_path, capsys):
+    out = tmp_path / "derived"
+    out.mkdir()
+    (out / "injection.json").write_text(json.dumps({"recorded": True, "recordings": {"capstone-noguard": {}}}))
+    assert derive.main(["--check", "--out", str(out), "--recordings", str(tmp_path / "none")]) == 1
+    err = capsys.readouterr().err
+    assert "capstone-noguard.jsonl" in err and "missing" in err
