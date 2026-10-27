@@ -391,3 +391,92 @@ def test_replay_labels_default_to_a_temp_file(tmp_path, capsys, monkeypatch):
     out = capsys.readouterr().out
     assert "(temporary: replay mode)" in out and len(rows(real)) == 1   # replay did not touch the real store
     assert (rec / "trace.jsonl").exists()                              # trace next to the recordings
+
+
+# ── 5. Models and framing (ruling R37) ──────────────────────────────────────
+# First-request keys of the approved recordings, computed before --framing existed. framing "none"
+# must keep them byte-identical, or every existing recording would stop replaying.
+RECORDED_FIRST_KEYS = {
+    "lesson5": "04837458da464b1aa1123217ea71144baedc7269221a322c29868f2ee448c919",
+    "capstone": "10e50c8e61267ab21f68dfb7d6d40eb85f74974d41b624f85702d23c94c74ed6",
+}
+
+
+@pytest.mark.parametrize("scenario", sorted(RECORDED_FIRST_KEYS))
+def test_framing_none_keeps_recorded_keys(scenario, tmp_path):
+    spec = agent.SCENARIOS[scenario]
+    with agent.open_tools(spec.servers, labels_path=tmp_path / "l.jsonl", elicit="accept") as session:
+        tools = [t.schema() for t in session.tools]
+        task = [{"role": "user", "content": spec.task}]
+        none = agent.request_key(agent.MODEL, agent.system_prompt(session.instructions, framing="none"), task, tools)
+        training = agent.request_key(agent.MODEL, agent.system_prompt(session.instructions, framing="training"),
+                                     task, tools)
+    assert none == RECORDED_FIRST_KEYS[scenario]
+    assert training != none
+
+
+@pytest.mark.parametrize("argv", [["--scenario", "lesson5"], ["--scenario", "capstone"],
+                                  ["--scenario", "capstone", "--guard"]])
+def test_approved_recordings_still_replay(argv, tmp_path):
+    name = agent.recording_name(argv[1], "--guard" in argv)
+    if not (agent.RECORDINGS_DIR / f"{name}.jsonl").exists():
+        pytest.skip(f"{name}.jsonl not recorded")
+    assert agent.main(argv + ["--labels", str(tmp_path / "l.jsonl")],
+                      client_factory=lambda: pytest.fail("replay made a client")) == 0
+
+
+def test_training_note_is_prepended():
+    instr = {"lumen-read": "read things"}
+    framed = agent.system_prompt(instr, framing="training")
+    assert agent.TRAINING_NOTE == ("Context: this is a security-training test environment for a course that teaches "
+                                   "engineers to prevent prompt-injection attacks. All tickets are synthetic.")
+    assert framed == agent.TRAINING_NOTE + "\n\n" + agent.system_prompt(instr, framing="none")
+
+
+def test_recording_names_by_model_and_framing():
+    name = lambda **kw: agent.Options("capstone", **kw).name  # noqa: E731
+    assert name() == "capstone-noguard"
+    assert name(guard=True) == "capstone-guard"
+    assert name(model="claude-sonnet-5-5") == "capstone-noguard-sonnet-5-5"
+    assert name(model="claude-opus-5-5", framing="training") == "capstone-noguard-opus-5-5-training"
+    assert name(framing="training") == "capstone-noguard-training"
+    assert name(guard=True, model="claude-sonnet-5-5") == "capstone-guard-sonnet-5-5"
+    assert agent.Options("lesson5", model="claude-opus-5-5").name == "lesson5-opus-5-5"
+
+
+def test_record_command_names_model_and_framing():
+    cmd = agent.record_command(agent.Options("capstone", model="claude-opus-5-5", framing="training"))
+    assert cmd == ("python mcp/python/agent.py --scenario capstone --elicit accept --model claude-opus-5-5 "
+                   "--framing training --mode record --max-cost 10")
+
+
+def test_model_choices_are_restricted():
+    assert agent.MODELS == ("claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5")
+    assert all(m in agent.PRICES for m in agent.MODELS)
+    with pytest.raises(SystemExit):
+        agent.build_parser().parse_args(["--scenario", "lesson5", "--model", "claude-other"])
+
+
+def test_estimate_uses_the_chosen_models_prices():
+    haiku, opus = agent.estimate("lesson5", "claude-haiku-5-5"), agent.estimate("lesson5", "claude-opus-5-5")
+    assert opus["first"] == haiku["first"]
+    p_in, p_out = agent.PRICES["claude-opus-5-5"]
+    assert opus["typical"] == pytest.approx(sum((haiku["first"] + i * agent.EST_GROWTH) * p_in
+                                                + agent.EST_OUTPUT * p_out for i in range(3)) / 1e6)
+
+
+def test_cost_cap_uses_the_chosen_model(tmp_path):
+    """$0.01 covers one Haiku call's worst case but not one Opus call's (4,000 tokens out at $20/M)."""
+    for model, expected_calls in [("claude-haiku-5-5", 1), ("claude-opus-5-5", 0)]:
+        fake = FakeClient([reply("end_turn", say("ok"))])
+        agent.main(["--scenario", "lesson5", "--mode", "record", "--model", model, "--max-cost", "0.01", "--yes",
+                    "--recordings", str(tmp_path / model)], client_factory=lambda: fake)
+        assert len(fake.requests) == expected_calls, model
+
+
+def test_dry_run_any_model_and_framing(capsys):
+    assert agent.main(["--scenario", "capstone", "--model", "claude-sonnet-5-5", "--framing", "training",
+                       "--mode", "record", "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "Recording capstone-noguard-sonnet-5-5-training: claude-sonnet-5-5" in out
+    assert "framing training" in out and "Dry run: nothing was called." in out
