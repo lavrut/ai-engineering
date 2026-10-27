@@ -42,14 +42,14 @@ async def _run_case(client: Client, case: dict) -> dict:
         try:
             r = await client.read_resource(p["uri"])
         except MCPError as e:
-            return {"error": str(e)}
+            return {"error": str(e), "code": e.code}
         return {"contents": [{"uri": str(c.uri), "mimeType": c.mime_type, "json": json.loads(c.text)}
                              for c in r.contents]}
     if m == "prompts/get":
         try:
             r = await client.get_prompt(p["name"], p["arguments"])
         except MCPError as e:
-            return {"error": str(e)}
+            return {"error": str(e), "code": e.code}
         return {"contents": [{"role": x.role, "text": x.content.text} for x in r.messages]}
     raise AssertionError(f"unknown method {m}")
 

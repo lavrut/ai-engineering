@@ -56,7 +56,7 @@ We measured it from each server's real `tools/list` result. The token figure is 
 
 Within one server, a tool name is a key. Across servers, nothing in the protocol enforces anything, because each client talks to one server and cannot see the others. As far as our research sheet records, the spec leaves clashes to the host.
 
-A host that keeps one table of tools by name has a problem as soon as two servers offer `search_tickets`: the later one replaces the earlier one, and no error is raised. The usual fix is a prefix. Claude Code, for example, shows MCP tools as `mcp__<server>__<tool>`. Look at your own host's tool list to see its scheme, because it is the host's choice and can change.
+A host that keeps one table of tools by name has a problem as soon as two servers offer `search_tickets`: the later one replaces the earlier one, and no error is raised. The usual fix is a prefix. Hosts choose their own scheme and it can change, so look at your own host's tool list to see it. One we believe Claude Code uses is shown in the optional section below; check your host's docs.
 
 A second kind of clash is about trust, not names. A tool's description is text the model reads, and it comes from the server's author. A server you did not write can describe its tools in words meant to steer the model's choices about other servers' tools. The spec says to treat tool annotations as untrusted unless the server is trusted. Adding a server adds text to the model's context, so add only servers you would trust with that.
 
@@ -167,7 +167,7 @@ For **Claude Code**, one command adds the same server. Everything after `--` is 
 claude mcp add lumen-read -- /ABS/PATH/.venv-mcp/bin/python /ABS/PATH/mcp/python/read_server.py
 ```
 
-Then ask the host to find the duplicate-charge ticket. It will ask your permission before it calls a tool, and the tool list in its interface will show how it names the tools.
+Then ask the host to find the duplicate-charge ticket. It will ask your permission before it calls a tool, and the tool list in its interface will show how it names the tools. We believe Claude Code shows them as `mcp__<server>__<tool>`, a server-name prefix that avoids clashes, but that is from memory, not from a check: see what your host does.
 
 ### Which protocol version did the host use? (optional)
 

@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Annotated, TypedDict
 
 from mcp.server import MCPServer
-from mcp.server.mcpserver.exceptions import ResourceError
 from mcp.shared.exceptions import MCPError
 from mcp_types import INVALID_PARAMS, CallToolResult, TextContent, ToolAnnotations
 
@@ -123,7 +122,7 @@ def build_read_server(*, auth: bool = False) -> MCPServer:
         try:
             return json.dumps(tickets.get(id), ensure_ascii=False)
         except KeyError:
-            raise ResourceError(err_unknown(id)) from None
+            raise MCPError(INVALID_PARAMS, err_unknown(id)) from None  # the spec's -32602; a ResourceError becomes -32603
 
     @mcp.resource("lumen://reports/eval", mime_type="application/json")
     def eval_report() -> str:

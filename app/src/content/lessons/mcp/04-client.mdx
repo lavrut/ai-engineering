@@ -22,14 +22,14 @@ quiz:
       - They do not match; only the tool names do
     answer: 1
     explanation: Python adds titles and definitions, and Go's struct cannot say a hint is absent, so each client normalises the same way. That makes the output comparable, which is what lets one contract test both servers.
-  - question: You run the client with --url against lumen-read and no token. What do you get, and what does it tell you?
+  - question: A call to lumen-ops returns an InputRequiredResult holding a confirmation question. What does the client do next?
     options:
-      - The tool list, because discovery is public
-      - A one-line refusal, "HTTP 401 Unauthorized", because the server over HTTP is a resource server and checks a bearer token before it answers any request
-      - A hang, until the connection times out
-      - The tool list with ticket text hidden
+      - Treats it as an error and stops
+      - Asks its answerer, then sends the same call again with the answer attached
+      - Waits for the server to send a request of its own
+      - Answers yes automatically, because the client is trusted
     answer: 1
-    explanation: Over HTTP, lumen-read only answers a request that carries a token issued for it. The client records the status of the refused request and says so in one line. Over stdio there is no token, because the host that starts the process is the trust boundary.
+    explanation: A server cannot send the client a request in this revision, so the question comes back as the reply to the call. The client supplies an answer through its callback and retries the same call. The answer is only the client's claim, which is why a write needs more than a yes over the wire.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
 import FlowDiagram from '../../../components/FlowDiagram.astro';
@@ -50,7 +50,7 @@ A server waits to be asked. The program that asks is the client. In the last two
 | `read URI` | Reads a resource |
 | `prompt NAME JSON` | Gets a prompt |
 
-Two flags choose the server: `--stdio` starts `read_server.py` as a child process, and `--url` talks to a Streamable HTTP endpoint. Everything after the connection is the same, which is the point of a protocol.
+This lesson uses stdio: the client starts `read_server.py` as a child process with `--stdio`. A second way to connect, over HTTP, is lesson 7. Everything after the connection is the same, which is the point of a protocol.
 
 ### Discovery
 
@@ -69,10 +69,6 @@ A server in this revision cannot send the client a question. When `lumen-ops` ne
 
 The client's own answer is only a claim. A server cannot tell a person from `--yes`. That is why a write needs more than a "yes" over the wire.
 
-### HTTP needs a token
-
-`lumen-read` over HTTP is an OAuth resource server: every request needs a bearer token issued for it. The client has flags for a token (`--token-file`, `--token` and the `LUMEN_TOKEN` environment variable), and sends it in an `Authorization: Bearer` header, never in the URL. Where tokens come from is lesson 9. Here you only need to see what happens without one.
-
 ## See it
 
 Press **Next** through the client's five steps. Watch where the answerer sits: it hangs off the call step, not the connection, because a question can only come back as the answer to a call.
@@ -87,11 +83,8 @@ Section 2 connects.
 
 <CodeTabs source="mcp-client" section={2} />
 
-- `HttpTarget(url, headers)` is a URL plus the headers every request carries. `http_target(url, token)` is the one place the HTTP path is built. With a token it adds `Authorization: Bearer ...`, and the URL stays exactly as given.
+- The HTTP lines in this section are covered in lesson 7.
 - `callback = elicitation_callback(answer or deny)` is built first. Passing it to `Client(..., elicitation_callback=callback)` is what declares the elicitation capability.
-- `if isinstance(target, str) and target.startswith(("http://", "https://"))` sends a URL down the HTTP path. Anything else, such as `StdioServerParameters` or an in-process server in a test, goes to `Client(target, ...)`.
-- `http.event_hooks["response"].append(record)` remembers the status of the last non-2xx answer to a POST. A failed call can then say "HTTP 401 Unauthorized" instead of an SDK stack.
-- The comment on `connect` notes that the SDK follows a redirect only within the endpoint's own origin, so the headers never go elsewhere.
 
 Section 3 discovers.
 
@@ -144,31 +137,3 @@ Call a tool, and then call it from Go. The two commands print the same bytes. We
 .venv-mcp/bin/python mcp/python/client.py --stdio call search_tickets '{"query": "charged twice", "limit": 2}'
 cd mcp/go && go run ./client -stdio call search_tickets '{"query": "charged twice", "limit": 2}'
 ```
-
-### Try HTTP without a token
-
-This needs three terminals, all from the repo root. The first command starts the test authorization server. It is **test only** and it auto-approves every request, so it must stay on `127.0.0.1`. On its first start it writes `mcp/data/dev-signing.key`, which is git-ignored. The HTTP server reads the same key, and refuses to start without it.
-
-Terminal 1:
-
-```bash
-.venv-mcp/bin/python mcp/python/auth_server.py
-```
-
-Terminal 2 starts `lumen-read` over HTTP on `127.0.0.1:8765`:
-
-```bash
-.venv-mcp/bin/python mcp/python/read_server.py --http
-```
-
-Terminal 3 connects with no token. You should see one line, `client: the server refused the request: HTTP 401 Unauthorized`, and exit code 1. The Go client prints the same line:
-
-```bash
-.venv-mcp/bin/python mcp/python/client.py --url http://127.0.0.1:8765/mcp discover
-```
-
-```bash
-cd mcp/go && go run ./client -url http://127.0.0.1:8765/mcp discover
-```
-
-Stop both servers with Ctrl-C when you are done. Lesson 9 shows how to get a token that this server accepts.

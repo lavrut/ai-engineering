@@ -24,10 +24,10 @@ and hand-typed error texts, not from a server. Edit the generator, never the JSO
   - `isError` true: `{"error": <content[0].text>}`. The text must be exactly the fixed message (no prefix), and there is no structuredContent.
 - **resources/read**
   - success: `{"contents": [{"uri", "mimeType", "json"}]}` where `json` is the entry's `text` parsed as JSON.
-  - failure: `{"error": <JSON-RPC error message>}`. The Go server must set that message to the fixed text (`unknown ticket: {id}`).
+  - failure: `{"error": <JSON-RPC error message>, "code": <JSON-RPC error code>}`. The message is the fixed text (`unknown ticket: {id}`) and the code is -32602 (INVALID_PARAMS), in both servers.
 - **prompts/get**
   - success: `{"contents": [{"role", "text"}]}`, one per message (text content).
-  - failure: `{"error": <JSON-RPC error message>}`, as for resources.
+  - failure: `{"error": <JSON-RPC error message>, "code": <JSON-RPC error code>}`, as for resources (-32602).
 
 ## Ops cases (`server: "ops"`, lumen-ops `label_ticket`)
 

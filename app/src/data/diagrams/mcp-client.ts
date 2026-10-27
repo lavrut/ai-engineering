@@ -28,14 +28,14 @@ export const mcpClient: Diagram = {
       n: 1,
       highlight: ['cmd', 'e-cmd-connect', 'connect'],
       caption:
-        'One command per run. The flags pick the server (--stdio or --url), where the token comes from (--token-file, then --token, then LUMEN_TOKEN) and how to answer a question (--yes, --no or ask). In the code: section 1.',
+        'One command per run. The flags pick the server (here --stdio, which starts lumen-read as a child process) and how to answer a question (--yes, --no or ask). In the code: section 1.',
       code: { file: 'python', section: 1, source: 'mcp-client' },
     },
     {
       n: 2,
       highlight: ['connect', 'e-connect-discover', 'discover'],
       caption:
-        'Over HTTP the token goes in an Authorization: Bearer header on every request and never in the URL. A refused request is reported with its status in one line. In the code: section 2.',
+        'The client connects: over stdio it starts the process and exchanges messages on its input and output. The HTTP path through this section is lesson 7. In the code: section 2.',
       code: { file: 'python', section: 2, source: 'mcp-client' },
     },
     {

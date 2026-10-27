@@ -29,7 +29,7 @@ quiz:
       - You do not know yet. The SDKs speak the old handshake as well, so a host may be using either, and the way to know is to look at what it sent
       - It used 2025-11-25, because hosts are always one revision behind
     answer: 2
-    explanation: The facts sheet could not confirm what Claude Desktop and Claude Code speak, and the SDKs handle both eras. The lesson's smoke test shows lumen-read answering both. Always report the version you observed, not the one you expect.
+    explanation: Nobody has confirmed what Claude Desktop and Claude Code speak, and the SDKs handle both eras. The lesson's smoke test shows lumen-read answering both. Always report the version you observed, not the one you expect.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
 import FlowDiagram from '../../../components/FlowDiagram.astro';
@@ -71,7 +71,7 @@ The spec here is revision 2026-07-28. The previous one is 2025-11-25. The facts 
 
 - **No handshake.** There is no `initialize` call and no `notifications/initialized`. A client can send its first real request straight away.
 - **Capabilities on every request.** Each request carries `_meta` keys for the protocol version, the client's capabilities and (as a "should") the client's name. A result carries the server's name in `_meta`. A mismatch gives an `UnsupportedProtocolVersionError`, code -32022.
-- **No sessions.** The `Mcp-Session-Id` header is gone, and a server's lists may not vary from one connection to the next. A tool that needs state across calls hands back an id that the model passes into the next call.
+- **No sessions.** The `Mcp-Session-Id` header is gone, and a server's lists may not vary from one connection to the next (they may vary by the caller's authorization scope). A tool that needs state across calls hands back an id that the model passes into the next call.
 - **A discovery call.** `server/discover` returns the versions, capabilities and instructions a server supports. Clients may skip it.
 - **No server-to-client requests.** When a server needs an answer from the person, it replies to the call with an `InputRequiredResult`, and the client retries the same call with the answer. Lesson 8 builds this.
 
@@ -83,7 +83,7 @@ Older things are still around. The sheet lists roots, sampling and logging as de
 
 ### What we build
 
-Two servers over one shared core. `lumen-read` has no side effects: three tools, two resources and one prompt over the 60 Lumen tickets plus an extra injection test ticket, `t061`. `lumen-ops` writes labels, only after a person confirms, and only over HTTP. Hosts grant consent per server, so the read server can be approved once while the write server stays gated.
+Two servers over one shared core. `lumen-read` has no side effects: three tools, two resources and one prompt over the 60 Lumen tickets plus an extra injection test ticket, `t061`. `lumen-ops` writes labels, only after a person confirms, and only over HTTP. A host can grant consent per server, so the read server can be approved once while the write server stays gated.
 
 ## See it
 
@@ -101,7 +101,7 @@ The whole server is started in one place. Section 6 of `read_server.py` chooses 
 
 - `ap.add_argument("--http", action="store_true", ...)` is the only switch. With no flag the server speaks stdio.
 - `build_read_server().run()` builds the server and runs it on stdio. The client starts this process and owns its stdin and stdout.
-- `app = build_http_app()` builds the HTTP app instead. It needs a signing key, because the HTTP server checks a bearer token. With no key file, `SigningKeyMissing` becomes a message that says how to fix it, and the server never falls back to a default key.
+- `app = build_http_app()` builds the HTTP app instead. Serving over HTTP is lesson 7.
 - `uvicorn.run(app, host="127.0.0.1", port=args.port)` binds the loopback address only, on port `8765` unless you pass `--port`.
 
 What a request looks like on the wire follows. It is a real `tools/call` captured from `lumen-read` for the lesson 2 aid, not typed in:
@@ -136,7 +136,7 @@ What a request looks like on the wire follows. It is a real `tools/call` capture
 
 ### Set up
 
-The track needs Python 3.12 or later and Go 1.22 or later. From the repo root, make a virtual environment for it and install the pinned packages. Never install into your base Python.
+The track needs Python 3.12 or later and Go 1.27.2 or later, the version `mcp/go/go.mod` requires. From the repo root, make a virtual environment for it and install the pinned packages. Never install into your base Python.
 
 ```bash
 python3 -m venv .venv-mcp

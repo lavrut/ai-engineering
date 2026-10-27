@@ -29,7 +29,7 @@ quiz:
       - A tool result with isError true
       - The nearest ticket, t099
     answer: 1
-    explanation: A missing resource is a protocol error, not a tool result, because nothing was called as a tool. Python and Go return the same message, which is what the shared contract compares. The error code is not the same in both. The spec says -32602, the Go server sends that, and the Python server's SDK sends -32603.
+    explanation: A missing resource is a protocol error, not a tool result, because nothing was called as a tool. Python and Go return the same message, which is what the shared contract compares. Both also send the same error code, -32602, which is the spec's code for this.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
 import McpMessageView from '../../../components/mcp/McpMessageView.astro';
@@ -51,7 +51,7 @@ An <Term t="MCP resource" /> is data with an address. The client lists them (`re
 
 A resource carries a `mimeType`, here `application/json`, so a host knows how to show it. Results of reads also carry `ttlMs` and `cacheScope`, which tell a client how long it may keep the answer. Ours say `"ttlMs": 0` and `"cacheScope": "private"`: do not reuse it, and do not share it between users.
 
-A resource that does not exist is a protocol error with the message `unknown ticket: t999`. The 2026-07-28 revision gives that error the code -32602 (it was -32002). The Go server sends -32602. The Python server sends -32603, "internal error", because its SDK turns the `ResourceError` it raises into that code. We checked both. The shared contract compares the message and not the code, so the difference passes the tests, and a client that branches on the code would see it.
+A resource that does not exist is a protocol error with the message `unknown ticket: t999` and the code -32602 (INVALID_PARAMS). The 2026-07-28 revision uses -32602 for this (it was -32002). Both Lumen servers send it, and the shared contract checks the code as well as the message.
 
 ### Prompts
 
@@ -85,7 +85,7 @@ Section 3 holds the resources.
 
 - `@mcp.resource("lumen://tickets/{id}", mime_type="application/json")` registers a template. The `{id}` in the address is passed to the function as `id`.
 - `return json.dumps(tickets.get(id), ensure_ascii=False)` returns the same ticket JSON that `get_ticket` does.
-- `raise ResourceError(err_unknown(id)) from None` turns a missing id into the fixed message. The client sees an error with that text. Over the in-memory client its code is -32603.
+- `raise MCPError(INVALID_PARAMS, err_unknown(id)) from None` turns a missing id into the fixed message with the code -32602. The SDK would turn a plain `ResourceError` into -32603 (internal error), which is not what the spec says, so the server raises the protocol error directly, as the prompt does.
 - `@mcp.resource("lumen://reports/eval", ...)` has no hole in its address, so it is a plain resource.
 - `return json.dumps(eval_summary(), ensure_ascii=False)` reads the summary file on every call. The server keeps no copy.
 
@@ -100,7 +100,7 @@ Section 4 holds the prompt.
 
 ## How Go does it
 
-The Go tab shows the same two sections. The one thing worth reading is the error. The Go SDK has a ready-made "resource not found" error, but its message is the generic `Resource not found`. The contract needs `unknown ticket: t999`, so section 1 of the Go server defines `rpcError`, which builds a `jsonrpc.Error` with code `jsonrpc.CodeInvalidParams` (-32602) and the fixed text. The resource template and the prompt both use it. The message on the wire is the same as Python's. The code is not: Go sends -32602, the spec's code for a missing resource, where Python's SDK sends -32603.
+The Go tab shows the same two sections. The one thing worth reading is the error. The Go SDK has a ready-made "resource not found" error, but its message is the generic `Resource not found`. The contract needs `unknown ticket: t999`, so section 1 of the Go server defines `rpcError`, which builds a `jsonrpc.Error` with code `jsonrpc.CodeInvalidParams` (-32602) and the fixed text. The resource template and the prompt both use it. The result on the wire is the same as Python's, message and code.
 
 ## Try it
 

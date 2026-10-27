@@ -117,7 +117,7 @@ func rpcMessage(t *testing.T, err error) map[string]any {
 	if !errors.As(err, &je) {
 		t.Fatalf("want a JSON-RPC error, got %T: %v", err, err)
 	}
-	return map[string]any{"error": je.Message}
+	return map[string]any{"error": je.Message, "code": float64(je.Code)}
 }
 
 func connect(t *testing.T) *mcp.ClientSession {
