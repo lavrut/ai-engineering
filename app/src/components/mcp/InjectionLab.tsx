@@ -4,7 +4,7 @@ import NoRecordedRun from '../llms/NoRecordedRun';
 import { BASE_CSS } from './mcpStyle';
 
 const FILTERS: { id: GuardFilter; label: string }[] = [
-  { id: 'all', label: 'All recordings' },
+  { id: 'all', label: 'All runs' },
   { id: 'noguard', label: 'Guard off' },
   { id: 'guard', label: 'Guard on' },
 ];
@@ -87,7 +87,9 @@ export default function InjectionLab({ recorded, rows, simulatedRows, commands }
         These rows come from <code>simulate.py</code>: a script that does what t061 asks, run through the real agent, guard and servers. No model was
         called. They show what the defences in code do when a model obeys.
       </p>
-      <p class="mc-live">{simulatedSummary(sim)}</p>
+      <p class="mc-live" aria-live="polite">
+        {simulatedSummary(sim)}
+      </p>
       <RunTable rows={sim} label="Simulated runs" />
       <Readings rows={sim} label="What each simulated run shows" answer="What the script answered" />
     </section>

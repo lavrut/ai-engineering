@@ -43,6 +43,17 @@ const button = (name: string | RegExp) => screen.getByRole('button', { name });
 
 afterEach(() => cleanup());
 
+// The aid logic, one module per aid group (ruling R43), re-exported by mcpAids.ts.
+const MCP_LIB = ['mcpAids.ts', 'mcpTypes.ts', 'mcpMessages.ts', 'mcpElicitation.ts', 'mcpAppPreview.ts', 'mcpInjection.ts'];
+
+describe('mcp aid modules', () => {
+  it('are split per aid group, each well under 400 lines, and mcpAids.ts only re-exports them', () => {
+    for (const f of MCP_LIB) expect(readFileSync(join(here, '../src/lib', f), 'utf8').split('\n').length, f).toBeLessThan(400);
+    const barrel = readFileSync(join(here, '../src/lib/mcpAids.ts'), 'utf8');
+    expect(barrel.match(/^export \* from '\.\/mcp\w+';$/gm)).toHaveLength(5);
+  });
+});
+
 // ── McpMessageView ──────────────────────────────────────────────────────────
 // Literals from mcp/data/derived/messages.json (python mcp/python/derive.py): lumen-read, spec 2026-07-28.
 describe('message view data', () => {
@@ -359,7 +370,7 @@ describe('AppPreview', () => {
     for (const f of ['AppPreview.tsx', 'AppPreview.astro']) {
       expect(readFileSync(join(here, '../src/components/mcp', f), 'utf8')).not.toMatch(/innerHTML|dangerouslySetInnerHTML|set:html/);
     }
-    expect(readFileSync(join(here, '../src/lib/mcpAids.ts'), 'utf8')).not.toMatch(/innerHTML/);
+    for (const f of MCP_LIB) expect(readFileSync(join(here, '../src/lib', f), 'utf8'), f).not.toMatch(/innerHTML/);
   });
 });
 
@@ -536,6 +547,14 @@ describe('InjectionLab simulated section', () => {
     const sim = screen.getByRole('table', { name: /Simulated runs/ });
     expect(within(sim).getAllByRole('row')).toHaveLength(2);
     expect(sim.textContent).toContain('capstone-noguard-simulated-compromised');
+  });
+
+  it('announces the simulated summary too, and never calls simulated runs recordings', () => {
+    render(<InjectionLab {...injectionLabProps(data.injection)} />);
+    const live = [...document.querySelectorAll('[aria-live="polite"]')].map((e) => e.textContent);
+    expect(live).toContain('2 simulated runs shown (a scripted model, not a real one). In 2 of them the script tried to write. Rows written in total: 1.');
+    expect(screen.getByRole('radio', { name: 'All runs' })).toBeTruthy();
+    expect(screen.queryByRole('radio', { name: /recordings/ })).toBeNull();
   });
 
   it('still shows the simulated runs when nothing real is recorded', () => {
