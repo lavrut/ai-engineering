@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -262,6 +264,33 @@ func TestTokenSentAsBearerHeaderOnly(t *testing.T) {
 	}
 	if _, err := newTransport(true, "", token); err == nil {
 		t.Error("-token with -stdio must be refused")
+	}
+}
+
+func TestResolveTokenPrecedence(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "t.tok")
+	os.WriteFile(f, []byte("  from-file \nsecond\n"), 0o600)
+	for _, c := range []struct {
+		file, flag, env, want string
+		warn                  bool
+	}{
+		{f, "from-flag", "from-env", "from-file", true},
+		{"", "from-flag", "from-env", "from-flag", true},
+		{"", "", "from-env", "from-env", false},
+		{"", "", "", "", false},
+	} {
+		got, warn, err := resolveToken(c.file, c.flag, c.env)
+		if err != nil || got != c.want || warn != c.warn {
+			t.Errorf("%+v: got %q %v %v", c, got, warn, err)
+		}
+	}
+	empty := filepath.Join(t.TempDir(), "e.tok")
+	os.WriteFile(empty, []byte("\n"), 0o600)
+	if _, _, err := resolveToken(empty, "", ""); err == nil || err.Error() != "token file is empty: "+empty {
+		t.Errorf("empty: %v", err)
+	}
+	if _, _, err := resolveToken(empty+".missing", "", ""); err == nil || err.Error() != "token file not readable: "+empty+".missing" {
+		t.Errorf("missing: %v", err)
 	}
 }
 

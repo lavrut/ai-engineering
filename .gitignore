@@ -18,3 +18,5 @@ llms/inspect/logs/
 logs/
 .venv-mcp/
 mcp/data/labels.jsonl
+# the test AS's HS256 signing key (generated on first start, mode 0600; ruling R25)
+mcp/data/dev-signing.key

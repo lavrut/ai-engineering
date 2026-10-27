@@ -1,10 +1,14 @@
 """Lumen MCP client (Python): discover, list tools, call tools, read resources, get prompts.
 
-Usage:  python mcp/python/client.py (--stdio | --url URL [--token TOKEN]) [--yes | --no] <command>
-          --stdio   spawn mcp/python/read_server.py and talk over stdio
-          --url     talk to a Streamable HTTP server, e.g. http://127.0.0.1:8765/mcp
-          --token   an OAuth access token for that server, sent as `Authorization: Bearer` on every
-                    request (never in the URL). Only with --url.
+Usage:  python mcp/python/client.py (--stdio | --url URL [--token-file PATH | --token TOKEN]) [--yes | --no] <command>
+          --stdio       spawn mcp/python/read_server.py and talk over stdio
+          --url         talk to a Streamable HTTP server, e.g. http://127.0.0.1:8765/mcp
+          --token-file  read the OAuth access token for that server from a file (first line, trimmed)
+          --token       the token itself: works, but warns, because a command line is visible in the
+                        process list and shell history
+          LUMEN_TOKEN   (environment) the token, when neither flag is given
+          Precedence: --token-file, then --token, then LUMEN_TOKEN. The token is sent as
+          `Authorization: Bearer` on every request, never in the URL. Only with --url.
           --yes     answer every input-required (elicitation) round "accept" without asking
           --no      answer every round "decline" without asking
           (neither) ask on the terminal: the prompt goes to stderr, the answer is read from stdin (y/N)
@@ -35,6 +39,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -263,6 +268,29 @@ class UsageError(Exception):
     pass
 
 
+# Printed (to stderr) whenever --token is given. The Go client prints the same line.
+TOKEN_FLAG_WARNING = ("client: warning: a token on the command line is visible in the process list and shell "
+                      "history; use a token file or LUMEN_TOKEN")
+
+
+def resolve_token(token_file: str | None, token: str | None, env: str | None) -> tuple[str | None, bool]:
+    """The token to send and whether to warn (a token was given on the command line).
+    Precedence: --token-file, then --token, then LUMEN_TOKEN. Empty values count as absent."""
+    warn = bool(token)
+    if token_file:
+        try:
+            text = Path(token_file).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            raise UsageError(f"token file not readable: {token_file}") from None
+        lines = text.strip().splitlines()
+        if not lines or not lines[0].strip():
+            raise UsageError(f"token file is empty: {token_file}")
+        return lines[0].strip(), warn
+    if token:
+        return token, warn
+    return (env or None), warn
+
+
 def json_object(args: list[str], i: int) -> dict:
     if len(args) <= i:
         return {}
@@ -307,19 +335,25 @@ async def amain(argv: list[str]) -> None:
     where = ap.add_mutually_exclusive_group(required=True)
     where.add_argument("--stdio", action="store_true", help="spawn read_server.py and use stdio")
     where.add_argument("--url", help="Streamable HTTP endpoint, e.g. http://127.0.0.1:8765/mcp")
-    ap.add_argument("--token", help="OAuth access token for --url, sent as Authorization: Bearer")
+    ap.add_argument("--token-file", help="file holding the OAuth access token for --url")
+    ap.add_argument("--token", help="OAuth access token for --url (visible to other users: prefer --token-file)")
     yn = ap.add_mutually_exclusive_group()
     yn.add_argument("--yes", action="store_true", help="accept input-required rounds")
     yn.add_argument("--no", action="store_true", help="decline input-required rounds")
     ap.add_argument("command", choices=["discover", "tools", "call", "read", "prompt"])
     ap.add_argument("args", nargs="*")
     ns = ap.parse_args(argv)
-    if ns.token is not None and ns.url is None:
-        ap.error("--token needs --url")
     answer = always(True) if ns.yes else always(False) if ns.no else ask_terminal()
     try:
+        if ns.stdio and (ns.token_file or ns.token):
+            raise UsageError("a token needs --url / -url")
+        token = None
+        if ns.url is not None:  # LUMEN_TOKEN is ambient: used for HTTP only
+            token, warn = resolve_token(ns.token_file, ns.token, os.environ.get("LUMEN_TOKEN"))
+            if warn:
+                print(TOKEN_FLAG_WARNING, file=sys.stderr)
         check_args(ns.command, ns.args)
-        async with connect(stdio_params() if ns.stdio else http_target(ns.url, ns.token), answer) as client:
+        async with connect(stdio_params() if ns.stdio else http_target(ns.url, token), answer) as client:
             print(dump(await run(client, ns.command, ns.args)))
     except UsageError as e:
         print(f"client: {e}", file=sys.stderr)

@@ -173,11 +173,8 @@ def test_tool_error_text_is_not_prefixed():
 
 # ── 3. HTTP app and security ────────────────────────────────────────────────
 META = {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientCapabilities": {}}
-# HTTP needs a token since Task 8: the fixture token is lumen-read's own (tickets:read, aud = read URI).
-TOKEN = mint_test_token(SCOPE_READ, READ_RESOURCE)
 HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json",
-           "Host": "127.0.0.1:8765", "MCP-Protocol-Version": "2026-07-28", "Mcp-Method": "server/discover",
-           "Authorization": f"Bearer {TOKEN}"}
+           "Host": "127.0.0.1:8765", "MCP-Protocol-Version": "2026-07-28", "Mcp-Method": "server/discover"}
 
 
 def _discover(pad: int = 0) -> bytes:
@@ -188,7 +185,11 @@ def _discover(pad: int = 0) -> bytes:
 
 
 def _http() -> TestClient:
-    return TestClient(build_http_app(), base_url="http://127.0.0.1:8765")
+    """HTTP needs a token since Task 8: lumen-read's own (tickets:read, aud = read URI), minted with
+    this test's key."""
+    c = TestClient(build_http_app(), base_url="http://127.0.0.1:8765")
+    c.headers["Authorization"] = f"Bearer {mint_test_token(SCOPE_READ, READ_RESOURCE)}"
+    return c
 
 
 def test_server_discover_version():

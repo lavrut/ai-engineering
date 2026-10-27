@@ -8,8 +8,14 @@
 // `WWW-Authenticate: Bearer resource_metadata="..."`. No token is ever passed on to anything else.
 //
 // The audience check lives in the verifier (ruling R7): the Go SDK's RequireBearerToken checks
-// scopes and expiry but not audience. The Python servers do the same in mcp/python/resource_auth.py,
-// and the numbered sections match it.
+// scopes and expiry but not audience. Order (ruling R24): the verifier runs first and rejects a
+// token for another server with 401; only a verified token reaches the scope check (403). Audience
+// before scope, as the spec says, so lumen-read's token at lumen-ops is 401, not 403. The Python
+// servers do the same in mcp/python/resource_auth.py, and the numbered sections match it.
+//
+// The signing key is never in the source (ruling R25): the test AS writes 32 random bytes (hex,
+// mode 0600, git-ignored) to mcp/data/dev-signing.key on first start, and LoadSigningKey reads it
+// (or the file named by LUMEN_SIGNING_KEY_FILE). A server without it refuses to start.
 package auth
 
 import (
@@ -17,10 +23,14 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -42,11 +52,48 @@ const (
 	Leeway       = 30 * time.Second                            // clock skew allowed on exp / nbf / iat
 )
 
-// TestSigningKey is the TEST-ONLY HS256 key shared with the test AS (resource_auth.TEST_SIGNING_KEY
-// in Python holds the same string). It is public: anyone who reads it can mint tokens, which is
-// acceptable only for a loopback lab. Production uses an asymmetric key (RS256/ES256) published by
-// the AS as a JWKS, so resource servers hold no secret at all.
-const TestSigningKey = "lumen-TEST-ONLY-hs256-key-public-do-not-use-in-production"
+const (
+	KeyFileEnv  = "LUMEN_SIGNING_KEY_FILE"
+	keyFileName = "dev-signing.key" // in mcp/data, next to labels.jsonl
+	keyBytes    = 32
+)
+
+// KeyFile is the signing key file: $LUMEN_SIGNING_KEY_FILE, else mcp/data/dev-signing.key.
+func KeyFile() string {
+	if p := os.Getenv(KeyFileEnv); p != "" {
+		return p
+	}
+	return filepath.Join(core.Root(), "mcp", "data", keyFileName)
+}
+
+// LoadSigningKey reads the HS256 key the test AS signs with: 32 bytes stored as one line of hex,
+// readable by the owner only. There is no default key: without the file it returns an error that
+// says how to fix it. HS256 is symmetric, so whoever holds this file can mint tokens; acceptable
+// only on a loopback lab. Production uses an asymmetric key (RS256/ES256) published by the AS as a
+// JWKS, so resource servers hold no secret. The Python twin is resource_auth.load_signing_key.
+func LoadSigningKey() ([]byte, error) {
+	path := KeyFile()
+	fix := "start the test AS first (python mcp/python/auth_server.py), or set " + KeyFileEnv
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("signing key file %s not found or unreadable: %s", path, fix)
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		return nil, fmt.Errorf("signing key file %s is readable by others: chmod 600 %s", path, path)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("signing key file %s not found or unreadable: %s", path, fix)
+	}
+	key, err := hex.DecodeString(strings.TrimSpace(string(raw)))
+	if err != nil || len(key) != keyBytes {
+		return nil, fmt.Errorf("signing key file %s must hold %d bytes as hex: %s", path, keyBytes, fix)
+	}
+	return key, nil
+}
+
+// ErrNoKey is what Verifier panics with when given an empty key: it never verifies without one.
+var ErrNoKey = errors.New("empty signing key")
 
 // InspectorOrigins are the only browser origins allowed besides the server's own (ruling R11).
 var InspectorOrigins = []string{"http://127.0.0.1:6274", "http://localhost:6274"}
@@ -73,11 +120,14 @@ func audiences(raw json.RawMessage) ([]string, bool) {
 	return nil, false
 }
 
-// Verifier checks an HS256 access token from the test AS for `resource`: signature, issuer,
-// exp/nbf/iat (with Leeway), audience, and that it names a subject and a client. Any failure wraps
-// ErrInvalidToken, so RequireBearerToken answers 401. On success, TokenInfo.UserID is the token's
-// `sub` and Extra["client_id"] its `client_id`: the only identity the tools trust.
-func Verifier(resource string) sdkauth.TokenVerifier {
+// Verifier checks an HS256 access token from the test AS for `resource`, signed with `key`:
+// signature, issuer, exp/nbf/iat (with Leeway), audience, and that it names a subject and a client.
+// Any failure wraps ErrInvalidToken, so RequireBearerToken answers 401. On success, TokenInfo.UserID
+// is the token's `sub` and Extra["client_id"] its `client_id`: the only identity the tools trust.
+func Verifier(resource string, key []byte) sdkauth.TokenVerifier {
+	if len(key) == 0 {
+		panic(ErrNoKey) // a programming error: callers load the key with LoadSigningKey first
+	}
 	return func(_ context.Context, token string, _ *http.Request) (*sdkauth.TokenInfo, error) {
 		invalid := func(why string) (*sdkauth.TokenInfo, error) {
 			return nil, fmt.Errorf("%w: %s", sdkauth.ErrInvalidToken, why)
@@ -92,7 +142,7 @@ func Verifier(resource string) sdkauth.TokenVerifier {
 		if b64json(p[0], &hdr) != nil || hdr.Alg != "HS256" { // never "none", never another algorithm
 			return invalid("algorithm")
 		}
-		mac := hmac.New(sha256.New, []byte(TestSigningKey))
+		mac := hmac.New(sha256.New, key)
 		mac.Write([]byte(p[0] + "." + p[1]))
 		sig, err := base64.RawURLEncoding.DecodeString(p[2])
 		if err != nil || !hmac.Equal(sig, mac.Sum(nil)) {
@@ -117,8 +167,10 @@ func Verifier(resource string) sdkauth.TokenVerifier {
 		if c.Exp == 0 || now > c.Exp+skew || (c.Nbf != 0 && now+skew < c.Nbf) || (c.Iat != 0 && now+skew < c.Iat) {
 			return invalid("expired or not yet valid")
 		}
+		// R7 + R24: the audience is checked here, while verifying, so a token for another server is
+		// 401 before RequireBearerToken ever looks at its scopes (the 403 check comes after).
 		auds, ok := audiences(c.Aud)
-		if !ok || !oauthex.MatchesResource(auds, resource) { // R7: the audience, in the verifier
+		if !ok || !oauthex.MatchesResource(auds, resource) {
 			return invalid(fmt.Sprintf("audience %v is not %s", auds, resource))
 		}
 		return &sdkauth.TokenInfo{Scopes: strings.Fields(c.Scope), Expiration: time.Unix(c.Exp, 0), UserID: c.Sub,
@@ -167,21 +219,22 @@ func MetadataURL(resource string) string {
 	return u.Scheme + "://" + u.Host + PRMPath
 }
 
-// Handler serves `mcpHandler` at /mcp as a resource server for `resource`, and its metadata at
-// PRMPath. Order on /mcp: Origin (403, every method) -> cross-origin protection (403, unsafe
-// methods, incl. Sec-Fetch-Site) -> body cap (413) -> bearer token (401 / 403) -> MCP. So a bad
-// Origin or an oversized body is refused before any token is looked at (ruling R9 records that
-// Python checks the token first).
-func Handler(mcpHandler http.Handler, resource, scope string) http.Handler {
+// Handler serves `mcpHandler` at /mcp as a resource server for `resource` (tokens signed with
+// `key`), and its metadata at PRMPath. Order on /mcp: Origin (403, every method) -> cross-origin
+// protection (403, unsafe methods, incl. Sec-Fetch-Site) -> body cap (413) -> bearer token -> MCP.
+// So a bad Origin or an oversized body is refused before any token is looked at (ruling R9 records
+// that Python checks the token first). Within the bearer step: the verifier (signature, time,
+// audience: 401) runs before the scope check (403), ruling R24.
+func Handler(mcpHandler http.Handler, resource, scope string, key []byte) http.Handler {
 	cop := http.NewCrossOriginProtection()
 	for _, o := range InspectorOrigins {
 		if err := cop.AddTrustedOrigin(o); err != nil {
 			panic(err)
 		}
 	}
-	protect := sdkauth.RequireBearerToken(Verifier(resource), &sdkauth.RequireBearerTokenOptions{
+	protect := sdkauth.RequireBearerToken(Verifier(resource, key), &sdkauth.RequireBearerTokenOptions{
 		ResourceMetadataURL: MetadataURL(resource),
-		Scopes:              []string{scope},
+		Scopes:              []string{scope}, // checked only on a token the verifier accepted: 403
 	})
 	mux := http.NewServeMux()
 	mux.Handle(PRMPath, sdkauth.ProtectedResourceMetadataHandler(&oauthex.ProtectedResourceMetadata{

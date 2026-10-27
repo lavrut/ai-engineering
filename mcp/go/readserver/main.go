@@ -22,8 +22,12 @@ func main() {
 	s := NewReadServer()
 	if *useHTTP {
 		addr := fmt.Sprintf("127.0.0.1:%d", *port)
+		h, err := NewHTTPHandler(s)
+		if err != nil {
+			log.Fatalf("readserver: %v", err) // no key file: never fall back to a default key
+		}
 		log.Printf("lumen-read listening on http://%s/mcp", addr)
-		log.Fatal(http.ListenAndServe(addr, NewHTTPHandler(s)))
+		log.Fatal(http.ListenAndServe(addr, h))
 	}
 	if err := s.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		log.Fatal(err)

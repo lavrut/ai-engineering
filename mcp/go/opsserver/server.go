@@ -309,9 +309,15 @@ func (o *ops) server() *mcp.Server {
 
 // NewHTTPHandler is the Streamable HTTP handler: /mcp (Stateless) as an OAuth resource server for
 // auth.OpsResource with scope auth.ScopeWrite, and the protected-resource metadata at auth.PRMPath. The
-// order of checks (Origin for every method -> body cap -> bearer token) is in auth.Handler.
-func NewHTTPHandler(s *mcp.Server) http.Handler {
+// order of checks (Origin for every method -> body cap -> bearer token) is in auth.Handler. It
+// reads the signing key file (auth.LoadSigningKey) and returns its error, which says to start the
+// test AS first: there is no default key.
+func NewHTTPHandler(s *mcp.Server) (http.Handler, error) {
+	key, err := auth.LoadSigningKey()
+	if err != nil {
+		return nil, err
+	}
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s },
 		&mcp.StreamableHTTPOptions{Stateless: true, MaxRequestBodyBytes: core.MaxBodyBytes})
-	return auth.Handler(mcpHandler, auth.OpsResource, auth.ScopeWrite)
+	return auth.Handler(mcpHandler, auth.OpsResource, auth.ScopeWrite, key), nil
 }

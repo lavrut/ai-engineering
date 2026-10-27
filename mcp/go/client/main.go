@@ -1,9 +1,14 @@
 // Lumen MCP client (Go): discover, list tools, call tools, read resources, get prompts.
 //
-//	go run ./client (-stdio | -url URL [-token TOKEN]) [-yes | -no] <command> [args]
+//	go run ./client (-stdio | -url URL [-token-file PATH | -token TOKEN]) [-yes | -no] <command> [args]
 //	  -stdio  spawn mcp/python/read_server.py (python from $LUMEN_PYTHON, else .venv-mcp, else python3)
 //	  -url    talk to a Streamable HTTP server, e.g. http://127.0.0.1:8765/mcp
-//	  -token  an OAuth access token for that server, sent as `Authorization: Bearer` (never in the URL)
+//	  -token-file  read the OAuth access token for that server from a file (first line, trimmed)
+//	  -token       the token itself: works, but warns (a command line is visible in the process list
+//	               and shell history)
+//	  LUMEN_TOKEN  (environment) the token, when neither flag is given
+//	  Precedence: -token-file, then -token, then LUMEN_TOKEN. The token is sent as
+//	  `Authorization: Bearer` on every request, never in the URL. Only with -url.
 //	  -yes    answer every input-required (elicitation) round "accept" without asking
 //	  -no     answer every round "decline" without asking
 //	  (neither) ask on the terminal: the prompt goes to stderr, the answer is read from stdin (y/N)
@@ -110,13 +115,38 @@ func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 	return b.next.RoundTrip(r)
 }
 
+// tokenFlagWarning is printed (to stderr) whenever -token is given. The Python client prints the same line.
+const tokenFlagWarning = "client: warning: a token on the command line is visible in the process list and shell " +
+	"history; use a token file or LUMEN_TOKEN"
+
+// resolveToken picks the token to send and whether to warn (a token was given on the command line).
+// Precedence: -token-file, then -token, then LUMEN_TOKEN. Empty values count as absent.
+func resolveToken(tokenFile, token, env string) (string, bool, error) {
+	warn := token != ""
+	if tokenFile != "" {
+		raw, err := os.ReadFile(tokenFile)
+		if err != nil {
+			return "", warn, fmt.Errorf("token file not readable: %s", tokenFile)
+		}
+		first, _, _ := strings.Cut(strings.TrimSpace(string(raw)), "\n")
+		if first = strings.TrimSpace(first); first == "" {
+			return "", warn, fmt.Errorf("token file is empty: %s", tokenFile)
+		}
+		return first, warn, nil
+	}
+	if token != "" {
+		return token, warn, nil
+	}
+	return env, warn, nil
+}
+
 // newTransport is the one place the transport is built. With a token, the HTTP client sends
 // `Authorization: Bearer <token>` on every request; the URL is left exactly as given (a token never
 // goes in it). A token with -stdio is refused: it is an HTTP credential.
 func newTransport(stdio bool, url, token string) (mcp.Transport, error) {
 	if stdio {
 		if token != "" {
-			return nil, errors.New("-token needs -url")
+			return nil, errors.New("a token needs --url / -url")
 		}
 		cmd, err := stdioCommand()
 		if err != nil {
@@ -497,7 +527,8 @@ func run(ctx context.Context, cs *mcp.ClientSession, command string, args []stri
 func main() {
 	stdio := flag.Bool("stdio", false, "spawn read_server.py and use stdio")
 	url := flag.String("url", "", "Streamable HTTP endpoint, e.g. http://127.0.0.1:8765/mcp")
-	token := flag.String("token", "", "OAuth access token for -url, sent as Authorization: Bearer")
+	tokenFile := flag.String("token-file", "", "file holding the OAuth access token for -url")
+	tokenFlag := flag.String("token", "", "OAuth access token for -url (visible to other users: prefer -token-file)")
 	yes := flag.Bool("yes", false, "accept input-required rounds")
 	no := flag.Bool("no", false, "decline input-required rounds")
 	flag.Parse()
@@ -506,7 +537,7 @@ func main() {
 		os.Exit(1)
 	}
 	if flag.NArg() < 1 || *stdio == (*url != "") || (*yes && *no) {
-		fmt.Fprintln(os.Stderr, "usage: client (-stdio | -url URL [-token TOKEN]) [-yes | -no] discover|tools|call NAME JSON|read URI|prompt NAME JSON")
+		fmt.Fprintln(os.Stderr, "usage: client (-stdio | -url URL [-token-file PATH | -token TOKEN]) [-yes | -no] discover|tools|call NAME JSON|read URI|prompt NAME JSON")
 		os.Exit(2)
 	}
 	answer := askTerminal(os.Stdin, os.Stderr)
@@ -515,7 +546,21 @@ func main() {
 	} else if *no {
 		answer = always(false)
 	}
-	transport, err := newTransport(*stdio, *url, *token)
+	if *stdio && (*tokenFile != "" || *tokenFlag != "") {
+		fail(errors.New("a token needs --url / -url"))
+	}
+	token := ""
+	if *url != "" { // LUMEN_TOKEN is ambient: used for HTTP only
+		t, warn, err := resolveToken(*tokenFile, *tokenFlag, os.Getenv("LUMEN_TOKEN"))
+		if warn {
+			fmt.Fprintln(os.Stderr, tokenFlagWarning)
+		}
+		if err != nil {
+			fail(err)
+		}
+		token = t
+	}
+	transport, err := newTransport(*stdio, *url, token)
 	if err != nil {
 		fail(err)
 	}

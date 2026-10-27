@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -37,8 +39,9 @@ func with(c map[string]any, k string, v any) map[string]any {
 
 // ── 1. Token verifier ───────────────────────────────────────────────────────
 func TestVerifierAcceptsAGoodToken(t *testing.T) {
-	v := auth.Verifier(auth.OpsResource)
-	ti, err := v(context.Background(), authtest.Token(auth.ScopeWrite, auth.OpsResource, "c-1", "u-9"), nil)
+	key := authtest.UseKey(t)
+	v := auth.Verifier(auth.OpsResource, key)
+	ti, err := v(context.Background(), authtest.Token(key, auth.ScopeWrite, auth.OpsResource, "c-1", "u-9"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,25 +52,26 @@ func TestVerifierAcceptsAGoodToken(t *testing.T) {
 }
 
 func TestVerifierRejects(t *testing.T) {
+	key := authtest.UseKey(t)
 	now := time.Now().Unix()
 	base := good(auth.OpsResource, auth.ScopeWrite)
 	cases := map[string]string{
 		"garbage":        "not-a-jwt",
-		"wrong_key":      authtest.SignWith(base, "another-key-that-is-long-enough-for-hs256!!", "HS256"),
-		"alg_none":       authtest.SignWith(base, "", "none"),
-		"expired":        authtest.Sign(with(with(base, "exp", now-3600), "iat", now-4000)),
-		"not_yet_valid":  authtest.Sign(with(base, "nbf", now+3600)),
-		"issued_future":  authtest.Sign(with(base, "iat", now+3600)),
-		"wrong_issuer":   authtest.Sign(with(base, "iss", "http://127.0.0.1:9001")),
-		"no_exp":         authtest.Sign(with(base, "exp", nil)),
-		"no_aud":         authtest.Sign(with(base, "aud", nil)),
-		"no_sub":         authtest.Sign(with(base, "sub", nil)),
-		"no_client_id":   authtest.Sign(with(base, "client_id", nil)),
-		"other_audience": authtest.Sign(with(base, "aud", auth.ReadResource)),
-		"aud_list_other": authtest.Sign(with(base, "aud", []string{auth.ReadResource, "http://x.invalid/mcp"})),
-		"aud_number":     authtest.Sign(with(base, "aud", 7)),
+		"wrong_key":      authtest.SignWith(base, []byte("another-key-that-is-32-bytes-long!!"), "HS256"),
+		"alg_none":       authtest.SignWith(base, nil, "none"),
+		"expired":        authtest.Sign(key, with(with(base, "exp", now-3600), "iat", now-4000)),
+		"not_yet_valid":  authtest.Sign(key, with(base, "nbf", now+3600)),
+		"issued_future":  authtest.Sign(key, with(base, "iat", now+3600)),
+		"wrong_issuer":   authtest.Sign(key, with(base, "iss", "http://127.0.0.1:9001")),
+		"no_exp":         authtest.Sign(key, with(base, "exp", nil)),
+		"no_aud":         authtest.Sign(key, with(base, "aud", nil)),
+		"no_sub":         authtest.Sign(key, with(base, "sub", nil)),
+		"no_client_id":   authtest.Sign(key, with(base, "client_id", nil)),
+		"other_audience": authtest.Sign(key, with(base, "aud", auth.ReadResource)),
+		"aud_list_other": authtest.Sign(key, with(base, "aud", []string{auth.ReadResource, "http://x.invalid/mcp"})),
+		"aud_number":     authtest.Sign(key, with(base, "aud", 7)),
 	}
-	v := auth.Verifier(auth.OpsResource)
+	v := auth.Verifier(auth.OpsResource, key)
 	for name, tok := range cases {
 		if _, err := v(context.Background(), tok, nil); !errors.Is(err, sdkauth.ErrInvalidToken) {
 			t.Errorf("%s: want ErrInvalidToken (401), got %v", name, err)
@@ -75,7 +79,7 @@ func TestVerifierRejects(t *testing.T) {
 	}
 	// RFC 7519: aud may be a list; one entry naming this server is enough. A trailing slash is ignored.
 	for _, aud := range []any{[]string{auth.ReadResource, auth.OpsResource}, auth.OpsResource + "/"} {
-		if _, err := v(context.Background(), authtest.Sign(with(base, "aud", aud)), nil); err != nil {
+		if _, err := v(context.Background(), authtest.Sign(key, with(base, "aud", aud)), nil); err != nil {
 			t.Errorf("aud %v: %v", aud, err)
 		}
 	}
@@ -101,8 +105,9 @@ func do(h http.Handler, method, path, token, origin string) *httptest.ResponseRe
 }
 
 func TestHandlerStatuses(t *testing.T) {
-	h := auth.Handler(okHandler, auth.OpsResource, auth.ScopeWrite)
-	tok := authtest.Token(auth.ScopeWrite, auth.OpsResource, "lumen-cli", "user-1")
+	key := authtest.UseKey(t)
+	h := auth.Handler(okHandler, auth.OpsResource, auth.ScopeWrite, key)
+	tok := authtest.Token(key, auth.ScopeWrite, auth.OpsResource, "lumen-cli", "user-1")
 	if rec := do(h, "POST", "/mcp", tok, ""); rec.Code != 200 || rec.Body.String() != "lumen-cli" {
 		t.Errorf("good token: %d %q", rec.Code, rec.Body.String())
 	}
@@ -111,10 +116,10 @@ func TestHandlerStatuses(t *testing.T) {
 	if rec.Code != 401 || !strings.Contains(rec.Header().Get("WWW-Authenticate"), want) {
 		t.Errorf("no token: %d %q", rec.Code, rec.Header().Get("WWW-Authenticate"))
 	}
-	if rec := do(h, "POST", "/mcp", authtest.Token(auth.ScopeRead, auth.OpsResource, "c", "u"), ""); rec.Code != 403 {
+	if rec := do(h, "POST", "/mcp", authtest.Token(key, auth.ScopeRead, auth.OpsResource, "c", "u"), ""); rec.Code != 403 {
 		t.Errorf("wrong scope: %d", rec.Code)
 	}
-	if rec := do(h, "POST", "/mcp", authtest.Token(auth.ScopeWrite, auth.ReadResource, "c", "u"), ""); rec.Code != 401 {
+	if rec := do(h, "POST", "/mcp", authtest.Token(key, auth.ScopeWrite, auth.ReadResource, "c", "u"), ""); rec.Code != 401 {
 		t.Errorf("wrong audience: %d", rec.Code)
 	}
 	if rec := do(h, "POST", "/mcp?access_token="+tok, "", ""); rec.Code != 401 {
@@ -123,9 +128,10 @@ func TestHandlerStatuses(t *testing.T) {
 }
 
 func TestOriginCheckedForEveryMethod(t *testing.T) {
+	key := authtest.UseKey(t)
 	// R18: http.CrossOriginProtection lets safe methods (GET, HEAD, OPTIONS) through; ours does not.
-	h := auth.Handler(okHandler, auth.OpsResource, auth.ScopeWrite)
-	tok := authtest.Token(auth.ScopeWrite, auth.OpsResource, "lumen-cli", "user-1")
+	h := auth.Handler(okHandler, auth.OpsResource, auth.ScopeWrite, key)
+	tok := authtest.Token(key, auth.ScopeWrite, auth.OpsResource, "lumen-cli", "user-1")
 	for _, m := range []string{"GET", "HEAD", "OPTIONS", "POST", "DELETE"} {
 		for _, token := range []string{tok, ""} { // Go checks Origin before auth: 403 with or without a token
 			if rec := do(h, m, "/mcp", token, "http://evil.example"); rec.Code != 403 {
@@ -147,7 +153,8 @@ func TestOriginCheckedForEveryMethod(t *testing.T) {
 }
 
 func TestProtectedResourceMetadata(t *testing.T) {
-	h := auth.Handler(okHandler, auth.ReadResource, auth.ScopeRead)
+	key := authtest.UseKey(t)
+	h := auth.Handler(okHandler, auth.ReadResource, auth.ScopeRead, key)
 	rec := do(h, "GET", "/.well-known/oauth-protected-resource/mcp", "", "")
 	var prm map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &prm); err != nil || rec.Code != 200 {
@@ -160,11 +167,63 @@ func TestProtectedResourceMetadata(t *testing.T) {
 }
 
 func TestBodyCapBeforeAuth(t *testing.T) {
-	h := auth.Handler(okHandler, auth.OpsResource, auth.ScopeWrite)
+	key := authtest.UseKey(t)
+	h := auth.Handler(okHandler, auth.OpsResource, auth.ScopeWrite, key)
 	req := httptest.NewRequest("POST", "http://127.0.0.1:8766/mcp", strings.NewReader(strings.Repeat(" ", 131073)))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusRequestEntityTooLarge {
 		t.Errorf("over the cap, no token: %d", rec.Code)
+	}
+}
+
+// ── 3. The signing key file (ruling R25) ────────────────────────────────────
+func TestLoadSigningKey(t *testing.T) {
+	key := authtest.UseKey(t)
+	got, err := auth.LoadSigningKey()
+	if err != nil || string(got) != string(key) {
+		t.Fatalf("got %x, %v", got, err)
+	}
+}
+
+func TestMissingKeyFileFailsClearly(t *testing.T) {
+	t.Setenv(auth.KeyFileEnv, filepath.Join(t.TempDir(), "absent.key"))
+	_, err := auth.LoadSigningKey()
+	if err == nil || !strings.Contains(err.Error(), "start the test AS first") || !strings.Contains(err.Error(), "absent.key") {
+		t.Fatalf("err %v", err)
+	}
+}
+
+func TestUnusableKeyFileRefused(t *testing.T) {
+	for name, write := range map[string]func(string) error{
+		"0644":   func(p string) error { return os.WriteFile(p, []byte(strings.Repeat("ab", 32)+"\n"), 0o644) },
+		"short":  func(p string) error { return os.WriteFile(p, []byte("abcd\n"), 0o600) },
+		"nothex": func(p string) error { return os.WriteFile(p, []byte(strings.Repeat("zz", 32)+"\n"), 0o600) },
+	} {
+		path := filepath.Join(t.TempDir(), "k")
+		if err := write(path); err != nil {
+			t.Fatal(err)
+		}
+		os.Chmod(path, map[bool]os.FileMode{true: 0o644, false: 0o600}[name == "0644"]) // umask-proof
+		t.Setenv(auth.KeyFileEnv, path)
+		if _, err := auth.LoadSigningKey(); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func TestDefaultKeyFile(t *testing.T) {
+	t.Setenv(auth.KeyFileEnv, "")
+	if want := filepath.Join("mcp", "data", "dev-signing.key"); !strings.HasSuffix(auth.KeyFile(), want) {
+		t.Errorf("default %s", auth.KeyFile())
+	}
+}
+
+func TestTokenFromAnotherKeyIs401(t *testing.T) {
+	old := authtest.UseKey(t)
+	tok := authtest.Token(old, auth.ScopeWrite, auth.OpsResource, "lumen-cli", "user-1")
+	key := authtest.UseKey(t) // the AS restarted with a new key file
+	if rec := do(auth.Handler(okHandler, auth.OpsResource, auth.ScopeWrite, key), "POST", "/mcp", tok, ""); rec.Code != 401 {
+		t.Fatalf("got %d", rec.Code)
 	}
 }

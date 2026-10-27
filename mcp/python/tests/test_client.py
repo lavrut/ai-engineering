@@ -220,14 +220,18 @@ def test_unanswerable_form_is_declined():
 
 # ── 4. HTTP (--url) ─────────────────────────────────────────────────────────
 @pytest.fixture(scope="module")
-def http_url():
+def http_url(tmp_path_factory):
+    """lumen-read over HTTP, with its own random key file. Tests mint tokens with `token_for`."""
     import socket
     import time
+    from conftest import write_key_file
+    key = write_key_file(tmp_path_factory.mktemp("rs-key") / "signing.key")
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
     proc = subprocess.Popen([sys.executable, str(ROOT / "mcp" / "python" / "read_server.py"), "--http",
-                             "--port", str(port)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=ROOT)
+                             "--port", str(port)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=ROOT,
+                            env={**os.environ, "LUMEN_SIGNING_KEY_FILE": str(key)})
     try:
         for _ in range(100):
             try:
@@ -237,52 +241,124 @@ def http_url():
                 time.sleep(0.2)
         else:
             raise RuntimeError("read_server --http did not start")
+        http_url.key = key
         yield f"http://127.0.0.1:{port}/mcp"
     finally:
         proc.terminate()
         proc.wait(timeout=10)
 
 
+def token_for(monkeypatch, scope: str = SCOPE_READ, audience: str = READ_RESOURCE) -> str:
+    """A token signed with the running server's key (lumen-read's own scope and audience by default)."""
+    monkeypatch.setenv("LUMEN_SIGNING_KEY_FILE", str(http_url.key))
+    return mint_test_token(scope, audience)
+
+
 HTTP_COMMANDS = [("tools",), ("call", "search_tickets", '{"query": "refund duplicate", "limit": 3}')]
-# lumen-read over HTTP is a resource server since Task 8: the fixture token is its own (R19: --token).
-TOKEN = mint_test_token(SCOPE_READ, READ_RESOURCE)
+# The one-line warning both clients print when a token is passed on the command line (R26).
+WARNING = ("client: warning: a token on the command line is visible in the process list and shell history; "
+           "use a token file or LUMEN_TOKEN\n")
+
+
+def clean_env(**extra: str) -> dict:
+    env = {k: v for k, v in os.environ.items() if k != "LUMEN_TOKEN"}
+    return {**env, **extra}
+
+
+def run_py(*args: str, env: dict | None = None):
+    return subprocess.run([sys.executable, str(CLIENT_PY), *args], capture_output=True, text=True, cwd=ROOT,
+                          env=env or clean_env())
+
+
+def run_go(binary, *args: str, env: dict | None = None):
+    return subprocess.run([str(binary), *args], capture_output=True, text=True, cwd=ROOT, env=env or clean_env())
 
 
 @pytest.mark.parametrize("command", HTTP_COMMANDS)
-def test_python_client_url_matches_stdio(http_url, command):
-    over_http = subprocess.run([sys.executable, str(CLIENT_PY), "--url", http_url, "--token", TOKEN, *command],
-                               capture_output=True, text=True, check=True, cwd=ROOT).stdout
-    over_stdio = subprocess.run([sys.executable, str(CLIENT_PY), "--stdio", *command],
-                                capture_output=True, text=True, check=True, cwd=ROOT).stdout
-    assert over_http == over_stdio
+def test_python_client_url_matches_stdio(http_url, command, monkeypatch):
+    over_http = run_py("--url", http_url, *command, env=clean_env(LUMEN_TOKEN=token_for(monkeypatch)))
+    over_stdio = run_py("--stdio", *command)
+    assert over_http.returncode == 0, over_http.stderr
+    assert over_http.stdout == over_stdio.stdout
     if command[0] == "tools":
-        assert [t["name"] for t in json.loads(over_http)] == ["classify_complaint", "get_ticket", "search_tickets"]
+        assert [t["name"] for t in json.loads(over_http.stdout)] == ["classify_complaint", "get_ticket",
+                                                                      "search_tickets"]
 
 
 @pytest.mark.parametrize("command", HTTP_COMMANDS)
-def test_go_client_url_same_output(go_client, http_url, command):
-    py = subprocess.run([sys.executable, str(CLIENT_PY), "--url", http_url, "--token", TOKEN, *command],
-                        capture_output=True, text=True, check=True, cwd=ROOT).stdout
-    go = subprocess.run([str(go_client), "-url", http_url, "-token", TOKEN, *command],
-                        capture_output=True, text=True, check=True, cwd=ROOT).stdout
-    assert go == py
+def test_go_client_url_same_output(go_client, http_url, command, monkeypatch):
+    env = clean_env(LUMEN_TOKEN=token_for(monkeypatch))
+    py, go = run_py("--url", http_url, *command, env=env), run_go(go_client, "-url", http_url, *command, env=env)
+    assert py.returncode == 0 and go.returncode == 0, (py.stderr, go.stderr)
+    assert go.stdout == py.stdout and go.stderr == py.stderr == ""
 
 
-def test_url_without_token_fails_in_both_clients(go_client, http_url):
-    """No token, no access: both clients exit non-zero against the resource server (401)."""
-    py = subprocess.run([sys.executable, str(CLIENT_PY), "--url", http_url, "tools"],
-                        capture_output=True, text=True, cwd=ROOT)
-    go = subprocess.run([str(go_client), "-url", http_url, "tools"], capture_output=True, text=True, cwd=ROOT)
-    assert py.returncode != 0 and py.stdout == ""
-    assert go.returncode != 0 and go.stdout == ""
+def test_token_sources_and_warning_match_in_both_clients(go_client, http_url, monkeypatch, tmp_path):
+    """R26: --token-file, then --token, then LUMEN_TOKEN. --token works but warns on stderr; the
+    warning is the same line in both clients. A token file or the env var prints no warning."""
+    good, bad = token_for(monkeypatch), "not-a-token"
+    good_file, bad_file = tmp_path / "good.tok", tmp_path / "bad.tok"
+    good_file.write_text(good + "\n")
+    bad_file.write_text(bad + "\n")
+    cases = [  # (python args, go args, env token, expect success, expect warning)
+        (["--token-file", str(good_file)], ["-token-file", str(good_file)], None, True, False),
+        (["--token", good], ["-token", good], None, True, True),
+        ([], [], good, True, False),
+        (["--token-file", str(good_file), "--token", bad], ["-token-file", str(good_file), "-token", bad], bad,
+         True, True),  # the file wins over both
+        (["--token-file", str(bad_file), "--token", good], ["-token-file", str(bad_file), "-token", good], good,
+         False, True),
+        (["--token", good], ["-token", good], bad, True, True),  # --token wins over the env
+        (["--token", bad], ["-token", bad], good, False, True),
+        ([], [], None, False, False),  # no token at all: 401
+    ]
+    for py_args, go_args, env_token, ok, warns in cases:
+        env = clean_env(**({"LUMEN_TOKEN": env_token} if env_token else {}))
+        py = run_py("--url", http_url, *py_args, "tools", env=env)
+        go = run_go(go_client, "-url", http_url, *go_args, "tools", env=env)
+        assert (py.returncode == 0) is ok and (go.returncode == 0) is ok, (py_args, py.stderr, go.stderr)
+        assert py.stdout == go.stdout
+        if ok:
+            assert py.stderr == go.stderr == (WARNING if warns else "")
+        else:
+            assert py.stderr.startswith(WARNING) is warns and go.stderr.startswith(WARNING) is warns
 
 
-def test_token_needs_url_in_both_clients(go_client):
-    """--token is an HTTP credential; with --stdio it is a usage error, never silently dropped."""
-    py = subprocess.run([sys.executable, str(CLIENT_PY), "--stdio", "--token", "x", "tools"],
-                        capture_output=True, text=True, cwd=ROOT)
-    go = subprocess.run([str(go_client), "-stdio", "-token", "x", "tools"], capture_output=True, text=True, cwd=ROOT)
-    assert py.returncode != 0 and go.returncode != 0
+def test_token_file_errors_match_in_both_clients(go_client, http_url, tmp_path):
+    empty = tmp_path / "empty.tok"
+    empty.write_text("\n")
+    missing = tmp_path / "missing.tok"
+    for name, want in [(empty, f"client: token file is empty: {empty}\n"),
+                       (missing, f"client: token file not readable: {missing}\n")]:
+        py = run_py("--url", http_url, "--token-file", str(name), "tools")
+        go = run_go(go_client, "-url", http_url, "-token-file", str(name), "tools")
+        assert py.returncode == go.returncode == 1
+        assert py.stderr == go.stderr == want
+
+
+def test_token_needs_url_in_both_clients(go_client, tmp_path):
+    """A token is an HTTP credential: with --stdio, --token or --token-file is a usage error.
+    (LUMEN_TOKEN in the environment is ambient and is simply not used for stdio.)"""
+    f = tmp_path / "t.tok"
+    f.write_text("x\n")
+    for py_args, go_args in [(["--token", "x"], ["-token", "x"]), (["--token-file", str(f)], ["-token-file", str(f)])]:
+        py = run_py("--stdio", *py_args, "tools")
+        go = run_go(go_client, "-stdio", *go_args, "tools")
+        assert py.returncode == go.returncode == 1
+        assert py.stderr.endswith("client: a token needs --url / -url\n") and py.stderr == go.stderr
+    ok = run_py("--stdio", "tools", env=clean_env(LUMEN_TOKEN="x"))
+    assert ok.returncode == 0 and ok.stderr == ""
+
+
+def test_resolve_token_precedence(tmp_path):
+    f = tmp_path / "t.tok"
+    f.write_text("  from-file \n")
+    rt = lumen_client.resolve_token
+    assert rt(str(f), "from-flag", "from-env") == ("from-file", True)
+    assert rt(None, "from-flag", "from-env") == ("from-flag", True)
+    assert rt(None, None, "from-env") == ("from-env", False)
+    assert rt(None, None, None) == (None, False)
+    assert rt(None, None, "") == (None, False)
 
 
 # ── 5. Edge cases (identical in both clients) ───────────────────────────────

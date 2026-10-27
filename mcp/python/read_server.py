@@ -26,7 +26,7 @@ from mcp_types import INVALID_PARAMS, CallToolResult, TextContent, ToolAnnotatio
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "core" / "python"))
 from lumen_core import (DEFAULT_LIMIT, MAX_BODY_BYTES, MAX_LIMIT, MAX_QUERY_CHARS,  # noqa: E402
                         MAX_TEXT_CHARS, MIN_LIMIT, REPO_ROOT, classify, tickets)
-from resource_auth import READ_RESOURCE, SCOPE_READ, resource_server  # noqa: E402
+from resource_auth import READ_RESOURCE, SCOPE_READ, SigningKeyMissing, resource_server  # noqa: E402
 
 # ── 1. Configuration and helpers ────────────────────────────────────────────
 INSTRUCTIONS = (
@@ -172,7 +172,11 @@ def main() -> None:
     args = ap.parse_args()
     if args.http:
         import uvicorn
-        uvicorn.run(build_http_app(), host="127.0.0.1", port=args.port)
+        try:
+            app = build_http_app()
+        except SigningKeyMissing as e:  # no key file: say how to fix it, never fall back to a key
+            raise SystemExit(f"read_server: {e}") from None
+        uvicorn.run(app, host="127.0.0.1", port=args.port)
     else:
         build_read_server().run()
 

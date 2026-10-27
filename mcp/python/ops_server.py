@@ -37,12 +37,12 @@ from mcp.server.mcpserver.context import Context
 from mcp.server.mcpserver.resolve import Elicit, Resolve
 from mcp.server.request_state import RequestStateBoundary, RequestStateSecurity
 from mcp_types import CallToolResult, TextContent, ToolAnnotations
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "core" / "python"))
 from lumen_core import CATEGORIES, LABELS_PATH, MAX_BODY_BYTES, tickets  # noqa: E402
 from lumen_core.labels import write_label  # noqa: E402
-from resource_auth import OPS_RESOURCE, SCOPE_WRITE, resource_server  # noqa: E402
+from resource_auth import OPS_RESOURCE, SCOPE_WRITE, SigningKeyMissing, resource_server  # noqa: E402
 
 # ── 1. Configuration and helpers ────────────────────────────────────────────
 INSTRUCTIONS = (
@@ -96,16 +96,17 @@ def validation_error(id: str, label: str) -> str | None:
 
 # ── 2. The confirmation question ────────────────────────────────────────────
 class Confirm(BaseModel):
-    """The form: one boolean. Only the JSON boolean true confirms: anything else ("yes", 1, null)
-    is read as false, so the tool answers with the fixed decline text, as the Go server does,
-    instead of failing schema validation. The schema the user sees is unchanged: a boolean."""
+    """The form: one boolean. Only the JSON boolean true confirms: anything else ("yes", 1, null,
+    or no `confirm` at all) is read as false, so the tool answers with the fixed decline text, as
+    the Go server does, instead of failing schema validation. The schema the user sees is
+    unchanged: a required boolean."""
     model_config = ConfigDict(strict=True)
     confirm: bool
 
-    @field_validator("confirm", mode="before")
+    @model_validator(mode="before")
     @classmethod
-    def only_true_confirms(cls, v: object) -> bool:
-        return v is True
+    def only_true_confirms(cls, data: object) -> dict:
+        return {"confirm": isinstance(data, dict) and data.get("confirm") is True}
 
 
 def ask_confirm(id: str, label: str) -> Elicit[Confirm] | DeclinedElicitation:
@@ -168,7 +169,11 @@ def state_security() -> RequestStateSecurity:
 
 def state_expiry(security: RequestStateSecurity, wire: str) -> float | None:
     """The `exp` the SDK sealed into this state, or None if it does not open. The boundary has
-    already verified the state by the time the tool runs; this only reads its expiry."""
+    already verified the state by the time the tool runs; this only reads its expiry.
+    It relies on the claims envelope of mcp==2.3.0 (request_state.py: JSON with "exp"). If a later
+    SDK changes that format, this returns None and label_ticket refuses every confirmed write:
+    failing closed is the intended outcome (accepted with ruling R27), and the replay and
+    concurrency tests will fail loudly rather than let a replay through."""
     try:
         exp = json.loads(security.codec.unseal(wire))["exp"]
     except Exception:  # noqa: BLE001 - any failure: no expiry, so the caller refuses
@@ -243,7 +248,11 @@ def main() -> None:
     ap.add_argument("--labels", type=Path, default=LABELS_PATH, help="append-only label file")
     args = ap.parse_args()
     import uvicorn
-    uvicorn.run(build_http_app(build_ops_server(args.labels, auth=True)), host="127.0.0.1", port=args.port)
+    try:
+        app = build_http_app(build_ops_server(args.labels, auth=True))
+    except SigningKeyMissing as e:  # no key file: say how to fix it, never fall back to a key
+        raise SystemExit(f"ops_server: {e}") from None
+    uvicorn.run(app, host="127.0.0.1", port=args.port)
 
 
 if __name__ == "__main__":

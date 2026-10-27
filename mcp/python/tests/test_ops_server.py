@@ -83,6 +83,15 @@ def test_label_declined_writes_nothing(tmp_path, reply):
     assert rows(path) == []
 
 
+def test_accept_without_confirm_key_is_declined(tmp_path):
+    """R27: an accepted answer with no `confirm` at all is a "no": the fixed decline, as in Go."""
+    path = tmp_path / "labels.jsonl"
+    for content in ({}, {"other": True}):
+        r, _ = call(path, {"id": "t001", "label": "bug"}, ElicitResult(action="accept", content=content))
+        assert r.is_error and r.content[0].text == DECLINED, (content, r.content[0].text)
+    assert rows(path) == []
+
+
 def test_label_bad_label(tmp_path):
     path = tmp_path / "labels.jsonl"
     r, asked = call(path, {"id": "t001", "label": "spam"}, ACCEPT)
@@ -356,11 +365,8 @@ def test_contract_ops(tmp_path):
 
 # ── 4. HTTP app and security (same hardening as lumen-read) ─────────────────
 META = {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientCapabilities": {}}
-# HTTP needs a token since Task 8: the fixture token is lumen-ops's own (tickets:write, aud = ops URI).
-TOKEN = mint_test_token(SCOPE_WRITE, OPS_RESOURCE)
 HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json",
-           "Host": "127.0.0.1:8766", "MCP-Protocol-Version": "2026-07-28", "Mcp-Method": "server/discover",
-           "Authorization": f"Bearer {TOKEN}"}
+           "Host": "127.0.0.1:8766", "MCP-Protocol-Version": "2026-07-28", "Mcp-Method": "server/discover"}
 
 
 def _discover(pad: int = 0) -> bytes:
@@ -371,8 +377,12 @@ def _discover(pad: int = 0) -> bytes:
 
 
 def _http(tmp_path) -> TestClient:
-    return TestClient(build_http_app(build_ops_server(tmp_path / "labels.jsonl", auth=True)),
-                      base_url="http://127.0.0.1:8766")
+    """HTTP needs a token since Task 8: lumen-ops's own (tickets:write, aud = ops URI), minted with
+    this test's key."""
+    c = TestClient(build_http_app(build_ops_server(tmp_path / "labels.jsonl", auth=True)),
+                   base_url="http://127.0.0.1:8766")
+    c.headers["Authorization"] = f"Bearer {mint_test_token(SCOPE_WRITE, OPS_RESOURCE)}"
+    return c
 
 
 def test_server_discover(tmp_path):

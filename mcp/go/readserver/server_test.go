@@ -241,8 +241,28 @@ func TestToolsReadOnlyAndInstructions(t *testing.T) {
 // ── 3. HTTP hardening ───────────────────────────────────────────────────────
 const listBody = `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
 
-// readToken is the HTTP fixture token: lumen-read's own scope and audience.
-var readToken = authtest.Token(auth.ScopeRead, auth.ReadResource, "lumen-cli", "user-1")
+// readToken() is the HTTP fixture token: lumen-read's own scope and audience.
+func readToken() string { return tok(auth.ScopeRead, auth.ReadResource, "lumen-cli", "user-1") }
+
+// httpHandler gives this test its own random signing key (ruling R25) and the server's HTTP handler.
+func httpHandler(t *testing.T, s *mcp.Server) http.Handler {
+	t.Helper()
+	authtest.UseKey(t)
+	h, err := NewHTTPHandler(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h
+}
+
+// tok mints a token with this test's key (set by httpHandler / authtest.UseKey).
+func tok(scope, audience, clientID, sub string) string {
+	key, err := auth.LoadSigningKey()
+	if err != nil {
+		panic(err)
+	}
+	return authtest.Token(key, scope, audience, clientID, sub)
+}
 
 func newReqAs(method string, body io.Reader, origin, token string) *http.Request {
 	req := httptest.NewRequest(method, "http://127.0.0.1:8765/mcp", body)
@@ -258,7 +278,7 @@ func newReqAs(method string, body io.Reader, origin, token string) *http.Request
 }
 
 func newReq(body io.Reader, origin string) *http.Request {
-	return newReqAs("POST", body, origin, readToken)
+	return newReqAs("POST", body, origin, readToken())
 }
 
 func post(h http.Handler, body, origin string) *httptest.ResponseRecorder {
@@ -274,7 +294,7 @@ func postAs(h http.Handler, token string) *httptest.ResponseRecorder {
 }
 
 func TestOriginRejected(t *testing.T) {
-	h := NewHTTPHandler(NewReadServer())
+	h := httpHandler(t, NewReadServer())
 	for origin, want := range map[string]int{
 		"http://evil.example":   http.StatusForbidden,
 		"http://127.0.0.1:9999": http.StatusForbidden,
@@ -293,7 +313,7 @@ func TestOriginRejected(t *testing.T) {
 func padded(n int) string { return listBody + strings.Repeat(" ", n-len(listBody)) }
 
 func TestBodyCap(t *testing.T) {
-	h := NewHTTPHandler(NewReadServer())
+	h := httpHandler(t, NewReadServer())
 	if got := post(h, padded(core.MaxBodyBytes), "").Code; got != http.StatusOK {
 		t.Errorf("exactly %d bytes: got %d, want 200", core.MaxBodyBytes, got)
 	}
@@ -312,7 +332,7 @@ func TestBodyCap(t *testing.T) {
 
 // ── 4. Authorization (lumen-read over HTTP is a resource server) ────────────
 func TestNoToken401WithMetadata(t *testing.T) {
-	rec := postAs(NewHTTPHandler(NewReadServer()), "")
+	rec := postAs(httpHandler(t, NewReadServer()), "")
 	want := `resource_metadata="http://127.0.0.1:8765/.well-known/oauth-protected-resource/mcp"`
 	if rec.Code != 401 || !strings.Contains(rec.Header().Get("WWW-Authenticate"), want) {
 		t.Fatalf("got %d %q", rec.Code, rec.Header().Get("WWW-Authenticate"))
@@ -320,24 +340,24 @@ func TestNoToken401WithMetadata(t *testing.T) {
 }
 
 func TestRightTokenOK(t *testing.T) {
-	if rec := postAs(NewHTTPHandler(NewReadServer()), readToken); rec.Code != 200 {
+	if rec := postAs(httpHandler(t, NewReadServer()), readToken()); rec.Code != 200 {
 		t.Fatalf("got %d %s", rec.Code, rec.Body.String())
 	}
 }
 
 func TestWrongAudience401(t *testing.T) {
-	h := NewHTTPHandler(NewReadServer())
+	h := httpHandler(t, NewReadServer())
 	for _, aud := range []string{auth.OpsResource, "http://127.0.0.1:9999/mcp"} {
-		if rec := postAs(h, authtest.Token(auth.ScopeRead, aud, "lumen-cli", "user-1")); rec.Code != 401 {
+		if rec := postAs(h, tok(auth.ScopeRead, aud, "lumen-cli", "user-1")); rec.Code != 401 {
 			t.Errorf("aud %s: got %d", aud, rec.Code)
 		}
 	}
 }
 
 func TestWrongScope403(t *testing.T) {
-	h := NewHTTPHandler(NewReadServer())
+	h := httpHandler(t, NewReadServer())
 	for _, scope := range []string{auth.ScopeWrite, "", "tickets:admin"} {
-		rec := postAs(h, authtest.Token(scope, auth.ReadResource, "lumen-cli", "user-1"))
+		rec := postAs(h, tok(scope, auth.ReadResource, "lumen-cli", "user-1"))
 		if rec.Code != 403 || !strings.Contains(rec.Header().Get("WWW-Authenticate"), "resource_metadata=") {
 			t.Errorf("scope %q: got %d", scope, rec.Code)
 		}
@@ -346,7 +366,7 @@ func TestWrongScope403(t *testing.T) {
 
 func TestProtectedResourceMetadata(t *testing.T) {
 	rec := httptest.NewRecorder()
-	NewHTTPHandler(NewReadServer()).ServeHTTP(rec,
+	httpHandler(t, NewReadServer()).ServeHTTP(rec,
 		httptest.NewRequest("GET", "http://127.0.0.1:8765/.well-known/oauth-protected-resource/mcp", nil))
 	var prm struct {
 		Resource             string   `json:"resource"`
@@ -363,10 +383,10 @@ func TestProtectedResourceMetadata(t *testing.T) {
 
 func TestGetWithBadOrigin403(t *testing.T) {
 	// R18: Origin is checked for every method, not only the unsafe ones (with a valid token, R9).
-	h := NewHTTPHandler(NewReadServer())
+	h := httpHandler(t, NewReadServer())
 	for origin, bad := range map[string]bool{"http://evil.example": true, "http://127.0.0.1:6274": false} {
 		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, newReqAs("GET", nil, origin, readToken))
+		h.ServeHTTP(rec, newReqAs("GET", nil, origin, readToken()))
 		if (rec.Code == 403) != bad {
 			t.Errorf("GET Origin %q: got %d", origin, rec.Code)
 		}
@@ -377,7 +397,7 @@ func TestOriginCheckedBeforeAuth(t *testing.T) {
 	// R9 ordering, recorded: Go checks Origin first, so a bad Origin is 403 even with no token.
 	// (Python checks the token first: 401 there.)
 	rec := httptest.NewRecorder()
-	NewHTTPHandler(NewReadServer()).ServeHTTP(rec, newReqAs("POST", strings.NewReader(listBody), "http://evil.example", ""))
+	httpHandler(t, NewReadServer()).ServeHTTP(rec, newReqAs("POST", strings.NewReader(listBody), "http://evil.example", ""))
 	if rec.Code != 403 {
 		t.Fatalf("got %d", rec.Code)
 	}

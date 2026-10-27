@@ -2,7 +2,12 @@
 
     *** Never run this anywhere but 127.0.0.1, and never for real users. ***
     It AUTO-APPROVES every authorization request with no login page and one fixed test subject
-    (TEST_SUBJECT = "user-1"), and it signs tokens with a public test key (resource_auth.TEST_SIGNING_KEY).
+    (TEST_SUBJECT = "user-1").
+
+The signing key: on first start it writes 32 random bytes (hex) to mcp/data/dev-signing.key, mode
+0600 and git-ignored (or to $LUMEN_SIGNING_KEY_FILE), and reuses that file afterwards. The resource
+servers read the same file. No key is ever written in source code. HS256 is symmetric, so the file
+is a secret: a production AS signs with an asymmetric key and publishes only the public half (JWKS).
 
 What it does do properly, because that is what the lessons teach:
   - Authorization code + PKCE (S256 only) for public clients (token_endpoint_auth_method "none").
@@ -23,8 +28,11 @@ Run:  python mcp/python/auth_server.py      (serves http://127.0.0.1:9000)
 """
 from __future__ import annotations
 
+import os
 import secrets
+import sys
 import time
+from pathlib import Path
 
 import jwt
 from mcp.server.auth.provider import (AccessToken, AuthorizationCode, AuthorizationParams, AuthorizeError,
@@ -35,7 +43,8 @@ from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from pydantic import AnyUrl
 from starlette.applications import Starlette
 
-from resource_auth import ISSUER, OPS_RESOURCE, READ_RESOURCE, SCOPE_READ, SCOPE_WRITE, TEST_SIGNING_KEY
+from resource_auth import (ISSUER, KEY_BYTES, OPS_RESOURCE, READ_RESOURCE, SCOPE_READ, SCOPE_WRITE,
+                           SigningKeyMissing, key_file, load_signing_key)
 
 # ── 1. Configuration ────────────────────────────────────────────────────────
 HOST, PORT = "127.0.0.1", 9000
@@ -53,13 +62,29 @@ LUMEN_CLI = OAuthClientInformationFull(
     response_types=["code"], scope=" ".join(SCOPES))
 
 
-# ── 2. Tokens ───────────────────────────────────────────────────────────────
+# ── 2. Signing key and tokens ───────────────────────────────────────────────
+def ensure_signing_key(path: Path | None = None) -> bytes:
+    """Create the key file on first start (32 random bytes as hex, mode 0600), or load it.
+    O_EXCL: two AS processes starting at once cannot both write one."""
+    path = path or key_file()
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            return load_signing_key(path)
+        with os.fdopen(fd, "w", encoding="ascii") as f:
+            f.write(secrets.token_hex(KEY_BYTES) + "\n")
+    return load_signing_key(path)
+
+
 def mint_test_token(scope: str, audience: str, client_id: str = "lumen-cli", sub: str = TEST_SUBJECT) -> str:
     """For tests only (never exposed over HTTP): a signed access token as this AS would issue it,
-    without the browser round trip. `audience` is the resource URI the token is good for."""
+    without the browser round trip. `audience` is the resource URI the token is good for. Signed
+    with the key file's key (raises SigningKeyMissing without one)."""
     now = int(time.time())
     return jwt.encode({"iss": ISSUER, "aud": audience, "sub": sub, "client_id": client_id, "scope": scope,
-                       "iat": now, "exp": now + ACCESS_TTL}, TEST_SIGNING_KEY, algorithm="HS256")
+                       "iat": now, "exp": now + ACCESS_TTL}, load_signing_key(), algorithm="HS256")
 
 
 # ── 3. The provider (in memory) ─────────────────────────────────────────────
@@ -134,7 +159,9 @@ class TestOnlyProvider:
 
 # ── 4. The app ──────────────────────────────────────────────────────────────
 def build_auth_app(provider: TestOnlyProvider | None = None) -> Starlette:
-    """The SDK's AS routes around the in-memory provider. Registration (DCR) is on."""
+    """The SDK's AS routes around the in-memory provider. Registration (DCR) is on. Raises
+    SigningKeyMissing when there is no key file (main() creates it first)."""
+    load_signing_key()  # fail at build time, not at the first /token request
     # AnyHttpUrl("http://127.0.0.1:9000") would render with a trailing "/" and the SDK client would
     # reject the metadata ("issuer mismatch"); AuthSettings keeps the empty path.
     issuer = AuthSettings(issuer_url=ISSUER, resource_server_url=None).issuer_url
@@ -147,7 +174,12 @@ def build_auth_app(provider: TestOnlyProvider | None = None) -> Starlette:
 # ── 5. Entry point ──────────────────────────────────────────────────────────
 def main() -> None:
     import uvicorn
-    print(f"TEST-ONLY authorization server on {ISSUER} (auto-approves as {TEST_SUBJECT!r})")
+    try:
+        ensure_signing_key()
+    except SigningKeyMissing as e:
+        raise SystemExit(f"auth_server: {e}") from None
+    print(f"TEST-ONLY authorization server on {ISSUER} (auto-approves as {TEST_SUBJECT!r}); "
+          f"signing key file: {key_file()}", file=sys.stderr)
     uvicorn.run(build_auth_app(), host=HOST, port=PORT)
 
 

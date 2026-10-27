@@ -14,6 +14,7 @@ import json
 import re
 import secrets
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -32,8 +33,9 @@ import ops_server  # noqa: E402
 import read_server  # noqa: E402
 import resource_auth  # noqa: E402
 from auth_server import mint_test_token  # noqa: E402
+from conftest import write_key_file  # noqa: E402
 from resource_auth import (ISSUER, OPS_RESOURCE, READ_RESOURCE, SCOPE_READ, SCOPE_WRITE,  # noqa: E402
-                           TEST_SIGNING_KEY)
+                           SigningKeyMissing, load_signing_key)
 
 ROOT = Path(__file__).resolve().parents[3]
 META = {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientCapabilities": {}}
@@ -70,8 +72,9 @@ def discover(name: str, tmp_path: Path, token: str | None, **extra: str):
         return c.post("/mcp", content=DISCOVER, headers=headers(SERVERS[name][2], token, **extra))
 
 
-def signed(claims: dict, key: str = TEST_SIGNING_KEY, alg: str = "HS256") -> str:
-    return jwt.encode(claims, key, algorithm=alg)
+def signed(claims: dict, key: bytes | str | None = None, alg: str = "HS256") -> str:
+    """Sign with this test's key (conftest), or with `key`."""
+    return jwt.encode(claims, load_signing_key() if key is None else key, algorithm=alg)
 
 
 def good_claims(name: str) -> dict:
@@ -164,7 +167,7 @@ def test_invalid_tokens_401(name, tmp_path):
     base = good_claims(name)
     bad = {
         "garbage": "not-a-jwt",
-        "wrong_key": signed(base, key="another-key-that-is-long-enough-for-hs256!!"),
+        "wrong_key": signed(base, key=secrets.token_bytes(32)),
         "expired": signed({**base, "iat": now - 4000, "exp": now - 3600}),
         "not_yet_valid": signed({**base, "nbf": now + 3600}),
         "wrong_issuer": signed({**base, "iss": "http://127.0.0.1:9001"}),
@@ -349,7 +352,7 @@ def test_as_preregistered_pkce_flow_mints_an_audience_bound_token(tmp_path):
                                         "redirect_uri": REDIRECT, "client_id": "lumen-cli",
                                         "code_verifier": VERIFIER, "resource": READ_RESOURCE})
     assert replay.status_code == 400  # codes are single use
-    claims = jwt.decode(tok["access_token"], TEST_SIGNING_KEY, algorithms=["HS256"], audience=READ_RESOURCE)
+    claims = jwt.decode(tok["access_token"], load_signing_key(), algorithms=["HS256"], audience=READ_RESOURCE)
     assert claims["aud"] == READ_RESOURCE and claims["iss"] == ISSUER
     assert claims["client_id"] == "lumen-cli" and claims["sub"] == auth_server.TEST_SUBJECT == "user-1"
     assert claims["scope"] == SCOPE_READ
@@ -376,7 +379,7 @@ def test_as_refresh_keeps_audience():
                                      "client_id": "lumen-cli"}).json()
         again = c.post("/token", data={"grant_type": "refresh_token", "refresh_token": tok["refresh_token"],
                                        "client_id": "lumen-cli"})
-    claims = jwt.decode(new["access_token"], TEST_SIGNING_KEY, algorithms=["HS256"], audience=OPS_RESOURCE)
+    claims = jwt.decode(new["access_token"], load_signing_key(), algorithms=["HS256"], audience=OPS_RESOURCE)
     assert claims["scope"] == SCOPE_WRITE
     assert again.status_code == 400  # refresh tokens rotate
 
@@ -418,7 +421,7 @@ def test_mint_test_token_is_not_served():
 
 
 def test_mint_test_token_claims():
-    claims = jwt.decode(mint_test_token(SCOPE_READ, READ_RESOURCE), TEST_SIGNING_KEY, algorithms=["HS256"],
+    claims = jwt.decode(mint_test_token(SCOPE_READ, READ_RESOURCE), load_signing_key(), algorithms=["HS256"],
                         audience=READ_RESOURCE)
     assert {k: claims[k] for k in ("iss", "aud", "sub", "client_id", "scope")} == {
         "iss": ISSUER, "aud": READ_RESOURCE, "sub": "user-1", "client_id": "lumen-cli", "scope": SCOPE_READ}
@@ -431,8 +434,78 @@ def test_as_is_labelled_test_only():
     assert "test" in (auth_server.mint_test_token.__doc__ or "").lower()
 
 
-def test_go_shares_the_test_issuer_key_and_resources():
-    """The Go resource servers verify tokens from this AS: same issuer, key and canonical URIs."""
+def test_go_shares_the_issuer_resources_and_key_file():
+    """The Go resource servers verify tokens from this AS: same issuer, canonical URIs, scopes, and the
+    same key file (path and env override). No signing key is written in either language's source."""
     go = (ROOT / "mcp" / "go" / "auth" / "auth.go").read_text(encoding="utf-8")
-    for value in (ISSUER, TEST_SIGNING_KEY, READ_RESOURCE, OPS_RESOURCE, SCOPE_READ, SCOPE_WRITE):
-        assert re.search(r'=\s*"' + re.escape(value) + '"', go), value
+    for value in (ISSUER, READ_RESOURCE, OPS_RESOURCE, SCOPE_READ, SCOPE_WRITE, "LUMEN_SIGNING_KEY_FILE",
+                  "dev-signing.key"):
+        assert re.search(r'"' + re.escape(value) + '"', go), value
+    assert resource_auth.KEY_FILE_ENV == "LUMEN_SIGNING_KEY_FILE"
+    assert resource_auth.DEFAULT_KEY_FILE == ROOT / "mcp" / "data" / "dev-signing.key"
+
+
+# ── 6. The signing key file (ruling R25) ────────────────────────────────────
+def test_as_generates_the_key_on_first_start(tmp_path):
+    path = tmp_path / "data" / "dev-signing.key"
+    key = auth_server.ensure_signing_key(path)
+    assert len(key) == 32
+    assert path.stat().st_mode & 0o777 == 0o600
+    text = path.read_text(encoding="ascii")
+    assert re.fullmatch(r"[0-9a-f]{64}\n", text)  # the format Go reads too
+    assert auth_server.ensure_signing_key(path) == key  # a second start reuses it
+    assert bytes.fromhex(text.strip()) == key
+
+
+def test_keys_differ_per_generation(tmp_path):
+    assert auth_server.ensure_signing_key(tmp_path / "a") != auth_server.ensure_signing_key(tmp_path / "b")
+
+
+def test_env_names_the_key_file(signing_key, monkeypatch):
+    assert resource_auth.key_file() == signing_key
+    monkeypatch.delenv("LUMEN_SIGNING_KEY_FILE")
+    assert resource_auth.key_file() == resource_auth.DEFAULT_KEY_FILE
+
+
+def test_missing_key_file_fails_clearly(tmp_path, monkeypatch):
+    """No key file: every user of the key refuses, naming the fix. There is no default key."""
+    monkeypatch.setenv("LUMEN_SIGNING_KEY_FILE", str(tmp_path / "absent.key"))
+    for build in (read_server.build_http_app, ops_server.build_http_app, auth_server.build_auth_app,
+                  lambda: mint_test_token(SCOPE_READ, READ_RESOURCE)):
+        with pytest.raises(SigningKeyMissing) as e:
+            build()
+        assert "start the test AS first" in str(e.value) and "absent.key" in str(e.value)
+
+
+@pytest.mark.parametrize("script,args", [("read_server.py", ["--http"]), ("ops_server.py", [])])
+def test_server_without_key_exits_with_the_message(tmp_path, script, args):
+    env = {**__import__("os").environ, "LUMEN_SIGNING_KEY_FILE": str(tmp_path / "absent.key")}
+    r = subprocess.run([sys.executable, str(ROOT / "mcp" / "python" / script), *args, "--port", "1"],
+                       capture_output=True, text=True, env=env, timeout=60)
+    assert r.returncode != 0
+    assert "start the test AS first" in r.stderr and "Traceback" not in r.stderr
+
+
+@pytest.mark.parametrize("bad", ["0644", "short", "nothex"])
+def test_unusable_key_file_refused(tmp_path, monkeypatch, bad):
+    path = write_key_file(tmp_path / "k")
+    if bad == "0644":
+        path.chmod(0o644)  # readable by others: refuse, like ssh does
+    elif bad == "short":
+        path.write_text("abcd\n")
+    else:
+        path.write_text("zz" * 32 + "\n")
+    monkeypatch.setenv("LUMEN_SIGNING_KEY_FILE", str(path))
+    with pytest.raises(SigningKeyMissing):
+        load_signing_key()
+
+
+def test_token_from_another_key_is_401(tmp_path, monkeypatch):
+    """Two AS starts with different keys: the old key's tokens no longer verify."""
+    token = mint_test_token(SCOPE_READ, READ_RESOURCE)
+    monkeypatch.setenv("LUMEN_SIGNING_KEY_FILE", str(write_key_file(tmp_path / "other.key")))
+    assert discover("read", tmp_path, token).status_code == 401
+
+
+def test_key_file_is_git_ignored():
+    assert "mcp/data/dev-signing.key" in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
