@@ -199,7 +199,7 @@ class ReplayAPI(ModelAPI):
         return out
 
 
-def replay_or_approved(model) -> bool:
+def replay_or_approved(model, flag: str = "--model") -> bool:
     """True for the replay model (free). Any other model, anthropic/ included, pays real money and Inspect
     has no y/N prompt, so it runs only once the learner has priced it and set LUMEN_LIVE_OK=1 (then False)."""
     if str(model).startswith("replay/"):
@@ -208,7 +208,7 @@ def replay_or_approved(model) -> bool:
         return False
     raise PermissionError(
         f"{model} is not the replay model: this run makes paid API calls. Price it first (free): "
-        f".venv-inspect/bin/python llms/inspect/summarize.py --estimate --model {model.name}; "
+        f".venv-inspect/bin/python llms/inspect/summarize.py --estimate {flag} {model.name}; "
         f"if you accept the cost, run again with {LIVE_OK}=1 in front of the command")
 
 
@@ -296,7 +296,7 @@ def rubric_judge():
         if not reply:        # no triage reply to judge: the lab skips these tickets
             return Score(value=none, metadata={"graded": False, "verdicts": dict.fromkeys(RUBRIC_IDS), "reasons": {}})
         grader = get_model(role="grader")
-        replay_or_approved(grader)        # a paid grader runs only after LUMEN_LIVE_OK=1
+        replay_or_approved(grader, "--grader")   # a paid grader runs only after LUMEN_LIVE_OK=1; price it as the grader
         out = await grader.generate([ChatMessageSystem(content=_judge_system(prompts)),
                                      ChatMessageUser(content=judge_message(state.input_text, reply, rubric))],
                                     config=GenerateConfig(response_schema=schema, max_tokens=MAX_TOKENS))

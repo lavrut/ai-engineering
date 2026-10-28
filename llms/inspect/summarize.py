@@ -165,7 +165,7 @@ def main(argv=None) -> int:
         try:
             print("\n".join(estimate_lines(args.model, args.grader)))
         except ValueError as e:
-            print(f"error: {e}")
+            print(f"error: {e}", file=sys.stderr)
             return 1
         return 0
     args.log_dir.mkdir(parents=True, exist_ok=True)

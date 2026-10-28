@@ -47,7 +47,22 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '../..');
 const lessonsDir = join(here, '../src/content/lessons/llms');
 const src = (p: string) => readFileSync(join(repo, p), 'utf8');
-const git = (...args: string[]) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' });
+// LLMS_HISTORY_REPO points the history pins at another checkout (the shallow-clone check in task-4d-report.md).
+const historyRepo = process.env.LLMS_HISTORY_REPO ?? repo;
+const git = (...args: string[]) => execFileSync('git', args, { cwd: historyRepo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+/** The three history pins need the commits they quote. A shallow clone, a ZIP download or a tree without .git
+ *  lacks them: those three pins skip, with this note in their names, and the other pins still run. */
+const hasHistory = (() => {
+  try {
+    for (const c of ['3610e80', 'b9981a6', 'fbeb068']) git('cat-file', '-e', `${c}^{commit}`);
+    git('cat-file', '-e', 'b9981a6:llms/data/tickets.jsonl');
+    return true;
+  } catch {
+    return false;
+  }
+})();
+const NEEDS_HISTORY = ' (needs full git history: run git fetch --unshallow)';
+const itHistory = it.skipIf(!hasHistory);
 const read = (n: string) => readFileSync(join(lessonsDir, `${n}.mdx`), 'utf8');
 /** A whole lesson file, frontmatter (the quiz) included, with runs of whitespace collapsed, so a pinned
  *  sentence may wrap (P14). The quiz's own numbers are pinned again in 'the quizzes' at the end. */
@@ -208,7 +223,8 @@ describe('lesson 2 (the dataset): the numbers it states', () => {
   });
 
   // The story: the old labels (3610e80) graded against the first recording (b9981a6).
-  const old = (() => {
+  let oldCache: { data: LlmsData; oldDev: Ticket[]; score: (name: string) => ReturnType<typeof report> } | undefined;
+  const old = () => (oldCache ??= (() => {
     const data = buildLlmsData({
       tickets: git('show', '3610e80:llms/data/tickets.jsonl'),
       labels: '',
@@ -221,30 +237,42 @@ describe('lesson 2 (the dataset): the numbers it states', () => {
     const oldDev = data.tickets.filter((t) => t.split === 'dev');
     const score = (name: string) => report(gradesOn(name, oldDev, 0, data, data.tickets));
     return { data, oldDev, score };
-  })();
-  it('history: 55.0% for all three prompts; Sonnet 50.0/52.5, Opus 52.5/50.0; 16 wrong in all five; 10 relabelled, 6 kept', () => {
-    for (const p of ['v1_basic', 'v2_rules', 'v3_examples']) expect(pct(old.score(haiku(p)).both)).toBe('55.0%');
+  })());
+  itHistory(`history: 55.0% for all three prompts; Sonnet 50.0/52.5, Opus 52.5/50.0; 16 wrong in all five; 10 relabelled, 6 kept; v1_basic 55.0% to 70.0% on unchanged responses${NEEDS_HISTORY}`, () => {
+    expect(git('diff', '--stat', 'b9981a6', 'HEAD', '--', `llms/data/responses/${haiku('v1_basic')}.jsonl`)).toBe('');
+    expect(pct(both(haiku('v1_basic'), dev))).toBe('70.0%');
+    expect(l).toContain('its dev score went from 55.0% to 70.0%, purely because the answer key changed');
+    for (const p of ['v1_basic', 'v2_rules', 'v3_examples']) expect(pct(old().score(haiku(p)).both)).toBe('55.0%');
     expect(l).toContain('The first recorded run scored all three prompts at the same 55.0% on dev');
     const five = [haiku('v1_basic'), `triage__${SONNET}__v1_basic__low`, `triage__${SONNET}__v1_basic__high`,
       `triage__${OPUS}__v1_basic__low`, `triage__${OPUS}__v1_basic__high`];
-    expect(five.map((n) => pct(old.score(n).both))).toEqual(['55.0%', '50.0%', '52.5%', '52.5%', '50.0%']);
+    expect(five.map((n) => pct(old().score(n).both))).toEqual(['55.0%', '50.0%', '52.5%', '52.5%', '50.0%']);
     expect(l).toContain('Haiku scores 55.0%, Sonnet 50.0% and 52.5% at low and high effort, and Opus 52.5% and 50.0%');
-    const wrongAll = old.oldDev.map((t) => t.id).filter((id) =>
-      five.every((n) => !gradesOn(n, old.oldDev, 0, old.data, old.data.tickets).find((g) => g.case_id === id)!.both_ok));
+    const wrongAll = old().oldDev.map((t) => t.id).filter((id) =>
+      five.every((n) => !gradesOn(n, old().oldDev, 0, old().data, old().data.tickets).find((g) => g.case_id === id)!.both_ok));
     expect(wrongAll).toHaveLength(16);
     expect(l).toContain('16 dev tickets were wrong in all five');
-    const oldById = new Map(old.data.tickets.map((t) => [t.id, t]));
+    const oldById = new Map(old().data.tickets.map((t) => [t.id, t]));
     const kept = wrongAll.filter((id) => oldById.get(id)!.category === byId.get(id)!.category && oldById.get(id)!.priority === byId.get(id)!.priority);
     expect(kept).toEqual(['t007', 't012', 't015', 't029', 't034', 't039']);
     expect(wrongAll.length - kept.length).toBe(10);
     expect(l).toContain('changed the labels on 10 of those 16 tickets. The other 6 (`t007`, `t012`, `t015`, `t029`, `t034`, `t039`) kept their labels');
   });
-  it('the audits: 57/60 and 33/60 (55%); 24 relabels (2 categories, 23 priorities); 25 in all; round 3 60/60 with 5 ambiguous', () => {
-    const oldById = new Map(old.data.tickets.map((t) => [t.id, t]));
+  itHistory(`the audits against the original labels: 57/60 and 33/60 (55%); 25 tickets differ in all; t047 and t052${NEEDS_HISTORY}`, () => {
+    const oldById = new Map(old().data.tickets.map((t) => [t.id, t]));
     const r1 = jsonl<{ id: string; category: string; priority: string }>(src('llms/data/label_audits/round1_blind.jsonl'));
     expect(r1.filter((r) => r.category === oldById.get(r.id)!.category)).toHaveLength(57);
     expect(r1.filter((r) => r.priority === oldById.get(r.id)!.priority)).toHaveLength(33);
     expect(l).toContain('It matched the category on 57 of 60 tickets, but the priority on only 33 of 60 (55%)');
+    const differs = tickets.filter((t) => oldById.get(t.id)!.category !== t.category || oldById.get(t.id)!.priority !== t.priority);
+    expect(differs).toHaveLength(25);
+    expect(l).toContain('That makes 25 tickets in all whose labels differ from the original ones');
+    expect(oldById.get('t047')!.priority).toBe('high');
+    expect(byId.get('t047')!.priority).toBe('low');
+    expect(oldById.get('t052')!.priority).toBe('high');
+    expect(byId.get('t052')!.priority).toBe('urgent');
+  });
+  it('the audits: 24 relabels (2 categories, 23 priorities); round 2 and round 3 60/60 with 5 ambiguous', () => {
     const changes = src('llms/data/label_changes.md');
     const round1 = changes.slice(0, changes.indexOf('\n## ', changes.indexOf('| id |')));
     const rows = round1.split('\n').filter((r) => /^\| t\d{3} \|/.test(r)).map((r) => r.split('|').map((c) => c.trim()));
@@ -253,13 +281,6 @@ describe('lesson 2 (the dataset): the numbers it states', () => {
     expect(rows.filter((r) => r[4].includes('→'))).toHaveLength(23);
     expect(rows.filter((r) => r[3].includes('→') && r[4].includes('→')).map((r) => r[1])).toEqual(['t038']);
     expect(l).toContain('the guide changed 24 tickets\' labels: 2 categories and 23 priorities (`t038` changed both)');
-    const differs = tickets.filter((t) => oldById.get(t.id)!.category !== t.category || oldById.get(t.id)!.priority !== t.priority);
-    expect(differs).toHaveLength(25);
-    expect(l).toContain('That makes 25 tickets in all whose labels differ from the original ones');
-    expect(oldById.get('t047')!.priority).toBe('high');
-    expect(byId.get('t047')!.priority).toBe('low');
-    expect(oldById.get('t052')!.priority).toBe('high');
-    expect(byId.get('t052')!.priority).toBe('urgent');
     const r3 = jsonl<{ id: string; category: string; priority: string; ambiguous: boolean }>(src('llms/data/label_audits/round3_blind.jsonl'));
     expect(r3.filter((r) => r.category === byId.get(r.id)!.category)).toHaveLength(60);
     expect(r3.filter((r) => r.priority === byId.get(r.id)!.priority)).toHaveLength(60);
@@ -270,11 +291,8 @@ describe('lesson 2 (the dataset): the numbers it states', () => {
     expect(r2.filter((r) => r.ambiguous)).toHaveLength(5);
     expect(l).toContain('matched all 60 labels but marked 5 tickets ambiguous');
   });
-  it('v1_basic 55.0% to 70.0% with unchanged responses; v2/v3 97.5% on dev', () => {
-    expect(pct(old.score(haiku('v1_basic')).both)).toBe('55.0%');
+  it('v1_basic now 70.0%; v2/v3 97.5% on dev', () => {
     expect(pct(both(haiku('v1_basic'), dev))).toBe('70.0%');
-    expect(git('diff', '--stat', 'b9981a6', 'HEAD', '--', `llms/data/responses/${haiku('v1_basic')}.jsonl`)).toBe('');
-    expect(l).toContain('its dev score went from 55.0% to 70.0%, purely because the answer key changed');
     expect([pct(both(haiku('v2_rules'), dev)), pct(both(haiku('v3_examples'), dev))]).toEqual(['97.5%', '97.5%']);
     expect(l).toContain('so their 97.5% on dev partly measures');
   });
@@ -452,13 +470,15 @@ describe('lesson 6 (checking the judge): the numbers it states', () => {
   const agree = (order: 'before' | 'after', rid: string) => agreement(judgeV(order, rid), human(rid));
   const kappa = (order: 'before' | 'after', rid: string) => cohenKappa(judgeV(order, rid).map(Boolean), human(rid));
 
-  it('30 replies r001 to r030; the label fix at 19:31 and the first judge verdicts at 20:08 on 2026-10-25', () => {
+  it('30 replies r001 to r030, pending review', () => {
     expect(D.labels.map((r) => r.id)).toEqual(Array.from({ length: 30 }, (_, i) => `r${String(i + 1).padStart(3, '0')}`));
+    expect(src('llms/data/README.md')).toContain('These labels are Claude-drafted and pending your review.');
+  });
+  itHistory(`the label fix at 19:31 and the first judge verdicts at 20:08 on 2026-10-25${NEEDS_HISTORY}`, () => {
     expect(git('log', '-1', '--format=%ad', '--date=format:%Y-%m-%d %H:%M', 'fbeb068').trim()).toBe('2026-10-25 19:31');
     expect(git('log', '-1', '--format=%ad', '--date=format:%Y-%m-%d %H:%M', 'b9981a6').trim()).toBe('2026-10-25 20:08');
     expect(git('show', '--stat', '--format=', 'b9981a6')).toContain('judge__claude-opus-5-5__after__default.jsonl');
     expect(l).toContain('the label fix committed at 19:31 on 2026-10-25 and the first judge verdicts at 20:08');
-    expect(src('llms/data/README.md')).toContain('These labels are Claude-drafted and pending your review.');
   });
   it('RELABEL: agreement after the reply 28, 29, 30 of 30 (93.3%, 96.7%, 100%); lesson 6 "Agreement" and "See it" paragraphs', () => {
     expect(RUBRIC_IDS.map((rid) => Math.round(agree('after', rid) * 30))).toEqual([28, 29, 30]);

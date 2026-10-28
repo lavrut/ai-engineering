@@ -97,7 +97,7 @@ def run_py(argv, script, tmp_path):
         target.write_text(script, "utf-8")
     env = {"PYTHONPATH": str(PY), "PATH": "/usr/bin:/bin", "PYTHONHASHSEED": "0"}   # no ANTHROPIC_API_KEY
     return subprocess.run([sys.executable, str(target), *argv[1:]], cwd=PY, env=env,
-                          capture_output=True, text=True, timeout=300)
+                          stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=300)
 
 
 def test_every_saved_script_is_checked():
@@ -108,6 +108,7 @@ def test_every_saved_script_is_checked():
                 continue
             assert (path.stem, name) in names, f"{path.stem}: {name} has no checked output"
     assert len(CASES) == 15
+    assert all("--mode" not in c.values[1] for c in CASES)   # output checks replay; paid commands go through test_quoted_estimates
 
 
 @pytest.mark.parametrize("lesson, argv, echo, expected, script, tail", CASES)

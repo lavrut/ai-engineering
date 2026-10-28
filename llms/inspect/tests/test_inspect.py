@@ -448,13 +448,14 @@ def test_live_task_model_refused_without_approval(tmp_path, paid):
                        log_dir=str(tmp_path), display="none", limit=3)[0]
     assert paid == []                                    # nothing was called
     assert log.status == "error"
-    assert ti.LIVE_OK in all_errors(log) and "summarize.py --estimate" in all_errors(log)
+    assert ti.LIVE_OK in all_errors(log) and "summarize.py --estimate --model claude-haiku-5-5" in all_errors(log)
 
 
 def test_live_grader_refused_without_approval(tmp_path, paid):
     log = inspect_eval(ti.triage_judged(), model="replay/claude-haiku-5-5", model_roles={"grader": "paidfake/claude-opus-5-5"},
                        log_dir=str(tmp_path), display="none", limit=3)[0]
     assert paid == [] and log.status == "error" and ti.LIVE_OK in all_errors(log)
+    assert "summarize.py --estimate --grader claude-opus-5-5" in all_errors(log)   # priced as the grader
 
 
 def test_live_model_runs_once_approved_and_sends_no_replay_header(tmp_path, paid, monkeypatch):
@@ -476,4 +477,4 @@ def test_estimate_prices_the_live_runs_without_running_them(capsys, monkeypatch)
     assert summarize.main(["--estimate", "--model", "anthropic/claude-sonnet-5-5"]) == 0
     assert "claude-sonnet-5-5  180 calls  $1.5840" in capsys.readouterr().out
     assert summarize.main(["--estimate", "--model", "anthropic/claude-nope"]) == 1
-    assert 'no price for model "claude-nope"' in capsys.readouterr().out
+    assert 'no price for model "claude-nope"' in capsys.readouterr().err
