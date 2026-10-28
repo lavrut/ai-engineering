@@ -118,6 +118,10 @@ def cases() -> list[dict]:
         case("open-repeat-is-an-invalid-pattern", contract([field("code", pattern="a{,2}")]),
              [v("contract", None, False, "schema.fields[0].pattern: invalid pattern: {,2}")],
              rows=[{"code": "aa"}]),
+        # ruling D9: a counted repeat may not wrap a group that holds one (RE2 refuses the product)
+        case("nested-counted-repeat-is-an-invalid-pattern", contract([field("code", pattern="(a{2}){3}")]),
+             [v("contract", None, False, "schema.fields[0].pattern: invalid pattern: {3}")],
+             rows=[{"code": "aaaaaa"}]),
         case("row-count-above-max", contract(ID, {"row_count": {"max": 1}}),
              [FRESH, v("required", "id", True, "present in 2 rows"),
               v("row_count", None, False, "2 rows, above max 1"), v("type", "id", True, "all values are integer")],

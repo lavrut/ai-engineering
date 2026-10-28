@@ -108,6 +108,8 @@ def _check_info(info: Any) -> None:
 # Python and Go (ruling D7), so a pattern either means the same thing in both engines
 # or is refused by both. \d \w \s are rewritten to explicit ASCII classes, ^ and $ are
 # dropped (the match is already full), and the rest is passed through unchanged.
+# Ruling D9: counted repeats stop at 1000, and a counted repeat may not wrap a group
+# that holds one, since RE2 refuses the product ((a{1000}){1000}) that Python accepts.
 PATTERN_META = ".*+?()[]{}|^$\\-"
 CLASS_ESCAPES = "dDwWsS"
 _MAX = "\\U0010ffff"  # Go writes \x{10FFFF}
@@ -178,9 +180,11 @@ def _tokenize(p: str) -> list[tuple[str, str]]:
     """(source token, engine form) pairs; ContractError naming the first token outside D7."""
     toks: list[tuple[str, str]] = []
     i, depth, prev = 0, 0, ""
+    counted = [False]  # per open group (and the top level): does it hold a counted repeat?
+    closed = False  # the group that just closed held one
     while i < len(p):
         c = p[i]
-        kind = "atom"
+        kind, just_closed = "atom", False
         if c == "\\":
             e = p[i + 1:i + 2]
             if not e or (e not in PATTERN_META and e not in CLASS_ESCAPES):
@@ -197,10 +201,13 @@ def _tokenize(p: str) -> list[tuple[str, str]]:
             else:
                 tok = ("(", "(")
             depth, kind = depth + 1, "open"
+            counted.append(False)
         elif c == ")":
             if depth == 0:
                 _bad(")")
             depth, tok = depth - 1, (")", ")")
+            just_closed = counted.pop()
+            counted[-1] = counted[-1] or just_closed
         elif c == "|":
             tok, kind = ("|", "|"), "alt"
         elif c in "*+?{":
@@ -216,6 +223,10 @@ def _tokenize(p: str) -> list[tuple[str, str]]:
                     _bad(src)
             if prev != "atom":
                 _bad(src)
+            if c == "{":
+                if closed:
+                    _bad(src)
+                counted[-1] = True
             if p[i + len(src):i + len(src) + 1] in ("?", "+") and i + len(src) < len(p):
                 _bad(src + p[i + len(src)])
             tok, kind = (src, src), "quant"
@@ -233,7 +244,7 @@ def _tokenize(p: str) -> list[tuple[str, str]]:
             tok = (c, c)
         i = nxt if c == "[" else i + len(tok[0])
         toks.append(tok)
-        prev = kind
+        prev, closed = kind, just_closed
     if depth:
         _bad("(")
     return toks

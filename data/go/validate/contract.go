@@ -615,7 +615,9 @@ func checkInfo(v any) error {
 // A pattern is checked against an allow-list grammar by the same small tokenizer as
 // contract.py's _tokenize, so a pattern either means the same thing in both engines or is
 // refused by both. \d \w \s become explicit ASCII classes, ^ and $ are dropped (the match
-// is already full), and the rest passes through unchanged.
+// is already full), and the rest passes through unchanged. Ruling D9: counted repeats stop
+// at 1000, and a counted repeat may not wrap a group that holds one, since RE2 refuses the
+// product ((a{1000}){1000}) that Python accepts.
 const (
 	patternMeta  = `.*+?()[]{}|^$\-`
 	classEscapes = "dDwWsS"
@@ -733,8 +735,10 @@ func tokenize(pat string) ([]patToken, error) {
 	p := []rune(pat)
 	var toks []patToken
 	depth, prev := 0, ""
+	counted := []bool{false} // per open group (and the top level): does it hold a counted repeat?
+	closed := false          // the group that just closed held one
 	for i := 0; i < len(p); {
-		c, kind, next := p[i], "atom", -1
+		c, kind, next, justClosed := p[i], "atom", -1, false
 		var tok patToken
 		switch {
 		case c == '\\':
@@ -767,11 +771,15 @@ func tokenize(pat string) ([]patToken, error) {
 				tok = patToken{"(", "("}
 			}
 			depth, kind = depth+1, "open"
+			counted = append(counted, false)
 		case c == ')':
 			if depth == 0 {
 				return nil, badPattern(")")
 			}
 			depth, tok = depth-1, patToken{")", ")"}
+			justClosed = counted[len(counted)-1]
+			counted = counted[:len(counted)-1]
+			counted[len(counted)-1] = counted[len(counted)-1] || justClosed
 		case c == '|':
 			tok, kind = patToken{"|", "|"}, "alt"
 		case strings.ContainsRune("*+?{", c):
@@ -794,6 +802,12 @@ func tokenize(pat string) ([]patToken, error) {
 			}
 			if prev != "atom" {
 				return nil, badPattern(src)
+			}
+			if c == '{' {
+				if closed {
+					return nil, badPattern(src)
+				}
+				counted[len(counted)-1] = true
 			}
 			if after := i + len([]rune(src)); after < len(p) && (p[after] == '?' || p[after] == '+') {
 				return nil, badPattern(src + string(p[after]))
@@ -820,7 +834,7 @@ func tokenize(pat string) ([]patToken, error) {
 			i += len([]rune(tok.src))
 		}
 		toks = append(toks, tok)
-		prev = kind
+		prev, closed = kind, justClosed
 	}
 	if depth > 0 {
 		return nil, badPattern("(")

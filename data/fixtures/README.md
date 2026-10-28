@@ -31,7 +31,7 @@ Before compiling it, both validators run the same small tokenizer (`pattern_toke
 | bracket classes | `[...]` and `[^...]` holding literal characters, escaped metacharacters, ranges `a-z` (low end first), and the six class escapes; `-` is literal only as the first or last item; no `[` inside, no empty class |
 | groups | `(...)` and `(?:...)` |
 | alternation | `\|` |
-| quantifiers | `* + ? {n} {n,} {n,m}` after an atom, with n ≤ m ≤ 1000; no `{,n}`, no lazy `?` or possessive `+` suffix |
+| quantifiers | `* + ? {n} {n,} {n,m}` after an atom, with n ≤ m ≤ 1000; no `{,n}`, no lazy `?` or possessive `+` suffix; a counted repeat never follows a group that holds one, at any depth (`(a{2}){3}` is refused; `(a{2})+` is fine), because RE2 refuses the product and Python does not (ruling D9) |
 | anchors | `^` only as the first token and `$` only as the last; both are redundant under a full match and dropped before compiling |
 
 Anything else is refused when the contract loads, with the detail `schema.fields[i].pattern: invalid pattern: <offending token>`. Refused forms include inline flags, lookarounds, named groups, comments, backreferences, `\u`, `\N{}`, `\p`, `\b`, `\B`, `\A`, `\Z`, `[[:alpha:]]` and `[\b]`. The text is identical in both languages, and it never includes an engine's error text.
