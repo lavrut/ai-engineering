@@ -404,3 +404,16 @@ def test_engine_scores_untouched(world):
     before = (world["out"] / "engine_scores.json").read_bytes()
     assert run_main(world) == 0
     assert (world["out"] / "engine_scores.json").read_bytes() == before
+
+
+def test_patching_the_facade_reaches_derive_read(monkeypatch):
+    """M3: derive.py re-exports derive_read's caps and readers. A cap patched on `derive` reaches the reader
+    that uses it (args_text in derive_read caps at ARGS_CAP)."""
+    import derive_read
+    long_args = {"query": "x" * 200}
+    assert len(derive.args_text(long_args)) > 50
+    monkeypatch.setattr(derive, "ARGS_CAP", 9)
+    assert derive_read.ARGS_CAP == 9
+    assert len(derive.args_text(long_args)) <= 9
+    monkeypatch.undo()
+    assert derive_read.ARGS_CAP == derive.ARGS_CAP != 9

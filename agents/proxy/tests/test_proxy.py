@@ -880,3 +880,24 @@ def test_peek_error_other_than_oserror_is_not_idle(running, monkeypatch):
     h.server, h.rfile, h.close_connection = server, Broken(), False
     h.handle_one_request()
     assert seen == [True] and h.busy is False
+
+
+def test_lazy_names_resolve_when_proxy_py_is_loaded_by_path(tmp_path):
+    """M2: proxy.py loaded by path (as desk_core's test does), from a directory that is not agents/proxy and
+    with agents/proxy off sys.path, still resolves the names the other three files define."""
+    import subprocess
+    path = Path(__file__).resolve().parents[1] / "proxy.py"
+    code = (
+        "import importlib.util, sys\n"
+        "assert not any(p.rstrip('/').endswith('agents/proxy') for p in sys.path), sys.path\n"
+        f"spec = importlib.util.spec_from_file_location('proxy_by_path', {str(path)!r})\n"
+        "mod = importlib.util.module_from_spec(spec)\n"
+        "spec.loader.exec_module(mod)\n"
+        "names = ['make_server', 'serve', 'ProxyServer', 'Handler', 'confirm', 'NotConfirmed', 'ledger_cost']\n"
+        "print(' '.join(f'{n}:{getattr(mod, n).__module__}' for n in names))\n"
+    )
+    r = subprocess.run([sys.executable, "-I", "-c", code], cwd=tmp_path, capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.split() == ["make_server:proxy_server", "serve:proxy_server", "ProxyServer:proxy_server",
+                                "Handler:proxy_handler", "confirm:proxy_cost", "NotConfirmed:proxy_cost",
+                                "ledger_cost:proxy_cost"]

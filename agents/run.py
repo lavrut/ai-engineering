@@ -34,6 +34,7 @@ import sys
 import tempfile
 import threading
 import time
+import types
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -50,6 +51,26 @@ import desk_core as core  # noqa: E402  (on the path run_sets set)
 import proxy  # noqa: E402
 from triage_lab import PRICES, call_cost  # noqa: E402,F401  (the LLMs lab's prices, import only)
 from lumen_core import LABELS_PATH  # noqa: E402  (mcp/data/labels.jsonl, git-ignored; on sys.path via desk_core)
+import run_engines  # noqa: E402  (the parts themselves, for the patch rule below)
+import run_sets  # noqa: E402
+import run_traces  # noqa: E402
+
+
+# A patch on this module reaches the parts (M3). The names above are copies of the parts' names, so patching one
+# here (monkeypatch.setattr(run, "MODEL", ...)) also sets it in every part that holds that name, and the
+# patched value is what the code sees wherever it looks the name up. Undoing the patch sets the old value back
+# the same way. Reading a name works as before.
+class _Facade(types.ModuleType):
+    def __setattr__(self, name: str, value: Any) -> None:
+        for part in _PARTS:
+            if name in vars(part):
+                setattr(part, name, value)
+        super().__setattr__(name, value)
+
+
+_PARTS = (run_sets, run_engines, run_traces)
+sys.modules[__name__].__class__ = _Facade
+
 
 # ── 1. One ticket, one proxy run ────────────────────────────────────────────
 def record_command(engine_name: str, desk: str, ticket_id: str, max_calls: int | None) -> str:

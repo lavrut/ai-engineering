@@ -1,10 +1,12 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import matter from 'gray-matter';
 import { describe, expect, it } from 'vitest';
 import { BUDGET, SUMMARY_TOKENS, SYSTEM_TOKENS, TOOL_SCHEMA_TOKENS, TURN_SIZES, WINDOW } from '../src/lib/compaction';
 import { parseTrace } from '../src/lib/trace';
 import { scenarios } from '../src/data/scenarios';
+import { harnessFlow } from '../src/data/diagrams/harness-flow';
 import sample from '../src/data/sample-trace.jsonl?raw';
 
 // The Harness track: every number a lesson states is pinned here against its source: the harness files'
@@ -277,4 +279,67 @@ describe('every Try it command runs in the harness venv', () => {
       }
     }
   });
+});
+
+// M1 (P14): the quizzes state numbers too. Each lesson's quiz phrases are pinned here, every number computed
+// from the same sources as the body pins above (the harness constants, the lab prices, the aids' data); a wrong
+// option's number is written out as the wrong option it is, and the HTTP codes are fixed facts. Every data
+// number in a quiz must be in one of its lesson's phrases.
+type Quiz = { question: string; options: string[]; answer: number; explanation: string }[];
+const quizText = (n: string) =>
+  (matter(lesson(n)).data.quiz as Quiz).flatMap((q) => [q.question, ...q.options, q.explanation]).join(' | ').replace(/\s+/g, ' ');
+/** The numbers a quiz states that carry data: decimals, thousands, and integers of two or more digits.
+ *  Single digits are structure ("step 5", "Three tool calls"). */
+const NUMBER = /\d+(?:,\d{3})*(?:\.\d+)?/g;
+const quizNumbers = (n: string) => [...quizText(n).matchAll(NUMBER)].map((m) => m[0]).filter((x) => /[.,]/.test(x) || x.length >= 2);
+
+describe('the quizzes: every number they state is pinned (M1)', () => {
+  const last = harnessFlow.steps[harnessFlow.steps.length - 1];
+  const ms = [...readFileSync(join(here, '../src/components/Timeline.astro'), 'utf8').matchAll(/ms: (\d+) \}/g)].map((m) => Number(m[1]));
+  const seq = ms.reduce((a, b) => a + b, 0);
+  const summaryCap = num(/max_tokens=([\d_]+)/.exec(py.slice(py.indexOf('def compact')))![1]);
+  const over = CONTEXT_BUDGET + 2_000; // a made-up reading just over the budget
+  const ins = [2_000, 3_500, 4_500];
+  const outs = [200, 300, 100];
+  const tin = ins.reduce((a, b) => a + b, 0);
+  const tout = outs.reduce((a, b) => a + b, 0);
+  const and3 = (x: string[]) => `${x[0]}, ${x[1]} and ${x[2]}`;
+
+  it('the facts behind the phrases', () => {
+    expect(last.caption).toMatch(/final answer is shown to you/); // "step 10 ... shows the answer"
+    expect(over).toBeGreaterThan(CONTEXT_BUDGET);
+    expect(WINDOW).toBe(1_000_000);
+    expect(dollars(tin, tout)).toBeCloseTo(0.052, 10);
+  });
+
+  const PINNED: Record<string, string[]> = {
+    '01': [`end_turn jumps to step ${last.n} and shows the answer`, `Straight to step ${last.n}, to show the answer` /* a wrong option */,
+      `The loop only reaches step ${last.n} when the router sees end_turn`],
+    '04': [`ends the loop after ${MAX_TURNS} model calls`, `costs at most ${MAX_TURNS} loop calls`],
+    '06': [`Three tool calls take ${ms[0]}, ${ms[1]} and ${ms[2]} ms`, `${seq} ms, because each call waits for the one before` /* a wrong option */,
+      `${Math.max(...ms)} ms, the length of the slowest call`, `${Math.min(...ms)} ms, the length of the fastest call` /* a wrong option */,
+      `${Math.round(seq / ms.length)} ms, the average` /* a wrong option */,
+      `about ${Math.max(...ms)} ms instead of the ${seq} ms a one-at-a-time loop would need`],
+    '07': [`input_tokens is ${commas(over)}`, `fits under ${commas(CONTEXT_BUDGET)}` /* a wrong option */, `${commas(over)} is over CONTEXT_BUDGET`,
+      `max_tokens ${summaryCap}`, `context window is ${commas(WINDOW)} tokens. Why does the harness compact at ${commas(CONTEXT_BUDGET)}?`,
+      `refuses requests over ${commas(CONTEXT_BUDGET)} tokens` /* a wrong option */, `past ${commas(CONTEXT_BUDGET)} tokens` /* a wrong option */,
+      `${commas(CONTEXT_BUDGET)} is the most that max_tokens allows` /* a wrong option */],
+    '08': ['would catch every 429', 'A 429 is both a RateLimitError and an APIStatusError', 'with the 429 case above', 'The API answers 529 (overloaded) twice'],
+    '09': [`input_tokens ${and3(ins.map(commas))}, and output_tokens ${and3(outs.map(String))}`,
+      `At $${P_IN} per million input tokens and $${P_OUT} per million output tokens`,
+      `About $${dollars(0, tout).toFixed(3)}` /* a wrong option: output only */, `About $${((tin * P_OUT) / 1e6).toFixed(2)}` /* a wrong option: input at the output price */,
+      `About $${dollars(tin, tout).toFixed(3)}`, `About $${dollars(tin, 0).toFixed(3)}` /* a wrong option: input only */,
+      `Input is ${commas(tin)} tokens, which costs ${commas(tin)} × ${P_IN} / 1,000,000 = $${dollars(tin, 0).toFixed(2)}`,
+      `Output is ${tout} tokens, which costs ${tout} × ${P_OUT} / 1,000,000 = $${dollars(0, tout).toFixed(3)}`,
+      `The total is $${dollars(tin, tout).toFixed(3)}`],
+  };
+
+  for (const l of ['01', '02', '03', '04', '05', '06', '07', '08', '09']) {
+    it(`lesson ${l}: each stated phrase holds, and every number in the quiz is one of them`, () => {
+      const q = quizText(l);
+      for (const phrase of PINNED[l] ?? []) expect(q, l).toContain(phrase);
+      const covered = new Set((PINNED[l] ?? []).flatMap((x) => x.match(NUMBER) ?? []));
+      for (const x of quizNumbers(l)) expect(covered.has(x), `lesson ${l}: quiz number ${x} is not pinned`).toBe(true);
+    });
+  }
 });

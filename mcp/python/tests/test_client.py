@@ -442,3 +442,19 @@ def test_usage_errors_match_in_both_clients(go_client, command, message):
     go = subprocess.run([str(go_client), "-stdio", *command], capture_output=True, text=True, env=env, cwd=ROOT)
     for r in (py, go):
         assert r.returncode == 1 and r.stdout == "" and r.stderr.strip() == message
+
+
+def test_patching_the_facade_reaches_the_parts(monkeypatch):
+    """M3: client.py re-exports client_connect's and client_calls' names. Patching one on `client` sets it in
+    every part that holds it (connect looks deny up in client_connect); undoing the patch restores them."""
+    import client_calls
+    import client_connect
+
+    async def fake(message: str) -> bool:
+        return True
+
+    real = lumen_client.deny
+    monkeypatch.setattr(lumen_client, "deny", fake)
+    assert lumen_client.deny is client_connect.deny is client_calls.deny is fake
+    monkeypatch.undo()
+    assert lumen_client.deny is client_connect.deny is client_calls.deny is real

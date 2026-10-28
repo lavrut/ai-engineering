@@ -2,7 +2,6 @@
 
 Part of agent.py (which re-exports every name here): one key per request, replay and record
 (section 1), and the estimate, worst case and y/N (2). Configuration comes from agent_config.py.
-A test that patches a name used here patches this module, where the code looks it up.
 """
 from __future__ import annotations
 

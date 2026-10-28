@@ -2,8 +2,7 @@
 
 Part of agent.py (which re-exports every name here): the harness imported on first use (section 1),
 the bridge from the harness's threads to the async MCP client (2), MCP tools as harness tools (3) and
-the untrusted-read rule (4). Configuration comes from agent_config.py. A test that patches a name
-used here (connect, CALL_TIMEOUT) patches this module, where the code looks it up.
+the untrusted-read rule (4). Configuration comes from agent_config.py.
 """
 from __future__ import annotations
 

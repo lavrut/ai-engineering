@@ -43,6 +43,12 @@ import httpx
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "llms" / "python"))
 from triage_lab import PRICES, call_cost  # noqa: E402
 
+# The other three files sit beside this one; put their folder on the path, so they import even when this file is
+# loaded by path from somewhere else (M2).
+_HERE = str(Path(__file__).resolve().parent)
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+
 # The other three files import this one's configuration, so `proxy.<name>` loads them on first use.
 ELSEWHERE = {
     "proxy_cost": ("BadRequest", "check_body", "estimate_input_tokens", "worst_call", "sse_complete", "usage_tokens",

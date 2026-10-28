@@ -41,6 +41,7 @@ import asyncio
 import json
 import os
 import sys
+import types
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -53,10 +54,29 @@ if str(HERE) not in sys.path:
 
 # The client is three files: this one (configuration, discovery, the entry point), client_connect.py
 # and client_calls.py. Their names are re-exported here, so `import client` and `client.X` work as
-# before. These are copies of the names: patch a name in the module that defines it, not here.
+# before.
 from client_calls import (NO_TEXT, Answerer, always, ask_terminal, call, deny,  # noqa: E402,F401
                           elicitation_callback, prompt, read, resource_entry)
 from client_connect import HttpTarget, Refusal, connect, http_target, refusal_line  # noqa: E402,F401
+import client_calls  # noqa: E402  (the parts themselves, for the patch rule below)
+import client_connect  # noqa: E402
+
+
+# A patch on this module reaches the parts (M3). The names above are copies of the parts' names, so patching one
+# here (monkeypatch.setattr(client, "deny", ...)) also sets it in every part that holds that name, and the
+# patched value is what the code sees wherever it looks the name up. Undoing the patch sets the old value back
+# the same way. Reading a name works as before.
+class _Facade(types.ModuleType):
+    def __setattr__(self, name: str, value: Any) -> None:
+        for part in _PARTS:
+            if name in vars(part):
+                setattr(part, name, value)
+        super().__setattr__(name, value)
+
+
+_PARTS = (client_connect, client_calls)
+sys.modules[__name__].__class__ = _Facade
+
 
 # ── 1. Configuration ────────────────────────────────────────────────────────
 READ_SERVER = HERE / "read_server.py"

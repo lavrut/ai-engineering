@@ -17,7 +17,6 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import agent  # noqa: E402
-import agent_host  # noqa: E402  (the bridge lives here; patch names where the code looks them up)
 
 ROOT = Path(__file__).resolve().parents[3]
 harness = agent.load_harness()
@@ -125,8 +124,8 @@ def test_failed_open_does_not_stall(monkeypatch):
             raise
         yield None
 
-    monkeypatch.setattr(agent_host, "connect", hang)
-    monkeypatch.setattr(agent_host, "CALL_TIMEOUT", 0.5)
+    monkeypatch.setattr(agent, "connect", hang)          # agent.py's patch rule sets these in agent_host too (M3)
+    monkeypatch.setattr(agent, "CALL_TIMEOUT", 0.5)
     start = time.monotonic()
     with pytest.raises(TimeoutError):
         with agent.Bridge({"read": (None, agent.deny)}):

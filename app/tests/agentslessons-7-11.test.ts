@@ -657,3 +657,89 @@ describe('lesson 11 (capstone): the verdict and the numbers it states', () => {
     says('11-capstone', '`Make these paid calls? [y/N]`');
   });
 });
+
+// M1 (P14): the quizzes state numbers too. Each lesson's quiz phrases are pinned here, every number computed
+// from the same sources as the body pins above; a wrong option's number is written out as the wrong option it
+// is. Every data number in a quiz must be in one of its lesson's phrases.
+type Quiz = { question: string; options: string[]; answer: number; explanation: string }[];
+const quizText = (n: string) =>
+  (matter(read(n)).data.quiz as Quiz).flatMap((q) => [q.question, ...q.options, q.explanation]).join(' | ').replace(/\s+/g, ' ');
+/** The numbers a quiz states that carry data: decimals, thousands, and integers of two or more digits (ticket ids
+ *  such as the 061 of t061 included). Single digits are structure ("4 runs", "9 not evaluable"). */
+const NUMBER = /\d+(?:,\d{3})*(?:\.\d+)?/g;
+const quizNumbers = (n: string) => [...quizText(n).matchAll(NUMBER)].map((m) => m[0]).filter((x) => /[.,]/.test(x) || x.length >= 2);
+
+describe('the quizzes: every number they state is pinned (M1)', () => {
+  const sdkSup = trace('desk-sdk', 'sdk-supervisor-t001');
+  const best = row('hand-go', 'supervisor');
+  const n = best.n;
+  const min = constant(runEvalsPy, 'MIN_SUCCESS');
+  const need = (rate: number) => {
+    let k = 1;
+    while (rate - 1 / Math.sqrt(k) < min) k += 1;
+    return k;
+  };
+  const k = need(best.success_rate);
+  const lg = row('langgraph', 'supervisor');
+  const sdkRow = row('sdk', 'supervisor');
+  const others = DESKS.flatMap((d) => ENGINES.map((e) => ({ e, d }))).filter(({ e, d }) => !(e === 'sdk' && d === 'supervisor'));
+  const evaluable = (Object.values(sdkRow.runs) as Doc[]).filter((x) => x.trajectory_ok !== null).length;
+
+  it('the facts behind the phrases', () => {
+    expect(runPy).toContain('spent ${server.spent:.4f}'); // replay prints "spent $0.0000"
+    for (const e of ENGINES) {
+      const r = row(e, 'single').runs.t061;
+      expect([r.category_ok, r.judge_pass, r.task_success], e).toEqual([false, false, true]);
+    }
+    expect(existsSync(join(lessonsDir, '10-evals.mdx'))).toBe(true); // "lesson 10 compares frameworks"
+    says('09-agent-sdk', 'During the build, against a local stub of the API, the same field read 2.0 for a reply of 10 input and 1 output tokens.');
+    for (const { e, d } of others) expect(row(e, d).trajectory_n, `${e} ${d}`).toBe(n);
+    expect(sdkRow.trajectory_n).toBe(evaluable);
+    expect(sdkRow.trajectory_rate).toBe(1);
+    expect(12 / n - best.band).toBeLessThan(min); // "even 12 of 13 would fail"
+    expect(best.success_rate - lg.success_rate).toBeCloseTo(1 / n, 6); // "one ticket in 13" (rates kept to 6 places)
+    expect(sdkRow.success_rate).toBe(lg.success_rate);
+    const left = best.success_rate - 1 / Math.sqrt(k);
+    expect(left >= min && left < min + 0.005).toBe(true); // "just over 70"
+  });
+
+  const PINNED: Record<string, string[]> = {
+    '07-replay': [`Replaying the Agent SDK supervisor on t001 spends $${(0).toFixed(4)}, yet the scorecard lists that run at $${ledger(sdkSup).toFixed(5)}`],
+    '08-langgraph': ['so lesson 10 compares frameworks, not safety layers'],
+    '09-agent-sdk': ['the same field read 2.0 for a 10-token reply'],
+    '10-evals': [
+      "On t061 every single agent's category is wrong and the judge fails its reply, yet all four score a task success",
+      'The scorer has a bug on t061' /* a wrong option */,
+      'The judge was not recorded for t061' /* a wrong option */,
+      'So t061 has its own rule',
+      'The judge cannot read t061' /* a wrong option */,
+      `trajectory rate reads ${Math.round(sdkRow.trajectory_rate * 100)}% of ${sdkRow.trajectory_n}, while the other supervisors' rates are out of ${n}`,
+      `${Math.round(sdkRow.trajectory_rate * 100)}% of ${sdkRow.trajectory_n} says little`,
+    ],
+    '11-capstone': [
+      `succeeded on ${pct(best.success_rate)}% of ${n} tickets. The gate needs success minus the noise band to reach ${min * 100}%`,
+      `It passes; ${pct(best.success_rate)}% is above ${min * 100}%` /* a wrong option */,
+      'the gate should drop to 50% until a desk passes' /* a wrong option: a lower bar */,
+      `It fails because ${pct(best.success_rate)}% minus the ${pct(best.band)}-point band is ${pct(best.success_rate - best.band)}%`,
+      `no desk clears the gate on ${n} tickets, which is a statement about how much ${n} tickets can show`,
+      `On ${n} tickets the band is so wide that even 12 of ${n} would fail`,
+      `If the Go supervisor's ${pct(best.success_rate)}% held on more tickets`,
+      `${n + 1} tickets, one more than now` /* a wrong option */,
+      `${k} tickets, because 1/√${k} is about ${pct(1 / Math.sqrt(k))} points, and ${pct(best.success_rate)} − ${pct(1 / Math.sqrt(k))} is just over ${min * 100}`,
+      '100 tickets, because a band needs a round number' /* a wrong option */,
+      `Solving ${best.success_rate.toFixed(3)} − 1/√n ≥ ${min} gives n ≥ ${k}`,
+      `supervisors both scored ${pct(lg.success_rate)}%, ${pct(best.success_rate - lg.success_rate)} points below the Go supervisor`,
+      `${pct(best.success_rate - lg.success_rate)} points is one ticket in ${n} and far inside the ${pct(best.band)}-point band`,
+      `what these ${n} tickets happened to give`,
+    ],
+  };
+
+  for (const l of LESSONS) {
+    it(`${l}: each stated phrase holds, and every number in the quiz is one of them`, () => {
+      const q = quizText(l);
+      for (const phrase of PINNED[l]) expect(q, l).toContain(phrase);
+      const covered = new Set(PINNED[l].flatMap((x) => x.match(NUMBER) ?? []));
+      for (const x of quizNumbers(l)) expect(covered.has(x), `${l}: quiz number ${x} is not pinned`).toBe(true);
+    });
+  }
+});

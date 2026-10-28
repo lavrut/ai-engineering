@@ -648,3 +648,19 @@ def test_failed_refresh_keeps_the_old_recordings_and_trace(dirs, monkeypatch, ca
     assert {p.name: p.read_text() for p in store.glob("*.json")} == before
     assert trace.read_text() == old_trace
     assert go(argv, dirs) == 0                                      # and it still replays
+
+
+def test_patching_the_facade_reaches_the_parts(monkeypatch):
+    """M3: run.py re-exports its parts' names. Patching one on `run` patches it in every part that holds it,
+    so the code sees the patch wherever it looks the name up; undoing the patch restores them all."""
+    import run_sets
+    import run_traces
+    was = run_sets.MODEL
+    monkeypatch.setattr(run, "MODEL", "claude-patched")
+    assert (run.MODEL, run_sets.MODEL, run_traces.MODEL) == ("claude-patched",) * 3
+    sentinel = object()
+    monkeypatch.setattr(run, "preflight", sentinel)
+    assert run_engines.preflight is sentinel
+    monkeypatch.undo()
+    assert (run.MODEL, run_sets.MODEL, run_traces.MODEL) == (was,) * 3
+    assert run_engines.preflight is run.preflight is not sentinel
