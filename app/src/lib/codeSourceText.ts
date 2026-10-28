@@ -61,6 +61,7 @@ export function sourceTexts(id: CodeSourceId): { python: string; go?: string } {
         '../../../agents/frameworks/sdk_desk.py',
         '../../../agents/evals/scorers.py',
         '../../../agents/evals/run_evals.py',
+        '../../../agents/evals/judge_set.py',
       ],
       { query: '?raw', import: 'default', eager: true },
     ) as Record<string, string>;

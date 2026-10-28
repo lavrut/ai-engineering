@@ -41,7 +41,8 @@ export type CodeSourceId =
   | 'agents-langgraph'
   | 'agents-sdk'
   | 'agents-evals'
-  | 'agents-run-evals';
+  | 'agents-run-evals'
+  | 'agents-judge-set';
 
 export type CodeSourceInfo = {
   /** Repo-relative path of the Python file. */
@@ -88,10 +89,12 @@ export const CODE_SOURCES: Record<CodeSourceId, CodeSourceInfo> = {
   'agents-supervisor': { python: 'agents/desk/python/supervisor.py', go: 'agents/desk/go/supervisor.go' }, // single agent and supervisor, 1-6
   'agents-langgraph': { python: 'agents/frameworks/langgraph_desk.py' }, // the desk in LangGraph, 1-6
   'agents-sdk': { python: 'agents/frameworks/sdk_desk.py' }, // the desk in the Claude Agent SDK, 1-9
-  // The eval suite is two files whose section numbers overlap (scorers.py 1-7, run_evals.py 1-8), so they
-  // cannot read as one file: agents-evals is the scorers, agents-run-evals the runner, judge and gate.
+  // The eval suite is three files whose section numbers overlap (scorers.py 1-7, run_evals.py 1-7, judge_set.py 1),
+  // so they cannot read as one file: agents-evals is the scorers, agents-run-evals the runner, judge and gate,
+  // agents-judge-set the judge set's estimate and recording.
   'agents-evals': { python: 'agents/evals/scorers.py' }, // the scorers, 1-7
-  'agents-run-evals': { python: 'agents/evals/run_evals.py' }, // scoring every engine, the judge, the gate (6), 1-8
+  'agents-run-evals': { python: 'agents/evals/run_evals.py' }, // scoring every engine, the judge, the gate (6), 1-7
+  'agents-judge-set': { python: 'agents/evals/judge_set.py' }, // the judge set: estimate and record, 1
 };
 
 export const isSource = (id: string): id is CodeSourceId => Object.hasOwn(CODE_SOURCES, id);

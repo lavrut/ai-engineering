@@ -51,7 +51,7 @@ describe('code source registry', () => {
       [
         'harness', 'llms', 'llms-inspect', 'lora', 'ml-fetch', 'ml-llm', 'ml-mlflow', 'ml-mlops', 'ml-monitor', 'ml-serve', 'ml-train',
         'mcp-agent', 'mcp-app', 'mcp-auth', 'mcp-auth-server', 'mcp-client', 'mcp-ops', 'mcp-read', 'mcp-simulate',
-        'agents-proxy', 'agents-proxy-cost', 'agents-proxy-handler', 'agents-proxy-server', 'agents-patterns', 'agents-supervisor', 'agents-langgraph', 'agents-sdk', 'agents-evals', 'agents-run-evals',
+        'agents-proxy', 'agents-proxy-cost', 'agents-proxy-handler', 'agents-proxy-server', 'agents-patterns', 'agents-supervisor', 'agents-langgraph', 'agents-sdk', 'agents-evals', 'agents-run-evals', 'agents-judge-set',
       ].sort(),
     );
     expect(CODE_SOURCES['ml-serve']).toMatchObject({ python: 'ml/serve/server.py', go: 'ml/go/main.go' });
@@ -188,7 +188,8 @@ describe('code source registry', () => {
       ['agents-langgraph', 'agents/frameworks/langgraph_desk.py', [1, 2, 3, 4, 5, 6], undefined],
       ['agents-sdk', 'agents/frameworks/sdk_desk.py', [1, 2, 3, 4, 5, 6, 7, 8, 9], undefined],
       ['agents-evals', 'agents/evals/scorers.py', [1, 2, 3, 4, 5, 6, 7], undefined],
-      ['agents-run-evals', 'agents/evals/run_evals.py', [1, 2, 3, 4, 5, 6, 7, 8], undefined],
+      ['agents-run-evals', 'agents/evals/run_evals.py', [1, 2, 3, 4, 5, 6, 7], undefined],
+      ['agents-judge-set', 'agents/evals/judge_set.py', [1], undefined],
     ] as const)('%s lists its numbered sections', (id, py, sections, go) => {
       expect(CODE_SOURCES[id].python).toBe(py);
       const t = sourceTexts(id);
