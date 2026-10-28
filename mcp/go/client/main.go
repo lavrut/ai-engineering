@@ -37,29 +37,25 @@
 //  2. Annotation hints readOnlyHint / idempotentHint are dropped when false (Go's struct cannot say "absent").
 //  3. Integral floats print as integers: Go decodes every number to float64 and prints 1.0 as 1, and the
 //     Python client converts to match.
+//
+// The client is three files: main.go (configuration, discovery, the entry point), connect.go and calls.go.
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
-	"net/http"
-	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
-	"sync"
 	"unicode/utf16"
 
-	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -103,146 +99,7 @@ func stdioCommand() (*exec.Cmd, error) {
 	return exec.Command(python, filepath.Join(root, "mcp", "python", "read_server.py")), nil
 }
 
-// ── 2. Connecting (stdio / HTTP) ────────────────────────────────────────────
-
-// bearer sets `Authorization: Bearer <token>` only on requests to the endpoint's own origin (same
-// scheme and host:port). A token is good for one server; it must never reach anyone else.
-type bearer struct {
-	token  string
-	origin *neturl.URL // the endpoint: only Scheme and Host are compared
-	next   http.RoundTripper
-}
-
-func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
-	if r.URL.Scheme != b.origin.Scheme || r.URL.Host != b.origin.Host {
-		return b.next.RoundTrip(r) // another origin: no credential
-	}
-	r = r.Clone(r.Context()) // a RoundTripper must not modify the caller's request
-	r.Header.Set("Authorization", "Bearer "+b.token)
-	return b.next.RoundTrip(r)
-}
-
-// refusal remembers the last non-2xx answer the server gave to a POST (an MCP message), so a failed
-// call can say why in one line: refusalLine. The Python client prints the same line.
-type refusal struct {
-	mu     sync.Mutex
-	status int
-}
-
-func (r *refusal) get() int {
-	if r == nil {
-		return 0
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.status
-}
-
-func refusalLine(status int) string {
-	return fmt.Sprintf("client: the server refused the request: HTTP %d %s", status, http.StatusText(status))
-}
-
-// recordRefusals is the RoundTripper that fills a refusal.
-type recordRefusals struct {
-	rec  *refusal
-	next http.RoundTripper
-}
-
-func (t recordRefusals) RoundTrip(r *http.Request) (*http.Response, error) {
-	resp, err := t.next.RoundTrip(r)
-	if err == nil && r.Method == http.MethodPost && resp.StatusCode >= 300 {
-		t.rec.mu.Lock()
-		t.rec.status = resp.StatusCode
-		t.rec.mu.Unlock()
-	}
-	return resp, err
-}
-
-// noRedirects makes the HTTP client return a redirect as it is instead of following it (the
-// Python SDK follows one only within the endpoint's own origin; lesson 7 notes the difference). A 3xx
-// then fails the MCP request, and the token is never replayed to the redirect's target.
-func noRedirects(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-
-// tokenFlagWarning is printed (to stderr) whenever -token is given. The Python client prints the same line.
-const tokenFlagWarning = "client: warning: a token on the command line is visible in the process list and shell " +
-	"history; use a token file or LUMEN_TOKEN"
-
-// plainHTTPWarning is printed (to stderr) before a token goes to a plain-http URL off this machine.
-// The Python client prints the same line.
-const plainHTTPWarning = "client: warning: the token goes over plain http to a host that is not this machine, " +
-	"so anyone on the network path can read it; use https"
-
-// plainHTTPOffMachine is true for an http:// URL whose host is not 127.0.0.1, localhost or ::1.
-func plainHTTPOffMachine(raw string) bool {
-	u, err := neturl.Parse(raw)
-	if err != nil || u.Scheme != "http" {
-		return false
-	}
-	h := strings.ToLower(u.Hostname())
-	return h != "127.0.0.1" && h != "localhost" && h != "::1"
-}
-
-// resolveToken picks the token to send and whether to warn (a token was given on the command line).
-// Precedence: -token-file, then -token, then LUMEN_TOKEN. Empty values count as absent.
-func resolveToken(tokenFile, token, env string) (string, bool, error) {
-	warn := token != ""
-	if tokenFile != "" {
-		raw, err := os.ReadFile(tokenFile)
-		if err != nil {
-			return "", warn, fmt.Errorf("token file not readable: %s", tokenFile)
-		}
-		first, _, _ := strings.Cut(strings.TrimSpace(string(raw)), "\n")
-		if first = strings.TrimSpace(first); first == "" {
-			return "", warn, fmt.Errorf("token file is empty: %s", tokenFile)
-		}
-		return first, warn, nil
-	}
-	if token != "" {
-		return token, warn, nil
-	}
-	return env, warn, nil
-}
-
-// newTransport is the one place the transport is built. With a token, the HTTP client sends
-// `Authorization: Bearer <token>` on requests to the endpoint's origin only; the URL is left exactly
-// as given (a token never goes in it). Redirects are never followed. rec (may be nil) records a
-// refusal. A token with -stdio is refused: it is an HTTP credential.
-func newTransport(stdio bool, url, token string, rec *refusal) (mcp.Transport, error) {
-	if stdio {
-		if token != "" {
-			return nil, errors.New("a token needs --url / -url")
-		}
-		cmd, err := stdioCommand()
-		if err != nil {
-			return nil, err
-		}
-		return &mcp.CommandTransport{Command: cmd}, nil
-	}
-	origin, err := neturl.Parse(url)
-	if err != nil || origin.Host == "" {
-		return nil, fmt.Errorf("not an http(s) URL: %s", url)
-	}
-	var rt http.RoundTripper = http.DefaultTransport
-	if token != "" {
-		rt = bearer{token, origin, rt}
-	}
-	if rec != nil {
-		rt = recordRefusals{rec, rt}
-	}
-	return &mcp.StreamableClientTransport{Endpoint: url,
-		HTTPClient: &http.Client{Transport: rt, CheckRedirect: noRedirects}}, nil
-}
-
-// connect opens a session. Setting ElicitationHandler is what declares the elicitation capability,
-// so a server's confirmation step only runs when the client can answer it.
-func connect(ctx context.Context, transport mcp.Transport, answer Answerer) (*mcp.ClientSession, error) {
-	client := mcp.NewClient(&mcp.Implementation{Name: "lumen-client", Version: "0.1.0"}, &mcp.ClientOptions{
-		ElicitationHandler: elicitationHandler(answer),
-	})
-	return client.Connect(ctx, transport, nil)
-}
-
-// ── 3. Discovery ────────────────────────────────────────────────────────────
+// ── 2. Discovery ────────────────────────────────────────────────────────────
 
 // normaliseSchema reduces a JSON Schema to its shape: resolve $ref, keep only schemaShapeKeys, drop
 // "null" from type unions, and drop boolean additionalProperties. Python and Go print the same result.
@@ -402,131 +259,7 @@ func listTools(ctx context.Context, cs *mcp.ClientSession) (any, error) {
 	return out, nil
 }
 
-// ── 4. Calls, resources and prompts ─────────────────────────────────────────
-
-// rpcMessage turns a JSON-RPC error into the {"error": message} shape.
-func rpcMessage(err error) (any, error) {
-	var je *jsonrpc.Error
-	if errors.As(err, &je) {
-		return map[string]any{"error": je.Message}, nil
-	}
-	return nil, err
-}
-
-const noText = "<no text>"
-
-func call(ctx context.Context, cs *mcp.ClientSession, name string, arguments map[string]any) (any, error) {
-	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: arguments})
-	if err != nil {
-		return nil, err
-	}
-	if res.IsError {
-		message := noText
-		if len(res.Content) > 0 {
-			if tc, ok := res.Content[0].(*mcp.TextContent); ok {
-				message = tc.Text
-			}
-		}
-		return map[string]any{"error": message}, nil
-	}
-	return map[string]any{"structured": generic(res.StructuredContent)}, nil
-}
-
-func read(ctx context.Context, cs *mcp.ClientSession, uri string) (any, error) {
-	res, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: uri})
-	if err != nil {
-		return rpcMessage(err)
-	}
-	contents := []any{}
-	for _, c := range res.Contents {
-		entry := map[string]any{"uri": c.URI, "mimeType": c.MIMEType}
-		var j any
-		if err := json.Unmarshal([]byte(c.Text), &j); err != nil {
-			entry["text"] = c.Text
-		} else {
-			entry["json"] = j
-		}
-		contents = append(contents, entry)
-	}
-	return map[string]any{"contents": contents}, nil
-}
-
-func prompt(ctx context.Context, cs *mcp.ClientSession, name string, arguments map[string]any) (any, error) {
-	args := map[string]string{}
-	keys := make([]string, 0, len(arguments))
-	for k := range arguments {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		s, ok := arguments[k].(string)
-		if !ok {
-			return nil, fmt.Errorf("prompt arguments must be strings: %s", k)
-		}
-		args[k] = s
-	}
-	res, err := cs.GetPrompt(ctx, &mcp.GetPromptParams{Name: name, Arguments: args})
-	if err != nil {
-		return rpcMessage(err)
-	}
-	contents := []any{}
-	for _, m := range res.Messages {
-		var text any
-		if tc, ok := m.Content.(*mcp.TextContent); ok {
-			text = tc.Text
-		}
-		contents = append(contents, map[string]any{"role": string(m.Role), "text": text})
-	}
-	return map[string]any{"contents": contents}, nil
-}
-
-// ── 5. Answering input-required rounds ──────────────────────────────────────
-
-// A server that needs a confirmation answers a call with an InputRequiredResult holding an
-// elicitation request. The SDK drives the retry; this handler supplies the answer. The answer is
-// the client's own assertion: the server cannot tell a human from a script (-yes).
-type Answerer func(ctx context.Context, message string) bool
-
-func always(value bool) Answerer {
-	return func(context.Context, string) bool { return value }
-}
-
-// askTerminal prompts on stderr (stdout stays clean JSON) and reads the answer from stdin.
-// Only y or yes accepts.
-func askTerminal(in io.Reader, errOut io.Writer) Answerer {
-	reader := bufio.NewReader(in)
-	return func(_ context.Context, message string) bool {
-		fmt.Fprintf(errOut, "%s [y/N] ", message)
-		line, _ := reader.ReadString('\n')
-		switch strings.ToLower(strings.TrimSpace(line)) {
-		case "y", "yes":
-			return true
-		}
-		return false
-	}
-}
-
-func elicitationHandler(answer Answerer) func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-	return func(ctx context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-		if !answer(ctx, req.Params.Message) {
-			return &mcp.ElicitResult{Action: "decline"}, nil
-		}
-		// Accept: set every boolean field the form asks for to true. Any other field type is not
-		// something a y/N prompt can fill, so it is declined rather than guessed.
-		schema, _ := generic(req.Params.RequestedSchema).(map[string]any)
-		props, _ := schema["properties"].(map[string]any)
-		content := map[string]any{}
-		for name, p := range props {
-			if m, _ := p.(map[string]any); m["type"] != "boolean" {
-				return &mcp.ElicitResult{Action: "decline"}, nil
-			}
-			content[name] = true
-		}
-		return &mcp.ElicitResult{Action: "accept", Content: content}, nil
-	}
-}
-
-// ── 6. Entry point ──────────────────────────────────────────────────────────
+// ── 3. Entry point ──────────────────────────────────────────────────────────
 
 // dump renders v as ASCII-only JSON with sorted keys (Go sorts map keys) and 2-space indent, the
 // same bytes as Python's json.dumps(sort_keys=True, indent=2).

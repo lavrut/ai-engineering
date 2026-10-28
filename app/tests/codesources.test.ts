@@ -50,7 +50,7 @@ describe('code source registry', () => {
     expect([...ids].sort()).toEqual(
       [
         'harness', 'llms', 'llms-inspect', 'lora', 'ml-fetch', 'ml-llm', 'ml-mlflow', 'ml-mlops', 'ml-monitor', 'ml-serve', 'ml-train',
-        'mcp-agent', 'mcp-app', 'mcp-auth', 'mcp-auth-server', 'mcp-client', 'mcp-ops', 'mcp-read', 'mcp-simulate',
+        'mcp-agent', 'mcp-agent-config', 'mcp-agent-host', 'mcp-agent-model', 'mcp-app', 'mcp-auth', 'mcp-auth-server', 'mcp-client', 'mcp-client-calls', 'mcp-client-connect', 'mcp-ops', 'mcp-read', 'mcp-simulate',
         'agents-proxy', 'agents-proxy-cost', 'agents-proxy-handler', 'agents-proxy-server', 'agents-patterns', 'agents-supervisor', 'agents-langgraph', 'agents-sdk', 'agents-evals', 'agents-run-evals', 'agents-judge-set',
       ].sort(),
     );
@@ -110,11 +110,16 @@ describe('code source registry', () => {
     it.each([
       ['mcp-read', [1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6]],
       ['mcp-ops', [1, 2, 3, 4, 5, 6, 7], [1, 2, 3, 4, 5, 6]],
-      ['mcp-client', [1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6]],
+      ['mcp-client', [1, 2, 3], [1, 2, 3]],
+      ['mcp-client-connect', [1], [1]],
+      ['mcp-client-calls', [1, 2], [1, 2]],
       ['mcp-auth', [1, 2, 3], [1, 2, 3]],
       ['mcp-auth-server', [1, 2, 3, 4, 5], undefined],
       ['mcp-app', [1, 2, 3, 4, 5, 6, 7], undefined],
-      ['mcp-agent', [1, 2, 3, 4, 5, 6, 7, 8, 9], undefined],
+      ['mcp-agent', [1, 2], undefined],
+      ['mcp-agent-config', [1], undefined],
+      ['mcp-agent-host', [1, 2, 3, 4], undefined],
+      ['mcp-agent-model', [1, 2], undefined],
       ['mcp-simulate', [1, 2, 3, 4], undefined],
     ] as const)('%s lists its numbered sections', (id, py, go) => {
       const t = sourceTexts(id);

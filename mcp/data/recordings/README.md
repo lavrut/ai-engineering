@@ -64,7 +64,7 @@ The harness trace goes to `trace.jsonl` in this folder (git-ignored), not to the
 ## Other models and the training framing
 
 - `--model` is one of `claude-haiku-5-5` (the default), `claude-sonnet-5-5` or `claude-opus-5-5`. The estimate and the cost cap use that model's prices from `llms/python/triage_lab.py`'s `PRICES`.
-- `--framing training` puts `TRAINING_NOTE` (in `agent.py`) before the system prompt. `--framing none` is the default, and it leaves the requests, and so the keys above, unchanged.
+- `--framing training` puts `TRAINING_NOTE` (in `agent_config.py`) before the system prompt. `--framing none` is the default, and it leaves the requests, and so the keys above, unchanged.
 - The default model with no framing keeps the plain names. Anything else adds a suffix, for example `capstone-noguard-sonnet-5-5.jsonl`, `capstone-guard-opus-5-5.jsonl` or `capstone-noguard-opus-5-5-training.jsonl`.
 
 The commands are the ones above plus the flags. Each still needs the user's approval of its printed estimate:

@@ -41,19 +41,22 @@ import asyncio
 import json
 import os
 import sys
-from contextlib import asynccontextmanager
-from dataclasses import dataclass
-from http import HTTPStatus
 from pathlib import Path
-from typing import Any, Awaitable, Callable, TextIO
+from typing import Any
 from urllib.parse import urlsplit
 
 from mcp import Client, StdioServerParameters
-from mcp.client.streamable_http import streamable_http_client
-from mcp.shared.exceptions import MCPError
-from mcp_types import ElicitResult
 
 HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))  # the two other parts sit beside this file (also when loaded by path)
+
+# The client is three files: this one (configuration, discovery, the entry point), client_connect.py
+# and client_calls.py. Their names are re-exported here, so `import client` and `client.X` work as
+# before. These are copies of the names: patch a name in the module that defines it, not here.
+from client_calls import (NO_TEXT, Answerer, always, ask_terminal, call, deny,  # noqa: E402,F401
+                          elicitation_callback, prompt, read, resource_entry)
+from client_connect import HttpTarget, Refusal, connect, http_target, refusal_line  # noqa: E402,F401
 
 # ── 1. Configuration ────────────────────────────────────────────────────────
 READ_SERVER = HERE / "read_server.py"
@@ -67,61 +70,7 @@ def stdio_params() -> StdioServerParameters:
     return StdioServerParameters(command=sys.executable, args=[str(READ_SERVER)])
 
 
-# ── 2. Connecting (stdio / HTTP) ────────────────────────────────────────────
-@dataclass(frozen=True)
-class HttpTarget:
-    """A Streamable HTTP endpoint plus the headers every request carries."""
-    url: str
-    headers: dict[str, str]
-
-
-def http_target(url: str, token: str | None = None) -> Any:
-    """The one place the HTTP path is built. With a token, every request carries
-    `Authorization: Bearer <token>`; the URL is left exactly as given (a token never goes in it)."""
-    if token is None:
-        return url
-    return HttpTarget(url, {"Authorization": f"Bearer {token}"})
-
-
-@dataclass
-class Refusal:
-    """The last non-2xx answer the server gave to a POST (an MCP message), so a failed call can
-    say why in one line (refusal_line). The Go client records and prints the same."""
-    status: int | None = None
-
-
-def refusal_line(status: int) -> str:
-    return f"client: the server refused the request: HTTP {status} {HTTPStatus(status).phrase}"
-
-
-@asynccontextmanager
-async def connect(target: Any, answer: "Answerer | None" = None, refusal: Refusal | None = None):
-    """Open a Client on a StdioServerParameters, an http(s) URL, an HttpTarget, or (in tests) an
-    in-process server. The elicitation callback is what declares the `elicitation` capability, so
-    a server's confirmation step only runs when the client can answer it. Over HTTP, `refusal`
-    (if given) records a non-2xx answer. Redirects: the SDK follows one only within the endpoint's
-    origin (the client itself has follow_redirects=False), so the headers never go elsewhere."""
-    callback = elicitation_callback(answer or deny)
-    if isinstance(target, str) and target.startswith(("http://", "https://")):
-        target = HttpTarget(target, {})
-    if isinstance(target, HttpTarget):
-        # The SDK's own factory (MCP timeouts), from a private module verified on mcp==2.3.0.
-        from mcp.shared._httpx_utils import create_mcp_http_client
-        async with create_mcp_http_client(headers=target.headers) as http:
-            if refusal is not None:
-                async def record(response) -> None:
-                    if response.request.method == "POST" and response.status_code >= 300:
-                        refusal.status = response.status_code
-                http.event_hooks["response"].append(record)
-            async with Client(streamable_http_client(target.url, http_client=http),
-                              elicitation_callback=callback) as client:
-                yield client
-        return
-    async with Client(target, elicitation_callback=callback) as client:
-        yield client
-
-
-# ── 3. Discovery ────────────────────────────────────────────────────────────
+# ── 2. Discovery ────────────────────────────────────────────────────────────
 def normalise_schema(schema: dict | None, defs: dict | None = None) -> dict | None:
     """Reduce a JSON Schema to its shape: resolve $ref, keep only SCHEMA_SHAPE_KEYS, drop "null"
     from type unions, and drop boolean additionalProperties. Python and Go print the same result."""
@@ -188,89 +137,7 @@ async def list_tools(client: Client) -> list[dict]:
     } for t in sorted(result.tools, key=lambda t: t.name)]
 
 
-# ── 4. Calls, resources and prompts ─────────────────────────────────────────
-NO_TEXT = "<no text>"
-
-
-async def call(client: Client, name: str, arguments: dict) -> dict:
-    result = await client.call_tool(name, arguments)
-    if result.is_error:
-        texts = [getattr(c, "text", None) for c in result.content]
-        return {"error": texts[0] if texts and isinstance(texts[0], str) else NO_TEXT}
-    return {"structured": result.structured_content}
-
-
-def resource_entry(c: Any) -> dict:
-    """{"uri", "mimeType", "json"}; a non-JSON (or non-text) body prints "text" instead of "json"."""
-    entry = {"uri": str(c.uri), "mimeType": c.mime_type}
-    text = getattr(c, "text", None)
-    try:
-        entry["json"] = json.loads(text)
-    except (TypeError, ValueError):
-        entry["text"] = text
-    return entry
-
-
-async def read(client: Client, uri: str) -> dict:
-    try:
-        result = await client.read_resource(uri)
-    except MCPError as e:
-        return {"error": str(e)}
-    return {"contents": [resource_entry(c) for c in result.contents]}
-
-
-async def prompt(client: Client, name: str, arguments: dict) -> dict:
-    try:
-        result = await client.get_prompt(name, arguments)
-    except MCPError as e:
-        return {"error": str(e)}
-    return {"contents": [{"role": m.role, "text": getattr(m.content, "text", None)} for m in result.messages]}
-
-
-# ── 5. Answering input-required rounds ──────────────────────────────────────
-# A server that needs a confirmation answers a call with an InputRequiredResult holding an
-# elicitation request. The Client drives the retry; this callback supplies the answer. The answer
-# is the client's own assertion: the server cannot tell a human from a script (--yes).
-Answerer = Callable[[str], Awaitable[bool]]
-
-
-async def deny(message: str) -> bool:
-    return False
-
-
-def always(value: bool) -> Answerer:
-    async def answer(message: str) -> bool:
-        return value
-    return answer
-
-
-def ask_terminal(stdin: TextIO | None = None, stderr: TextIO | None = None) -> Answerer:
-    """Prompt on stderr (stdout stays clean JSON), read the answer from stdin. Only y/yes accepts."""
-    async def answer(message: str) -> bool:
-        err, inp = stderr or sys.stderr, stdin if stdin is not None else sys.stdin
-        if inp is None:  # stdin is closed: nobody can answer, so decline
-            return False
-        err.write(f"{message} [y/N] ")
-        err.flush()
-        line = await asyncio.to_thread(inp.readline)
-        return line.strip().lower() in ("y", "yes")
-    return answer
-
-
-def elicitation_callback(answer: Answerer):
-    async def callback(context: Any, params: Any) -> ElicitResult:
-        if not await answer(params.message):
-            return ElicitResult(action="decline")
-        # Accept: set every boolean field the form asks for to true. Any other field type is
-        # not something a y/N prompt can fill, so it is declined rather than guessed.
-        props = (params.requested_schema or {}).get("properties", {})
-        if any(p.get("type") != "boolean" for p in props.values()):
-            return ElicitResult(action="decline")
-        return ElicitResult(action="accept", content={name: True for name in props})
-    return callback
-
-
-# ── 6. Entry point ──────────────────────────────────────────────────────────
+# ── 3. Entry point ──────────────────────────────────────────────────────────
 def canon(value: Any) -> Any:
     """Print an integral float (1.0) as an integer (1), as Go does; the contract treats them as equal."""
     if isinstance(value, float) and value.is_integer() and abs(value) < 2**53:

@@ -72,12 +72,12 @@ By simple arithmetic, which we did not measure, ten servers like `lumen-read` wo
 
 ## The code
 
-The agent from lesson 5 is a host in miniature. Section 4 is where tools from every server are merged, and it is where a clash would happen.
+The agent from lesson 5 is a host in miniature. Section 3 of `agent_host.py` is where tools from every server are merged, and it is where a clash would happen.
 
-<CodeTabs source="mcp-agent" section={4} />
+<CodeTabs source="mcp-agent-host" section={3} />
 
 - `for server, client in bridge.clients.items():` visits each server in turn.
-- `session.instructions[SERVER_NAMES[server]] = client.instructions or ""` keeps each server's instructions apart, under its own name. Section 7's `system_prompt` joins them as `lumen-read: ...`, so the model can tell which server said what.
+- `session.instructions[SERVER_NAMES[server]] = client.instructions or ""` keeps each server's instructions apart, under its own name. Section 2 of `agent_model.py` has `system_prompt`, which joins them as `lumen-read: ...`, so the model can tell which server said what.
 - `session.tools.append(harness.Tool(...))` adds every tool from every server to one list.
 - `harness.REGISTRY.update({t.name: t for t in session.tools})` builds the table by bare tool name. Two tools with the same name would share a key, and the later would win. `lumen-read` and `lumen-ops` share no names, so this is safe today. Nothing in the code would stop a third server from breaking it.
 

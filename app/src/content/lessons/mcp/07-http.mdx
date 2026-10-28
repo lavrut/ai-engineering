@@ -81,9 +81,9 @@ Section 5 of `lumen-read` builds the HTTP app.
 - `return LocalOnly(app, port)` wraps it in the course's own check, from `resource_auth.py`. It runs first on `/mcp`, for every method, and answers 403 unless `Host` is in `local_hosts` and `Origin` is absent or in `local_origins`, both built from the port.
 - In section 6, `uvicorn.run(app, host="127.0.0.1", port=args.port)` binds the loopback address only, and `build_http_app(port=args.port)` builds the lists for that port.
 
-Section 2 of the client is where `--url` goes.
+Section 1 of the client's `client_connect.py` is where `--url` goes.
 
-<CodeTabs source="mcp-client" section={2} />
+<CodeTabs source="mcp-client-connect" section={1} />
 
 - `HttpTarget(url, headers)` is a URL plus the headers every request carries. `http_target(url, token)` is the one place the HTTP path is built. With a token it adds `Authorization: Bearer ...`, and the URL stays exactly as given.
 - `if isinstance(target, str) and target.startswith(("http://", "https://"))` sends a URL down the HTTP path. Anything else, such as `StdioServerParameters` or an in-process server in a test, goes to `Client(target, ...)`.

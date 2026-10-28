@@ -119,8 +119,8 @@ describe('diagram data', () => {
   // section ("In the code: section N."), so a renumbered file breaks the build, not the lesson.
   describe('MCP diagrams', () => {
     const mcp: [string, Diagram, Record<number, [string, number]>][] = [
-      ['mcp-architecture', mcpArchitecture, { 1: ['mcp-agent', 4], 2: ['mcp-client', 2], 3: ['mcp-read', 2], 4: ['mcp-read', 3], 5: ['mcp-ops', 2], 6: ['mcp-ops', 4] }],
-      ['mcp-client', mcpClient, { 1: ['mcp-client', 1], 2: ['mcp-client', 2], 3: ['mcp-client', 3], 4: ['mcp-client', 4], 5: ['mcp-client', 5] }],
+      ['mcp-architecture', mcpArchitecture, { 1: ['mcp-agent-host', 3], 2: ['mcp-client-connect', 1], 3: ['mcp-read', 2], 4: ['mcp-read', 3], 5: ['mcp-ops', 2], 6: ['mcp-ops', 4] }],
+      ['mcp-client', mcpClient, { 1: ['mcp-client', 1], 2: ['mcp-client-connect', 1], 3: ['mcp-client', 2], 4: ['mcp-client-calls', 1], 5: ['mcp-client-calls', 2] }],
       ['mcp-http', mcpHttp, { 1: ['mcp-read', 5], 2: ['mcp-read', 5], 3: ['mcp-auth', 2], 4: ['mcp-auth', 3], 5: ['mcp-read', 5] }],
       ['mcp-oauth', mcpOauth, { 1: ['mcp-auth', 3], 2: ['mcp-auth-server', 4], 3: ['mcp-auth-server', 3], 4: ['mcp-auth-server', 2], 5: ['mcp-auth', 1], 6: ['mcp-auth', 2] }],
     ];

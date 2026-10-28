@@ -82,18 +82,18 @@ At Haiku 5.5's prices ($0.10 per million input tokens, $0.50 per million output,
 
 ## The code
 
-Section 3 is the bridge between the two worlds. The harness runs tools from worker threads and expects a plain string back. The MCP client is async.
+The agent is four files: `agent.py` runs a scenario and is the entry point, `agent_config.py` holds the configuration, `agent_host.py` is the host and `agent_model.py` makes the model calls. Section 2 of `agent_host.py` is the bridge between the two worlds. The harness runs tools from worker threads and expects a plain string back. The MCP client is async.
 
-<CodeTabs source="mcp-agent" section={3} />
+<CodeTabs source="mcp-agent-host" section={2} />
 
 - `self._loop = asyncio.new_event_loop()` and `threading.Thread(..., daemon=True)` give the bridge a private event loop on its own thread.
 - `asyncio.run_coroutine_threadsafe(self._hold(), self._loop)` starts one long-lived task. `_hold` opens every client with an `AsyncExitStack`, then waits on `self._stop`. An MCP client must be opened and closed in the same task, so one task owns them all.
 - `def run(self, coro)` submits a coroutine to that loop from any thread and waits up to `CALL_TIMEOUT` (60 seconds) for the result.
 - `__exit__` sets the stop event so the clients close in their own task. If the clients are still opening, it cancels instead of waiting.
 
-Section 4 turns MCP tools into harness tools.
+Section 3 of `agent_host.py` turns MCP tools into harness tools.
 
-<CodeTabs source="mcp-agent" section={4} />
+<CodeTabs source="mcp-agent-host" section={3} />
 
 - `def carries_untrusted(value)` looks for an `untrusted_body` field anywhere in a result. Lesson 11 uses it.
 - `def taints(name, result)` says whether a result puts ticket text into the context. It fails closed: `search_tickets` and `get_ticket` always count, and so does any result with no structured content.
@@ -103,9 +103,9 @@ Section 4 turns MCP tools into harness tools.
 - `harness.Tool(t.name, t.description or "", t.input_schema, make_fn(...), needs_approval=not read_only)` is the whole conversion: the MCP name, description and schema become the harness's.
 - `harness.REGISTRY.clear()` and `.update({t.name: t for t in session.tools})` make the MCP tools the whole registry for the session. The harness's own file tools are hidden and restored on exit. The registry is keyed by name, which matters in lesson 6.
 
-Section 6 is the model call, in replay and record.
+Section 1 of `agent_model.py` is the model call, in replay and record.
 
-<CodeTabs source="mcp-agent" section={6} />
+<CodeTabs source="mcp-agent-model" section={1} />
 
 - `request_key(model, system, messages, tools, overrides)` is the SHA-256 of the canonical JSON of those parts. No time, ids or usage go in, so the same request always gets the same key.
 - `block_dict(block)` keeps only the listed fields of each content block. An unknown block type raises, instead of guessing which of its fields are stable.

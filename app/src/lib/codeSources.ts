@@ -27,10 +27,15 @@ export type CodeSourceId =
   | 'mcp-read'
   | 'mcp-ops'
   | 'mcp-client'
+  | 'mcp-client-connect'
+  | 'mcp-client-calls'
   | 'mcp-auth'
   | 'mcp-auth-server'
   | 'mcp-app'
   | 'mcp-agent'
+  | 'mcp-agent-config'
+  | 'mcp-agent-host'
+  | 'mcp-agent-model'
   | 'mcp-simulate'
   | 'agents-proxy'
   | 'agents-proxy-cost'
@@ -72,11 +77,18 @@ export const CODE_SOURCES: Record<CodeSourceId, CodeSourceInfo> = {
   'mcp-read': { python: 'mcp/python/read_server.py', go: 'mcp/go/readserver/server.go', goMore: ['mcp/go/readserver/main.go'] }, // lumen-read
   // ops_server.py also has section 7 (the App); Go has 1-6, so a quote of 7 uses mcp-app.
   'mcp-ops': { python: 'mcp/python/ops_server.py', go: 'mcp/go/opsserver/server.go', goMore: ['mcp/go/opsserver/main.go'] }, // lumen-ops
-  'mcp-client': { python: 'mcp/python/client.py', go: 'mcp/go/client/main.go' }, // the client
+  // The client is three files in each language, each numbering its own sections alike in Python and Go.
+  'mcp-client': { python: 'mcp/python/client.py', go: 'mcp/go/client/main.go' }, // configuration, discovery, entry point: 1-3
+  'mcp-client-connect': { python: 'mcp/python/client_connect.py', go: 'mcp/go/client/connect.go' }, // connecting (stdio / HTTP): 1
+  'mcp-client-calls': { python: 'mcp/python/client_calls.py', go: 'mcp/go/client/calls.go' }, // calls (1), answering input-required rounds (2)
   'mcp-auth': { python: 'mcp/python/resource_auth.py', go: 'mcp/go/auth/auth.go' }, // the resource-server half of OAuth, sections 1-3
   'mcp-auth-server': { python: 'mcp/python/auth_server.py' }, // the test authorization server, sections 1-5
   'mcp-app': { python: 'mcp/python/ops_server.py' }, // section 7, the labelling App's resource (Python only)
-  'mcp-agent': { python: 'mcp/python/agent.py' }, // the harness driving the servers (Python only)
+  // The agent (Python only) is four files, each numbering its own sections, so each is its own source.
+  'mcp-agent': { python: 'mcp/python/agent.py' }, // running a scenario (1), the entry point (2)
+  'mcp-agent-config': { python: 'mcp/python/agent_config.py' }, // configuration: 1
+  'mcp-agent-host': { python: 'mcp/python/agent_host.py' }, // the harness import, the bridge, MCP tools as harness tools, the guard: 1-4
+  'mcp-agent-model': { python: 'mcp/python/agent_model.py' }, // model calls: replay and record (1), cost (2)
   'mcp-simulate': { python: 'mcp/python/simulate.py' }, // the SIMULATED compromised model, sections 1-4 (Python only)
   // AI Agents track. The hand-built patterns and supervisor number sections 1-6 alike in Python and Go;
   // the proxy, the two framework desks and the evals are Python only. The proxy is four files, each numbering its

@@ -214,13 +214,13 @@ describe('lesson 5 (agent): the numbers it states', () => {
     expect(l).toContain(`first request about ${e.first} input tokens, typical \`$${e.typical.toFixed(4)}\` for ${e.calls} calls`);
     expect(l).toContain(`worst case \`$${e.worst.toFixed(4)}\` if all ${e.max_calls} allowed calls`);
     expect(l).toContain(`The real recording made ${calls.length} calls, not ${e.calls}`);
-    expect(constant('mcp/python/agent.py', 'WORST_RESULT_TOKENS')).toBe(8000);
-    expect(constant('mcp/python/agent.py', 'MAX_TOKENS')).toBe(4000);
+    expect(constant('mcp/python/agent_model.py', 'WORST_RESULT_TOKENS')).toBe(8000);
+    expect(constant('mcp/python/agent_config.py', 'MAX_TOKENS')).toBe(4000);
     expect(l).toContain('up to 8,000 tokens of tool results on every round and 4,000 output tokens on every call');
   });
 
   it('CALL_TIMEOUT is 60 seconds', () => {
-    expect(constant('mcp/python/agent.py', 'CALL_TIMEOUT')).toBe(60);
+    expect(constant('mcp/python/agent_config.py', 'CALL_TIMEOUT')).toBe(60);
     expect(l).toContain('`CALL_TIMEOUT` (60 seconds)');
   });
 });
@@ -374,8 +374,8 @@ describe('lesson 11 (capstone): the numbers it states', () => {
     expect(l).toContain('capstone-guard-simulated-compromised: guard asked about label_ticket; label rows written: 0');
   });
 
-  it('quotes TRAINING_NOTE as agent.py has it', () => {
-    const m = /^TRAINING_NOTE = \(([\s\S]*?)\)$/m.exec(src('mcp/python/agent.py'));
+  it('quotes TRAINING_NOTE as agent_config.py has it', () => {
+    const m = /^TRAINING_NOTE = \(([\s\S]*?)\)$/m.exec(src('mcp/python/agent_config.py'));
     const note = [...(m?.[1] ?? '').matchAll(/"([^"]*)"/g)].map((x) => x[1]).join('');
     expect(note.length).toBeGreaterThan(50);
     expect(l).toContain(`"${note}"`);
