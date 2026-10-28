@@ -162,7 +162,7 @@ Make a file of 131,073 spaces, one byte over the cap, and send it:
 ```bash
 mkdir -m 700 -p ~/.lumen
 head -c 131073 /dev/zero | tr '\0' ' ' > ~/.lumen/lumen-big.json
-curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8765/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' --data-binary @~/.lumen/lumen-big.json
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8765/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' --data-binary @"$HOME/.lumen/lumen-big.json"
 ```
 
 We got `401`: Python's SDK checks the token before the size. Its body-cap test sends a valid token, and gets 413 at the same size.
