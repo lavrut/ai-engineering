@@ -106,7 +106,7 @@ Sorting by accuracy or macro-F1 puts Naive Bayes first, by less than the noise b
 - `log_run(...)` puts the record together. `sha256_file(model_path)` hashes the model file; `keep_path=False` keeps the hash and drops the path, for a model that is thrown away.
 - `if target.exists() and not replace and ... != dump_json(run)` refuses to overwrite a record whose contents would change. Rewriting an identical record is allowed, which is what makes a rebuild safe.
 - `write_json_atomic(target, run)` writes the file all at once or not at all; lesson 8 shows how.
-- `list_runs()` reads every record and sorts by time, then id. `python mlops.py runs` prints it.
+- `list_runs()` reads every record and sorts by time, then id. `../../.venv-ml/bin/python mlops.py runs` prints it.
 - `compare_runs(a, b)` returns only what differs: params as `[a, b]`, numeric metrics as `[a, b, b − a]`. `_flatten` turns nested metrics into names like `test.per_class_f1.Mortgage` first.
 
 `ml/python/with_mlflow.py` does the same with MLflow. Section 1 points MLflow at a folder; section 2 logs one run.

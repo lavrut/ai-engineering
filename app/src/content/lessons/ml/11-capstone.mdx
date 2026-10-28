@@ -119,7 +119,7 @@ Section 4 is the retrain.
 - `if result["passed"]: promote(...)` is the only place a retrain can change production.
 
 <Callout kind="note" title="A failing gate exits non-zero">
-  `python mlops.py retrain` and `gate` exit with code 1 when the gate fails, like the eval gate in the LLMs track. A scheduled job or a CI step can stop on that without reading the output.
+  `../../.venv-ml/bin/python mlops.py retrain` and `gate` exit with code 1 when the gate fails, like the eval gate in the LLMs track. A scheduled job or a CI step can stop on that without reading the output.
 </Callout>
 
 ## Try it

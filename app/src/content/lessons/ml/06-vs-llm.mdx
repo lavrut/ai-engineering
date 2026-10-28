@@ -132,7 +132,7 @@ Section 5 scores both models on the same complaints.
 - `latency_p50_ms` comes from `reports/latency.json` for v1 and from the saved lines for Claude, each with a `latency_note` saying what it measured.
 
 <Callout kind="warning" title="Recording costs money">
-  `python compare_llm.py record` and `live` call the API with your `ANTHROPIC_API_KEY`. For the full 200 they print an estimate of $0.025, a worst case of $0.090 and the $10 cap, then ask `Make these paid calls? [y/N]`. Without a `y`, or `--yes`, nothing is called. `record` skips complaints already saved, so with the committed file it has nothing to do.
+  `../../.venv-ml/bin/python compare_llm.py record` and `live` (from `ml/python`) call the API with your `ANTHROPIC_API_KEY`. For the full 200 they print an estimate of $0.025, a worst case of $0.090 and the $10 cap, then ask `Make these paid calls? [y/N]`. Without a `y`, or `--yes`, nothing is called. `record` skips complaints already saved, so with the committed file it has nothing to do.
 </Callout>
 
 ## Try it

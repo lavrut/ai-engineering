@@ -143,7 +143,7 @@ Section 4 scores each period.
 
 ## How Go does it
 
-`go -C ml/go run . drift` prints the same table as `python monitor.py`, character for character. It gets there partly by recomputing and partly by reading.
+`go -C ml/go run . drift` prints the same table as `.venv-ml/bin/python ml/python/monitor.py`, character for character. It gets there partly by recomputing and partly by reading.
 
 - **Recomputed:** Go loads the production model, picks the top words from the training split, scores and counts the 2022 reference and every stream period itself, and computes PSI and the shifted words with its own code. Its `proportions` adds epsilon after dividing, and its sums use the same `pySum` compensation as the server, so the numbers agree with Python's: to 10⁻¹² on the fixed PSI cases in the tests, and to 10⁻⁹ across the whole report.
 - **Read, not recomputed:** the alert thresholds. They come from 5,000 draws of NumPy's random generator, and Go cannot reproduce NumPy's stream of random numbers. So Go reads the thresholds, settings and stop words from `drift.json` and checks it was made for the same model version and the same period sizes. It refuses to run otherwise rather than alert against the wrong line.

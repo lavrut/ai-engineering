@@ -24,8 +24,19 @@ const json = (p: string): any => JSON.parse(src(p));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const report = (name: string): any => json(`ml/reports/${name}.json`);
 const read = (n: string) => readFileSync(join(lessonsDir, `${n}.mdx`), 'utf8');
-/** A lesson's body with runs of whitespace collapsed, so a pinned sentence may wrap. */
-const flat = (n: string) => matter(read(n)).content.replace(/\s+/g, ' ');
+/** A whole lesson file, frontmatter (the quiz) included, with runs of whitespace collapsed, so a
+ *  pinned sentence may wrap. The quiz's own numbers are pinned again in 'the quizzes' below. */
+const flat = (n: string) => read(n).replace(/\s+/g, ' ');
+type Quiz = { question: string; options: string[]; answer: number; explanation: string }[];
+/** Every question, option and explanation of a lesson's quiz, one string. */
+const quizText = (n: string) =>
+  (matter(read(n)).data.quiz as Quiz).flatMap((q) => [q.question, ...q.options, q.explanation]).join(' | ').replace(/\s+/g, ' ');
+/** The numbers a quiz states that carry data: decimals, thousands, percentages, and integers of
+ *  two or more digits that are not a year (2011-2026). Small counts like "C = 3" or "1/6" are
+ *  structure, not data, and every one of those is pinned by the lesson's own quiz test anyway. */
+const quizNumbers = (n: string) =>
+  [...quizText(n).matchAll(/\d+(?:,\d{3})*(?:\.\d+)?/g)].map((m) => m[0])
+    .filter((x) => /[.,]/.test(x) || (x.length >= 2 && !(Number(x) >= 2011 && Number(x) <= 2026)));
 /** The text block after the n-th "You should see" (or "starts") in a lesson's Try it. */
 const commas = (n: number) => n.toLocaleString('en-US');
 const f3 = (x: number) => x.toFixed(3);
@@ -72,6 +83,11 @@ describe('the ML lessons as a set', () => {
         if (/^python3 -m venv (\.venv-ml|\/tmp\/mlflow-venv)\b/.test(line)) continue; // creating a venv
         const rest = line.replace(/(\.\.\/)*\.venv-ml\/bin\/\w+/g, 'VENV').replace(/\/tmp\/mlflow-venv\/bin\/\w+/g, 'VENV');
         expect(/(^|[\s(;&|'<])(python3?|pip3?|pytest|uvicorn)\s/.exec(rest), `${l}: ${line}`).toBeNull();
+      }
+    }
+    for (const l of LESSONS) {
+      for (const [, span] of read(l).matchAll(/`([^`\n]+)`/g)) {
+        expect(/^(python3?|pip3?|pytest|uvicorn) /.test(span), `${l}: inline \`${span}\``).toBe(false);
       }
     }
     expect(src('README.md')).toContain('python3 -m venv .venv-ml && .venv-ml/bin/pip install -r ml/python/requirements.txt');
@@ -400,7 +416,7 @@ describe('lesson 5 (evaluating): the numbers it states', () => {
     expect(l).toContain('so money transfer, with 60 test complaints, weighs as much as credit reporting, with 260');
   });
 
-  it('macro 0.769, weighted 0.800; baseline 43.3% and 0.101; +37.5 and 6.2 points; 37.1%', () => {
+  it('macro 0.769, weighted 0.800; baseline 43.3% and 0.101; +37.5 and 6.3 points (43.33 against 37.06)', () => {
     expect([f3(t.macro.f1), f3(t.weighted.f1)]).toEqual(['0.769', '0.800']);
     expect(l).toContain("v1's macro-F1 is 0.769.");
     expect(l).toContain("v1's weighted F1 is 0.800.");
@@ -410,10 +426,10 @@ describe('lesson 5 (evaluating): the numbers it states', () => {
     expect(l).toContain('Always answering credit reporting scores 43.3% accuracy on 2022');
     expect(l).toContain('Its macro-F1 is 0.101. It gets F1 0 on five of the six categories');
     expect(((t.accuracy - maj.test.accuracy) * 100).toFixed(1)).toBe('37.5');
-    expect(((maj.test.accuracy - maj.train.accuracy) * 100).toFixed(1)).toBe('6.3'); // 43.33 − 37.06
-    expect((Number(p1(maj.test.accuracy)) - Number(p1(maj.train.accuracy))).toFixed(1)).toBe('6.2'); // of the rounded shares
+    const pc2 = (x: number) => (x * 100).toFixed(2);
+    expect([((maj.test.accuracy - maj.train.accuracy) * 100).toFixed(1), pc2(maj.test.accuracy), pc2(maj.train.accuracy)]).toEqual(['6.3', '43.33', '37.06']);
     expect(l).toContain(`v1's ${p1(t.accuracy)}% beats the baseline's 43.3% by 37.5 points`);
-    expect(l).toContain('the baseline is also 6.2 points better than on the training years, 37.1%');
+    expect(l).toContain('the baseline is also 6.3 points better than on the training years (43.33% against 37.06%)');
   });
 
   it('bands: ±4.1 for 600, ±2.4 for 1,800, ±12.9 for 60', () => {
@@ -924,4 +940,86 @@ describe('lesson 11 (capstone): the numbers it states', () => {
     expect(gate.gain.toFixed(4)).toBe('0.0052');
     expect(l).toContain('which needs about 37,000 holdout complaints (1/0.0052²)');
   });
+});
+
+describe('the quizzes: every number a question, option or explanation states (P14)', () => {
+  const mt = metrics.models;
+  const lt = mt.logreg.test;
+  const cr = lt.per_class[CR];
+  const dc = lt.per_class['Debt collection'];
+  const sweep10 = /^ +10\.0 +\d+ +([\d.]+) +([\d.]+)/m.exec(tryitText('04-training'))!.slice(1).map(Number);
+  const leak = /fit on all years: {2}(\d+) words[\s\S]*?(\d+) in one training complaint, (\d+) never in training/.exec(tryitText('03-features'))!.slice(1).map(Number);
+  const randoms = [...tryitText('02-data').matchAll(/random split, seed \d: ([\d.]+)/g)].map((m) => m[1]).sort();
+  const c1 = run('logreg-C1-2019-2021').metrics;
+  const c3 = run('logreg-C3-2019-2021').metrics;
+  const r2 = run('logreg-C1-2019-2022').metrics;
+  const tail2of24 = binomialTail(24, 0.05, 2);
+  const majCrF1 = mt.majority.test.per_class[CR].f1;
+  // Each lesson: the exact phrases its quiz states, every number computed from its source. The
+  // fixed facts (HTTP codes, SHA-256, a hypothetical 50,000 a day, 2 bytes per "é") say why.
+  const PINNED: Record<string, string[]> = {
+    '01-what': [`the ${commas(dataset.splits.train.n)} training complaints`, `(${V1.trained_on.to})`, `seed ${constant('ml/python/train.py', 'SEED')}`,
+      'SHA-256'],
+    '02-data': [`at ${p1(drift.sample_class_shares['2024'][CR])}% of complaints`, `the real share in 2024 was ${p1(drift.real_class_shares['2024'][CR])}%`,
+      `about ${Math.round(drift.sample_class_shares['2024'][CR] * 100)}% of real complaints` /* a wrong option: the sample's share */, '(50 a month, at least 5 per category)', 'SHA-256',
+      `(${randoms[0]} to ${randoms[2]} against ${f3(lt.accuracy)})`],
+    '03-features': [`all ${commas(rows.length)} complaints`, `${commas(rows.length)} complaints`, `more than ${commas(train.length)} complaints`,
+      `grows from ${commas(V1.vocabulary.length)} to ${commas(leak[0])} words`, `Only ${leak[2]} of the extra words are new; ${commas(leak[1])} were in a single training complaint`,
+      `idf ${f3(V1.idf[V1.vocabulary.indexOf('escrow')])}`, `idf ${f3(V1.idf[V1.vocabulary.indexOf('the')])}`,
+      `appears in ${train.filter((r) => tokenize(r.narrative, V1.tokenizer).includes('escrow')).length} of the ${commas(train.length)} training complaints and "the" in ${commas(train.filter((r) => tokenize(r.narrative, V1.tokenizer).includes('the')).length)}`],
+    '04-training': [`the loss is ${log.checkpoints[0].loss.toFixed(4)}`, `ln 6 ≈ ${Math.log(6).toFixed(4)}`,
+      `With C = ${Number(/^ +(10)\.0 /m.exec(tryitText('04-training'))![1])}, logistic regression scores ${p1(sweep10[0])}% on the training years and ${p1(sweep10[1])}% on 2022. With C = 1 it scores ${p1(mt.logreg.train.accuracy)}% and ${p1(lt.accuracy)}%`,
+      `memorise its ${commas(dataset.splits.train.n)} complaints`,
+      `Naive Bayes scores ${f3(mt.nb.test.macro.f1)} test macro-F1 and logistic regression ${f3(lt.macro.f1)}, with a noise band of ±${f3(lt.band)}`,
+      `the ${f3(mt.nb.test.macro.f1 - lt.macro.f1)} difference`],
+    '05-evaluating': [`scores ${p1(mt.majority.test.accuracy)}% accuracy on 2022 but only ${f3(mt.majority.test.macro.f1)} macro-F1`,
+      `the ${cr.support} credit reporting complaints carry the baseline to ${p1(mt.majority.test.accuracy)}%`,
+      `Credit reporting's F1 is about ${f3(majCrF1)} and the other five are 0`,
+      `precision ${f3(dc.precision)} and recall ${f3(dc.recall)}`,
+      `${Math.round(dc.recall * dc.support)} of ${dc.support} debt collection complaints were found (recall ${f3(dc.recall)}), and ${Math.round(dc.recall * dc.support)} of the ${Math.round((dc.recall * dc.support) / dc.precision)} debt collection answers were right (precision ${f3(dc.precision)})`,
+      `; ${lt.confusion[lt.classes.indexOf('Debt collection')][lt.classes.indexOf(CR)]} were called credit reporting`, `scores ${p1(mt.logreg.train.accuracy)}% on the training years and ${p1(lt.accuracy)}% on 2022, with a test band of ±${p1(lt.band)} points`,
+      `The drop of ${((mt.logreg.train.accuracy - lt.accuracy) * 100).toFixed(1)} points`],
+    '06-vs-llm': [`the same ${llm.n} test complaints`, `scores ${p1(llm.claude.accuracy)}% and v1 ${p1(llm.v1.accuracy)}%. The noise band is ±${p1(llm.band)} points`,
+      `Claude is ${((llm.claude.accuracy - llm.v1.accuracy) * 100).toFixed(1)} points more accurate`, `a ${((llm.claude.accuracy - llm.v1.accuracy) * 100).toFixed(1)}-point gap is inside the ±${p1(llm.band)} band`,
+      `With ${llm.n} complaints, an accuracy can move by about 1/√${llm.n}, ${p1(1 / Math.sqrt(llm.n))} points`,
+      `median latency is ${f3(llm.v1.latency_p50_ms)} ms on the Python server and Claude's is ${commas(llm.claude.latency_p50_ms)} ms`,
+      'recorded with 8 calls in flight at once', 'Claude Haiku 5.5', 'label 50,000 complaints a day'],
+    '07-tracking': [`score ${f3(c1.test.macro_f1)} and ${f3(c3.test.macro_f1)} macro-F1 on the 2022 test year (n = ${c1.test.n}, band ±${f3(c1.test.band)})`,
+      `C = 3 is ${((c3.train.macro_f1 - c1.train.macro_f1) * 100).toFixed(1)} points higher on the training year`,
+      `because ${f3(c3.test.macro_f1)} is close enough`, `The test difference, ${f3(c1.test.macro_f1 - c3.test.macro_f1)}, is far inside ±${f3(c1.test.band)}`, '`model.sha256`'],
+    '08-registry': ['SHA-256'],
+    '09-serving': [`with hash ${registry.versions.v1.sha256.slice(0, 8)}…`, `sends ${commas(constant('ml/serve/server.py', 'MAX_CHARS'))} copies of "é". That is ${commas(2 * constant('ml/serve/server.py', 'MAX_CHARS'))} bytes of UTF-8`,
+      `over ${commas(constant('ml/serve/server.py', 'MAX_CHARS'))} bytes`, `exactly ${commas(constant('ml/serve/server.py', 'MAX_CHARS'))}`,
+      `about ${2 * constant('ml/serve/server.py', 'MAX_CHARS') / 1000} KB, is well under the ${commas(constant('ml/serve/server.py', 'MAX_BODY'))}-byte cap`,
+      '400, because', '413, because', '200, because', 'UTF-8',
+      `The recorded medians are ${f3(latency.servers.python.p50_ms)} ms for the Python server and ${f3(latency.servers.go.p50_ms)} ms for the Go server`,
+      `Go answers in ${f3(latency.servers.go.p50_ms)} ms on any machine`],
+    '10-drift': [`${drift.reference_training_in_sample.months.filter((m: { alert_convention: boolean }) => m.alert_convention).length} of the ${drift.months.length} stream months cross PSI ${drift.settings.alert_at}`,
+      `v1 is ${Math.round(mt.logreg.train.accuracy * 100)}% right`,
+      `alerted in ${drift.months.filter((m: { alert_calibrated: boolean }) => m.alert_calibrated).length} of ${drift.months.length} months`,
+      `at most ${drift.null.expected_chance_alerts.month.per_signal} alerts per signal`, `${drift.months.length} months give at most ${drift.null.expected_chance_alerts.month.per_signal} alerts per signal`,
+      `up to ${Math.round(tail2of24 * 100)}% of the time`,
+      `grew from ${p1(drift.real_class_shares['2022'][CR])}% of these complaints in 2022 to ${p1(drift.real_class_shares['2024'][CR])}% in 2024`,
+      `(${p1(drift.sample_class_shares['2022'][CR])}% to ${p1(drift.sample_class_shares['2024'][CR])}%)`],
+    '11-capstone': [`On the ${r2.holdout.n} complaints of 2023 H1, v2 scores ${f3(r2.holdout.macro_f1)} macro-F1 and v1 ${f3(r2.production_holdout.macro_f1)}. The band is ±${f3(r2.holdout.band)}`,
+      `The gain, +${f3(r2.gate.gain)}`, `a ${f3(r2.gate.gain)} gain needs tens of thousands`,
+      `the same ${r2.holdout.n} complaints`, `(${Math.round(r2.holdout.accuracy * 300)} right against ${Math.round(r2.production_holdout.accuracy * 300)})`,
+      `at least ${r2.gate.floor}`, `below ${r2.gate.floor} is impossible`],
+  };
+
+  it('the majority baseline: credit reporting F1 about 0.605, the other five 0', () => {
+    expect(f3(majCrF1)).toBe('0.605');
+    expect(Object.entries(mt.majority.test.per_class).filter(([c]) => c !== CR).every(([, v]) => (v as { f1: number }).f1 === 0)).toBe(true);
+    expect(f3(c1.test.macro_f1 - c3.test.macro_f1)).toBe('0.002');
+    expect(Math.round(1 / r2.gate.gain ** 2)).toBeGreaterThan(10000); // "tens of thousands"
+  });
+
+  for (const l of LESSONS) {
+    it(`${l}: each stated phrase holds, and every number in the quiz is one of them`, () => {
+      const q = quizText(l);
+      for (const phrase of PINNED[l]) expect(q, l).toContain(phrase);
+      const covered = new Set(PINNED[l].flatMap((x) => x.match(/\d+(?:,\d{3})*(?:\.\d+)?/g) ?? []));
+      for (const n of quizNumbers(l)) expect(covered.has(n), `${l}: quiz number ${n} is not pinned`).toBe(true);
+    });
+  }
 });
