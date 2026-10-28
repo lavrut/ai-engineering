@@ -1,3 +1,4 @@
 anthropic>=1.0
 pytest>=8
+httpx==0.28.1  # tests/test_call.py imports it
 brotli>=1.2  # older brotli makes every API call fail with "Connection error" under the SDK's HTTP client

@@ -22,10 +22,9 @@ Both harnesses call the Claude API, so running one costs money. They work inside
 ```sh
 export ANTHROPIC_API_KEY=sk-ant-...
 
-# Python
+# Python (from the repo root, once: python3 -m venv .venv-harness && .venv-harness/bin/pip install -r harness/python/requirements.txt)
 cd harness/python
-pip install -r requirements.txt
-python harness.py
+../../.venv-harness/bin/python harness.py
 
 # Go
 cd harness/go
@@ -38,8 +37,11 @@ Type a task at the prompt, or `exit`.
 
 The tests use a fake model and never call the API.
 
+Set up the venv once, from the repo root (`.venv-harness/` is git-ignored; never install into your base Python):
+
 ```sh
-cd harness/python && pytest
+python3 -m venv .venv-harness && .venv-harness/bin/pip install -r harness/python/requirements.txt
+.venv-harness/bin/python -m pytest harness/python -q
 cd harness/go && go test ./...
 ```
 
@@ -48,13 +50,13 @@ cd harness/go && go test ./...
 Replay mode is the default: every model answer is read from `llms/data/responses/`, so these commands are free and need no API key.
 
 ```sh
-pip install -r llms/python/requirements.txt
+python3 -m venv .venv-llms && .venv-llms/bin/pip install -r llms/python/requirements.txt    # once, from the repo root; .venv-llms/ is git-ignored
 
-python3 llms/python/triage_lab.py run --prompt v2_rules --split dev
-python3 llms/python/triage_lab.py compare --prompt v1_basic --vs v2_rules
-python3 llms/python/triage_lab.py judge --prompt v2_rules --split test
-python3 llms/python/triage_lab.py agreement
-python3 llms/python/triage_lab.py gate --prompt v1_basic --baseline v2_rules --split dev   # FAIL, exit 1
+.venv-llms/bin/python llms/python/triage_lab.py run --prompt v2_rules --split dev
+.venv-llms/bin/python llms/python/triage_lab.py compare --prompt v1_basic --vs v2_rules
+.venv-llms/bin/python llms/python/triage_lab.py judge --prompt v2_rules --split test
+.venv-llms/bin/python llms/python/triage_lab.py agreement
+.venv-llms/bin/python llms/python/triage_lab.py gate --prompt v1_basic --baseline v2_rules --split dev   # FAIL, exit 1
 
 cd llms/go && go run . run --prompt v2_rules     # same scores in Go
 ```
@@ -68,9 +70,9 @@ The data files (tickets, prompts, reply labels, saved responses), how the labels
 The tests use fixtures and fake models and never call the API.
 
 ```sh
-cd llms/python && python3 -m pytest -q
+.venv-llms/bin/python -m pytest llms/python -q
 cd llms/go && go test ./...
-python3 -m pytest llms/finetune -q     # from the repo root; LoRA data formatting only, no GPU
+.venv-llms/bin/python -m pytest llms/finetune -q     # LoRA data formatting only, no GPU
 ```
 
 ### Record new answers (costs money)
@@ -79,8 +81,8 @@ python3 -m pytest llms/finetune -q     # from the repo root; LoRA data formattin
 
 ```sh
 export ANTHROPIC_API_KEY=sk-ant-...
-python3 llms/python/triage_lab.py run --prompt v2_rules --model claude-sonnet-5-5 --effort medium --mode record
-python3 llms/python/triage_lab.py record --plan all --max-cost 10    # the full recording plan
+.venv-llms/bin/python llms/python/triage_lab.py run --prompt v2_rules --model claude-sonnet-5-5 --effort medium --mode record
+.venv-llms/bin/python llms/python/triage_lab.py record --plan all --max-cost 10    # the full recording plan
 ```
 
 ### The same eval with Inspect (optional)
@@ -102,7 +104,7 @@ python3 -m venv .venv-inspect
 .venv-inspect/bin/python -m pytest llms/inspect/tests -q          # the parity tests
 ```
 
-`summarize.py` exits non-zero if an Inspect score stops matching the lab's. Logs go to `llms/inspect/logs/`; only the summary is committed. The live path (`--model anthropic/claude-haiku-5-5`) costs money: get the estimate first from `python3 llms/python/triage_lab.py run --prompt v2_rules --split all --reps 3 --mode live` and answer `N` to the prompt (it prints about $0.08, worst case $0.20; the judged run's Opus grader adds about $0.47, worst case $0.91).
+`summarize.py` exits non-zero if an Inspect score stops matching the lab's. Logs go to `llms/inspect/logs/`; only the summary is committed. The live path (`--model anthropic/claude-haiku-5-5`) costs money: get the estimate first from `.venv-llms/bin/python llms/python/triage_lab.py run --prompt v2_rules --split all --reps 3 --mode live` and answer `N` to the prompt (it prints about $0.08, worst case $0.20; the judged run's Opus grader adds about $0.47, worst case $0.91).
 
 ### LoRA on Colab
 
@@ -110,7 +112,7 @@ python3 -m venv .venv-inspect
 
 1. Zip the repo's `llms/` folder and upload `llms.zip` in Colab's file panel.
 2. Run `!unzip -q llms.zip`, `!pip install -q -r llms/finetune/requirements.txt`, `!python llms/finetune/lora.py`. The first run downloads about 1 GB of model weights.
-3. Download `predictions.jsonl` before the session ends, then re-score it anywhere with `python3 llms/finetune/lora.py --score predictions.jsonl`.
+3. Download `predictions.jsonl` before the session ends, then re-score it anywhere with `.venv-llms/bin/python llms/finetune/lora.py --score predictions.jsonl`.
 
 ## Run the ML track
 
@@ -118,8 +120,10 @@ Everything in the ML track runs on a laptop CPU, offline and free. The only paid
 
 ### Setup
 
+Run every command below from the repo root, in the `.venv-ml/` virtual environment (git-ignored; never install into your base Python).
+
 ```sh
-pip install -r ml/python/requirements.txt
+python3 -m venv .venv-ml && .venv-ml/bin/pip install -r ml/python/requirements.txt
 ```
 
 The ML track needs Python 3.12 or later: from 3.12, `sum()` adds floats with compensation (Neumaier), and the Python/Go parity checks and the byte-identical rebuilds rely on it.
@@ -129,9 +133,8 @@ The scientific stack is pinned to exact versions (`scikit-learn==1.8.0`, `numpy=
 ### Train and evaluate
 
 ```sh
-cd ml/python
-python3 train.py                   # rewrites models/v1.json byte for byte and prints the metrics table
-python3 train.py --model logreg --version v1 --write-reports   # also rewrites dataset.json, metrics.json, training_log.json in ml/reports/, byte for byte
+.venv-ml/bin/python ml/python/train.py                   # rewrites models/v1.json byte for byte and prints the metrics table
+.venv-ml/bin/python ml/python/train.py --model logreg --version v1 --write-reports   # also rewrites dataset.json, metrics.json, training_log.json in ml/reports/, byte for byte
 ```
 
 ### Runs, registry and gate
@@ -139,18 +142,17 @@ python3 train.py --model logreg --version v1 --write-reports   # also rewrites d
 `mlops.py` keeps one JSON file per run in `ml/runs/` and the versions, stages and history in `ml/registry.json`. Read-only commands:
 
 ```sh
-cd ml/python
-python3 mlops.py runs
-python3 mlops.py compare logreg-C1-2019-2021 logreg-C3-2019-2021
+.venv-ml/bin/python ml/python/mlops.py runs
+.venv-ml/bin/python ml/python/mlops.py compare logreg-C1-2019-2021 logreg-C3-2019-2021
 ```
 
 Commands that write (`experiments`, `register`, `promote`, `rollback`, `gate`, `retrain`) take `--root DIR`. Try them on a copy so the committed files stay as they are:
 
 ```sh
-ML="$(mktemp -d)/ml" && cp -R .. "$ML"
-python3 mlops.py --root "$ML" gate v2          # FAILED vs v1, exit 1: gain +0.005 inside the 0.058 band
-python3 mlops.py --root "$ML" promote v2 production
-python3 mlops.py --root "$ML" rollback         # production is now v1
+ML="$(mktemp -d)/ml" && cp -R ml "$ML"
+.venv-ml/bin/python ml/python/mlops.py --root "$ML" gate v2          # FAILED vs v1, exit 1: gain +0.005 inside the 0.058 band
+.venv-ml/bin/python ml/python/mlops.py --root "$ML" promote v2 production
+.venv-ml/bin/python ml/python/mlops.py --root "$ML" rollback         # production is now v1
 ```
 
 ### Serve the model
@@ -158,24 +160,23 @@ python3 mlops.py --root "$ML" rollback         # production is now v1
 Both servers load the registry's production version, check its SHA-256, and follow the same contract (`ml/serve/server.py`'s docstring). From the repo root:
 
 ```sh
-uvicorn server:app --app-dir ml/serve --port 8000
+.venv-ml/bin/uvicorn server:app --app-dir ml/serve --port 8000
 go -C ml/go run . serve -port 8001
 curl -s localhost:8000/predict -d '{"text": "my mortgage payment was misapplied"}'
 curl -s localhost:8000/health
 go -C ml/go run . predict "my mortgage payment was misapplied"   # score one text, no server
 ```
 
-`ML_ROOT=/path/to/ml` points either server at another copy of `ml/`. `cd ml/python && python3 bench.py` starts both servers and measures their latency; `--write-reports` would replace the committed `ml/reports/latency.json` with your machine's numbers.
+`ML_ROOT=/path/to/ml` points either server at another copy of `ml/`. `.venv-ml/bin/python ml/python/bench.py` starts both servers and measures their latency; `--write-reports` would replace the committed `ml/reports/latency.json` with your machine's numbers.
 
 ### Monitor for drift
 
 ```sh
-cd ml/python
-python3 monitor.py                # PSI per month and quarter against the 2022 reference; writes nothing
-go -C ../go run . drift           # the same table, recomputed in Go (thresholds read from drift.json)
+.venv-ml/bin/python ml/python/monitor.py    # PSI per month and quarter against the 2022 reference; writes nothing
+go -C ml/go run . drift           # the same table, recomputed in Go (thresholds read from drift.json)
 ```
 
-`python3 monitor.py --write-reports` rewrites `ml/reports/drift.json`.
+`.venv-ml/bin/python ml/python/monitor.py --write-reports` rewrites `ml/reports/drift.json`.
 
 ### MLflow (optional)
 
@@ -194,8 +195,7 @@ python3 -m venv /tmp/mlflow-venv
 Lesson 6 compares v1 with `claude-haiku-5-5` on 200 test complaints. The answers were recorded once, with approval, for $0.0204, and are saved in `ml/data/llm_responses/`, so the comparison replays for free:
 
 ```sh
-cd ml/python
-python3 compare_llm.py compare     # v1 0.810 vs claude-haiku-5-5 0.865 (noise band ±0.071); rewrites llm_compare.json byte for byte
+.venv-ml/bin/python ml/python/compare_llm.py compare     # v1 0.810 vs claude-haiku-5-5 0.865 (noise band ±0.071); rewrites llm_compare.json byte for byte
 ```
 
 `record` and `live` call the API with your `ANTHROPIC_API_KEY` and cost money (about $0.02 for all 200). Each prints an estimate, a worst case and the $10 cap, and calls nothing without a `y` or `--yes`.
@@ -205,7 +205,7 @@ python3 compare_llm.py compare     # v1 0.810 vs claude-haiku-5-5 0.865 (noise b
 The tests never call the API or the network.
 
 ```sh
-cd ml/python && python3 -m pytest -q
+.venv-ml/bin/python -m pytest ml/python -q
 cd ml/go && go vet ./... && go test ./...
 ```
 

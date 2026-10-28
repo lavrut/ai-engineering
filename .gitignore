@@ -23,3 +23,6 @@ mcp/data/labels.jsonl
 mcp/data/dev-signing.key
 # the proxy log run.py keeps per set (R59)
 agents/data/traces/*/proxy.log
+.venv-harness/
+.venv-llms/
+.venv-ml/
