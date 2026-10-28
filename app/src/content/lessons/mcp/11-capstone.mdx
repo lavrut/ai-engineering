@@ -103,7 +103,7 @@ Section 4 of `agent_host.py` is the guard.
 - Its docstring states the claim and the same-response boundary in words.
 - `def make_approver(session, *, guard, human)` builds the function the harness's permission gate calls before every tool that needs approval. Without `--guard` it allows the call, which is how the attack is shown.
 - `if name not in tools: return False` refuses any tool that is not one of this session's MCP tools.
-- `session.read_untrusted.is_set()` reads the flag that section 4's `taints` sets. It fails closed: any `search_tickets` or `get_ticket` result sets it, even an empty one, and so does any result with no structured content or with an `untrusted_body` field anywhere in it.
+- `session.read_untrusted.is_set()` reads the flag that section 3's `taints` sets. It fails closed: any `search_tickets` or `get_ticket` result sets it, even an empty one, and so does any result with no structured content or with an `untrusted_body` field anywhere in it.
 - `scripted_human(approve)` is the person the guard asks, scripted by `--approve`. It prints `! guard: untrusted ticket text was read this turn; asking the person about ...`.
 
 Section 2 of `simulate.py` is the simulated model.
