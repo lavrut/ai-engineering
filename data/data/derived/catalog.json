@@ -1,0 +1,254 @@
+{
+ "agents_derived": {
+  "bytes": 224155,
+  "consumers": [
+   "app"
+  ],
+  "contract": null,
+  "description": "Scores, costs and patterns the agents lessons and aids are built from.",
+  "files": 5,
+  "last_commit": "1724226",
+  "missing": false,
+  "path": "agents/data/derived/*.json",
+  "producer": "agents",
+  "rows": 5,
+  "schema": {
+   "about": "object",
+   "engines": "object",
+   "gate": "object",
+   "tickets": "array"
+  }
+ },
+ "agents_traces": {
+  "bytes": 1052892,
+  "consumers": [
+   "agents"
+  ],
+  "contract": "agent-traces.v1",
+  "description": "One recorded agent run per file, grouped by trace set.",
+  "files": 134,
+  "last_commit": "e9c02c8",
+  "missing": false,
+  "path": "agents/data/traces/*/*.json",
+  "producer": "agents",
+  "rows": 134,
+  "schema": {
+   "approve": "string",
+   "cost_usd": "string",
+   "desk": "string",
+   "elicit": "string",
+   "engine": "string",
+   "errors": "array",
+   "mode": "string",
+   "model": "string",
+   "output": "object",
+   "paid_calls": "integer",
+   "proxy_calls": "array",
+   "set": "string",
+   "spent": "number",
+   "ticket": "string",
+   "trace": "array"
+  }
+ },
+ "category_map": {
+  "bytes": 3279,
+  "consumers": [
+   "app",
+   "ml"
+  ],
+  "contract": null,
+  "description": "How raw complaint products map onto the classifier's categories.",
+  "files": 1,
+  "last_commit": "54c2346",
+  "missing": false,
+  "path": "ml/data/category_map.json",
+  "producer": "ml",
+  "rows": 1,
+  "schema": {
+   "categories": "array",
+   "map": "object",
+   "note": "string"
+  }
+ },
+ "complaints": {
+  "bytes": 4609144,
+  "consumers": [
+   "mcp"
+  ],
+  "contract": "complaints.v1",
+  "description": "The 3600 public consumer complaints the ML classifier trains on.",
+  "files": 1,
+  "last_commit": "54c2346",
+  "missing": false,
+  "path": "ml/data/complaints.jsonl",
+  "producer": "ml",
+  "rows": 3600,
+  "schema": {
+   "date": "string",
+   "id": "string",
+   "narrative": "string",
+   "product": "string",
+   "product_raw": "string"
+  }
+ },
+ "mcp_derived": {
+  "bytes": 35827,
+  "consumers": [
+   "app"
+  ],
+  "contract": null,
+  "description": "Numbers and snapshots the MCP lessons and aids are built from.",
+  "files": 6,
+  "last_commit": "e83aeaa",
+  "missing": false,
+  "path": "mcp/data/derived/*.json",
+  "producer": "mcp",
+  "rows": 6,
+  "schema": {
+   "html": "string",
+   "mimeType": "string",
+   "sample_tool_input": "object",
+   "uri": "string"
+  }
+ },
+ "mcp_recordings": {
+  "bytes": 22090,
+  "consumers": [
+   "agents",
+   "mcp"
+  ],
+  "contract": null,
+  "description": "Recorded model calls the MCP agent replays offline.",
+  "files": 8,
+  "last_commit": "d24b89b",
+  "missing": false,
+  "path": "mcp/data/recordings/**/*.json*",
+  "producer": "mcp",
+  "rows": 16,
+  "schema": {
+   "approve": "string",
+   "call": "integer",
+   "elicit": "string",
+   "guard": "boolean",
+   "key": "string",
+   "model": "string",
+   "response": "object",
+   "scenario": "string"
+  }
+ },
+ "ml_registry": {
+  "bytes": 2608,
+  "consumers": [
+   "mcp",
+   "ml"
+  ],
+  "contract": null,
+  "description": "The model registry: versions and which one serves.",
+  "files": 1,
+  "last_commit": "0723812",
+  "missing": false,
+  "path": "ml/registry.json",
+  "producer": "ml",
+  "rows": 1,
+  "schema": {
+   "history": "array",
+   "versions": "object"
+  }
+ },
+ "ml_reports": {
+  "bytes": 72281,
+  "consumers": [
+   "app",
+   "mcp"
+  ],
+  "contract": null,
+  "description": "The ML track's reports: dataset, metrics, drift, latency and the LLM comparison.",
+  "files": 6,
+  "last_commit": "36c26cc",
+  "missing": false,
+  "path": "ml/reports/*.json",
+  "producer": "ml",
+  "rows": 6,
+  "schema": {
+   "classes": "array",
+   "counts": "object",
+   "counts_raw": "object",
+   "generated_by": "string",
+   "n": "integer",
+   "narrative_chars": "object",
+   "snippets": "object",
+   "splits": "object",
+   "years": "array"
+  }
+ },
+ "model_responses": {
+  "bytes": 562737,
+  "consumers": [
+   "app",
+   "llms"
+  ],
+  "contract": null,
+  "description": "Saved model responses per prompt and model, replayed instead of paid calls.",
+  "files": 14,
+  "last_commit": "f41768b",
+  "missing": false,
+  "path": "llms/data/responses/**/*.jsonl",
+  "producer": "llms",
+  "rows": 743,
+  "schema": {
+   "case_id": "string",
+   "config": "object",
+   "error": "string",
+   "input_tokens": "integer",
+   "key": "string",
+   "latency_ms": "integer",
+   "output": "object",
+   "output_tokens": "integer",
+   "stop_reason": "string"
+  }
+ },
+ "reply_labels": {
+  "bytes": 8664,
+  "consumers": [
+   "app",
+   "llms"
+  ],
+  "contract": null,
+  "description": "Human labels on draft replies, the gold set for LLMs lesson 6's judge.",
+  "files": 1,
+  "last_commit": "699981f",
+  "missing": false,
+  "path": "llms/data/reply_labels.jsonl",
+  "producer": "llms",
+  "rows": 30,
+  "schema": {
+   "id": "string",
+   "labels": "object",
+   "reply": "string",
+   "ticket_id": "string"
+  }
+ },
+ "tickets": {
+  "bytes": 16705,
+  "consumers": [
+   "agents",
+   "mcp"
+  ],
+  "contract": "tickets.v1",
+  "description": "The 60 Lumen support tickets with gold category, priority and split.",
+  "files": 1,
+  "last_commit": "19296f8",
+  "missing": false,
+  "path": "llms/data/tickets.jsonl",
+  "producer": "llms",
+  "rows": 60,
+  "schema": {
+   "category": "string",
+   "id": "string",
+   "priority": "string",
+   "split": "string",
+   "tags": "array",
+   "text": "string"
+  }
+ }
+}
