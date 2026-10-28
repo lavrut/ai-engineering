@@ -8,11 +8,11 @@ minutes: 25
 quiz:
   - question: The client passes an elicitation callback when it connects, even to lumen-read, which never asks a question. What does passing the callback do?
     options:
-      - It makes the connection slower
       - It declares in the client's capabilities that it can answer a confirmation question, which is the only reason a server like lumen-ops will ask one
+      - It makes the connection slower
       - It lets the client write tickets
       - It turns on logging
-    answer: 1
+    answer: 0
     explanation: Capabilities travel on every request in this revision. A server that needs a person to confirm a write will only ask a client that said it can answer. With no callback the capability is absent, and the server has to refuse or find another way.
   - question: The Python client and the Go client print byte-identical JSON for tools. The two SDKs describe schemas differently. What makes the output match?
     options:
@@ -25,10 +25,10 @@ quiz:
   - question: A call to lumen-ops returns an InputRequiredResult holding a confirmation question. What does the client do next?
     options:
       - Treats it as an error and stops
-      - Asks its answerer, then sends the same call again with the answer attached
-      - Waits for the server to send a request of its own
       - Answers yes automatically, because the client is trusted
-    answer: 1
+      - Waits for the server to send a request of its own
+      - Asks its answerer, then sends the same call again with the answer attached
+    answer: 3
     explanation: A server cannot send the client a request in this revision, so the question comes back as the reply to the call. The client supplies an answer through its callback and retries the same call. The answer is only the client's claim, which is why a write needs more than a yes over the wire.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -50,7 +50,7 @@ A server waits to be asked. The program that asks is the client. In the last two
 | `read URI` | Reads a resource |
 | `prompt NAME JSON` | Gets a prompt |
 
-This lesson uses stdio: the client starts `read_server.py` as a child process with `--stdio`. A second way to connect, over HTTP, is lesson 7. Everything after the connection is the same, which is the point of a protocol.
+This lesson uses stdio: given `--stdio`, the client starts `read_server.py` as a child process. A second way to connect, over HTTP, is lesson 7. Everything after the connection is the same, which is the point of a protocol.
 
 ### Discovery
 

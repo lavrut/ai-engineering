@@ -22,9 +22,9 @@
   :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .row { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
   #status { margin-top: 12px; min-height: 1.5em; padding: 4px 0; }
-  #status[data-kind="ok"]::before { content: "Done: "; color: var(--ok); font-weight: 700; }
-  #status[data-kind="error"]::before { content: "Error: "; color: var(--bad); font-weight: 700; }
-  #status[data-kind="wait"]::before { content: "Working: "; font-weight: 700; }
+  #status strong { font-weight: 700; }
+  #status[data-kind="ok"] strong { color: var(--ok); }
+  #status[data-kind="error"] strong { color: var(--bad); }
 </style>
 </head>
 <body>
@@ -82,7 +82,14 @@ function request(method, params) {
   });
 }
 function notify(method, params) { send({ jsonrpc: "2.0", method: method, params: params }); }
-function say(kind, text) { el.status.dataset.kind = kind; el.status.textContent = text; }
+// The prefix is text in the live region, so a screen reader announces it with the message.
+var PREFIX = { ok: "Done: ", error: "Error: ", wait: "Working: " };
+function say(kind, text) {
+  var prefix = document.createElement("strong");
+  prefix.textContent = PREFIX[kind] || "";
+  el.status.dataset.kind = kind;
+  el.status.replaceChildren(prefix, document.createTextNode(text));
+}
 function setBusy(b) {
   busy = b;
   el.confirm.disabled = b || ticketId === null;

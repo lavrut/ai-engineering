@@ -9,10 +9,10 @@ quiz:
   - question: The harness calls Tool.fn from worker threads, and the MCP Client is async. How does agent.py join the two?
     options:
       - It rewrites the harness to be async
-      - A Bridge owns a private event loop on a daemon thread. One long-lived task opens every client and holds it, and each tool call is submitted to that loop and waited for
-      - It starts a new client for every tool call
       - It runs the servers in separate processes and reads their output files
-    answer: 1
+      - It starts a new client for every tool call
+      - A Bridge owns a private event loop on a daemon thread. One long-lived task opens every client and holds it, and each tool call is submitted to that loop and waited for
+    answer: 3
     explanation: An MCP client must be opened and closed inside one task, so the bridge keeps one task alive for the whole session. The harness stays synchronous and unedited. Each call crosses over with run_coroutine_threadsafe and waits for the answer.
   - question: In replay mode the model's answers come from a file, but the servers still run. Why keep the servers real?
     options:

@@ -17,9 +17,9 @@ in the recording format plus "simulated": true on every line. derive.py replays 
 real agent to build the `simulated` block of injection.json.
 
 Run (free; no API, no key):
-    python mcp/python/simulate.py            # run both, print what happened; writes nothing in the repo
-    python mcp/python/simulate.py --check    # fail if mcp/data/simulated/ is out of date
-    python mcp/python/simulate.py --write    # rewrite mcp/data/simulated/
+    .venv-mcp/bin/python mcp/python/simulate.py            # run both, print what happened; writes nothing in the repo
+    .venv-mcp/bin/python mcp/python/simulate.py --check    # fail if mcp/data/simulated/ is out of date
+    .venv-mcp/bin/python mcp/python/simulate.py --write    # rewrite mcp/data/simulated/
 """
 from __future__ import annotations
 
@@ -152,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
                          or (SIMULATED_DIR / r["path"].name).read_text(encoding="utf-8")
                          != r["path"].read_text(encoding="utf-8")]
                 if stale:
-                    print(f"simulate: out of date: {', '.join(stale)}. Run: python mcp/python/simulate.py --write",
+                    print(f"simulate: out of date: {', '.join(stale)}. Run: .venv-mcp/bin/python mcp/python/simulate.py --write",
                           file=sys.stderr)
                     return 1
                 print("simulate: up to date")

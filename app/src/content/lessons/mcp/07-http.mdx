@@ -101,6 +101,8 @@ The Go tab of section 5 is short, because the checks live in `mcp/go/auth/auth.g
 
 `mcp.StreamableHTTPOptions{Stateless: true, MaxRequestBodyBytes: core.MaxBodyBytes}` sets the cap a second time inside the SDK.
 
+The two clients differ on redirects. Python's SDK follows a redirect within the endpoint's own origin. Go's client follows none at all (`noRedirects`), so a 3xx fails the call. Either way the token never goes to another server.
+
 ## Try it
 
 This needs three terminals, all from the repo root. Everything here is free.

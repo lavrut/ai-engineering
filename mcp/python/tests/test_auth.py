@@ -573,6 +573,94 @@ def test_as_dynamic_registration():
     assert r.status_code == 302 and "code=" in r.headers["location"]
 
 
+def _register(c: TestClient, redirects: list[str], **headers: str):
+    return c.post("/register", headers=headers, json={
+        "redirect_uris": redirects, "token_endpoint_auth_method": "none", "grant_types": ["authorization_code"],
+        "response_types": ["code"], "scope": SCOPE_WRITE})
+
+
+@pytest.mark.parametrize("redirect", ["http://127.0.0.1:33418/callback", "http://127.0.0.1/cb",
+                                      "http://localhost:6274/oauth/callback", "http://LOCALHOST:1/a/b/c?x=1"])
+def test_as_registers_loopback_http_redirects(redirect):
+    """P5: any port and any path, as long as the scheme is http and the host is 127.0.0.1 or localhost."""
+    with _as() as c:
+        r = _register(c, [redirect])
+    assert r.status_code == 201, r.text
+
+
+@pytest.mark.parametrize("redirects", [
+    ["https://evil.example/cb"],                 # the reviewer's page (I1)
+    ["http://evil.example/cb"],                  # a public host over http
+    ["https://127.0.0.1:33418/callback"],        # https, even on loopback: the rule is http + loopback host
+    ["http://192.168.1.5:33418/callback"],       # a non-loopback IP
+    ["http://10.0.0.1/cb"],
+    ["http://127.0.0.2/cb"],                     # not one of the two named hosts
+    ["http://localhost.evil.example/cb"],        # a host that only starts with "localhost"
+    ["http://127.0.0.1.nip.io/cb"],
+    ["http://user@127.0.0.1/cb"],                # userinfo: refused rather than parsed
+    ["http://127.0.0.1:33418/callback", "https://evil.example/cb"],  # one bad entry spoils the list
+])
+def test_as_refuses_non_loopback_redirects(redirects):
+    """P5: registration refuses the redirect URI with RFC 7591's invalid_redirect_uri, so no code can be sent
+    off the machine."""
+    provider = auth_server.TestOnlyProvider()
+    with TestClient(auth_server.build_auth_app(provider), base_url=ISSUER) as c:
+        r = _register(c, redirects)
+    assert r.status_code == 400 and r.json()["error"] == "invalid_redirect_uri", r.text
+    assert set(provider.clients) == {"lumen-cli"}
+
+
+@pytest.mark.parametrize("path", ["/register", "/token", "/.well-known/oauth-authorization-server"])
+def test_as_cors_is_loopback_only(path):
+    """P5: a preflight from a loopback http origin is answered for that origin (never `*`); one from any other
+    origin gets 403 and no CORS headers, so the browser blocks the page's request."""
+    pre = {"Access-Control-Request-Method": "POST" if path != "/.well-known/oauth-authorization-server" else "GET",
+           "Access-Control-Request-Headers": "content-type"}
+    with _as() as c:
+        good = c.options(path, headers={"Origin": "http://localhost:6274", **pre})
+        bad = c.options(path, headers={"Origin": "https://evil.example", **pre})
+        meta = c.get("/.well-known/oauth-authorization-server", headers={"Origin": "http://127.0.0.1:6274"})
+    assert good.status_code == 200 and good.headers["access-control-allow-origin"] == "http://localhost:6274"
+    assert bad.status_code == 403 and "access-control-allow-origin" not in bad.headers
+    assert meta.headers["access-control-allow-origin"] == "http://127.0.0.1:6274"
+
+
+@pytest.mark.parametrize("origin", ["https://evil.example", "http://evil.example", "https://localhost:6274",
+                                    "http://192.168.1.5:8080", "null"])
+def test_as_refuses_requests_from_other_origins(origin):
+    """P5: a browser request carrying a non-loopback Origin is refused server-side (403), even a `no-cors` one
+    whose response the page could not read, so it registers nothing and redeems nothing."""
+    provider = auth_server.TestOnlyProvider()
+    with TestClient(auth_server.build_auth_app(provider), base_url=ISSUER) as c:
+        code = _code(c)
+        reg = _register(c, [REDIRECT], Origin=origin)
+        tok = c.post("/token", headers={"Origin": origin}, data={
+            "grant_type": "authorization_code", "code": code, "redirect_uri": REDIRECT, "client_id": "lumen-cli",
+            "code_verifier": VERIFIER})
+        ok = _redeem(c, _code(c))
+    assert reg.status_code == 403 and "access-control-allow-origin" not in reg.headers
+    assert tok.status_code == 403 and "access-control-allow-origin" not in tok.headers
+    assert set(provider.clients) == {"lumen-cli"}
+    assert ok.status_code == 200  # no Origin (the CLI) still works
+
+
+def test_a_page_at_an_https_origin_cannot_obtain_a_code():
+    """I1, the reviewer's in-process probe: a page at https://evil.example registers a client with its own
+    redirect URI, then sends the browser to /authorize for tickets:write at lumen-ops. Every route to a code
+    at its origin is closed: the registration is refused (by Origin, and by redirect URI without one), the
+    pre-registered client will not redirect there, and nothing answers it with CORS."""
+    evil = "https://evil.example/cb"
+    with _as() as c:
+        from_page = _register(c, [evil], Origin="https://evil.example")
+        from_script = _register(c, [evil])
+        authorize = c.get("/authorize", follow_redirects=False, params={
+            "response_type": "code", "client_id": "lumen-cli", "redirect_uri": evil, "code_challenge": CHALLENGE,
+            "code_challenge_method": "S256", "state": "s", "scope": SCOPE_WRITE, "resource": OPS_RESOURCE})
+    assert from_page.status_code == 403 and "access-control-allow-origin" not in from_page.headers
+    assert from_script.status_code == 400 and from_script.json()["error"] == "invalid_redirect_uri"
+    assert authorize.status_code == 400 and "location" not in authorize.headers
+
+
 def test_mint_test_token_is_not_served():
     """mint_test_token is a function for tests, never an HTTP endpoint."""
     paths = {getattr(r, "path", "") for r in auth_server.build_auth_app().routes}

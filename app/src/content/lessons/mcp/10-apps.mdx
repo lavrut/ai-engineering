@@ -44,7 +44,7 @@ A tool returns data. Sometimes a person would rather see a small form than read 
 
 ### Three pieces
 
-- **The resource.** The page is a resource at `ui://lumen/label.html` with the mime type `text/html;profile=mcp-app`. It is 7,051 bytes of HTML, CSS and script, with no build step.
+- **The resource.** The page is a resource at `ui://lumen/label.html` with the mime type `text/html;profile=mcp-app`. It is 7,225 bytes of HTML, CSS and script, with no build step.
 - **The link.** `label_ticket` carries `_meta.ui.resourceUri = "ui://lumen/label.html"`. That is how a host knows the tool has a page.
 - **The channel.** The page and the host talk JSON-RPC over `postMessage`, using the Apps extension's own methods: `ui/initialize`, `ui/notifications/tool-input`, `ui/notifications/tool-result` and `tools/call`. The page speaks version `2026-01-26` of the extension.
 
@@ -125,7 +125,7 @@ asyncio.run(main())
 .venv-mcp/bin/python /tmp/try_app.py
 ```
 
-You should see `tool: label_ticket -> App: ui://lumen/label.html`, `mime type: text/html;profile=mcp-app`, the four empty CSP lists, and `html: 7051 bytes; starts <!doctype html>`.
+You should see `tool: label_ticket -> App: ui://lumen/label.html`, `mime type: text/html;profile=mcp-app`, the four empty CSP lists, and `html: 7225 bytes; starts <!doctype html>`.
 
 ### Run the App's tests
 

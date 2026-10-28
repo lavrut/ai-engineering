@@ -11,14 +11,14 @@ SDK's in-memory Client: no network, no OAuth. Only the model call can cost money
 does not: --mode replay (the default) answers from mcp/data/recordings/<name>.jsonl.
 
 Run (free, replay):
-    python mcp/python/agent.py --scenario lesson5
-    python mcp/python/agent.py --scenario capstone                       # no guard (the recorded models refused; see simulate.py for one that obeys)
-    python mcp/python/agent.py --scenario capstone --guard               # guard: the scripted person says no
+    .venv-mcp/bin/python mcp/python/agent.py --scenario lesson5
+    .venv-mcp/bin/python mcp/python/agent.py --scenario capstone                       # no guard (the recorded models refused; see simulate.py for one that obeys)
+    .venv-mcp/bin/python mcp/python/agent.py --scenario capstone --guard               # guard: the scripted person says no
 In replay, lumen-ops writes to a temporary label file (printed); --labels PATH overrides.
 Estimate a recording (free, no API client is created):
-    python mcp/python/agent.py --scenario capstone --guard --mode record --dry-run
+    .venv-mcp/bin/python mcp/python/agent.py --scenario capstone --guard --mode record --dry-run
 Record (paid: prints the estimate, asks y/N, stops at --max-cost; ANTHROPIC_API_KEY from the environment):
-    python mcp/python/agent.py --scenario lesson5 --mode record --max-cost 10
+    .venv-mcp/bin/python mcp/python/agent.py --scenario lesson5 --mode record --max-cost 10
 """
 from __future__ import annotations
 
@@ -46,7 +46,6 @@ sys.path.insert(0, str(REPO / "llms" / "python"))
 from client import Answerer, always, connect, deny  # noqa: E402
 from ops_server import build_ops_server  # noqa: E402  (puts mcp/core/python on sys.path)
 from read_server import build_read_server  # noqa: E402
-from lumen_core import LABELS_PATH  # noqa: E402
 from triage_lab import PRICES, call_cost  # noqa: E402  (the lab's price table, dollars per million tokens)
 
 # ── 1. Configuration ────────────────────────────────────────────────────────
@@ -122,7 +121,7 @@ def recording_name(scenario: str, guard: bool, model: str = MODEL, framing: str 
 
 def record_command(opts: Options, dry_run: bool = False) -> str:
     """The command that records (or, with dry_run, estimates) exactly this run, non-default options included."""
-    parts = ["python mcp/python/agent.py", f"--scenario {opts.scenario}"]
+    parts = [".venv-mcp/bin/python mcp/python/agent.py", f"--scenario {opts.scenario}"]
     if opts.writes:
         parts += [f"--guard --approve {opts.approve}"] if opts.guard else []
         parts += [f"--elicit {opts.elicit}"]
@@ -584,7 +583,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--dry-run", action="store_true", help="print the record estimate and exit; calls nothing")
     ap.add_argument("--yes", action="store_true", help="approve the paid calls without asking")
     ap.add_argument("--labels", type=Path, default=None,
-                    help="lumen-ops' label file (default: a temporary file in replay, mcp/data/labels.jsonl in record)")
+                    help="lumen-ops' label file (default: a temporary file, in replay and record)")
     ap.add_argument("--recordings", type=Path, default=RECORDINGS_DIR)
     return ap
 
@@ -611,12 +610,13 @@ def main(argv: list[str] | None = None, *, client_factory: Callable[[], Any] = a
             return 1
         ledger = Ledger()
         model_call = record_model(opts, client_factory=client_factory, max_cost=args.max_cost, ledger=ledger)
-        labels = args.labels or LABELS_PATH
     else:
         model_call = replay_model(opts)
-        labels = args.labels or Path(tempfile.mkdtemp(prefix="lumen-agent-")) / "labels.jsonl"
+    # Both modes default to a temporary label file (M11): a real model that obeyed t061 in record mode
+    # must not append `outage` rows to the repo's mcp/data/labels.jsonl. --labels PATH keeps them.
+    labels = args.labels or Path(tempfile.mkdtemp(prefix="lumen-agent-")) / "labels.jsonl"
     if opts.writes:
-        print(f"labels: {labels}" + ("  (temporary: replay mode)" if args.labels is None and ledger is None else ""))
+        print(f"labels: {labels}" + ("  (temporary)" if args.labels is None else ""))
 
     harness = load_harness()
     trace_was = harness.TRACE_FILE

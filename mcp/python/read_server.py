@@ -7,7 +7,7 @@ it only ever leaves this server inside a field named `untrusted_body`. The Go se
 Over HTTP it is an OAuth resource server (scope tickets:read, audience http://127.0.0.1:<port>/mcp, 8765 by default); see
 resource_auth.py. Over stdio there is no OAuth: the host that spawns the process is the trust boundary.
 
-Run:  python mcp/python/read_server.py [--http] [--port 8765]
+Run:  .venv-mcp/bin/python mcp/python/read_server.py [--http] [--port 8765]
 """
 from __future__ import annotations
 

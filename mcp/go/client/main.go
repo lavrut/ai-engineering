@@ -159,13 +159,28 @@ func (t recordRefusals) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 // noRedirects makes the HTTP client return a redirect as it is instead of following it (the
-// Python SDK's client does the same: follow_redirects=False). A 3xx then fails the MCP request,
-// and the token is never replayed to the redirect's target.
+// Python SDK follows one only within the endpoint's own origin; lesson 7 notes the difference). A 3xx
+// then fails the MCP request, and the token is never replayed to the redirect's target.
 func noRedirects(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 
 // tokenFlagWarning is printed (to stderr) whenever -token is given. The Python client prints the same line.
 const tokenFlagWarning = "client: warning: a token on the command line is visible in the process list and shell " +
 	"history; use a token file or LUMEN_TOKEN"
+
+// plainHTTPWarning is printed (to stderr) before a token goes to a plain-http URL off this machine.
+// The Python client prints the same line.
+const plainHTTPWarning = "client: warning: the token goes over plain http to a host that is not this machine, " +
+	"so anyone on the network path can read it; use https"
+
+// plainHTTPOffMachine is true for an http:// URL whose host is not 127.0.0.1, localhost or ::1.
+func plainHTTPOffMachine(raw string) bool {
+	u, err := neturl.Parse(raw)
+	if err != nil || u.Scheme != "http" {
+		return false
+	}
+	h := strings.ToLower(u.Hostname())
+	return h != "127.0.0.1" && h != "localhost" && h != "::1"
+}
 
 // resolveToken picks the token to send and whether to warn (a token was given on the command line).
 // Precedence: -token-file, then -token, then LUMEN_TOKEN. Empty values count as absent.
@@ -616,6 +631,9 @@ func main() {
 			fail(err)
 		}
 		token = t
+		if token != "" && plainHTTPOffMachine(*url) {
+			fmt.Fprintln(os.Stderr, plainHTTPWarning)
+		}
 	}
 	rec := &refusal{}
 	transport, err := newTransport(*stdio, *url, token, rec)
@@ -639,6 +657,7 @@ func main() {
 	defer cs.Close()
 	result, err := run(ctx, cs, flag.Arg(0), flag.Args()[1:])
 	if err != nil {
+		cs.Close() // failCall exits, which skips the deferred Close
 		failCall(err)
 	}
 	fmt.Println(dump(result))

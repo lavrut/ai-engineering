@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -27,7 +28,8 @@ func main() {
 			log.Fatalf("readserver: %v", err) // no key file: never fall back to a default key
 		}
 		log.Printf("lumen-read listening on http://%s/mcp", addr)
-		log.Fatal(http.ListenAndServe(addr, h))
+		srv := &http.Server{Addr: addr, Handler: h, ReadHeaderTimeout: 10 * time.Second} // a slow client cannot hold a connection open
+		log.Fatal(srv.ListenAndServe())
 	}
 	if err := s.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		log.Fatal(err)

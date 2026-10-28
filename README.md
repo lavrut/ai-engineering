@@ -227,7 +227,7 @@ Two Lumen MCP servers over one shared core, to MCP spec 2026-07-28: `lumen-read`
 python3 -m venv .venv-mcp && .venv-mcp/bin/pip install -r mcp/requirements.txt
 ```
 
-- Python 3.12 or later, in the `.venv-mcp/` virtual environment at the repo root (git-ignored). `mcp==2.3.0` is pinned exactly; the ML stack is pinned as in the ML track, because `classify_complaint` loads the ML track's model.
+- Python 3.12 or later, in the `.venv-mcp/` virtual environment at the repo root (git-ignored). Every package in `mcp/requirements.txt` is pinned exactly (`mcp==2.3.0`, `anthropic==2.3.0`, `pytest==9.1.1` and the rest); the ML stack is pinned as in the ML track, because `classify_complaint` loads the ML track's model.
 - Go 1.27.2 (`mcp/go/go.mod`), with the official Go SDK pinned in `go.mod`.
 - Node 22.19 or later only for the optional MCP Inspector smoke test.
 
@@ -239,10 +239,10 @@ The first command runs once and exits. The other three are long-running servers:
 .venv-mcp/bin/python mcp/python/client.py --stdio discover                  # lumen-read over stdio (no auth)
 .venv-mcp/bin/python mcp/python/auth_server.py                             # TEST-ONLY authorization server on :9000
 .venv-mcp/bin/python mcp/python/read_server.py --http                      # lumen-read on 127.0.0.1:8765, needs tickets:read
-cd mcp/go && go run ./opsserver -labels /tmp/lumen-live-labels.jsonl       # lumen-ops (Go) on 127.0.0.1:8766, needs tickets:write
+cd mcp/go && go run ./opsserver -labels ~/.lumen/live-labels.jsonl       # lumen-ops (Go) on 127.0.0.1:8766, needs tickets:write
 ```
 
-The authorization server is for tests only: it approves every request at once for one fixed user, so while it runs any web page in your browser could register and obtain a token from it (the resource servers' Host and Origin checks stop such a token being used from a browser); run it only on 127.0.0.1 and only while learning. Servers on other ports: start the AS with `--read-port` / `--ops-port` to match. On its first start it writes a random signing key to `mcp/data/dev-signing.key` (mode 0600, git-ignored, never commit it). Both HTTP servers read that key and refuse to start without it; `LUMEN_SIGNING_KEY_FILE` moves it. Swap any server for its twin: `(cd mcp/go && go run ./readserver -http)`, or `.venv-mcp/bin/python mcp/python/ops_server.py --labels PATH`.
+The authorization server is for tests only: it approves every request at once for one fixed user. So it registers only redirect URIs on `http://127.0.0.1` or `http://localhost` (any port) and refuses browser requests from any other origin, which keeps a web page from collecting a token from it; run it only on 127.0.0.1 and only while learning. Servers on other ports: start the AS with `--read-port` / `--ops-port` to match. On its first start it writes a random signing key to `mcp/data/dev-signing.key` (mode 0600, git-ignored, never commit it). Both HTTP servers read that key and refuse to start without it; `LUMEN_SIGNING_KEY_FILE` moves it. Swap any server for its twin: `(cd mcp/go && go run ./readserver -http)`, or `.venv-mcp/bin/python mcp/python/ops_server.py --labels PATH`.
 
 ### Clients and auth
 
@@ -255,7 +255,7 @@ The Python and Go clients print the same bytes. Over HTTP the token goes in an `
 (cd mcp/go && go run ./client -url http://127.0.0.1:8765/mcp -token-file ~/.lumen/read.tok call search_tickets '{"query": "charged twice", "limit": 1}')
 ```
 
-Stop the servers and `rm -f ~/.lumen/read.tok /tmp/lumen-live-labels.jsonl` when done.
+Stop the servers and `rm -f ~/.lumen/read.tok ~/.lumen/live-labels.jsonl` when done.
 
 ### The agent
 

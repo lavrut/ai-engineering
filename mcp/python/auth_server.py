@@ -3,9 +3,10 @@
     *** Never run this anywhere but 127.0.0.1, and never for real users. ***
     It AUTO-APPROVES every authorization request with no login page and one fixed test subject
     (TEST_SUBJECT = "user-1").
-    While it runs, any web page in the browser could register a client and obtain a token: it
-    auto-approves, Dynamic Client Registration is open, and /register and /token send CORS `*`. Only
-    the resource servers' Host and Origin checks (R42) stop such a token being used from a browser.
+    Because it auto-approves, it must never hand a code to anything but this machine (P5): a
+    registered redirect URI must be http on 127.0.0.1 or localhost (any port, any path), and a
+    browser request from any other Origin is refused (403), with CORS answered for loopback origins
+    only. Without that, any web page could register its own https redirect and obtain a write token.
 
 The signing key: on first start it writes 32 random bytes (hex) to mcp/data/dev-signing.key, mode
 0600 and git-ignored (or to $LUMEN_SIGNING_KEY_FILE), and reuses that file afterwards. The resource
@@ -31,7 +32,7 @@ It is built from the SDK's own routes (mcp.server.auth.routes.create_auth_routes
 /.well-known/oauth-authorization-server, /authorize, /token and /register. mint_test_token() is a
 plain function for tests and is never routed.
 
-Run:  python mcp/python/auth_server.py      (serves http://127.0.0.1:9000)
+Run:  .venv-mcp/bin/python mcp/python/auth_server.py      (serves http://127.0.0.1:9000)
 """
 from __future__ import annotations
 
@@ -39,19 +40,21 @@ import json
 import os
 import secrets
 import sys
+import re
 import tempfile
 import time
 from pathlib import Path
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlsplit
 
 import jwt
 from mcp.server.auth.provider import (AccessToken, AuthorizationCode, AuthorizationParams, AuthorizeError,
-                                      RefreshToken, TokenError, construct_redirect_uri)
+                                      RefreshToken, RegistrationError, TokenError, construct_redirect_uri)
 from mcp.server.auth.routes import create_auth_routes
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from pydantic import AnyUrl
 from starlette.applications import Starlette
+from starlette.middleware.cors import CORSMiddleware
 
 from resource_auth import (ISSUER, KEY_BYTES, OPS_PORT, READ_PORT, SCOPE_READ, SCOPE_WRITE, SigningKeyMissing,
                            key_file, load_signing_key, resource_uri)
@@ -67,12 +70,26 @@ CODE_TTL = 300
 REFRESH_TTL = 24 * 3600
 MAX_TOKEN_REQUEST = 16 * 1024  # bytes: a /token form is a few hundred
 CLI_REDIRECT = "http://127.0.0.1:33418/callback"  # redirect URIs match exactly, port included
+LOOPBACK_HOSTS = ("127.0.0.1", "localhost")  # the only hosts a code may be sent to, and the only browser origins
+LOOPBACK_ORIGIN = re.compile(r"http://(127\.0\.0\.1|localhost)(:[0-9]{1,5})?")  # matched whole, case-sensitive
 
 # The pre-registered public client (R4 primary): no secret, so PKCE is what protects the code.
 LUMEN_CLI = OAuthClientInformationFull(
     client_id="lumen-cli", client_name="Lumen CLI", redirect_uris=[AnyUrl(CLI_REDIRECT)],
     token_endpoint_auth_method="none", grant_types=["authorization_code", "refresh_token"],
     response_types=["code"], scope=" ".join(SCOPES))
+
+
+
+
+def loopback_http(uri: str) -> bool:
+    """True for an http URI on 127.0.0.1 or localhost (any port, any path), with no userinfo (P5)."""
+    try:
+        u = urlsplit(uri)
+        u.port  # raises ValueError on a malformed port
+    except ValueError:
+        return False
+    return u.scheme == "http" and u.hostname in LOOPBACK_HOSTS and u.username is None and u.password is None
 
 
 # ── 2. Signing key and tokens ───────────────────────────────────────────────
@@ -125,6 +142,12 @@ class TestOnlyProvider:
         return self.clients.get(client_id)
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:  # DCR (R4 secondary)
+        # P5: this AS approves without asking, so a code may only go back to this machine. An https or
+        # public redirect would let any web page register itself and collect a write-scoped code.
+        bad = [str(u) for u in client_info.redirect_uris or [] if not loopback_http(str(u))]
+        if bad or not client_info.redirect_uris:
+            raise RegistrationError("invalid_redirect_uri",
+                                    "redirect_uris must be http on 127.0.0.1 or localhost (test AS)")
         self.clients[client_info.client_id] = client_info
 
     async def authorize(self, client: OAuthClientInformationFull, params: AuthorizationParams) -> str:
@@ -186,6 +209,26 @@ class TestOnlyProvider:
 
 
 # ── 4. The app ──────────────────────────────────────────────────────────────
+def _loopback_origins_only(app):
+    """ASGI wrapper (P5): a request carrying an Origin that is not http on 127.0.0.1 or localhost gets 403
+    before any handler runs, CORS preflights included, so it registers and redeems nothing. A request with
+    no Origin (the CLI, a test) passes."""
+    async def gated(scope, receive, send):
+        if scope["type"] == "http":
+            origin = dict(scope["headers"]).get(b"origin")
+            if origin is not None and not LOOPBACK_ORIGIN.fullmatch(origin.decode("latin-1")):
+                return await _json(send, 403, {"error": "invalid_request",
+                                               "error_description": "origin not allowed: loopback http only"})
+        return await app(scope, receive, send)
+    return gated
+
+
+def _loopback_cors(cors: CORSMiddleware, inner=None) -> CORSMiddleware:
+    """The SDK answers CORS with `*`; rebuild its middleware to answer loopback origins only (P5)."""
+    return CORSMiddleware(inner or cors.app, allow_origin_regex=LOOPBACK_ORIGIN.pattern,
+                          allow_methods=list(cors.allow_methods), allow_headers=list(cors.allow_headers))
+
+
 def _guard_token_resource(app, provider: TestOnlyProvider):
     """ASGI wrapper for /token (RFC 8707 §2.2). The SDK parses `resource` there but never compares
     it with the grant, and the provider never sees it. This reads the form, and when `resource` is
@@ -247,8 +290,14 @@ def build_auth_app(provider: TestOnlyProvider | None = None) -> Starlette:
                                 client_registration_options=ClientRegistrationOptions(
                                     enabled=True, valid_scopes=SCOPES, default_scopes=SCOPES))
     for route in routes:
-        if getattr(route, "path", "") == "/token":
-            route.app = _guard_token_resource(route.app, provider)
+        path = getattr(route, "path", "")
+        if isinstance(route.app, CORSMiddleware):
+            inner = _guard_token_resource(route.app.app, provider) if path == "/token" else None
+            route.app = _loopback_cors(route.app, inner)
+        elif path != "/authorize":  # /authorize is a browser navigation and never had CORS
+            raise RuntimeError(f"auth_server: the SDK route {path} is not CORS-wrapped as expected")
+        if path != "/authorize":
+            route.app = _loopback_origins_only(route.app)
     return Starlette(routes=routes)
 
 

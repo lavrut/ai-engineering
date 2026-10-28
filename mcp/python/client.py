@@ -1,6 +1,6 @@
 """Lumen MCP client (Python): discover, list tools, call tools, read resources, get prompts.
 
-Usage:  python mcp/python/client.py (--stdio | --url URL [--token-file PATH | --token TOKEN]) [--yes | --no] <command>
+Usage:  .venv-mcp/bin/python mcp/python/client.py (--stdio | --url URL [--token-file PATH | --token TOKEN]) [--yes | --no] <command>
           --stdio       spawn mcp/python/read_server.py and talk over stdio
           --url         talk to a Streamable HTTP server, e.g. http://127.0.0.1:8765/mcp
           --token-file  read the OAuth access token for that server from a file (first line, trimmed)
@@ -46,6 +46,7 @@ from dataclasses import dataclass
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Awaitable, Callable, TextIO
+from urllib.parse import urlsplit
 
 from mcp import Client, StdioServerParameters
 from mcp.client.streamable_http import streamable_http_client
@@ -292,6 +293,15 @@ class UsageError(Exception):
 # Printed (to stderr) whenever --token is given. The Go client prints the same line.
 TOKEN_FLAG_WARNING = ("client: warning: a token on the command line is visible in the process list and shell "
                       "history; use a token file or LUMEN_TOKEN")
+# Printed (to stderr) before a token goes to a plain-http URL off this machine. The Go client prints the same line.
+PLAIN_HTTP_WARNING = ("client: warning: the token goes over plain http to a host that is not this machine, "
+                      "so anyone on the network path can read it; use https")
+
+
+def plain_http_off_machine(url: str) -> bool:
+    """True for an http:// URL whose host is not 127.0.0.1, localhost or ::1."""
+    u = urlsplit(url)
+    return u.scheme == "http" and u.hostname not in ("127.0.0.1", "localhost", "::1")
 
 
 def resolve_token(token_file: str | None, token: str | None, env: str | None) -> tuple[str | None, bool]:
@@ -373,6 +383,8 @@ async def amain(argv: list[str]) -> None:
             token, warn = resolve_token(ns.token_file, ns.token, os.environ.get("LUMEN_TOKEN"))
             if warn:
                 print(TOKEN_FLAG_WARNING, file=sys.stderr)
+            if token is not None and plain_http_off_machine(ns.url):
+                print(PLAIN_HTTP_WARNING, file=sys.stderr)
         check_args(ns.command, ns.args)
     except UsageError as e:
         print(f"client: {e}", file=sys.stderr)

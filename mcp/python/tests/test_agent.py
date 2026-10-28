@@ -142,19 +142,19 @@ def test_replay_miss_names_record_command(tmp_path):
                                                                        recordings=tmp_path / "rec")))
     msg = str(e.value)
     assert "capstone-guard.jsonl" in msg
-    assert ("python mcp/python/agent.py --scenario capstone --guard --approve decline --elicit accept "
+    assert (".venv-mcp/bin/python mcp/python/agent.py --scenario capstone --guard --approve decline --elicit accept "
             f"--recordings {tmp_path / 'rec'} --mode record --max-cost 10") in msg
     assert "--mode record --dry-run" in msg
 
 
 def test_record_command_echoes_non_default_options(tmp_path):
     assert agent.record_command(agent.Options("lesson5")) == \
-        "python mcp/python/agent.py --scenario lesson5 --mode record --max-cost 10"
+        ".venv-mcp/bin/python mcp/python/agent.py --scenario lesson5 --mode record --max-cost 10"
     assert agent.record_command(agent.Options("capstone")) == \
-        "python mcp/python/agent.py --scenario capstone --elicit accept --mode record --max-cost 10"
+        ".venv-mcp/bin/python mcp/python/agent.py --scenario capstone --elicit accept --mode record --max-cost 10"
     cmd = agent.record_command(agent.Options("capstone", guard=True, labels=tmp_path / "x.jsonl",
                                              recordings=tmp_path / "r", model="claude-sonnet-5-5"), dry_run=True)
-    assert cmd == ("python mcp/python/agent.py --scenario capstone --guard --approve decline --elicit accept "
+    assert cmd == (".venv-mcp/bin/python mcp/python/agent.py --scenario capstone --guard --approve decline --elicit accept "
                    f"--model claude-sonnet-5-5 --recordings {tmp_path / 'r'} --labels {tmp_path / 'x.jsonl'} "
                    "--mode record --dry-run")
 
@@ -377,20 +377,34 @@ def test_record_stops_before_a_call_whose_worst_case_passes_the_cap(tmp_path, ca
     assert "the next call could cost up to $" in capsys.readouterr().out
 
 
-def test_replay_labels_default_to_a_temp_file(tmp_path, capsys, monkeypatch):
+def test_labels_default_to_a_temp_file_in_replay_and_record(tmp_path, capsys):
+    """M11: neither mode touches the repo's label store unless --labels names it, so a recorded model that
+    obeyed t061 could not append rows to mcp/data/labels.jsonl."""
+    from lumen_core import LABELS_PATH
     rec = tmp_path / "rec"
     fake = FakeClient([reply("tool_use", use("label_ticket", {"id": "t061", "label": "how_to"}, "tu_1")),
                        reply("end_turn", say("Labelled."))])
-    real = tmp_path / "real-labels.jsonl"
-    monkeypatch.setattr(agent, "LABELS_PATH", real)       # record's default: the real store
+    before = rows(LABELS_PATH) if LABELS_PATH.exists() else []
     argv = ["--scenario", "capstone", "--recordings", str(rec)]
+
+    def used() -> Path:
+        out = capsys.readouterr().out
+        line = next(l for l in out.splitlines() if l.startswith("labels: "))
+        assert "(temporary)" in line and "label rows written this run: 1" in out, out
+        return Path(line.removeprefix("labels: ").removesuffix("  (temporary)"))
     assert agent.main(argv + ["--mode", "record", "--yes"], client_factory=lambda: fake) == 0
-    out = capsys.readouterr().out
-    assert f"labels: {real}\n" in out and len(rows(real)) == 1
+    recorded = used()
     assert agent.main(argv, client_factory=lambda: pytest.fail("replay made a client")) == 0
+    replayed = used()
+    for path in (recorded, replayed):
+        assert path != LABELS_PATH and path.name == "labels.jsonl" and path.parent.name.startswith("lumen-agent-")
+        assert len(rows(path)) == 1
+    assert (rows(LABELS_PATH) if LABELS_PATH.exists() else []) == before   # the repo's store is untouched
+    assert (rec / "trace.jsonl").exists()                                     # trace next to the recordings
+    mine = tmp_path / "mine.jsonl"
+    assert agent.main(argv + ["--labels", str(mine)], client_factory=lambda: pytest.fail("replay made a client")) == 0
     out = capsys.readouterr().out
-    assert "(temporary: replay mode)" in out and len(rows(real)) == 1   # replay did not touch the real store
-    assert (rec / "trace.jsonl").exists()                              # trace next to the recordings
+    assert f"labels: {mine}\n" in out and len(rows(mine)) == 1   # --labels still writes where it is told
 
 
 # ── 5. Models and framing (ruling R37) ──────────────────────────────────────
@@ -446,7 +460,7 @@ def test_recording_names_by_model_and_framing():
 
 def test_record_command_names_model_and_framing():
     cmd = agent.record_command(agent.Options("capstone", model="claude-opus-5-5", framing="training"))
-    assert cmd == ("python mcp/python/agent.py --scenario capstone --elicit accept --model claude-opus-5-5 "
+    assert cmd == (".venv-mcp/bin/python mcp/python/agent.py --scenario capstone --elicit accept --model claude-opus-5-5 "
                    "--framing training --mode record --max-cost 10")
 
 

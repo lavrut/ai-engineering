@@ -3,8 +3,8 @@
 Expectations come from lumen_core (and the data files) plus the hand-typed fixed error texts,
 never from a server, so a server bug cannot write itself into the contract.
 
-    python mcp/fixtures/gen_contract.py            # rewrite contract.jsonl
-    python mcp/fixtures/gen_contract.py --check    # exit 1 if the file differs (CI / test)
+    .venv-mcp/bin/python mcp/fixtures/gen_contract.py            # rewrite contract.jsonl
+    .venv-mcp/bin/python mcp/fixtures/gen_contract.py --check    # exit 1 if the file differs (CI / test)
 
 The ops cases (lumen-ops, `label_ticket`) carry an `answer`: what the test client replies if the
 server asks for confirmation. Compare rules and how to run an ops case: mcp/fixtures/README.md.
@@ -179,7 +179,7 @@ def main(argv: list[str] | None = None) -> int:
     assert len(names) == len(set(names)), "duplicate case names"
     if args.check:
         if not OUT.exists() or OUT.read_text(encoding="utf-8") != text:
-            print(f"{OUT} is out of date: run python mcp/fixtures/gen_contract.py", file=sys.stderr)
+            print(f"{OUT} is out of date: run .venv-mcp/bin/python mcp/fixtures/gen_contract.py", file=sys.stderr)
             return 1
         return 0
     OUT.write_text(text, encoding="utf-8")

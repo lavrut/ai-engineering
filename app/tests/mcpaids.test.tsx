@@ -55,7 +55,7 @@ describe('mcp aid modules', () => {
 });
 
 // ── McpMessageView ──────────────────────────────────────────────────────────
-// Literals from mcp/data/derived/messages.json (python mcp/python/derive.py): lumen-read, spec 2026-07-28.
+// Literals from mcp/data/derived/messages.json (.venv-mcp/bin/python mcp/python/derive.py): lumen-read, spec 2026-07-28.
 describe('message view data', () => {
   const p = messageViewProps(data.messages);
 
@@ -452,7 +452,7 @@ describe('injection rows from other recordings', () => {
 
   it('falls back to the record commands when nothing is recorded', () => {
     expect(injectionLabProps({ recorded: false })).toEqual({ recorded: false, rows: [], simulatedRows: [], commands: INJECTION_COMMANDS });
-    expect(injectionLabProps({ recorded: false, command: ['x --mode record'] }).commands).toEqual(['x --mode record', 'python mcp/python/derive.py']);
+    expect(injectionLabProps({ recorded: false, command: ['x --mode record'] }).commands).toEqual(['x --mode record', '.venv-mcp/bin/python mcp/python/derive.py']);
   });
 });
 
@@ -487,7 +487,7 @@ describe('InjectionLab', () => {
   });
 
   it('shows No recorded run yet and the commands when nothing is recorded', () => {
-    render(<InjectionLab {...injectionLabProps({ recorded: false, command: ['python mcp/python/agent.py --scenario capstone --mode record --max-cost 10'] })} />);
+    render(<InjectionLab {...injectionLabProps({ recorded: false, command: ['.venv-mcp/bin/python mcp/python/agent.py --scenario capstone --mode record --max-cost 10'] })} />);
     expect(screen.getByText('No recorded run yet')).toBeTruthy();
     expect(document.querySelector('pre')?.textContent).toContain('--scenario capstone --mode record --max-cost 10');
     expect(document.querySelector('pre')?.textContent).toContain('derive.py');
@@ -506,7 +506,7 @@ describe('InjectionLab', () => {
 });
 
 // ── InjectionLab: the SIMULATED runs (ruling R41) ───────────────────────────
-// Literals from injection.json's `simulated` block (python mcp/python/simulate.py --write, then derive.py):
+// Literals from injection.json's `simulated` block (.venv-mcp/bin/python mcp/python/simulate.py --write, then derive.py):
 // a scripted model that obeys t061, run through the real agent and servers. Never a real model.
 describe('simulated injection runs', () => {
   const p = injectionLabProps(data.injection);

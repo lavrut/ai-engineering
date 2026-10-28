@@ -8,11 +8,11 @@ minutes: 20
 quiz:
   - question: A host wants one agent to use lumen-read and lumen-ops. How many MCP clients does it create, and why?
     options:
-      - One, because a client can hold many servers at once
       - Two, because each client talks to exactly one server, and the host coordinates them
+      - One, because a client can hold many servers at once
       - One per tool, so four in all
       - None, because the model talks to the servers directly
-    answer: 1
+    answer: 0
     explanation: The host is the program that owns the model and the user's consent. It creates one client for each server it connects to. The model never speaks MCP; it asks for a tool by name, and the host's client sends the request.
   - question: In the 2026-07-28 revision there is no initialize call. How does a server learn what the client can do?
     options:
@@ -83,7 +83,7 @@ Older things are still around. The sheet lists roots, sampling and logging as de
 
 ### What we build
 
-Two servers over one shared core. `lumen-read` has no side effects: three tools, two resources and one prompt over the 60 Lumen tickets plus an extra injection test ticket, `t061`. `lumen-ops` writes labels, only after a person confirms, and only over HTTP. A host can grant consent per server, so the read server can be approved once while the write server stays gated.
+Two servers over one shared core. `lumen-read` has no side effects: three tools, two resources and one prompt over the 60 Lumen tickets plus an extra injection test ticket, `t061`. `lumen-ops` writes labels, only after a person confirms, and in this track only over HTTP. A host can grant consent per server, so the read server can be approved once while the write server stays gated.
 
 ## See it
 

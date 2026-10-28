@@ -1,7 +1,7 @@
 """derive.py — small JSON files for the app's lessons, made by running the real servers in memory.
 
-Writes mcp/data/derived/{messages,tool_budget,elicitation,app_snapshot,injection}.json. They are
-committed; `python mcp/python/derive.py --check` fails if any is out of date (CI-style, writes nothing).
+Writes mcp/data/derived/{messages,tool_budget,elicitation,app_snapshot,injection,lesson_numbers}.json. They are
+committed; `.venv-mcp/bin/python mcp/python/derive.py --check` fails if any is out of date (CI-style, writes nothing).
 
 How messages are captured: mcp 2.3.0 has no message hook on the high-level Client, so a wrapping
 in-memory transport (TapTransport) sits between the client and the server's stream loop and records
@@ -27,6 +27,11 @@ injection.json also has a separate `simulated` block (ruling R41), built the sam
 mcp/data/simulated/ (written by simulate.py: a SCRIPTED model that obeys t061, run through the real
 agent and servers). Every line there must say "simulated": true, and no line in recordings/ may;
 either mix-up stops the build. Each simulated entry carries "simulated": true.
+
+lesson_numbers.json holds the figures the lessons' Try-it sections quote that no other file holds, from
+the same real code: the client's output (and its md5) for lesson 4's search, lesson 2's classification,
+lesson 9's one-hit search, and the free record-mode estimates of lessons 5 and 11. app/tests/mcplessons.test.ts
+pins the lesson prose against it.
 """
 from __future__ import annotations
 
@@ -57,7 +62,7 @@ DERIVED_DIR = REPO / "mcp" / "data" / "derived"
 RECORDINGS_DIR = REPO / "mcp" / "data" / "recordings"
 SIMULATED_DIR = REPO / "mcp" / "data" / "simulated"
 SIM_MODEL = "simulated-compromised"  # simulate.SIM_MODEL; a test pins that they agree
-FILES = ("messages", "tool_budget", "elicitation", "app_snapshot", "injection")
+FILES = ("messages", "tool_budget", "elicitation", "app_snapshot", "injection", "lesson_numbers")
 SEALED = "<sealed state>"
 SAMPLE_INPUT = {"id": "t001", "label": "billing"}
 
@@ -215,6 +220,40 @@ async def derive_app_snapshot() -> dict:
             "sample_tool_input": {"name": "label_ticket", "arguments": SAMPLE_INPUT}}
 
 
+LESSON_SEARCH = {"query": "charged twice", "limit": 2}  # lesson 4's parity check (lesson 2 shows the ids)
+LESSON_CLASSIFY = {"text": "I was charged twice for my subscription"}  # lesson 2
+
+
+async def derive_lesson_numbers() -> dict:
+    """What the client prints for the lessons' free stdio commands (run in memory, same code), and the
+    record-mode estimates the lessons quote (agent.estimate: no API client, no call)."""
+    import hashlib
+
+    import agent
+    import client as lumen_client
+    async with lumen_client.connect(build_read_server()) as c:
+        search = await lumen_client.run(c, "call", ["search_tickets", json.dumps(LESSON_SEARCH)])
+        one = await lumen_client.run(c, "call", ["search_tickets", json.dumps({**LESSON_SEARCH, "limit": 1})])
+        classified = await lumen_client.run(c, "call", ["classify_complaint", json.dumps(LESSON_CLASSIFY)])
+    printed = lumen_client.dump(search) + "\n"  # what `client.py ... call search_tickets` writes to stdout
+
+    def est(scenario: str, model: str) -> dict:
+        e = agent.estimate(scenario, model)
+        return {"model": model, "first": e["first"], "calls": e["calls"], "typical": round(e["typical"], 4),
+                "max_calls": agent.MAX_CALLS, "worst": round(e["worst"], 4)}
+    lesson5, capstone = await asyncio.to_thread(lambda: (est("lesson5", agent.MODEL),
+                                                         est("capstone", "claude-sonnet-5-5")))
+    c = classified["structured"]
+    return {"search_charged_twice": {"arguments": LESSON_SEARCH,
+                                     "ids": [r["id"] for r in search["structured"]["results"]],
+                                     "md5": hashlib.md5(printed.encode()).hexdigest()},
+            "search_charged_twice_1": [{"id": r["id"], "category": r["category"]}
+                                       for r in one["structured"]["results"]],
+            "classify": {"arguments": LESSON_CLASSIFY, "label": c["label"], "low_confidence": c["low_confidence"],
+                         "scores": len(c["scores"]), "model_version": c["model_version"]},
+            "estimates": {"lesson5": lesson5, "capstone-noguard-sonnet-5-5": capstone}}
+
+
 # ── 3. The injection outcome (needs the paid recordings) ────────────────────
 def record_commands() -> list[str]:
     import agent
@@ -333,7 +372,8 @@ def missing_recordings(committed: Path, recordings: Path, simulated: Path = SIMU
 async def build_all(recordings: Path = RECORDINGS_DIR, simulated: Path = SIMULATED_DIR) -> dict[str, dict]:
     return {"messages": await derive_messages(), "tool_budget": await derive_tool_budget(),
             "elicitation": await derive_elicitation(), "app_snapshot": await derive_app_snapshot(),
-            "injection": await asyncio.to_thread(derive_injection, recordings, replay_rows, simulated)}
+            "injection": await asyncio.to_thread(derive_injection, recordings, replay_rows, simulated),
+            "lesson_numbers": await derive_lesson_numbers()}
 
 
 def render(data: dict) -> str:
@@ -358,7 +398,7 @@ def main(argv: list[str] | None = None) -> int:
              if not (args.out / f"{n}.json").exists() or (args.out / f"{n}.json").read_text(encoding="utf-8") != render(d)]
     if args.check:
         if stale:
-            print(f"derive: stale or missing: {', '.join(stale)}. Run: python mcp/python/derive.py", file=sys.stderr)
+            print(f"derive: stale or missing: {', '.join(stale)}. Run: .venv-mcp/bin/python mcp/python/derive.py", file=sys.stderr)
             return 1
         print("derive: up to date")
         return 0
