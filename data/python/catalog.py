@@ -40,10 +40,13 @@ SAMPLE_ROWS = 50  # the schema sketch reads this many rows of the first file
 
 # Fixed list, never a crawl. `path` is a glob from the repo root (`**` reaches subfolders).
 # A dataset under a contract takes its consumers from the contract's `consumers` section;
-# the others declare theirs here.
+# the others declare theirs here. `derived_from` names the dataset a derived file is written from.
 DATASETS = [
     {"id": "tickets", "path": "llms/data/tickets.jsonl", "producer": "llms", "contract": "tickets.v1",
      "description": "The 60 Lumen support tickets with gold category, priority and split."},
+    {"id": "tickets_v2", "path": "data/data/tickets.v2.jsonl", "producer": "data", "contract": "tickets.v2",
+     "derived_from": "tickets",
+     "description": "The same tickets in the v2 shape (priority renamed urgency), written by migrate_tickets.py."},
     {"id": "complaints", "path": "ml/data/complaints.jsonl", "producer": "ml", "contract": "complaints.v1",
      "description": "The 3600 public consumer complaints the ML classifier trains on."},
     {"id": "category_map", "path": "ml/data/category_map.json", "producer": "ml",
@@ -159,16 +162,6 @@ def base_id(contract_id: str) -> str:
     return contract_id.rsplit(".v", 1)[0]
 
 
-def family(contracts: list[dict], contract_id: str) -> list[dict]:
-    """Every major version of a dataset's contract, in version order (tickets.v1, tickets.v2).
-
-    A breaking change leaves the old major in place until its sunset, so a dataset's
-    readers are spread over the versions: each declares the one it reads.
-    """
-    same = [c for c in contracts if base_id(c["info"]["id"]) == base_id(contract_id)]
-    return sorted(same, key=lambda c: (len(c["info"]["version"]), c["info"]["version"]))
-
-
 def _contracts(contracts: Path) -> list[dict]:
     return [C.load_contract(p) for p in sorted(Path(contracts).glob("*.yaml"))]
 
@@ -176,18 +169,17 @@ def _contracts(contracts: Path) -> list[dict]:
 def catalog(root: Path, datasets: list[dict] | None = None) -> dict:
     """{id: {path, files, bytes, rows, schema, producer, consumers, contract, last_commit, missing, description}}.
 
-    `consumers` lists tracks, from every version of the contract when there is one (a
-    reader on v2 still reads this dataset), else the declared list.
+    `consumers` lists tracks, from the contract when there is one, else the declared list.
+    Each major version governs its own file (ruling D13), so a reader is listed under the
+    file it reads: after the capstone, tickets (v1) for the MCP server, tickets_v2 for the agents.
     """
     root = Path(root)
     contracts = root / "data" / "contracts"
-    loaded = _contracts(contracts)
     out = {}
     for ds in datasets if datasets is not None else DATASETS:
         found = files(root, ds["path"])
         if ds.get("contract"):
-            versions = family(loaded, ds["contract"]) or [C.load_contract(_contract_file(contracts, ds["contract"]))]
-            names = [c["name"] for v in versions for c in v["consumers"]]
+            names = [c["name"] for c in C.load_contract(_contract_file(contracts, ds["contract"]))["consumers"]]
         else:
             names = ds.get("consumers", [])
         rows = 0
@@ -218,13 +210,15 @@ def lineage(cat: dict, contracts: list[dict], datasets: list[dict] | None = None
     """Producers -> datasets -> consumers, with the contract and version on each edge.
 
     A producer edge carries the dataset's contract and its version; a consumer edge
-    carries the contract version that consumer declares (ruling D2), from whichever
-    major lists it: after the capstone, tickets -> mcp-read-server is tickets.v1 and
-    tickets -> agents-eval is tickets.v2. Datasets without a contract take their
-    declared consumers, with no contract and no version.
+    carries the version that consumer declares (ruling D2). A derived dataset also gets
+    an edge from its source, carrying the source's contract: the migration reads
+    tickets under tickets.v1 and writes tickets_v2. Datasets without a contract take
+    their declared consumers, with no contract and no version.
     """
     by_contract = {c["info"]["id"]: c for c in contracts}
-    declared = {d["id"]: d.get("consumers", []) for d in (datasets if datasets is not None else DATASETS)}
+    listed = datasets if datasets is not None else DATASETS
+    declared = {d["id"]: d.get("consumers", []) for d in listed}
+    sources = {d["id"]: d["derived_from"] for d in listed if d.get("derived_from")}
     nodes: dict[str, dict] = {}
     edges = []
     for ds_id, entry in cat.items():
@@ -234,9 +228,12 @@ def lineage(cat: dict, contracts: list[dict], datasets: list[dict] | None = None
         nodes[ds_id] = {"id": ds_id, "kind": "dataset", "missing": entry["missing"]}
         edges.append({"from": producer, "to": ds_id, "contract": cid,
                       "version": governing["info"]["version"] if governing else None})
+        if ds_id in sources:
+            src = cat[sources[ds_id]]["contract"]
+            edges.append({"from": sources[ds_id], "to": ds_id, "contract": src,
+                          "version": by_contract[src]["info"]["version"] if src in by_contract else None})
         if governing:
-            readers = [(c["name"], v["info"]["id"], c["version"])
-                       for v in family(contracts, cid) for c in v["consumers"]]
+            readers = [(c["name"], cid, c["version"]) for c in governing["consumers"]]
         else:
             readers = [(name, None, None) for name in declared.get(ds_id, [])]
         for name, rid, version in readers:

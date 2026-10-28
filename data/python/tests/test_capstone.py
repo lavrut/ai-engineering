@@ -175,45 +175,120 @@ def test_verdicts_record_before_and_after():
     assert after["ok"] is True and "expect" not in after
 
 
-def test_lineage_edges_carry_each_consumers_version():
+def test_lineage_shows_both_files_and_both_versions():
+    """Ruling D13: the migrated file is a dataset of its own; each reader hangs off the file it reads."""
     lin = json.loads(K.LINEAGE.read_text(encoding="utf-8"))
     governed = {(e["from"], e["to"]): (e["contract"], e["version"]) for e in lin["edges"]}
-    assert governed[("tickets", "mcp-read-server")] == ("tickets.v1", "1")
-    assert governed[("tickets", "agents-eval")] == ("tickets.v2", "2")
     assert governed[("llms", "tickets")] == ("tickets.v1", "1")
+    assert governed[("tickets", "mcp-read-server")] == ("tickets.v1", "1")
+    assert governed[("tickets", "tickets_v2")] == ("tickets.v1", "1")  # the migration reads the v1 file
+    assert governed[("data", "tickets_v2")] == ("tickets.v2", "2")
+    assert governed[("tickets_v2", "agents-eval")] == ("tickets.v2", "2")
+    assert ("tickets", "agents-eval") not in governed and ("tickets_v2", "mcp-read-server") not in governed
+    cat = json.loads(K.CATALOG.read_text(encoding="utf-8"))
+    v2 = cat["tickets_v2"]
+    assert (v2["path"], v2["producer"], v2["contract"], v2["consumers"], v2["rows"]) == (
+        "data/data/tickets.v2.jsonl", "data", "tickets.v2", ["agents"], 60)
+    assert cat["tickets"]["consumers"] == ["mcp"]
 
 
-# ── 5. The gate ─────────────────────────────────────────────────────────────
+def test_contracts_name_the_dataset_they_govern():
+    want = {"tickets.v1": "llms/data/tickets.jsonl", "tickets.v2": "data/data/tickets.v2.jsonl",
+            "complaints.v1": "ml/data/complaints.jsonl", "agent-traces.v1": "agents/data/traces/*/*.json"}
+    got = {C.load_contract(p)["info"]["id"]: C.load_contract(p)["info"]["dataset"] for p in CONTRACTS.glob("*.yaml")}
+    assert got == want
+
+
+def test_info_dataset_must_be_text():
+    doc = C.load_contract(CONTRACTS / "tickets.v2.yaml")
+    doc["info"]["dataset"] = 3
+    with pytest.raises(C.ContractError, match=r"^info\.dataset must be a non-empty string$"):
+        C.check_contract(doc)
+
+
+# ── 5. The gate (ruling D12) ────────────────────────────────────────────────
+def pinned(tmp_path, as_of: str, edit=None) -> Path:
+    """A verdicts.json copy with another as_of; edit(doc) may change anything else in it."""
+    doc = json.loads(Q.VERDICTS.read_text(encoding="utf-8"))
+    doc["as_of"] = as_of
+    if edit:
+        edit(doc)
+    out = tmp_path / "verdicts.json"
+    out.write_text(json.dumps(doc), encoding="utf-8")
+    return out
+
+
+def copy_contracts(tmp_path, name, old, new) -> Path:
+    contracts = tmp_path / "contracts"
+    shutil.copytree(CONTRACTS, contracts)
+    path = contracts / name
+    text = path.read_text(encoding="utf-8")
+    assert old in text
+    path.write_text(text.replace(old, new), encoding="utf-8")
+    return contracts
+
+
 def test_gate_green_with_both_versions():
     g = G.gate()
     assert g["ok"] is True, g["reason"]
     rows = {(c["name"], c["declared"]): c for c in g["consumers"]}
-    for key in [("mcp-read-server", "tickets.v1"), ("agents-eval", "tickets.v2")]:
-        assert rows[key] == {"name": key[0], "declared": key[1], "contract_exists": True, "verdicts_ok": True}
+    assert rows[("mcp-read-server", "tickets.v1")] == {
+        "name": "mcp-read-server", "declared": "tickets.v1", "contract_exists": True, "verdicts_ok": True,
+        "sunset": "2027-01-31", "warning": False}
+    assert rows[("agents-eval", "tickets.v2")] == {
+        "name": "agents-eval", "declared": "tickets.v2", "contract_exists": True, "verdicts_ok": True,
+        "sunset": None, "warning": False}
     assert g["reason"] == "every consumer is green on the version it declares (4 of 4)"
 
 
+def test_gate_ignores_a_hand_edited_verdicts_json(tmp_path):
+    def break_all(doc):
+        for entry in doc["datasets"].values():
+            entry["ok"] = False
+            entry["expect"] = "fail"
+    assert G.gate(verdicts=pinned(tmp_path, "2026-10-28", break_all)) == G.gate()
+
+
+def test_gate_red_when_the_governed_file_fails(tmp_path):
+    contracts = copy_contracts(tmp_path, "tickets.v2.yaml", "  dataset: data/data/tickets.v2.jsonl",
+                               "  dataset: llms/data/tickets.jsonl")
+    g = G.gate(contracts)
+    assert g["ok"] is False
+    row = next(c for c in g["consumers"] if c["declared"] == "tickets.v2")
+    assert row["contract_exists"] is True and row["verdicts_ok"] is False
+    assert g["reason"] == ("agents-eval declares tickets.v2, which fails on llms/data/tickets.jsonl: "
+                           "enum_coverage urgency: missing values: \"low\", \"normal\", \"high\", \"urgent\" (+1 more failed)")
+
+
+def test_gate_red_when_the_governed_file_is_missing(tmp_path):
+    contracts = copy_contracts(tmp_path, "tickets.v2.yaml", "  dataset: data/data/tickets.v2.jsonl",
+                               "  dataset: data/data/nowhere.jsonl")
+    g = G.gate(contracts)
+    assert g["ok"] is False
+    assert g["reason"] == "agents-eval declares tickets.v2, but data/data/nowhere.jsonl has no files"
+
+
 def test_gate_red_when_a_consumer_declares_a_missing_version(tmp_path):
-    contracts = tmp_path / "contracts"
-    shutil.copytree(CONTRACTS, contracts)
-    v2 = contracts / "tickets.v2.yaml"
-    v2.write_text(v2.read_text(encoding="utf-8").replace("  - name: agents-eval\n    version: 2",
-                                                       "  - name: agents-eval\n    version: 3"), encoding="utf-8")
+    contracts = copy_contracts(tmp_path, "tickets.v2.yaml", "  - name: agents-eval\n    version: 2",
+                               "  - name: agents-eval\n    version: 3")
     g = G.gate(contracts)
     assert g["ok"] is False
     row = next(c for c in g["consumers"] if c["declared"] == "tickets.v3")
-    assert row == {"name": "agents-eval", "declared": "tickets.v3", "contract_exists": False, "verdicts_ok": False}
+    assert row == {"name": "agents-eval", "declared": "tickets.v3", "contract_exists": False, "verdicts_ok": False,
+                   "sunset": None, "warning": False}
     assert g["reason"] == "agents-eval declares tickets.v3, which has no contract file"
 
 
-def test_gate_red_when_a_declared_version_fails(tmp_path):
-    doc = json.loads(Q.VERDICTS.read_text(encoding="utf-8"))
-    doc["datasets"]["tickets-v2"]["ok"] = False
-    bad = tmp_path / "verdicts.json"
-    bad.write_text(json.dumps(doc), encoding="utf-8")
-    g = G.gate(verdicts=bad)
-    assert g["ok"] is False
-    assert g["reason"] == "agents-eval declares tickets.v2, whose verdicts fail"
+def test_gate_warns_past_a_sunset_but_stays_green(tmp_path):
+    g = G.gate(verdicts=pinned(tmp_path, "2027-02-01"))
+    assert g["ok"] is True, g["reason"]
+    row = next(c for c in g["consumers"] if c["declared"] == "tickets.v1")
+    assert row["warning"] is True and row["verdicts_ok"] is True and row["sunset"] == "2027-01-31"
+    assert [c["declared"] for c in g["consumers"] if c["warning"]] == ["tickets.v1"]
+    assert g["reason"] == ("every consumer is green on the version it declares (4 of 4); "
+                           "warning: mcp-read-server is on tickets.v1, past its sunset 2027-01-31")
+    on_the_day = G.gate(verdicts=pinned(tmp_path, "2027-01-31"))
+    assert not any(c["warning"] for c in on_the_day["consumers"])
 
 
 def test_gate_json_check(capsys):

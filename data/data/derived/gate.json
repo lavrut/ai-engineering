@@ -4,25 +4,33 @@
    "contract_exists": true,
    "declared": "agent-traces.v1",
    "name": "agents-eval",
-   "verdicts_ok": true
+   "sunset": null,
+   "verdicts_ok": true,
+   "warning": false
   },
   {
    "contract_exists": true,
    "declared": "complaints.v1",
    "name": "mcp-read-server",
-   "verdicts_ok": true
+   "sunset": null,
+   "verdicts_ok": true,
+   "warning": false
   },
   {
    "contract_exists": true,
    "declared": "tickets.v1",
    "name": "mcp-read-server",
-   "verdicts_ok": true
+   "sunset": "2027-01-31",
+   "verdicts_ok": true,
+   "warning": false
   },
   {
    "contract_exists": true,
    "declared": "tickets.v2",
    "name": "agents-eval",
-   "verdicts_ok": true
+   "sunset": null,
+   "verdicts_ok": true,
+   "warning": false
   }
  ],
  "ok": true,

@@ -182,7 +182,7 @@ def test_consumer_declared_version_exists():
 # ── 4. The live repo ────────────────────────────────────────────────────────
 def test_live_dataset_list_is_fixed():
     assert [d["id"] for d in K.DATASETS] == [
-        "tickets", "complaints", "category_map", "reply_labels", "model_responses", "ml_reports",
+        "tickets", "tickets_v2", "complaints", "category_map", "reply_labels", "model_responses", "ml_reports",
         "ml_registry", "mcp_recordings", "mcp_derived", "agents_traces", "agents_derived"]
 
 
@@ -191,7 +191,8 @@ def test_live_catalog_has_nothing_missing():
     assert [i for i, e in cat.items() if e["missing"]] == []
     assert cat["tickets"]["rows"] == 60 and cat["tickets"]["contract"] == "tickets.v1"
     assert cat["complaints"]["rows"] == 3600
-    assert cat["tickets"]["consumers"] == ["agents", "mcp"]
+    assert cat["tickets"]["consumers"] == ["mcp"]  # the agents eval reads tickets_v2 (ruling D13)
+    assert cat["tickets_v2"]["consumers"] == ["agents"]
     assert any("triage__Qwen" in f for f in K.files(ROOT, K.by_id("model_responses")["path"]))
 
 
@@ -199,7 +200,7 @@ def test_live_lineage_carries_the_contract_versions():
     lin = json.loads((K.LINEAGE).read_text(encoding="utf-8"))
     governed = {(e["from"], e["to"]): (e["contract"], e["version"]) for e in lin["edges"]}
     assert governed[("tickets", "mcp-read-server")] == ("tickets.v1", "1")
-    assert governed[("tickets", "agents-eval")] == ("tickets.v2", "2")  # moved in the capstone
+    assert governed[("tickets_v2", "agents-eval")] == ("tickets.v2", "2")  # moved in the capstone
     assert governed[("complaints", "mcp-read-server")] == ("complaints.v1", "1")
     assert governed[("agents_traces", "agents-eval")] == ("agent-traces.v1", "1")
 

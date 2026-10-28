@@ -231,7 +231,6 @@
  "tickets": {
   "bytes": 16705,
   "consumers": [
-   "agents",
    "mcp"
   ],
   "contract": "tickets.v1",
@@ -249,6 +248,28 @@
    "split": "string",
    "tags": "array",
    "text": "string"
+  }
+ },
+ "tickets_v2": {
+  "bytes": 16645,
+  "consumers": [
+   "agents"
+  ],
+  "contract": "tickets.v2",
+  "description": "The same tickets in the v2 shape (priority renamed urgency), written by migrate_tickets.py.",
+  "files": 1,
+  "last_commit": "d8f6f01",
+  "missing": false,
+  "path": "data/data/tickets.v2.jsonl",
+  "producer": "data",
+  "rows": 60,
+  "schema": {
+   "category": "string",
+   "id": "string",
+   "split": "string",
+   "tags": "array",
+   "text": "string",
+   "urgency": "string"
   }
  }
 }

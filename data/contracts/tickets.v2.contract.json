@@ -7,6 +7,7 @@
   }
  ],
  "info": {
+  "dataset": "data/data/tickets.v2.jsonl",
   "description": "Lumen support tickets in the v2 shape, one per line, with a gold category and urgency and a dev/test split.",
   "id": "tickets.v2",
   "migration": "From tickets.v1: priority is renamed urgency (same four values), and category gains the value security, which no ticket uses yet. Run data/python/migrate_tickets.py to write the v2 file from the v1 file. tickets.v1 stays, deprecated, until its sunset on 2027-01-31.",

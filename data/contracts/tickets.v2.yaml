@@ -9,6 +9,7 @@ info:
   version: 2
   status: active
   owner: data
+  dataset: data/data/tickets.v2.jsonl
   description: Lumen support tickets in the v2 shape, one per line, with a gold category and urgency and a dev/test split.
   migration: >-
     From tickets.v1: priority is renamed urgency (same four values), and category gains the

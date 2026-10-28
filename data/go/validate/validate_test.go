@@ -156,6 +156,15 @@ func TestContractErrorsMatchPython(t *testing.T) {
 			t.Errorf("pattern %s: got %q, want %q", pat, got, want)
 		}
 	}
+	for _, ds := range []string{`3`, `""`} {
+		v, err := ParseJSON(strings.Replace(strings.Replace(base, "%s", `"x"`, 1), `"description": "d"`, `"description": "d", "dataset": `+ds, 1))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadContract(v); err == nil || err.Error() != "info.dataset must be a non-empty string" {
+			t.Errorf("dataset %s: got %v", ds, err)
+		}
+	}
 	v, _ := ParseJSON(`{"info": 3}`)
 	if _, err := LoadContract(v); err == nil || err.Error() != "missing section: schema" {
 		t.Errorf("got %v", err)

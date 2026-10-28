@@ -7,6 +7,7 @@
   }
  ],
  "info": {
+  "dataset": "ml/data/complaints.jsonl",
   "description": "Public consumer complaints, one per line, with the product the classifier learns to predict.",
   "id": "complaints.v1",
   "owner": "ml",

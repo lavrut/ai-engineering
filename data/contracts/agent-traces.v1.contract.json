@@ -7,6 +7,7 @@
   }
  ],
  "info": {
+  "dataset": "agents/data/traces/*/*.json",
   "description": "One recorded agent run per file, as the agents track's eval scores it.",
   "id": "agent-traces.v1",
   "owner": "agents",

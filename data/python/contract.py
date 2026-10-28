@@ -16,7 +16,8 @@ Run (from the repo root):
 Free and offline: no model calls.
 
 A contract has exactly five sections:
-    info       id, version, status (active | deprecated), owner (a track), description, sunset
+    info       id, version, status (active | deprecated), owner (a track), description, sunset,
+               dataset (the path or glob, from the repo root, of the file the contract governs)
     schema     fields: name, type, required, meaning, and enum or pattern where it applies
                (a pattern is a full match in the allow-list grammar of ruling D7, written in
                data/fixtures/README.md; \\d \\w \\s are ASCII; anything else is refused)
@@ -101,8 +102,9 @@ def _check_info(info: Any) -> None:
         _date(info["sunset"], "info.sunset")
     elif info["status"] == "deprecated":
         raise ContractError("info.sunset is required when info.status is deprecated")
-    if "generated_at" in info:
-        _text(info, "generated_at", "info")
+    for key in ("generated_at", "dataset"):
+        if key in info:
+            _text(info, key, "info")
 
 
 # A pattern is checked against an allow-list grammar by the same small tokenizer in

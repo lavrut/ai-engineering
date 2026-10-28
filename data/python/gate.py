@@ -14,61 +14,86 @@ Run (from the repo root):
     .venv-data/bin/python data/python/gate.py --check   # fail if gate.json drifted
 Free and offline: no model calls.
 
-"Passes" is read from verdicts.json (quality.py writes it, as of a pinned date,
-and quality.py --check proves it current), not recomputed: one place judges the
-data, and the gate only asks the question. An entry recorded as an expected
-failure (`expect: fail`, the v1 rows under v2) is evidence of the break, not of a
-consumer's data, so the gate leaves it out.
+The gate judges for itself (ruling D12): for each consumer it loads the declared
+contract, finds the file that contract governs (`info.dataset`, a path or glob from
+the repo root) and validates it again, freshness included. It never reads a verdict
+from verdicts.json, so a hand-edited verdicts.json cannot turn it green; it takes
+only the pinned `as_of` from there, so its ages agree with quality.py's (and with
+quality.AGE_FROM for the derived v2 file). A consumer on a deprecated version past
+its sunset gets a warning, not a failure: the sunset is a promise to move, and the
+gate shows who has not moved yet.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
+import catalog as K
 import contract as C
+import quality as Q
 
 # ── 1. Paths ────────────────────────────────────────────────────────────────
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACTS = ROOT / "data" / "contracts"
-VERDICTS = ROOT / "data" / "data" / "derived" / "verdicts.json"
+VERDICTS = ROOT / "data" / "data" / "derived" / "verdicts.json"  # only its as_of is read
 GATE = ROOT / "data" / "data" / "derived" / "gate.json"
 
 
 # ── 2. The gate ─────────────────────────────────────────────────────────────
-def _green(datasets: dict, contract_id: str) -> bool:
-    """True when the contract has verdicts and every governed entry passed (expected breaks aside)."""
-    entries = [e for e in datasets.values() if e["contract"] == contract_id and e.get("expect") != "fail"]
-    return bool(entries) and all(e["ok"] for e in entries)
+def judge(doc: dict, root: Path, as_of: date) -> str | None:
+    """None when every file the contract governs passes it as of as_of; else what failed, in words."""
+    pattern = doc["info"].get("dataset")
+    if not pattern:
+        return "which names no dataset"
+    found = K.files(root, pattern)
+    if not found:
+        return f"but {pattern} has no files"
+    for rel in found:
+        age = Q.git_age_days(root / Q.AGE_FROM.get(rel, rel), as_of)
+        bad = [x for x in C.validate(doc, C.read_rows(root / rel), file_age_days=age) if not x["ok"]]
+        if bad:
+            x, more = bad[0], f" (+{len(bad) - 1} more failed)" if len(bad) > 1 else ""
+            return f"which fails on {rel}: {x['rule']} {x['field'] if x['field'] is not None else '-'}: {x['detail']}{more}"
+    return None
 
 
-def gate(contracts: Path = CONTRACTS, verdicts: Path = VERDICTS) -> dict:
-    """{"consumers": [{name, declared, contract_exists, verdicts_ok}], "ok", "reason"}.
+def gate(contracts: Path = CONTRACTS, verdicts: Path = VERDICTS, root: Path = ROOT) -> dict:
+    """{"consumers": [{name, declared, contract_exists, verdicts_ok, sunset, warning}], "ok", "reason"}.
 
     One row per consumer entry in every contract file, in file order; `declared` is the
-    contract id the consumer reads (tickets.v2). ok only when every row is green; the
-    reason names each red row, or says how many are green.
+    contract id the consumer reads (tickets.v2). ok only when every declared version
+    exists and validates green; `warning` (deprecated and as_of past the sunset) never
+    turns it red. The reason names each red row, or says how many are green, then any warning.
     """
-    datasets = json.loads(Path(verdicts).read_text(encoding="utf-8"))["datasets"]
-    rows, problems = [], []
+    as_of = Q.stored_as_of(Path(verdicts))
+    if as_of is None:
+        raise SystemExit(f"{Path(verdicts).name} has no as_of: run data/python/quality.py")
+    rows, problems, warnings, judged = [], [], [], {}
     for path in sorted(Path(contracts).glob("*.yaml")):
         doc = C.load_contract(path)
-        base = doc["info"]["id"].rsplit(".v", 1)[0]
         for c in doc["consumers"]:
-            declared = f"{base}.v{c['version']}"
-            exists = (Path(contracts) / f"{declared}.yaml").is_file()
-            ok = exists and _green(datasets, declared)
-            rows.append({"name": c["name"], "declared": declared, "contract_exists": exists, "verdicts_ok": ok})
-            if not exists:
-                problems.append(f"{c['name']} declares {declared}, which has no contract file")
-            elif not ok:
-                problems.append(f"{c['name']} declares {declared}, whose verdicts fail")
-    if problems:
-        reason = "; ".join(problems)
-    else:
-        reason = f"every consumer is green on the version it declares ({len(rows)} of {len(rows)})"
-    return {"consumers": rows, "ok": not problems, "reason": reason}
+            declared = f"{K.base_id(doc['info']['id'])}.v{c['version']}"
+            target = Path(contracts) / f"{declared}.yaml"
+            exists = target.is_file()
+            sunset, warning, failure = None, False, "which has no contract file"
+            if exists:
+                version = C.load_contract(target)
+                if declared not in judged:
+                    judged[declared] = judge(version, Path(root), as_of)
+                failure = judged[declared]
+                sunset = version["info"].get("sunset")
+                warning = version["info"]["status"] == "deprecated" and sunset is not None and as_of > date.fromisoformat(sunset)
+            rows.append({"name": c["name"], "declared": declared, "contract_exists": exists,
+                         "verdicts_ok": failure is None, "sunset": sunset, "warning": warning})
+            if failure is not None:
+                problems.append(f"{c['name']} declares {declared}, {failure}")
+            if warning:
+                warnings.append(f"warning: {c['name']} is on {declared}, past its sunset {sunset}")
+    head = problems or [f"every consumer is green on the version it declares ({len(rows)} of {len(rows)})"]
+    return {"consumers": rows, "ok": not problems, "reason": "; ".join(head + warnings)}
 
 
 # ── 3. gate.json ────────────────────────────────────────────────────────────
@@ -106,7 +131,8 @@ def main(argv: list[str] | None = None) -> int:
     doc = write()
     for r in doc["consumers"]:
         green = r["contract_exists"] and r["verdicts_ok"]
-        print(f"{'OK ' if green else 'FAIL'} {r['name']} on {r['declared']}")
+        note = f" (warning: past its sunset {r['sunset']})" if r["warning"] else ""
+        print(f"{'OK ' if green else 'FAIL'} {r['name']} on {r['declared']}{note}")
     print(f"gate: {'green' if doc['ok'] else 'red'}: {doc['reason']}")
     print(f"wrote {GATE.name}")
     return 0 if doc["ok"] else 1

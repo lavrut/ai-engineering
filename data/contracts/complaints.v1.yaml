@@ -8,6 +8,7 @@ info:
   version: 1
   status: active
   owner: ml
+  dataset: ml/data/complaints.jsonl
   description: Public consumer complaints, one per line, with the product the classifier learns to predict.
 
 # ── 2. schema ───────────────────────────────────────────────────────────────

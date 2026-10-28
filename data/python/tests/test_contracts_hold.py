@@ -1,4 +1,4 @@
-"""The three v1 contracts hold on the live datasets they describe.
+"""The three v1 contracts hold on the live datasets they describe (tickets.v2 is in test_capstone.py).
 
 The datasets belong to other tracks and are read in place: a red verdict here
 means a producer broke its promise (or the contract is wrong), never that this

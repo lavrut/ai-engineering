@@ -75,6 +75,9 @@ def test_agents_eval_reads_tickets_v2(isolated):
 
 
 def test_agents_desk_loader_still_reads_a_v1_file(monkeypatch, isolated):
+    # The agents track's own eval (desk_core) still reads the v1 file: the move to v2 is the
+    # data track's shim, and nothing in agents/ calls it. desk_core is no longer a declared v1
+    # consumer, so the governed path is borrowed from the v1 consumer that remains.
     # desk_core imports mcp/python/agent.py at module level for the live desk runs, which needs
     # the MCP SDK; the ticket loader never touches it, so a stub stands in and nothing is installed.
     monkeypatch.setitem(sys.modules, "agent", types.ModuleType("agent"))

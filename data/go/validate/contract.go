@@ -603,9 +603,11 @@ func checkInfo(v any) error {
 	} else if status == "deprecated" {
 		return cerr("info.sunset is required when info.status is deprecated")
 	}
-	if _, ok := info.Get("generated_at"); ok {
-		if _, err := text(info, "generated_at", "info"); err != nil {
-			return err
+	for _, k := range []string{"generated_at", "dataset"} {
+		if _, ok := info.Get(k); ok {
+			if _, err := text(info, k, "info"); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

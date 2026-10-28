@@ -10,6 +10,7 @@ info:
   version: 1
   status: active
   owner: agents
+  dataset: 'agents/data/traces/*/*.json'
   description: One recorded agent run per file, as the agents track's eval scores it.
 
 # ── 2. schema ───────────────────────────────────────────────────────────────

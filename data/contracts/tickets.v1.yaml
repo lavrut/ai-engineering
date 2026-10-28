@@ -10,6 +10,7 @@ info:
   status: deprecated
   sunset: 2027-01-31
   owner: llms
+  dataset: llms/data/tickets.jsonl
   description: Lumen support tickets, one per line, with a gold category and priority and a dev/test split.
 
 # ── 2. schema ───────────────────────────────────────────────────────────────
