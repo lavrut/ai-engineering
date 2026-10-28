@@ -46,6 +46,24 @@ afterEach(() => {
 });
 
 // ── llmsAids.ts ─────────────────────────────────────────────────────────────
+// The aid logic, one module per aid group, re-exported by llmsAids.ts (as mcpAids.ts and mlAids.ts do).
+const LLMS_LIB = ['llmsAids.ts', 'llmsAidsShared.ts', 'llmsAidsEval.ts', 'llmsAidsJudge.ts', 'llmsAidsTune.ts'];
+describe('llms aid modules', () => {
+  const lib = (f: string) => readFileSync(join(here, '../src/lib', f), 'utf8');
+  it('are split per aid group, each under 400 lines, and llmsAids.ts only re-exports them', () => {
+    for (const f of LLMS_LIB) expect(lib(f).split('\n').length, f).toBeLessThan(400);
+    expect(lib('llmsAids.ts').match(/^export \* from '\.\/llmsAids\w+';$/gm)).toHaveLength(4);
+    expect(lib('llmsAids.ts').replace(/^\/\/.*$/gm, '').replace(/^export \* from .*$/gm, '').trim()).toBe('');
+  });
+  it('import only llmsData.ts and each other: node:crypto (llmsKey) stays out of the islands', () => {
+    for (const f of LLMS_LIB) {
+      const from = [...lib(f).matchAll(/^(?:import|export)\s[^;]*?from\s+'([^']+)'/gms)].map((m) => m[1]);
+      for (const x of from) expect(x, `${f} imports ${x}`).toMatch(/^\.\/(llmsData|llmsAids\w*)$/);
+      expect(lib(f)).not.toMatch(/import\.meta|\brequire\(|import\(/);
+    }
+  });
+});
+
 describe('ticket rows and filters', () => {
   const rows = ticketRows(fixtureData().tickets);
 
