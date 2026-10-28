@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import anthropic
 import pytest
 
 import triage_lab as lab
@@ -166,7 +167,7 @@ def empty_root(root):
 def no_api(monkeypatch):
     def boom(*a, **k):
         raise AssertionError("the API must not be called")
-    monkeypatch.setattr(lab.anthropic, "Anthropic", boom)
+    monkeypatch.setattr(anthropic, "Anthropic", boom)
 
 
 def response_files(root):
@@ -316,7 +317,7 @@ def test_editing_mode_never_makes_unconfirmed_calls(root, monkeypatch, capsys, m
     lab = edited_lab(mode)
     monkeypatch.setattr(sys, "stdin", SimpleNamespace(isatty=lambda: False))
     client = FakeClient()
-    monkeypatch.setattr(lab.anthropic, "Anthropic", lambda **k: client)   # a call without a client is counted too
+    monkeypatch.setattr(anthropic, "Anthropic", lambda **k: client)   # a call without a client is counted too
     data = ["--data", str(root)]
     for argv in (["run"], ["run", "--mode", "replay"],
                  ["compare", "--prompt", "v1_basic", "--vs", "v2_rules"],
@@ -334,7 +335,7 @@ def test_editing_mode_never_makes_unconfirmed_calls(root, monkeypatch, capsys, m
 def test_library_calls_default_to_replay(root, monkeypatch, mode):
     lab = edited_lab(mode)
     client = FakeClient()
-    monkeypatch.setattr(lab.anthropic, "Anthropic", lambda **k: client)
+    monkeypatch.setattr(anthropic, "Anthropic", lambda **k: client)
     prompts = lab.load_prompts(root / "prompts.json")
     ticket = lab.load_tickets(root / "tickets.jsonl")[0]
     lab.triage(ticket, "v2_rules", client=client, root=root, prompts=prompts)

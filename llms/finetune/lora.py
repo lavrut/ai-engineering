@@ -181,6 +181,9 @@ def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     test = triage_lab.split(triage_lab.load_tickets(), "test")
     if argv[:1] == ["--score"]:                  # re-score a saved file, no GPU needed
+        if len(argv) < 2:
+            print("usage: python llms/finetune/lora.py --score predictions.jsonl", file=sys.stderr)
+            return 2
         summarize(triage_lab.load_jsonl(argv[1]), test)
         return 0
     dev = triage_lab.split(triage_lab.load_tickets(), "dev")

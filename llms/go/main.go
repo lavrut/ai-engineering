@@ -14,7 +14,7 @@
 //	go run . agreement                  # judge vs. the human labels
 //	go run . gate --prompt v3_examples --baseline v2_rules
 //
-//	export ANTHROPIC_API_KEY=sk-ant-... # only needed to record or run live
+//	read -rs ANTHROPIC_API_KEY && export ANTHROPIC_API_KEY # only to record or run live; paste the key, unechoed
 //	go run . run --mode live --model claude-sonnet-5-5 --effort high
 //
 // Add --data ../data/fixtures to use the tiny test data instead.

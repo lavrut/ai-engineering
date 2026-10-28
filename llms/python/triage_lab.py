@@ -7,15 +7,16 @@ the model reads a ticket and returns a category, a priority and a reply draft.
 The lab is everything around that call — the dataset, the prompts, saved
 responses, graders, an LLM judge, a runner and a report. This file is all of it.
 
-Run:
-    pip install anthropic
+Run (in the venv: from the repo root, python3 -m venv .venv-llms, then
+.venv-llms/bin/pip install -r llms/python/requirements.txt and source .venv-llms/bin/activate):
+    cd llms/python
     python triage_lab.py run                       # replay saved responses: free, no API key
     python triage_lab.py compare --prompt v1_basic --vs v2_rules
     python triage_lab.py judge --prompt v2_rules   # judge the saved replies
     python triage_lab.py agreement                 # judge vs. the human labels
     python triage_lab.py gate --prompt v3_examples --baseline v2_rules
 
-    export ANTHROPIC_API_KEY=sk-ant-...            # only needed to record or run live
+    read -rs ANTHROPIC_API_KEY && export ANTHROPIC_API_KEY   # only to record or run live; paste the key, unechoed
     python triage_lab.py record --plan all --max-cost 8   # prints the estimate, asks first
     python triage_lab.py run --mode live --model claude-sonnet-5-5 --effort high
 Add --data llms/data/fixtures to use the tiny test data instead.
@@ -32,7 +33,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-import anthropic
+# The anthropic SDK is imported inside call_model, only when a paid mode needs it, so replay,
+# the graders and llms/finetune/lora.py work without it installed.
 
 # ── 1. Configuration ────────────────────────────────────────────────────────
 TASK_MODEL = "claude-haiku-5-5"    # the model that does the triage
@@ -173,6 +175,7 @@ def call_model(params: dict, *, key, config, case_id, mode="replay", client=None
         saved = already_recorded(path, key)
         if saved:                                  # resume: never pay twice for the same request
             return {**saved, "skipped": True}      # "skipped" is not saved; the runner counts it as free
+    import anthropic                                         # only a paid call needs the SDK
     client = client or anthropic.Anthropic(max_retries=4)   # created only when a paid mode needs it
     line = {"key": key, "config": config, "case_id": case_id, "output": None, "stop_reason": None,
             "input_tokens": 0, "output_tokens": 0, "latency_ms": 0, "error": None}
