@@ -101,7 +101,7 @@ def test_dry_run_prints_and_deletes_nothing(world, capsys):
     for name, f in world["files"].items():
         for p in f["orphan"]:
             assert p.exists() and p.name in out
-    assert "dry run: nothing deleted; delete with: python agents/prune.py --delete" in out
+    assert "dry run: nothing deleted; delete with: .venv-agents/bin/python agents/prune.py --delete" in out
 
 
 def test_delete_removes_the_orphans_and_keeps_every_used_file(world, capsys):
@@ -116,7 +116,7 @@ def test_delete_removes_the_orphans_and_keeps_every_used_file(world, capsys):
 
 def test_sets_json_reports_judge_orphans(world):
     doc = derive.build_sets(world["traces"], world["store"])
-    assert doc["judge"] == {"recordings": 8, "missing": 0, "orphans": 1, "record": "python agents/evals/run_evals.py --record-judge"}
+    assert doc["judge"] == {"recordings": 8, "missing": 0, "orphans": 1, "record": ".venv-agents/bin/python agents/evals/run_evals.py --record-judge"}
     assert doc["sets"]["desk-hand"]["orphans"] == 1
     prune.main(["--delete"], traces_dir=world["traces"], store_dir=world["store"])
     doc = derive.build_sets(world["traces"], world["store"])

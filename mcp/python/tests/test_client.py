@@ -444,17 +444,11 @@ def test_usage_errors_match_in_both_clients(go_client, command, message):
         assert r.returncode == 1 and r.stdout == "" and r.stderr.strip() == message
 
 
-def test_patching_the_facade_reaches_the_parts(monkeypatch):
-    """M3: client.py re-exports client_connect's and client_calls' names. Patching one on `client` sets it in
-    every part that holds it (connect looks deny up in client_connect); undoing the patch restores them."""
+def test_client_re_exports_its_parts():
+    """client.py re-exports client_connect's and client_calls' names as plain names: client.X is the part's
+    own X. A test that patches one patches the module whose code looks it up (connect reads deny in
+    client_connect)."""
     import client_calls
     import client_connect
-
-    async def fake(message: str) -> bool:
-        return True
-
-    real = lumen_client.deny
-    monkeypatch.setattr(lumen_client, "deny", fake)
-    assert lumen_client.deny is client_connect.deny is client_calls.deny is fake
-    monkeypatch.undo()
-    assert lumen_client.deny is client_connect.deny is client_calls.deny is real
+    assert lumen_client.deny is client_connect.deny is client_calls.deny
+    assert lumen_client.connect is client_connect.connect and lumen_client.call is client_calls.call

@@ -225,7 +225,7 @@ export function agentTraceProps(json: TracesJson, opts: AgentTraceOptions = {}):
           r === undefined || isNotRecorded(r)
             ? {
                 recorded: false,
-                command: withRebuild(r?.command ?? `python agents/run.py --engine ${e.id} --desk ${d.id} --tickets ${t} --mode record --max-cost 10`, AGENTS_DERIVE_COMMAND),
+                command: withRebuild(r?.command ?? `.venv-agents/bin/python agents/run.py --engine ${e.id} --desk ${d.id} --tickets ${t} --mode record --max-cost 10`, AGENTS_DERIVE_COMMAND),
               }
             : runView(r);
       }

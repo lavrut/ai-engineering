@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // The AI Agents track's evaluation aids: CostCompare (lesson 6) and EngineScorecard (lessons 10-11),
 // plus the lesson 7 set numbers and the page budget. Every number an aid shows is pinned here as a
-// literal from agents/data/derived/*.json (python agents/derive.py; engine_scores.json from
-// python agents/evals/run_evals.py). With 13 tickets no engine clears the gate (ruling R66): the
+// literal from agents/data/derived/*.json (.venv-agents/bin/python agents/derive.py; engine_scores.json from
+// .venv-agents/bin/python agents/evals/run_evals.py). With 13 tickets no engine clears the gate (ruling R66): the
 // verdict is pinned as it is.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
@@ -102,12 +102,12 @@ describe('cost compare data', () => {
 
   it('shows the record command for a desk with missing tickets', () => {
     const json = structuredClone(data.costCompare) as CostCompareJson;
-    json.engines.sdk.supervisor = { recorded: false, command: 'python agents/run.py --engine sdk --desk supervisor --tickets t001,t002 --mode record --max-cost 10', missing: ['t001', 't002'] };
+    json.engines.sdk.supervisor = { recorded: false, command: '.venv-agents/bin/python agents/run.py --engine sdk --desk supervisor --tickets t001,t002 --mode record --max-cost 10', missing: ['t001', 't002'] };
     json.engines.sdk.supervisor_vs_single = null;
     const q = costCompareProps(json);
     expect(q.engines[3].supervisor).toEqual({
       recorded: false,
-      command: `python agents/run.py --engine sdk --desk supervisor --tickets t001,t002 --mode record --max-cost 10\n${AGENTS_SCORE_COMMAND}\n${AGENTS_DERIVE_COMMAND}`,
+      command: `.venv-agents/bin/python agents/run.py --engine sdk --desk supervisor --tickets t001,t002 --mode record --max-cost 10\n${AGENTS_SCORE_COMMAND}\n${AGENTS_DERIVE_COMMAND}`,
       missing: 't001, t002',
     });
     expect(q.engines[3].ratio).toBeNull();
@@ -150,7 +150,7 @@ describe('CostCompare', () => {
 
   it('shows No recorded run yet for a desk with missing tickets', () => {
     const json = structuredClone(data.costCompare) as CostCompareJson;
-    json.engines.sdk.supervisor = { recorded: false, command: 'python agents/run.py --engine sdk --desk supervisor --tickets t001 --mode record --max-cost 10', missing: ['t001'] };
+    json.engines.sdk.supervisor = { recorded: false, command: '.venv-agents/bin/python agents/run.py --engine sdk --desk supervisor --tickets t001 --mode record --max-cost 10', missing: ['t001'] };
     json.engines.sdk.supervisor_vs_single = null;
     render(<CostCompare {...costCompareProps(json)} />);
     expect(screen.getByText('No recorded run yet')).toBeTruthy();
@@ -251,13 +251,13 @@ describe('engine scorecard data', () => {
     const json = structuredClone(data.engineScores) as EngineScoresJson;
     json.scores.sdk.supervisor = {
       n: 13, complete: 0, status: 'not recorded', success_rate: null, band: null, trajectory_rate: null, trajectory_n: null, mean_cost_usd: null,
-      cost_basis: null, p50_ms: null, safety_fails: 0, record: 'python agents/run.py --set desk-sdk --mode record --max-cost 10',
+      cost_basis: null, p50_ms: null, safety_fails: 0, record: '.venv-agents/bin/python agents/run.py --set desk-sdk --mode record --max-cost 10',
     };
     const lg = json.scores.langgraph.single;
-    json.scores.langgraph.single = { ...lg, complete: 11, status: 'incomplete', success_rate: null, band: null, trajectory_rate: null, trajectory_n: null, mean_cost_usd: null, p50_ms: null, record: 'python agents/run.py --engine langgraph --desk single --tickets t004,t061 --mode record --max-cost 10' };
+    json.scores.langgraph.single = { ...lg, complete: 11, status: 'incomplete', success_rate: null, band: null, trajectory_rate: null, trajectory_n: null, mean_cost_usd: null, p50_ms: null, record: '.venv-agents/bin/python agents/run.py --engine langgraph --desk single --tickets t004,t061 --mode record --max-cost 10' };
     const q = engineScorecardProps(json);
     expect(q.rows[7]).toMatchObject({ status: 'not recorded', complete: '0 of 13', success: 'n/a', floor: 'n/a', clears: false });
-    expect(q.rows[7].command).toBe(`python agents/run.py --set desk-sdk --mode record --max-cost 10\n${AGENTS_SCORE_COMMAND}\n${AGENTS_DERIVE_COMMAND}`);
+    expect(q.rows[7].command).toBe(`.venv-agents/bin/python agents/run.py --set desk-sdk --mode record --max-cost 10\n${AGENTS_SCORE_COMMAND}\n${AGENTS_DERIVE_COMMAND}`);
     expect(q.rows[4]).toMatchObject({ status: 'incomplete', complete: '11 of 13', success: 'n/a', meanCost: 'n/a' });
     expect(q.tickets['sdk/supervisor']).toEqual([]);
   });
@@ -324,14 +324,14 @@ describe('EngineScorecard', () => {
       for (const desk of Object.keys(json.scores[engine])) {
         json.scores[engine][desk] = {
           n: 13, complete: 0, status: 'not recorded', success_rate: null, band: null, trajectory_rate: null, trajectory_n: null, mean_cost_usd: null,
-          cost_basis: null, p50_ms: null, safety_fails: 0, record: `python agents/run.py --set desk-${engine} --mode record --max-cost 10`,
+          cost_basis: null, p50_ms: null, safety_fails: 0, record: `.venv-agents/bin/python agents/run.py --set desk-${engine} --mode record --max-cost 10`,
         };
       }
     }
     json.gate = { engine: null, desk: null, reason: 'no complete engine x desk: record the desk sets first' };
     render(<EngineScorecard {...engineScorecardProps(json)} />);
     expect(screen.getAllByText('No recorded run yet').length).toBeGreaterThan(0);
-    expect(document.querySelector('pre')?.textContent).toContain('python agents/run.py --set desk-hand --mode record --max-cost 10');
+    expect(document.querySelector('pre')?.textContent).toContain('.venv-agents/bin/python agents/run.py --set desk-hand --mode record --max-cost 10');
     expect(screen.getByRole('status').textContent).toContain('no complete engine x desk: record the desk sets first');
   });
 });
@@ -345,8 +345,8 @@ describe('recording sets (lesson 7)', () => {
     expect(s.patterns).toMatchObject({ runs: 15, model_calls: 60, recordings: 57, missing: 0, orphans: 0, recorded_cost_usd: 0.0134697, distinct_recorded_cost_usd: 0.0130335 });
     // every recording a trace references is in the store: none missing (a missing one is reported, not counted)
     expect(Object.values(s).map((x) => x.missing)).toEqual([0, 0, 0, 0, 0, 0]);
-    expect(s['desk-sdk'].replay).toBe('python agents/run.py --set desk-sdk');
-    expect(s['desk-sdk'].record).toBe('python agents/run.py --set desk-sdk --mode record --max-cost 10');
+    expect(s['desk-sdk'].replay).toBe('.venv-agents/bin/python agents/run.py --set desk-sdk');
+    expect(s['desk-sdk'].record).toBe('.venv-agents/bin/python agents/run.py --set desk-sdk --mode record --max-cost 10');
   });
 });
 

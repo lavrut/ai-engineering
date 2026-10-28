@@ -141,7 +141,7 @@ export function patternStepperProps(json: PatternsJson, opts: PatternStepperOpti
         const r = json.patterns[p.id]?.[t]?.[e.id];
         runs[p.id][t][e.id] =
           r === undefined || isNotRecorded(r)
-            ? { recorded: false, command: withRebuild(r?.command ?? `python agents/run.py --set ${e.id === 'hand' ? 'patterns' : 'patterns-go'} --mode record --max-cost 10`, AGENTS_DERIVE_COMMAND) }
+            ? { recorded: false, command: withRebuild(r?.command ?? `.venv-agents/bin/python agents/run.py --set ${e.id === 'hand' ? 'patterns' : 'patterns-go'} --mode record --max-cost 10`, AGENTS_DERIVE_COMMAND) }
             : runView(r);
       }
     }

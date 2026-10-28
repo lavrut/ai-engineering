@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """derive — turn the committed traces into the small JSON files the app's lesson aids read.
 
-    python agents/derive.py            # write agents/data/derived/{patterns,traces,cost_compare,sets}.json
-    python agents/derive.py --check    # exit 1, naming the file, when a regenerated file differs from the one on disk
+    .venv-agents/bin/python agents/derive.py            # write agents/data/derived/{patterns,traces,cost_compare,sets}.json
+    .venv-agents/bin/python agents/derive.py --check    # exit 1, naming the file, when a regenerated file differs from the one on disk
 
 Input (read only): agents/data/traces/<set>/<engine>-<desk>-<ticket>.json (agents/run.py), the recordings folder
 agents/data/recordings/<set>/ (file names only), agents/data/derived/engine_scores.json (agents/evals/run_evals.py;
@@ -32,7 +32,6 @@ import json
 import re
 import statistics
 import sys
-import types
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -47,23 +46,7 @@ import run  # noqa: E402  (agents/run.py: the sets, the trace layout, the record
 from derive_read import (ARGS_CAP, COST_DIGITS, FENCE, MAX_COST, REPLY_CAP, STEP_CAP, WRITE_TOOLS,  # noqa: E402,F401
                          _cost, _num, _sum, args_text, excerpt, ledger, load, model_step, not_recorded, steps_of,
                          tool_step, totals)
-import derive_read  # noqa: E402  (the part itself, for the patch rule below)
 
-
-# A patch on this module reaches the parts (M3). The names above are copies of the parts' names, so patching one
-# here (monkeypatch.setattr(derive, "ARGS_CAP", ...)) also sets it in every part that holds that name, and the
-# patched value is what the code sees wherever it looks the name up. Undoing the patch sets the old value back
-# the same way. Reading a name works as before.
-class _Facade(types.ModuleType):
-    def __setattr__(self, name: str, value: Any) -> None:
-        for part in _PARTS:
-            if name in vars(part):
-                setattr(part, name, value)
-        super().__setattr__(name, value)
-
-
-_PARTS = (derive_read,)
-sys.modules[__name__].__class__ = _Facade
 
 core = run.core
 
@@ -382,7 +365,7 @@ def judge_set(traces_dir: Path, store_dir: Path) -> dict:
     wanted = run_evals.judge_keys(traces_dir)
     on_disk = store_keys(store_dir, run_evals.JUDGE_SET)
     return {"recordings": len(on_disk & wanted), "missing": len(wanted - on_disk), "orphans": len(on_disk - wanted),
-            "record": "python agents/evals/run_evals.py --record-judge"}
+            "record": ".venv-agents/bin/python agents/evals/run_evals.py --record-judge"}
 
 
 def build_sets(traces_dir: Path, store_dir: Path) -> dict:
@@ -401,8 +384,8 @@ def build_sets(traces_dir: Path, store_dir: Path) -> dict:
                       "distinct_recorded_cost_usd": _cost(_sum(list(used.values()))),
                       "recordings": len(set(used) & on_disk), "missing": len(set(used) - on_disk),
                       "orphans": len(on_disk - set(used)),
-                      "replay": f"python agents/run.py --set {name}",
-                      "record": f"python agents/run.py --set {name} --mode record --max-cost {MAX_COST}"}
+                      "replay": f".venv-agents/bin/python agents/run.py --set {name}",
+                      "record": f".venv-agents/bin/python agents/run.py --set {name} --mode record --max-cost {MAX_COST}"}
     return {"about": about(
         "Lesson 7 (record and replay): each recording set, what it holds and what it cost to record",
         ["agents/data/traces/<set>/", "agents/data/recordings/<set>/"],
@@ -486,7 +469,7 @@ def main(argv: list[str] | None = None, *, traces_dir: Path = TRACES_DIR, store_
         scores_drifted = evals_check() != 0      # run_evals prints its own line for engine_scores.json
         for n in drifted:
             print(f"{n} has drifted from the traces; regenerate with: "
-                  + ("python agents/evals/run_evals.py" if n == SCORES_FILE else "python agents/derive.py"))
+                  + (".venv-agents/bin/python agents/evals/run_evals.py" if n == SCORES_FILE else ".venv-agents/bin/python agents/derive.py"))
         if drifted or scores_drifted:
             return 1
         print("derived files match the traces")

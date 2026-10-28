@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """prune — delete the recordings no run uses (ruling R73). Free: it reads traces and file names, and calls nothing.
 
-    python agents/prune.py              # dry run: print what it would delete, delete nothing
-    python agents/prune.py --delete     # delete those files
+    .venv-agents/bin/python agents/prune.py              # dry run: print what it would delete, delete nothing
+    .venv-agents/bin/python agents/prune.py --delete     # delete those files
 
 A re-record leaves the superseded store files behind (R67 counts them as `orphans` in sets.json). Replay never
 reads them, but they ship with the repo, and one round of them held a model reply that repeated the Agent SDK's
@@ -15,7 +15,7 @@ per-user temp directory. So the store is pruned to exactly what the traces use:
 
 Only a complete set is pruned. A set with a missing trace (the cap stopped it, or a run failed) keeps every file,
 since its unfinished runs may still need them, and the judge set waits until every desk set is complete. After a
-prune, `python agents/derive.py` reports orphans 0, and replaying every set still matches its traces.
+prune, `.venv-agents/bin/python agents/derive.py` reports orphans 0, and replaying every set still matches its traces.
 """
 from __future__ import annotations
 
@@ -86,9 +86,9 @@ def main(argv: list[str] | None = None, *, traces_dir: Path = TRACES_DIR, store_
                 path.unlink()
         total += len(row["delete"])
     if args.delete:
-        print(f"deleted {total} files; now: python agents/derive.py")
+        print(f"deleted {total} files; now: .venv-agents/bin/python agents/derive.py")
     else:
-        print(f"{total} to delete in all; dry run: nothing deleted; delete with: python agents/prune.py --delete")
+        print(f"{total} to delete in all; dry run: nothing deleted; delete with: .venv-agents/bin/python agents/prune.py --delete")
     return 0
 
 

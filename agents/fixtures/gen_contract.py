@@ -8,8 +8,8 @@ scripted model replies; the Python code runs against them, and the output and mo
 Go replays the same replies and must produce the same `expect`. Edit this file, never the JSONL.
 
 Run:
-    python agents/fixtures/gen_contract.py --write
-    python agents/fixtures/gen_contract.py --check     # exit 1 if the committed file has drifted
+    .venv-agents/bin/python agents/fixtures/gen_contract.py --write
+    .venv-agents/bin/python agents/fixtures/gen_contract.py --check     # exit 1 if the committed file has drifted
 """
 from __future__ import annotations
 

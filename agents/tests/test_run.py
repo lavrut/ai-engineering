@@ -148,7 +148,7 @@ def test_dry_run_shape(name, capsys, dirs):
     assert "--max-calls" in out
     assert "prices $0.10 input / $0.50 output per million tokens" in out
     # R71: the printed record command never carries --yes, so a pasted command still asks y/N
-    assert f"  python agents/run.py --set {name} --mode record --max-cost 10\n" in out
+    assert f"  .venv-agents/bin/python agents/run.py --set {name} --mode record --max-cost 10\n" in out
     assert "--yes" not in out
     assert "Dry run: nothing was called." in out
     assert not dirs["store"].exists() and not dirs["traces"].exists()
@@ -215,14 +215,14 @@ def test_replay_miss_names_the_right_record_command(dirs, capsys):
     out = capsys.readouterr()
     text = out.out + out.err
     assert "replay miss" in text
-    assert "record with: python agents/run.py --engine hand --desk pattern:chain --tickets t001 --mode record" in text
+    assert "record with: .venv-agents/bin/python agents/run.py --engine hand --desk pattern:chain --tickets t001 --mode record" in text
     assert not (dirs["traces"] / "patterns" / "hand-chain-t001.json").exists()   # an incomplete run writes no trace
 
 
 def test_replay_miss_command_keeps_a_raised_max_calls(dirs, capsys):
     assert go(["--engine", "hand", "--desk", "single", "--tickets", "t007", "--max-calls", "14"], dirs) == 1
     text = "".join(capsys.readouterr())
-    assert "record with: python agents/run.py --engine hand --desk single --tickets t007 --mode record --max-calls 14" in text
+    assert "record with: .venv-agents/bin/python agents/run.py --engine hand --desk single --tickets t007 --mode record --max-calls 14" in text
 
 
 def _trace_files(d: Path) -> dict[str, str]:
@@ -533,7 +533,7 @@ def test_absorbed_replay_miss_is_incomplete(dirs, monkeypatch, capsys):
     monkeypatch.setitem(core.ENGINES, "hand", core.Engine(single=_absorbing(1), supervisor=_absorbing(1)))
     assert go(["--engine", "hand", "--desk", "single", "--tickets", "t001"], dirs) == 1
     out = capsys.readouterr().out
-    assert "replay miss; record with: python agents/run.py --engine hand --desk single --tickets t001 --mode record" in out
+    assert "replay miss; record with: .venv-agents/bin/python agents/run.py --engine hand --desk single --tickets t001 --mode record" in out
     assert not list((dirs["traces"] / "desk-hand").glob("*.json"))
 
 
@@ -610,7 +610,7 @@ def test_refresh_dry_run_says_every_call_is_paid(dirs, capsys):
     out = capsys.readouterr().out
     assert "every call is paid" in out and "every call is paid" not in plain
     assert "--tickets" in out.split("--refresh:")[1].splitlines()[0]     # refresh only the failed tickets
-    assert "  python agents/run.py --set desk-sdk --mode record --refresh --max-cost 10\n" in out and "--yes" not in out   # R71
+    assert "  .venv-agents/bin/python agents/run.py --set desk-sdk --mode record --refresh --max-cost 10\n" in out and "--yes" not in out   # R71
     # the estimate is unchanged: it already assumes every call is paid
     pick = lambda text: [l for l in text.splitlines() if "typical cost $" in l]   # noqa: E731
     assert pick(out) == pick(plain)
@@ -650,17 +650,14 @@ def test_failed_refresh_keeps_the_old_recordings_and_trace(dirs, monkeypatch, ca
     assert go(argv, dirs) == 0                                      # and it still replays
 
 
-def test_patching_the_facade_reaches_the_parts(monkeypatch):
-    """M3: run.py re-exports its parts' names. Patching one on `run` patches it in every part that holds it,
-    so the code sees the patch wherever it looks the name up; undoing the patch restores them all."""
+def test_run_re_exports_its_parts_and_a_patch_goes_on_the_owner(monkeypatch):
+    """run.py re-exports its parts' names as plain names (run.X is the part's own X). A test patches the module
+    whose code looks the name up: trace_doc in run_traces reads run_traces.MODEL."""
     import run_sets
     import run_traces
-    was = run_sets.MODEL
-    monkeypatch.setattr(run, "MODEL", "claude-patched")
-    assert (run.MODEL, run_sets.MODEL, run_traces.MODEL) == ("claude-patched",) * 3
-    sentinel = object()
-    monkeypatch.setattr(run, "preflight", sentinel)
-    assert run_engines.preflight is sentinel
-    monkeypatch.undo()
-    assert (run.MODEL, run_sets.MODEL, run_traces.MODEL) == (was,) * 3
-    assert run_engines.preflight is run.preflight is not sentinel
+    assert run.preflight is run_engines.preflight and run.trace_doc is run_traces.trace_doc
+    assert run.MODEL == run_sets.MODEL == run_traces.MODEL
+    monkeypatch.setattr(run_traces, "MODEL", "claude-patched")
+    doc = run.trace_doc(set_name="desk-hand", engine_name="hand", desk="single", ticket_id="t001", mode="replay",
+                        result={"trace": []}, spent=0.0, paid_calls=0)
+    assert doc["model"] == "claude-patched"

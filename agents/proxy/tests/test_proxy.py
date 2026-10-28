@@ -585,7 +585,7 @@ def test_token_budget_line_is_in_the_key():
 
 def test_record_command_can_be_named(running):
     """run.py names its own record command in a miss (one proxy run per ticket, R25)."""
-    cmd = "python agents/run.py --engine hand --desk single --tickets t001 --mode record"
+    cmd = ".venv-agents/bin/python agents/run.py --engine hand --desk single --tickets t001 --mode record"
     _, url, *_ = running("replay", set_name="desk-hand", record_command=cmd)
     r = post(url, BODY)
     assert r.status_code == 404

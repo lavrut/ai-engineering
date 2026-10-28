@@ -62,7 +62,7 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-for sub in ("agents/desk/python", "llms/python"):
+for sub in ("llms/python", "agents/desk/python"):   # agents folders end up first
     sys.path.insert(0, str(REPO / sub))
 
 import desk_core as core  # noqa: E402

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The AI Agents track's design aids: PatternStepper (lessons 2-4) and AgentTrace (lessons 5, 8, 9).
 // Every number an aid shows is pinned here as a literal taken from agents/data/derived/*.json
-// (python agents/derive.py; engine_scores.json from python agents/evals/run_evals.py).
+// (.venv-agents/bin/python agents/derive.py; engine_scores.json from .venv-agents/bin/python agents/evals/run_evals.py).
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -171,11 +171,11 @@ describe('pattern stepper data', () => {
 
   it('falls back to "No recorded run yet" and the record command for a missing run', () => {
     const json = structuredClone(data.patterns) as PatternsJson;
-    json.patterns.chain.t001.hand = { recorded: false, command: 'python agents/run.py --engine hand --desk pattern:chain --tickets t001 --mode record --max-cost 10' };
+    json.patterns.chain.t001.hand = { recorded: false, command: '.venv-agents/bin/python agents/run.py --engine hand --desk pattern:chain --tickets t001 --mode record --max-cost 10' };
     const q = patternStepperProps(json);
     expect(q.runs.chain.t001.hand).toEqual({
       recorded: false,
-      command: `python agents/run.py --engine hand --desk pattern:chain --tickets t001 --mode record --max-cost 10\n${AGENTS_DERIVE_COMMAND}`,
+      command: `.venv-agents/bin/python agents/run.py --engine hand --desk pattern:chain --tickets t001 --mode record --max-cost 10\n${AGENTS_DERIVE_COMMAND}`,
     });
   });
 });
@@ -223,7 +223,7 @@ describe('PatternStepper', () => {
 
   it('shows No recorded run yet with the command for a missing run', () => {
     const json = structuredClone(data.patterns) as PatternsJson;
-    json.patterns.chain.t001.hand = { recorded: false, command: 'python agents/run.py --engine hand --desk pattern:chain --tickets t001 --mode record --max-cost 10' };
+    json.patterns.chain.t001.hand = { recorded: false, command: '.venv-agents/bin/python agents/run.py --engine hand --desk pattern:chain --tickets t001 --mode record --max-cost 10' };
     render(<PatternStepper {...patternStepperProps(json)} />);
     expect(screen.getByText('No recorded run yet')).toBeTruthy();
     expect(document.querySelector('pre')?.textContent).toContain('--desk pattern:chain --tickets t001 --mode record');
@@ -338,10 +338,10 @@ describe('agent trace data', () => {
 
   it('falls back to "No recorded run yet" for a missing run', () => {
     const json = structuredClone(data.traces) as TracesJson;
-    json.runs.single.sdk.t001 = { recorded: false, command: 'python agents/run.py --engine sdk --desk single --tickets t001 --mode record --max-cost 10' };
+    json.runs.single.sdk.t001 = { recorded: false, command: '.venv-agents/bin/python agents/run.py --engine sdk --desk single --tickets t001 --mode record --max-cost 10' };
     expect(agentTraceProps(json).runs.single.sdk.t001).toEqual({
       recorded: false,
-      command: `python agents/run.py --engine sdk --desk single --tickets t001 --mode record --max-cost 10\n${AGENTS_DERIVE_COMMAND}`,
+      command: `.venv-agents/bin/python agents/run.py --engine sdk --desk single --tickets t001 --mode record --max-cost 10\n${AGENTS_DERIVE_COMMAND}`,
     });
   });
 });
@@ -411,7 +411,7 @@ describe('AgentTrace', () => {
 
   it('shows No recorded run yet with the command for a missing run', () => {
     const json = structuredClone(data.traces) as TracesJson;
-    json.runs.supervisor.hand.t001 = { recorded: false, command: 'python agents/run.py --engine hand --desk supervisor --tickets t001 --mode record --max-cost 10' };
+    json.runs.supervisor.hand.t001 = { recorded: false, command: '.venv-agents/bin/python agents/run.py --engine hand --desk supervisor --tickets t001 --mode record --max-cost 10' };
     render(<AgentTrace {...agentTraceProps(json)} />);
     expect(screen.getByText('No recorded run yet')).toBeTruthy();
     expect(document.querySelector('pre')?.textContent).toContain('--desk supervisor --tickets t001 --mode record');

@@ -9,7 +9,7 @@ about the learner-facing deployment, which stays HTTP-only (with OAuth) for ever
 it and changes nothing there (ruling R48).
 
 Run (by the Go engine, never by hand):
-    python agents/desk/python/ops_stdio.py --labels PATH
+    .venv-agents/bin/python agents/desk/python/ops_stdio.py --labels PATH
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO / "mcp" / "python"))
+sys.path.append(str(REPO / "mcp" / "python"))   # after the agents folders: both tracks have a derive.py
 
 from ops_server import build_ops_server  # noqa: E402  (import only, never edited)
 
