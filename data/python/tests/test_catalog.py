@@ -199,7 +199,7 @@ def test_live_lineage_carries_the_contract_versions():
     lin = json.loads((K.LINEAGE).read_text(encoding="utf-8"))
     governed = {(e["from"], e["to"]): (e["contract"], e["version"]) for e in lin["edges"]}
     assert governed[("tickets", "mcp-read-server")] == ("tickets.v1", "1")
-    assert governed[("tickets", "agents-eval")] == ("tickets.v1", "1")
+    assert governed[("tickets", "agents-eval")] == ("tickets.v2", "2")  # moved in the capstone
     assert governed[("complaints", "mcp-read-server")] == ("complaints.v1", "1")
     assert governed[("agents_traces", "agents-eval")] == ("agent-traces.v1", "1")
 

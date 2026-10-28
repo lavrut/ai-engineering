@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-quality — runs the v1 contracts against the live datasets and writes verdicts.json.
+quality — runs the contracts against the live datasets and writes verdicts.json.
 
 A contract is only a promise until something checks it against the real file.
 This runner does that for the three datasets the course's tracks share, in
@@ -22,6 +22,11 @@ The agent traces are one JSON object per file, so agent-traces.v1 validates each
 file as a one-row dataset (ruling D3); verdicts.json keeps one entry per trace
 set (agent-traces/<set>), rolling its files up rule by rule, which keeps the
 file small and still names the first failing file.
+
+The capstone adds two entries for tickets.v2: `tickets-v2`, the migrated file
+(data/data/tickets.v2.jsonl), which passes, and `tickets-v2-before`, the v1 file
+judged by v2, which fails on the renamed field. That failure is the point, so the
+entry carries `"expect": "fail"` and the run counts it as fine while it fails.
 """
 from __future__ import annotations
 
@@ -43,6 +48,14 @@ DATASETS = [  # fixed list, never a crawl: (id, contract file, dataset path from
     ("complaints", "complaints.v1.yaml", "ml/data/complaints.jsonl"),
 ]
 TRACES = ("agent-traces", "agent-traces.v1.yaml", "agents/data/traces")  # every <set>/*.json
+CAPSTONE = [  # (id, contract file, dataset path, expect): before and after the breaking change
+    ("tickets-v2", "tickets.v2.yaml", "data/data/tickets.v2.jsonl", None),
+    ("tickets-v2-before", "tickets.v2.yaml", "llms/data/tickets.jsonl", "fail"),
+]
+# A derived file is as fresh as the file it is derived from (migrate_tickets.py --check ties
+# the two byte for byte), so its age is its source's. This also keeps verdicts.json the same
+# before and after the derived file's own commit.
+AGE_FROM = {"data/data/tickets.v2.jsonl": "llms/data/tickets.jsonl"}
 
 
 # ── 2. Freshness from git, as of a date ─────────────────────────────────────
@@ -121,16 +134,21 @@ def _entry(contract_name: str, path: str, verdicts: list[dict], age: float | Non
             "verdicts": verdicts, "ok": all(x["ok"] for x in verdicts)}
 
 
+def as_expected(entry: dict) -> bool:
+    """An entry is fine when it passes, or when it is a recorded break (`expect: fail`) that fails."""
+    return entry["ok"] != (entry.get("expect") == "fail")
+
+
 def build(as_of: date) -> dict:
     """Every dataset's verdicts as of a date, keyed by dataset id; trace sets as agent-traces/<set>.
 
     A trace-set entry also carries `files`, the number of trace files rolled up.
     """
     datasets = {}
-    for ds_id, name, rel in DATASETS:
-        path, age = ROOT / rel, git_age_days(ROOT / rel, as_of)
+    for ds_id, name, rel, expect in [(*d, None) for d in DATASETS] + CAPSTONE:
+        path, age = ROOT / rel, git_age_days(ROOT / AGE_FROM.get(rel, rel), as_of)
         verdicts = C.validate(C.load_contract(CONTRACTS / name), C.read_rows(path), file_age_days=age)
-        datasets[ds_id] = _entry(name, rel, verdicts, age)
+        datasets[ds_id] = _entry(name, rel, verdicts, age, **({"expect": expect} if expect else {}))
     prefix, name, rel = TRACES
     contract = C.load_contract(CONTRACTS / name)
     for set_dir in sorted(p for p in (ROOT / rel).iterdir() if p.is_dir()):
@@ -201,13 +219,14 @@ def _table(doc: dict) -> bool:
     print(f"as of {doc['as_of']}")
     for ds_id, entry in doc["datasets"].items():
         bad = sum(1 for x in entry["verdicts"] if not x["ok"])
+        note = f" (expected to {entry['expect']})" if entry.get("expect") else ""
         print(f"{'OK ' if entry['ok'] else 'FAIL'} {ds_id} ({entry['contract']}): "
-              f"{len(entry['verdicts']) - bad} ok, {bad} failed")
-    return all(e["ok"] for e in doc["datasets"].values())
+              f"{len(entry['verdicts']) - bad} ok, {bad} failed{note}")
+    return all(as_expected(e) for e in doc["datasets"].values())
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Run the v1 contracts on the live datasets.")
+    ap = argparse.ArgumentParser(description="Run the contracts on the live datasets.")
     ap.add_argument("--check", action="store_true", help="fail if verdicts.json differs from a rebuild as of its as_of")
     ap.add_argument("--live", action="store_true", help="judge freshness as of today and write nothing")
     ap.add_argument("--as-of", type=date.fromisoformat, default=None, metavar="YYYY-MM-DD",

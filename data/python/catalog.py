@@ -154,18 +154,40 @@ def _contract_file(contracts: Path, contract_id: str) -> Path:
     return contracts / f"{contract_id}.yaml"
 
 
+def base_id(contract_id: str) -> str:
+    """tickets.v2 -> tickets: the name every major version of a contract shares."""
+    return contract_id.rsplit(".v", 1)[0]
+
+
+def family(contracts: list[dict], contract_id: str) -> list[dict]:
+    """Every major version of a dataset's contract, in version order (tickets.v1, tickets.v2).
+
+    A breaking change leaves the old major in place until its sunset, so a dataset's
+    readers are spread over the versions: each declares the one it reads.
+    """
+    same = [c for c in contracts if base_id(c["info"]["id"]) == base_id(contract_id)]
+    return sorted(same, key=lambda c: (len(c["info"]["version"]), c["info"]["version"]))
+
+
+def _contracts(contracts: Path) -> list[dict]:
+    return [C.load_contract(p) for p in sorted(Path(contracts).glob("*.yaml"))]
+
+
 def catalog(root: Path, datasets: list[dict] | None = None) -> dict:
     """{id: {path, files, bytes, rows, schema, producer, consumers, contract, last_commit, missing, description}}.
 
-    `consumers` lists tracks, from the contract when there is one, else the declared list.
+    `consumers` lists tracks, from every version of the contract when there is one (a
+    reader on v2 still reads this dataset), else the declared list.
     """
     root = Path(root)
     contracts = root / "data" / "contracts"
+    loaded = _contracts(contracts)
     out = {}
     for ds in datasets if datasets is not None else DATASETS:
         found = files(root, ds["path"])
         if ds.get("contract"):
-            names = [c["name"] for c in C.load_contract(_contract_file(contracts, ds["contract"]))["consumers"]]
+            versions = family(loaded, ds["contract"]) or [C.load_contract(_contract_file(contracts, ds["contract"]))]
+            names = [c["name"] for v in versions for c in v["consumers"]]
         else:
             names = ds.get("consumers", [])
         rows = 0
@@ -196,8 +218,10 @@ def lineage(cat: dict, contracts: list[dict], datasets: list[dict] | None = None
     """Producers -> datasets -> consumers, with the contract and version on each edge.
 
     A producer edge carries the dataset's contract and its version; a consumer edge
-    carries the version that consumer declares (ruling D2). Datasets without a
-    contract take their declared consumers, with no contract and no version.
+    carries the contract version that consumer declares (ruling D2), from whichever
+    major lists it: after the capstone, tickets -> mcp-read-server is tickets.v1 and
+    tickets -> agents-eval is tickets.v2. Datasets without a contract take their
+    declared consumers, with no contract and no version.
     """
     by_contract = {c["info"]["id"]: c for c in contracts}
     declared = {d["id"]: d.get("consumers", []) for d in (datasets if datasets is not None else DATASETS)}
@@ -211,7 +235,8 @@ def lineage(cat: dict, contracts: list[dict], datasets: list[dict] | None = None
         edges.append({"from": producer, "to": ds_id, "contract": cid,
                       "version": governing["info"]["version"] if governing else None})
         if governing:
-            readers = [(c["name"], cid, c["version"]) for c in governing["consumers"]]
+            readers = [(c["name"], v["info"]["id"], c["version"])
+                       for v in family(contracts, cid) for c in v["consumers"]]
         else:
             readers = [(name, None, None) for name in declared.get(ds_id, [])]
         for name, rid, version in readers:
@@ -226,7 +251,7 @@ def missing_versions(contracts: Path = CONTRACTS) -> list[str]:
     out = []
     for path in sorted(Path(contracts).glob("*.yaml")):
         doc = C.load_contract(path)
-        base = doc["info"]["id"].rsplit(".v", 1)[0]
+        base = base_id(doc["info"]["id"])
         for c in doc["consumers"]:
             want = f"{base}.v{c['version']}.yaml"
             if not (Path(contracts) / want).is_file():
@@ -241,8 +266,7 @@ def _text(doc: dict) -> str:
 
 def build(root: Path = ROOT) -> tuple[dict, dict]:
     cat = catalog(root)
-    contracts = [C.load_contract(p) for p in sorted((Path(root) / "data" / "contracts").glob("*.yaml"))]
-    return cat, lineage(cat, contracts)
+    return cat, lineage(cat, _contracts(Path(root) / "data" / "contracts"))
 
 
 def write() -> tuple[dict, dict]:

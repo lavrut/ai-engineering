@@ -63,7 +63,8 @@ def test_contract_values():
     assert t["quality"] == {"row_count": {"min": 60, "max": 60}, "unique": ["id"],
                             "enum_coverage": ["category", "priority"]}
     assert t["info"]["owner"] == "llms"
-    assert [(c["name"], c["version"]) for c in t["consumers"]] == [("mcp-read-server", "1"), ("agents-eval", "1")]
+    assert [(c["name"], c["version"]) for c in t["consumers"]] == [("mcp-read-server", "1")]  # agents-eval moved to v2
+    assert t["info"]["status"] == "deprecated" and t["info"]["sunset"] == "2027-01-31"
     c = C.load_contract(CONTRACTS / "complaints.v1.yaml")
     assert c["info"]["owner"] == "ml" and c["quality"]["row_count"] == {"min": 3600, "max": 3600}
     assert [(x["name"], x["version"]) for x in c["consumers"]] == [("mcp-read-server", "1")]
@@ -72,7 +73,8 @@ def test_contract_values():
     assert {"engine", "desk", "ticket", "trace", "proxy_calls", "errors"} <= {f["name"] for f in a["schema"]["fields"]}
     assert [(x["name"], x["version"]) for x in a["consumers"]] == [("agents-eval", "1")]
     for doc in (t, c, a):
-        assert doc["servicing"]["freshness"]["max_age_days"] == 365 and doc["info"]["status"] == "active"
+        assert doc["servicing"]["freshness"]["max_age_days"] == 365
+    assert c["info"]["status"] == a["info"]["status"] == "active"
 
 
 @pytest.mark.parametrize("name", [n for n, _ in LIVE])
@@ -87,4 +89,4 @@ def test_contract_sections_are_numbered(name):
 
 def test_exports_are_current(capsys):
     assert C.export_check() == 0
-    assert "exports: 3 current, 0 stale" in capsys.readouterr().out
+    assert "exports: 4 current, 0 stale" in capsys.readouterr().out

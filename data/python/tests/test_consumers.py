@@ -1,12 +1,15 @@
 """Consumer-contract tests: each consumer reads the path its contract governs, and what it reads holds.
 
-The consumers are other tracks' code, imported by file path and never edited:
-the MCP read server's ticket source (mcp/core/python/lumen_core/tickets.py) and
-the agents eval's ticket loader (agents/desk/python/desk_core.py). If either
-moves to another file, or the file stops meeting tickets.v1, these fail first.
+The MCP read server is other tracks' code, imported by file path and never
+edited: its ticket source (mcp/core/python/lumen_core/tickets.py) reads tickets.v1.
+The agents eval moved to tickets.v2 in the capstone, through the shim
+data/python/consumers/agents_eval_v2.py; its own loader (agents/desk/python/desk_core.py)
+still reads the v1 file, which must therefore keep meeting tickets.v1 until the
+sunset. If a reader moves to another file, or its file stops meeting the version
+it declares, these fail first.
 
 The injection ticket t061 (mcp/data/injection.jsonl) is a canary both consumers
-add on purpose; it is outside tickets.v1's scope, so these tests leave it out.
+add on purpose; it is outside every tickets contract, so these tests leave it out.
 """
 import importlib
 import sys
@@ -22,6 +25,7 @@ import contract as C  # noqa: E402
 
 ROOT = HERE.parents[2]
 TICKETS_V1 = ROOT / "data" / "contracts" / "tickets.v1.yaml"
+TICKETS_V2 = ROOT / "data" / "contracts" / "tickets.v2.yaml"
 INJECTION_ID = "t061"  # out of contract scope (see the module docstring)
 
 
@@ -57,17 +61,25 @@ def test_mcp_read_server_reads_tickets_v1(isolated):
     assert_all_ok(C.validate(contract, rows))
 
 
-def test_agents_eval_reads_tickets_v1(isolated):
+def test_agents_eval_reads_tickets_v2(isolated):
+    shim = importlib.import_module("consumers.agents_eval_v2")
+    contract = C.load_contract(TICKETS_V2)
+    want = governed_path(contract, "agents-eval")
+    assert shim.SOURCE == want, f"reads {shim.SOURCE}, the contract governs {want}"
+    read = C.read_rows(shim.SOURCE)
+    assert_all_ok(C.validate(contract, read))
+    picked = [t for t in shim.load_eval_tickets_v2() if t["id"] != INJECTION_ID]
+    assert len(picked) == 12
+    assert all(shim.to_v1_shape(r) in picked for r in read if r["id"] in {t["id"] for t in picked})
+    assert len({t["id"] for t in picked} & {r["id"] for r in read}) == 12  # every eval ticket is a v2 row
+
+
+def test_agents_desk_loader_still_reads_a_v1_file(monkeypatch, isolated):
     # desk_core imports mcp/python/agent.py at module level for the live desk runs, which needs
     # the MCP SDK; the ticket loader never touches it, so a stub stands in and nothing is installed.
-    sys.modules["agent"] = types.ModuleType("agent")
+    monkeypatch.setitem(sys.modules, "agent", types.ModuleType("agent"))
     sys.path.insert(0, str(ROOT / "agents" / "desk" / "python"))
     desk_core = importlib.import_module("desk_core")
     contract = C.load_contract(TICKETS_V1)
-    want = governed_path(contract, "agents-eval")
-    assert Path(desk_core.LUMEN_TICKETS) == want, f"reads {desk_core.LUMEN_TICKETS}, the contract governs {want}"
-    read = desk_core._rows(desk_core.LUMEN_TICKETS)  # the reader load_eval_tickets uses
-    assert_all_ok(C.validate(contract, read))
-    picked = [t for t in desk_core.load_eval_tickets() if t["id"] != INJECTION_ID]
-    assert len(picked) == 12
-    assert all(t in read for t in picked)  # every eval ticket is a row that passed the contract
+    assert Path(desk_core.LUMEN_TICKETS) == governed_path(contract, "mcp-read-server")
+    assert_all_ok(C.validate(contract, desk_core._rows(desk_core.LUMEN_TICKETS)))

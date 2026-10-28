@@ -100,7 +100,10 @@ def test_verdicts_json_shape():
     assert sets == ["agent-traces/" + p.name for p in sorted((ROOT / "agents" / "data" / "traces").iterdir()) if p.is_dir()]
     assert ds["tickets"]["contract"] == "tickets.v1" and ds["tickets"]["path"] == "llms/data/tickets.jsonl"
     assert ds["agent-traces/desk-sdk"]["files"] == 26
-    for entry in ds.values():
+    for ds_id, entry in ds.items():
+        if ds_id == "tickets-v2-before":  # the capstone's recorded break (test_capstone pins it)
+            assert entry["expect"] == "fail" and entry["ok"] is False and Q.as_expected(entry)
+            continue
         assert entry["ok"] is True and all(x["ok"] for x in entry["verdicts"])
         assert not Path(entry["path"]).is_absolute()
     assert Q.VERDICTS.stat().st_size < 100_000

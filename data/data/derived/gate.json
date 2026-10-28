@@ -1,0 +1,30 @@
+{
+ "consumers": [
+  {
+   "contract_exists": true,
+   "declared": "agent-traces.v1",
+   "name": "agents-eval",
+   "verdicts_ok": true
+  },
+  {
+   "contract_exists": true,
+   "declared": "complaints.v1",
+   "name": "mcp-read-server",
+   "verdicts_ok": true
+  },
+  {
+   "contract_exists": true,
+   "declared": "tickets.v1",
+   "name": "mcp-read-server",
+   "verdicts_ok": true
+  },
+  {
+   "contract_exists": true,
+   "declared": "tickets.v2",
+   "name": "agents-eval",
+   "verdicts_ok": true
+  }
+ ],
+ "ok": true,
+ "reason": "every consumer is green on the version it declares (4 of 4)"
+}
