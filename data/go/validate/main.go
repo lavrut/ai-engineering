@@ -17,7 +17,7 @@ import (
 	"strings"
 )
 
-// ── 7. Command line ─────────────────────────────────────────────────────────
+// ── 9. Command line ──────────────────────────────────────────────────────────
 
 // ageFlag parses like Python's float() and refuses a negative age, as contract.py does.
 type ageFlag struct{ v *float64 }

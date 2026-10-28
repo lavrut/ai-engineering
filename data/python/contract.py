@@ -18,8 +18,8 @@ Free and offline: no model calls.
 A contract has exactly five sections:
     info       id, version, status (active | deprecated), owner (a track), description, sunset
     schema     fields: name, type, required, meaning, and enum or pattern where it applies
-               (a pattern is a full match, like ^...$ in Go's RE2; lookarounds, backreferences,
-               possessive quantifiers and \\A \\Z are rejected so both languages agree)
+               (a pattern is a full match in the allow-list grammar of ruling D7, written in
+               data/fixtures/README.md; \\d \\w \\s are ASCII; anything else is refused)
     quality    row_count {min, max}, unique [fields], enum_coverage [fields]
     servicing  freshness {max_age_days}
     consumers  name, version, reads
@@ -104,40 +104,149 @@ def _check_info(info: Any) -> None:
         _text(info, "generated_at", "info")
 
 
-def _unsupported(pat: str) -> str | None:
-    """Name the first construct Python's re has and Go's RE2 lacks, or None.
+# A pattern is checked against an allow-list grammar by the same small tokenizer in
+# Python and Go (ruling D7), so a pattern either means the same thing in both engines
+# or is refused by both. \d \w \s are rewritten to explicit ASCII classes, ^ and $ are
+# dropped (the match is already full), and the rest is passed through unchanged.
+PATTERN_META = ".*+?()[]{}|^$\\-"
+CLASS_ESCAPES = "dDwWsS"
+_MAX = "\\U0010ffff"  # Go writes \x{10FFFF}
+_CLASS_OUT = {"d": "[0-9]", "D": "[^0-9]", "w": "[0-9A-Za-z_]", "W": "[^0-9A-Za-z_]",
+              "s": "[ \\t\\n\\r\\f]", "S": "[^ \\t\\n\\r\\f]"}
+_CLASS_IN = {"d": "0-9", "w": "0-9A-Za-z_", "s": " \\t\\n\\r\\f",
+             "D": "\\x00-\\x2f\\x3a-" + _MAX,
+             "W": "\\x00-\\x2f\\x3a-\\x40\\x5b-\\x5e\\x60\\x7b-" + _MAX,
+             "S": "\\x00-\\x08\\x0b\\x0e-\\x1f\\x21-" + _MAX}
+_MAX_REPEAT = 1000
 
-    A contract pattern is a full match (re.fullmatch here; ^...$ in RE2), so
-    the two engines agree on the subset this lets through.
-    """
-    in_class, i = False, 0
-    while i < len(pat):
-        c = pat[i]
-        nxt = pat[i + 1] if i + 1 < len(pat) else ""
+
+def _bad(tok: str):
+    raise ContractError(f"invalid pattern: {tok}")
+
+
+def _class_lit(c: str) -> str:
+    return "\\" + c if c in "\\]^-[" else c
+
+
+def _bracket(p: str, i: int) -> tuple[str, str, int]:
+    """One bracket class from p[i] == '[': (source, engine form, index after it)."""
+    j, neg = i + 1, ""
+    if p[j:j + 1] == "^":
+        j, neg = j + 1, "^"
+    items = []  # (kind, char): kind is lit, esc (a class escape) or dash (an unescaped -)
+    first = j
+    while True:
+        if j >= len(p):
+            _bad("[")
+        c = p[j]
+        if c == "]":
+            if j == first:
+                _bad(p[i:j + 1])
+            break
+        if c == "[":
+            _bad("[")
         if c == "\\":
-            if nxt in "AZ":
-                return f"\\{nxt} anchor"
-            if nxt in "123456789":
-                return f"backreference \\{nxt}"
-            i += 2
+            e = p[j + 1:j + 2]
+            if e and e in CLASS_ESCAPES:
+                items.append(("esc", e))
+            elif e and e in PATTERN_META:
+                items.append(("lit", e))
+            else:
+                _bad("\\" + e)
+            j += 2
             continue
-        if in_class:
-            in_class = c != "]"
+        items.append(("dash" if c == "-" else "lit", c))
+        j += 1
+    out, k = [], 0
+    while k < len(items):
+        kind, c = items[k]
+        if kind != "esc" and k + 2 < len(items) and items[k + 1][0] == "dash":
+            hi_kind, hi = items[k + 2]
+            if hi_kind == "esc" or ord(c) > ord(hi):
+                _bad(f"{c}-{hi}")
+            out.append(f"{_class_lit(c)}-{_class_lit(hi)}")
+            k += 3
+            continue
+        if kind == "dash" and 0 < k < len(items) - 1:
+            _bad("-")
+        out.append(_CLASS_IN[c] if kind == "esc" else _class_lit(c))
+        k += 1
+    return p[i:j + 1], "[" + neg + "".join(out) + "]", j + 1
+
+
+def _tokenize(p: str) -> list[tuple[str, str]]:
+    """(source token, engine form) pairs; ContractError naming the first token outside D7."""
+    toks: list[tuple[str, str]] = []
+    i, depth, prev = 0, 0, ""
+    while i < len(p):
+        c = p[i]
+        kind = "atom"
+        if c == "\\":
+            e = p[i + 1:i + 2]
+            if not e or (e not in PATTERN_META and e not in CLASS_ESCAPES):
+                _bad("\\" + e)
+            tok = (p[i:i + 2], _CLASS_OUT.get(e, p[i:i + 2]))
         elif c == "[":
-            in_class = True
-            if nxt == "^":
-                i += 1
-            if pat[i + 1:i + 2] == "]":
-                i += 1
-        elif c == "(" and nxt == "?":
-            for tok, name in (("=", "lookahead"), ("!", "lookahead"), ("<=", "lookbehind"),
-                              ("<!", "lookbehind"), (">", "atomic group"), ("P=", "backreference")):
-                if pat.startswith(tok, i + 2):
-                    return f"{name} (?{tok}"
-        elif c in "*+?}" and nxt == "+":
-            return f"possessive quantifier {c}+"
-        i += 1
-    return None
+            src, eng, nxt = _bracket(p, i)
+            tok = (src, eng)
+        elif c == "(":
+            if p.startswith("(?:", i):
+                tok = ("(?:", "(?:")
+            elif p.startswith("(?", i):
+                _bad(p[i:i + 3])
+            else:
+                tok = ("(", "(")
+            depth, kind = depth + 1, "open"
+        elif c == ")":
+            if depth == 0:
+                _bad(")")
+            depth, tok = depth - 1, (")", ")")
+        elif c == "|":
+            tok, kind = ("|", "|"), "alt"
+        elif c in "*+?{":
+            src = c
+            if c == "{":
+                m = re.match(r"\{([0-9]+)(,([0-9]*))?\}", p[i:])
+                if not m:
+                    close = p.find("}", i)
+                    _bad(p[i:close + 1] if close >= 0 else "{")
+                src = m.group(0)
+                lo, hi = int(m.group(1)), m.group(3)
+                if lo > _MAX_REPEAT or (hi and (int(hi) < lo or int(hi) > _MAX_REPEAT)):
+                    _bad(src)
+            if prev != "atom":
+                _bad(src)
+            if p[i + len(src):i + len(src) + 1] in ("?", "+") and i + len(src) < len(p):
+                _bad(src + p[i + len(src)])
+            tok, kind = (src, src), "quant"
+        elif c == "^":
+            if toks:
+                _bad("^")
+            tok, kind = ("^", ""), "anchor"
+        elif c == "$":
+            if i != len(p) - 1:
+                _bad("$")
+            tok, kind = ("$", ""), "anchor"
+        elif c in "]}":
+            _bad(c)
+        else:
+            tok = (c, c)
+        i = nxt if c == "[" else i + len(tok[0])
+        toks.append(tok)
+        prev = kind
+    if depth:
+        _bad("(")
+    return toks
+
+
+def pattern_tokens(p: str) -> list[str]:
+    """The pattern's tokens under ruling D7, or ContractError("invalid pattern: <token>")."""
+    return [src for src, _ in _tokenize(p)]
+
+
+def compile_pattern(p: str) -> re.Pattern:
+    """Compile a D7 pattern for fullmatch: ASCII classes, anchors dropped."""
+    return re.compile("".join(eng for _, eng in _tokenize(p)), re.ASCII)
 
 
 def _check_schema(schema: Any) -> None:
@@ -169,13 +278,12 @@ def _check_schema(schema: Any) -> None:
                 raise ContractError(f"{where}.pattern needs type string")
             if not isinstance(fld["pattern"], str):
                 raise ContractError(f"{where}.pattern must be a string")
-            bad = _unsupported(fld["pattern"])
-            if bad:
-                raise ContractError(f"{where}.pattern ({name}) uses syntax Go RE2 lacks: {bad}")
             try:
-                re.compile(fld["pattern"])
-            except re.error as e:
-                raise ContractError(f"{where}.pattern is not a valid pattern: {e}") from None
+                compile_pattern(fld["pattern"])
+            except ContractError as e:
+                raise ContractError(f"{where}.pattern: {e}") from None
+            except re.error:
+                raise ContractError(f"{where}.pattern: invalid pattern: {fld['pattern']}") from None
 
 
 def _check_quality(quality: Any, fields: dict[str, dict]) -> None:
@@ -233,10 +341,17 @@ def load_contract(path: Path) -> dict:
         text = path.read_text(encoding="utf-8")
     except OSError:
         raise ContractError(f"contract file not found: {path.name}") from None
+    except UnicodeDecodeError:
+        raise ContractError(f"{path.name} is not a valid contract file") from None
     try:
         doc = yaml.load(text, Loader=_Loader)
     except yaml.YAMLError:
-        raise ContractError(f"{path.name} is not valid YAML") from None
+        raise ContractError(f"{path.name} is not a valid contract file") from None
+    return check_contract(doc)
+
+
+def check_contract(doc: Any) -> dict:
+    """Validate a parsed contract (from YAML, or a fixture's JSON); raise ContractError."""
     doc = _mapping(doc, "contract")
     for section in SECTIONS:
         if section not in doc:
@@ -426,7 +541,7 @@ def _field_rules(fld: dict, rows: list[dict]) -> list[dict]:
         ]
         out.append(_verdict("enum", name, *_first(fails, "all values in enum")))
     if "pattern" in fld:
-        rx = re.compile(fld["pattern"])
+        rx = compile_pattern(fld["pattern"])
         fails = [
             f"row {i}: {_show(r[name])} does not match {fld['pattern']}"
             for i, r in enumerate(rows, 1)
@@ -528,6 +643,8 @@ def format_lines(verdicts: list[dict]) -> list[str]:
 # ── 5. Command line ─────────────────────────────────────────────────────────
 def _non_negative(ap: argparse.ArgumentParser, text: str) -> float:
     try:
+        if not text.isascii() or "_" in text:
+            raise ValueError  # float() also takes Unicode digits and 1_0; Go does not
         x = float(text)
     except ValueError:
         ap.error(f"--age-days needs a number, got {text!r}")

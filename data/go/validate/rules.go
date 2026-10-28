@@ -9,7 +9,7 @@ import (
 	"unicode/utf8"
 )
 
-// ── 4. Rows ─────────────────────────────────────────────────────────────────
+// ── 6. Rows ──────────────────────────────────────────────────────────────────
 
 // Rows are the parsed rows plus what could not be read: a bad line is a problem that
 // Validate turns into one failed parse verdict, never an error that stops the run.
@@ -104,7 +104,7 @@ func ReadRows(path string) Rows {
 	return ParseRows(strings.ReplaceAll(text, "\r", "\n"))
 }
 
-// ── 5. Rules ────────────────────────────────────────────────────────────────
+// ── 7. Rules ─────────────────────────────────────────────────────────────────
 
 // Verdict is one rule's result for one field (or for the dataset when Field is nil).
 type Verdict struct {
@@ -289,7 +289,7 @@ func freshness(c *Contract, age *float64) Verdict {
 	return verdict("freshness", nil, true, fmt.Sprintf("%s days old (max %s)", num(*age), num(limit)))
 }
 
-// ── 6. Verdicts ─────────────────────────────────────────────────────────────
+// ── 8. Verdicts ──────────────────────────────────────────────────────────────
 
 // Validate checks rows against a loaded contract: one verdict per rule and field, sorted
 // by (rule, field). ageDays is the file age the caller computed; nil means unknown.

@@ -172,7 +172,11 @@ func (p *jsonParser) number() (any, error) {
 			p.i = mark
 		}
 	}
-	return Number(p.s[start:p.i]), nil
+	n := Number(p.s[start:p.i])
+	if n.IsInt() && len(strings.TrimPrefix(string(n), "-")) > 4300 {
+		return nil, errJSON // Python's int() refuses more than 4300 digits
+	}
+	return n, nil
 }
 
 func (p *jsonParser) hex4() (rune, bool) {
@@ -607,52 +611,263 @@ func checkInfo(v any) error {
 	return nil
 }
 
-// unsupported names the first construct Python's re has and Go's RE2 lacks, or "";
-// a port of contract.py's _unsupported, scanned by code point as Python does.
-func unsupported(pat string) string {
-	p := []rune(pat)
-	at := func(i int) rune {
-		if i < len(p) {
-			return p[i]
-		}
-		return 0
+// ── 4. Patterns (ruling D7) ─────────────────────────────────────────────────
+// A pattern is checked against an allow-list grammar by the same small tokenizer as
+// contract.py's _tokenize, so a pattern either means the same thing in both engines or is
+// refused by both. \d \w \s become explicit ASCII classes, ^ and $ are dropped (the match
+// is already full), and the rest passes through unchanged.
+const (
+	patternMeta  = `.*+?()[]{}|^$\-`
+	classEscapes = "dDwWsS"
+	maxRepeat    = 1000
+)
+
+var (
+	classOut = map[rune]string{'d': "[0-9]", 'D': "[^0-9]", 'w': "[0-9A-Za-z_]", 'W': "[^0-9A-Za-z_]",
+		's': `[ \t\n\r\f]`, 'S': `[^ \t\n\r\f]`}
+	classIn = map[rune]string{'d': "0-9", 'w': "0-9A-Za-z_", 's': ` \t\n\r\f`,
+		'D': `\x00-\x2f\x3a-\x{10FFFF}`,
+		'W': `\x00-\x2f\x3a-\x40\x5b-\x5e\x60\x7b-\x{10FFFF}`,
+		'S': `\x00-\x08\x0b\x0e-\x1f\x21-\x{10FFFF}`}
+	repeatRe = regexp.MustCompile(`^\{([0-9]+)(,([0-9]*))?\}`)
+)
+
+// badPattern is the fixed refusal: the same text as contract.py, never an engine's error.
+type badPattern string
+
+func (b badPattern) Error() string { return "invalid pattern: " + string(b) }
+
+type patToken struct{ src, eng string }
+
+func classLit(c rune) string {
+	if strings.ContainsRune(`\]^-[`, c) {
+		return `\` + string(c)
 	}
-	inClass := false
-	for i := 0; i < len(p); i++ {
-		c, nxt := p[i], at(i+1)
+	return string(c)
+}
+
+// bracket reads one bracket class from p[i] == '[': its token and the index after it.
+func bracket(p []rune, i int) (patToken, int, error) {
+	j, neg := i+1, ""
+	if j < len(p) && p[j] == '^' {
+		j, neg = j+1, "^"
+	}
+	type item struct {
+		kind byte // l: literal, e: class escape, d: unescaped dash
+		c    rune
+	}
+	var items []item
+	first := j
+	for {
+		if j >= len(p) {
+			return patToken{}, 0, badPattern("[")
+		}
+		c := p[j]
+		if c == ']' {
+			if j == first {
+				return patToken{}, 0, badPattern(string(p[i : j+1]))
+			}
+			break
+		}
+		if c == '[' {
+			return patToken{}, 0, badPattern("[")
+		}
+		if c == '\\' {
+			if j+1 >= len(p) {
+				return patToken{}, 0, badPattern(`\`)
+			}
+			switch e := p[j+1]; {
+			case strings.ContainsRune(classEscapes, e):
+				items = append(items, item{'e', e})
+			case strings.ContainsRune(patternMeta, e):
+				items = append(items, item{'l', e})
+			default:
+				return patToken{}, 0, badPattern(`\` + string(e))
+			}
+			j += 2
+			continue
+		}
+		kind := byte('l')
+		if c == '-' {
+			kind = 'd'
+		}
+		items = append(items, item{kind, c})
+		j++
+	}
+	var out strings.Builder
+	for k := 0; k < len(items); {
+		it := items[k]
+		if it.kind != 'e' && k+2 < len(items) && items[k+1].kind == 'd' {
+			hi := items[k+2]
+			if hi.kind == 'e' || it.c > hi.c {
+				return patToken{}, 0, badPattern(string(it.c) + "-" + string(hi.c))
+			}
+			out.WriteString(classLit(it.c) + "-" + classLit(hi.c))
+			k += 3
+			continue
+		}
+		if it.kind == 'd' && k > 0 && k < len(items)-1 {
+			return patToken{}, 0, badPattern("-")
+		}
+		if it.kind == 'e' {
+			out.WriteString(classIn[it.c])
+		} else {
+			out.WriteString(classLit(it.c))
+		}
+		k++
+	}
+	return patToken{string(p[i : j+1]), "[" + neg + out.String() + "]"}, j + 1, nil
+}
+
+// repeatCount reads a {n,m} bound, capped just above the limit so huge numbers cannot overflow.
+func repeatCount(s string) int {
+	if len(s) > 4 {
+		return maxRepeat + 1
+	}
+	n, _ := strconv.Atoi(s)
+	return n
+}
+
+// tokenize is contract.py's _tokenize, by code point: (source, engine form) per token.
+func tokenize(pat string) ([]patToken, error) {
+	p := []rune(pat)
+	var toks []patToken
+	depth, prev := 0, ""
+	for i := 0; i < len(p); {
+		c, kind, next := p[i], "atom", -1
+		var tok patToken
 		switch {
 		case c == '\\':
-			if nxt == 'A' || nxt == 'Z' {
-				return fmt.Sprintf(`\%c anchor`, nxt)
+			if i+1 >= len(p) {
+				return nil, badPattern(`\`)
 			}
-			if nxt >= '1' && nxt <= '9' {
-				return fmt.Sprintf(`backreference \%c`, nxt)
+			e := p[i+1]
+			if !strings.ContainsRune(patternMeta, e) && !strings.ContainsRune(classEscapes, e) {
+				return nil, badPattern(`\` + string(e))
 			}
-			i++
-		case inClass:
-			inClass = c != ']'
+			src := string(p[i : i+2])
+			tok = patToken{src, src}
+			if s, ok := classOut[e]; ok {
+				tok.eng = s
+			}
 		case c == '[':
-			inClass = true
-			if nxt == '^' {
-				i++
+			t, n, err := bracket(p, i)
+			if err != nil {
+				return nil, err
 			}
-			if at(i+1) == ']' {
-				i++
+			tok, next = t, n
+		case c == '(':
+			rest := string(p[i:])
+			switch {
+			case strings.HasPrefix(rest, "(?:"):
+				tok = patToken{"(?:", "(?:"}
+			case strings.HasPrefix(rest, "(?"):
+				return nil, badPattern(string(p[i:min(i+3, len(p))]))
+			default:
+				tok = patToken{"(", "("}
 			}
-		case c == '(' && nxt == '?':
-			rest := string(p[i+2:])
-			for _, t := range [][2]string{{"=", "lookahead"}, {"!", "lookahead"}, {"<=", "lookbehind"},
-				{"<!", "lookbehind"}, {">", "atomic group"}, {"P=", "backreference"}} {
-				if strings.HasPrefix(rest, t[0]) {
-					return fmt.Sprintf("%s (?%s", t[1], t[0])
+			depth, kind = depth+1, "open"
+		case c == ')':
+			if depth == 0 {
+				return nil, badPattern(")")
+			}
+			depth, tok = depth-1, patToken{")", ")"}
+		case c == '|':
+			tok, kind = patToken{"|", "|"}, "alt"
+		case strings.ContainsRune("*+?{", c):
+			src := string(c)
+			if c == '{' {
+				m := repeatRe.FindStringSubmatch(string(p[i:]))
+				if m == nil {
+					for k := i; k < len(p); k++ {
+						if p[k] == '}' {
+							return nil, badPattern(string(p[i : k+1]))
+						}
+					}
+					return nil, badPattern("{")
+				}
+				src = m[0]
+				lo := repeatCount(m[1])
+				if lo > maxRepeat || (m[3] != "" && (repeatCount(m[3]) < lo || repeatCount(m[3]) > maxRepeat)) {
+					return nil, badPattern(src)
 				}
 			}
-		case strings.ContainsRune("*+?}", c) && nxt == '+':
-			return fmt.Sprintf("possessive quantifier %c+", c)
+			if prev != "atom" {
+				return nil, badPattern(src)
+			}
+			if after := i + len([]rune(src)); after < len(p) && (p[after] == '?' || p[after] == '+') {
+				return nil, badPattern(src + string(p[after]))
+			}
+			tok, kind = patToken{src, src}, "quant"
+		case c == '^':
+			if len(toks) > 0 {
+				return nil, badPattern("^")
+			}
+			tok, kind = patToken{"^", ""}, "anchor"
+		case c == '$':
+			if i != len(p)-1 {
+				return nil, badPattern("$")
+			}
+			tok, kind = patToken{"$", ""}, "anchor"
+		case c == ']' || c == '}':
+			return nil, badPattern(string(c))
+		default:
+			tok = patToken{string(c), string(c)}
 		}
+		if next >= 0 {
+			i = next
+		} else {
+			i += len([]rune(tok.src))
+		}
+		toks = append(toks, tok)
+		prev = kind
 	}
-	return ""
+	if depth > 0 {
+		return nil, badPattern("(")
+	}
+	return toks, nil
 }
+
+// patternTokens is the pattern's tokens under ruling D7, or the fixed refusal.
+func patternTokens(p string) ([]string, error) {
+	toks, err := tokenize(p)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, len(toks))
+	for i, t := range toks {
+		out[i] = t.src
+	}
+	return out, nil
+}
+
+// engineForm is the pattern as handed to RE2, before the full-match wrapper.
+func engineForm(p string) (string, error) {
+	toks, err := tokenize(p)
+	if err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	for _, t := range toks {
+		b.WriteString(t.eng)
+	}
+	return b.String(), nil
+}
+
+// compilePattern compiles a D7 pattern as a full match.
+func compilePattern(p string) (*regexp.Regexp, error) {
+	eng, err := engineForm(p)
+	if err != nil {
+		return nil, err
+	}
+	rx, err := regexp.Compile(`^(?:` + eng + `)$`)
+	if err != nil {
+		return nil, badPattern(p) // e.g. nested repeats over RE2's size limit
+	}
+	return rx, nil
+}
+
+// ── 5. Schema, quality, servicing, consumers ─────────────────────────────────
 
 func checkSchema(v any) ([]Field, error) {
 	schema, err := mapping(v, "schema")
@@ -711,15 +926,12 @@ func checkSchema(v any) ([]Field, error) {
 			if !ok {
 				return nil, cerr("%s.pattern must be a string", where)
 			}
-			if bad := unsupported(pat); bad != "" {
-				return nil, cerr("%s.pattern (%s) uses syntax Go RE2 lacks: %s", where, name, bad)
-			}
-			// compile alone first, so a pattern like "a)(b" is not rescued by the wrapper
-			if _, err := regexp.Compile(pat); err != nil {
-				return nil, cerr("%s.pattern is not a valid pattern: %v", where, err)
+			rx, err := compilePattern(pat)
+			if err != nil {
+				return nil, cerr("%s.pattern: %v", where, err)
 			}
 			f.Pattern, f.HasPattern = pat, true
-			f.rx = regexp.MustCompile(`^(?:` + pat + `)$`)
+			f.rx = rx
 		}
 		out = append(out, f)
 	}
@@ -885,7 +1097,7 @@ func LoadContractFile(path string) (*Contract, error) {
 	}
 	v, err := ParseJSON(string(raw))
 	if err != nil || !utf8.Valid(raw) {
-		return nil, cerr("%s is not valid JSON (Go reads the export: contract.py --export)", filepath.Base(path))
+		return nil, cerr("%s is not a valid contract file", filepath.Base(path))
 	}
 	return LoadContract(v)
 }

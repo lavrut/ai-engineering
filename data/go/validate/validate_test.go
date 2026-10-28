@@ -69,8 +69,8 @@ func rowsOf(t *testing.T, f fixture) Rows {
 
 func TestCasesMatchFixtures(t *testing.T) {
 	cases := loadCases(t)
-	if len(cases) < 18 {
-		t.Fatalf("expected at least 18 cases, got %d", len(cases))
+	if len(cases) < 21 {
+		t.Fatalf("expected at least 21 cases, got %d", len(cases))
 	}
 	seen := map[string]bool{}
 	for _, f := range cases {
@@ -80,11 +80,14 @@ func TestCasesMatchFixtures(t *testing.T) {
 			}
 			seen[f.name] = true
 			cv, _ := f.value.Get("contract")
-			c, err := LoadContract(cv)
-			if err != nil {
-				t.Fatalf("contract: %v", err)
+			var verdicts []Verdict
+			if c, err := LoadContract(cv); err != nil {
+				// a contract that fails to load is one contract verdict, as on the command line
+				verdicts = []Verdict{verdict("contract", nil, false, err.Error())}
+			} else {
+				verdicts = Validate(c, rowsOf(t, f), f.ageDays)
 			}
-			got, _ := json.Marshal(Validate(c, rowsOf(t, f), f.ageDays))
+			got, _ := json.Marshal(verdicts)
 			want, _ := json.Marshal(f.expect)
 			if !bytes.Equal(got, want) {
 				t.Errorf("verdicts differ\n got: %s\nwant: %s", got, want)
@@ -133,10 +136,10 @@ func TestContractErrorsMatchPython(t *testing.T) {
 	 "schema": {"fields": [{"name": "id", "type": "string", "required": true, "meaning": "m", "pattern": %s}]},
 	 "quality": {}, "servicing": {"freshness": {"max_age_days": 3}}, "consumers": []}`
 	for pat, want := range map[string]string{
-		`"(?=x)"`:    "schema.fields[0].pattern (id) uses syntax Go RE2 lacks: lookahead (?=",
-		`"(a)\\1"`:   `schema.fields[0].pattern (id) uses syntax Go RE2 lacks: backreference \1`,
-		`"a++"`:      "schema.fields[0].pattern (id) uses syntax Go RE2 lacks: possessive quantifier ++",
-		`"\\Aab"`:    `schema.fields[0].pattern (id) uses syntax Go RE2 lacks: \A anchor`,
+		`"(?=x)"`:    "schema.fields[0].pattern: invalid pattern: (?=",
+		`"(a)\\1"`:   `schema.fields[0].pattern: invalid pattern: \1`,
+		`"a{,2}"`:    "schema.fields[0].pattern: invalid pattern: {,2}",
+		`"\\Aab"`:    `schema.fields[0].pattern: invalid pattern: \A`,
 		`3`:          "schema.fields[0].pattern must be a string",
 		`"[*+]+\\+"`: "",
 	} {
@@ -156,6 +159,87 @@ func TestContractErrorsMatchPython(t *testing.T) {
 	v, _ := ParseJSON(`{"info": 3}`)
 	if _, err := LoadContract(v); err == nil || err.Error() != "missing section: schema" {
 		t.Errorf("got %v", err)
+	}
+	if _, err := ParseJSON(strings.Repeat("7", 4301)); err == nil {
+		t.Error("an integer over 4300 digits should be invalid JSON, as in Python")
+	}
+}
+
+// Ruling D7: every allowed form, with its tokens and engine form; test_contract.py has the same table.
+var allowedPatterns = []struct {
+	pat    string
+	tokens []string
+	engine string
+}{
+	{"abc", []string{"a", "b", "c"}, "abc"},
+	{"é.", []string{"é", "."}, "é."},
+	{`\.\*\+\?\(\)\[\]\{\}\|\^\$\\\-`, []string{`\.`, `\*`, `\+`, `\?`, `\(`, `\)`, `\[`, `\]`, `\{`, `\}`,
+		`\|`, `\^`, `\$`, `\\`, `\-`}, `\.\*\+\?\(\)\[\]\{\}\|\^\$\\\-`},
+	{`\d\D\w\W\s\S`, []string{`\d`, `\D`, `\w`, `\W`, `\s`, `\S`},
+		`[0-9][^0-9][0-9A-Za-z_][^0-9A-Za-z_][ \t\n\r\f][^ \t\n\r\f]`},
+	{"[abc]", []string{"[abc]"}, "[abc]"},
+	{"[^a-z]", []string{"[^a-z]"}, "[^a-z]"},
+	{`[\d\w\s_]`, []string{`[\d\w\s_]`}, `[0-90-9A-Za-z_ \t\n\r\f_]`},
+	{`[\D]`, []string{`[\D]`}, `[\x00-\x2f\x3a-\x{10FFFF}]`},
+	{`[\W\S]`, []string{`[\W\S]`}, `[\x00-\x2f\x3a-\x40\x5b-\x5e\x60\x7b-\x{10FFFF}\x00-\x08\x0b\x0e-\x1f\x21-\x{10FFFF}]`},
+	{`[-a\]^]`, []string{`[-a\]^]`}, `[\-a\]\^]`},
+	{"(a)(?:b)", []string{"(", "a", ")", "(?:", "b", ")"}, "(a)(?:b)"},
+	{"a|b|", []string{"a", "|", "b", "|"}, "a|b|"},
+	{"a*b+c?", []string{"a", "*", "b", "+", "c", "?"}, "a*b+c?"},
+	{"a{2}b{2,}c{2,5}", []string{"a", "{2}", "b", "{2,}", "c", "{2,5}"}, "a{2}b{2,}c{2,5}"},
+	{"^ab$", []string{"^", "a", "b", "$"}, "ab"},
+	{"", []string{}, ""},
+}
+
+var rejectedPatterns = [][2]string{
+	{"(?i)abc", "(?i"}, {"(?x)a", "(?x"}, {"(?a)a", "(?a"}, {"(?=x)", "(?="}, {"(?!x)", "(?!"},
+	{"(?<=A)B", "(?<"}, {"(?P<n>a)", "(?P"}, {"(?#c)", "(?#"}, {"(?>a)", "(?>"},
+	{`(a)\1`, `\1`}, {`\` + "u0041", `\u`}, {`\N{LATIN SMALL LETTER A}`, `\N`}, {`\p{L}+`, `\p`},
+	{`\Aab`, `\A`}, {`ab\Z`, `\Z`}, {`a\b`, `\b`}, {`a\B`, `\B`}, {`\n`, `\n`}, {`a\`, `\`},
+	{"[[:alpha:]]", "["}, {`[\b]`, `\b`}, {"[]", "[]"}, {"[^]", "[^]"}, {"[abc", "["}, {"[z-a]", "z-a"},
+	{`[\d-z]`, "-"}, {"[a-c-e]", "-"},
+	{"a{,2}", "{,2}"}, {"a{x}", "{x}"}, {"a{2", "{"}, {"a{3,2}", "{3,2}"}, {"a{1001}", "{1001}"},
+	{"a*?", "*?"}, {"a+?", "+?"}, {"a??", "??"}, {"a{2}?", "{2}?"}, {"a++", "++"}, {"a*+", "*+"}, {"a?+", "?+"},
+	{"*a", "*"}, {"a**", "*"}, {"(+)", "+"}, {"a|*", "*"}, {"^*", "*"},
+	{"a^", "^"}, {"a$b", "$"}, {"(a$)", "$"}, {"(a", "("}, {"a)", ")"}, {"a]", "]"}, {"a}", "}"},
+}
+
+func TestAllowedPatternTokens(t *testing.T) {
+	for _, c := range allowedPatterns {
+		toks, err := patternTokens(c.pat)
+		if err != nil || strings.Join(toks, "\x00") != strings.Join(c.tokens, "\x00") || len(toks) != len(c.tokens) {
+			t.Errorf("patternTokens(%q) = %q, %v; want %q", c.pat, toks, err, c.tokens)
+		}
+		if eng, _ := engineForm(c.pat); eng != c.engine {
+			t.Errorf("engineForm(%q) = %q, want %q", c.pat, eng, c.engine)
+		}
+		if _, err := compilePattern(c.pat); err != nil {
+			t.Errorf("compilePattern(%q): %v", c.pat, err)
+		}
+	}
+}
+
+func TestRejectedPatternNamesTheToken(t *testing.T) {
+	for _, c := range rejectedPatterns {
+		_, err := patternTokens(c[0])
+		if err == nil || err.Error() != "invalid pattern: "+c[1] {
+			t.Errorf("patternTokens(%q): %v, want invalid pattern: %s", c[0], err, c[1])
+		}
+	}
+}
+
+func TestClassesAreASCII(t *testing.T) {
+	for _, c := range []struct {
+		pat, s string
+		want   bool
+	}{
+		{`\d`, "٣", false}, {`\w`, "é", false}, {`\s`, " ", false}, {`\s`, "\v", false},
+		{`\S`, "\v", true}, {`[\S]`, "\v", true}, {`[\D]`, "٣", true}, {`\d+`, "42", true},
+	} {
+		rx, _ := compilePattern(c.pat)
+		if rx.MatchString(c.s) != c.want {
+			t.Errorf("%s on %q: want %v", c.pat, c.s, c.want)
+		}
 	}
 }
 
@@ -203,6 +287,12 @@ func TestCLIOutputAndExit(t *testing.T) {
 	if code != 1 || !strings.Contains(out, "FAIL type id: row 1: expected integer, got string\n") ||
 		!strings.HasSuffix(out, "verdicts: 3 ok, 1 failed\n") {
 		t.Errorf("failing run: exit %d\n%s", code, out)
+	}
+	garbled := filepath.Join(dir, "garbled.contract.json")
+	os.WriteFile(garbled, []byte(`{"info": [`), 0o644)
+	out, code = run(garbled, ok)
+	if code != 1 || out != "FAIL contract -: garbled.contract.json is not a valid contract file\nverdicts: 0 ok, 1 failed\n" {
+		t.Errorf("garbled contract: exit %d\n%s", code, out)
 	}
 	broken := filepath.Join(dir, "broken.contract.json")
 	os.WriteFile(broken, []byte(`{"info": 3}`), 0o644)

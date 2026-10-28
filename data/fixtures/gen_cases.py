@@ -5,6 +5,7 @@ gen_cases — writes data/fixtures/cases.jsonl, the cases both validators must r
 Each line: {"name", "contract", "rows" | "dataset", "age_days", "expect"}.
 `expect` is written out by hand below, not computed by contract.py, so the file
 is a second opinion on the validator and the Go twin has something to match.
+A contract that fails to load expects one `contract` verdict, as the CLI prints.
 `dataset` (raw text) replaces `rows` for the cases that test reading the file.
 
 Run (from the repo root):
@@ -39,6 +40,7 @@ def v(rule, fld, ok, detail):
     return {"rule": rule, "field": fld, "ok": ok, "detail": detail}
 
 
+ARABIC_THREE, NBSP, VTAB = chr(0x663), chr(0xA0), chr(0x0B)  # Unicode digit, no-break space, \v
 FRESH = v("freshness", None, True, "unknown: no git date")
 ID = [field("id", "integer", True)]
 
@@ -104,6 +106,18 @@ def cases() -> list[dict]:
               v("pattern", "word", False, 'row 1: "abc1" does not match [a-z]+'),
               v("type", "code", True, "all values are string"), v("type", "word", True, "all values are string")],
              rows=[{"code": "T-0001", "word": "abc1"}, {"code": "T-0001\n", "word": "abc"}, {"code": "x"}]),
+        # ruling D7: \d and \s are ASCII in both languages; a{,2} is refused by both
+        case("digit-class-is-ascii", contract([field("code", pattern="\\d+")]),
+             [FRESH, v("pattern", "code", False, f'row 1: "{ARABIC_THREE}" does not match \\d+'),
+              v("type", "code", True, "all values are string")],
+             rows=[{"code": ARABIC_THREE}, {"code": "42"}]),
+        case("space-class-is-ascii", contract([field("s", pattern="\\s")]),
+             [FRESH, v("pattern", "s", False, f'row 1: "{NBSP}" does not match \\s (+1 more)'),
+              v("type", "s", True, "all values are string")],
+             rows=[{"s": NBSP}, {"s": VTAB}, {"s": " "}, {"s": "\t"}]),
+        case("open-repeat-is-an-invalid-pattern", contract([field("code", pattern="a{,2}")]),
+             [v("contract", None, False, "schema.fields[0].pattern: invalid pattern: {,2}")],
+             rows=[{"code": "aa"}]),
         case("row-count-above-max", contract(ID, {"row_count": {"max": 1}}),
              [FRESH, v("required", "id", True, "present in 2 rows"),
               v("row_count", None, False, "2 rows, above max 1"), v("type", "id", True, "all values are integer")],

@@ -3,6 +3,7 @@
 The verdict dicts are asserted whole, because the Go twin must reproduce
 them exactly. Row numbers in details are 1-based.
 """
+import copy
 import json
 import sys
 from pathlib import Path
@@ -182,7 +183,7 @@ def test_bad_contract_names_section(tmp_path, old, new, needle):
 def test_bad_contract_missing_file_and_bad_yaml(tmp_path):
     with pytest.raises(C.ContractError, match="contract file not found"):
         C.load_contract(tmp_path / "nope.yaml")
-    with pytest.raises(C.ContractError, match="not valid YAML"):
+    with pytest.raises(C.ContractError, match="^c.yaml is not a valid contract file$"):
         C.load_contract(write_contract(tmp_path, "info: [unclosed"))
 
 
@@ -264,22 +265,79 @@ def test_every_fixture_case_reproduces():
         case = json.loads(line)
         names.add(case["name"])
         rows = C.parse_rows(case["dataset"]) if "dataset" in case else case["rows"]
-        got = C.validate(case["contract"], rows, file_age_days=case["age_days"])
+        try:  # a contract that fails to load is one contract verdict, as on the command line
+            con = C.check_contract(copy.deepcopy(case["contract"]))
+        except C.ContractError as e:
+            got = [v("contract", None, False, str(e))]
+        else:
+            got = C.validate(con, rows, file_age_days=case["age_days"])
         assert got == case["expect"], case["name"]
     assert len(names) == len(lines)
 
 
-@pytest.mark.parametrize("pattern,what", [
-    ("(?=x)", "lookahead"), ("(?!x)", "lookahead"), ("(?<=A)B", "lookbehind"), ("(?<!A)B", "lookbehind"),
-    (r"(a)\1", "backreference"), ("a++", "possessive"), ("a*+", "possessive"), ("a?+", "possessive"),
-    (r"\Aab", "anchor"), (r"ab\Z", "anchor"),
-])
-def test_pattern_outside_shared_subset_is_rejected(tmp_path, pattern, what):
+# Ruling D7: every allowed form, with its tokens and engine form; Go's validate_test.go has the same table.
+ALLOWED = [
+    ("abc", ["a", "b", "c"], "abc"),
+    ("é.", ["é", "."], "é."),
+    (r"\.\*\+\?\(\)\[\]\{\}\|\^\$\\\-", [r"\.", r"\*", r"\+", r"\?", r"\(", r"\)", r"\[", r"\]", r"\{", r"\}",
+                                      r"\|", r"\^", r"\$", r"\\", r"\-"], r"\.\*\+\?\(\)\[\]\{\}\|\^\$\\\-"),
+    (r"\d\D\w\W\s\S", [r"\d", r"\D", r"\w", r"\W", r"\s", r"\S"],
+     r"[0-9][^0-9][0-9A-Za-z_][^0-9A-Za-z_][ \t\n\r\f][^ \t\n\r\f]"),
+    ("[abc]", ["[abc]"], "[abc]"),
+    ("[^a-z]", ["[^a-z]"], "[^a-z]"),
+    (r"[\d\w\s_]", [r"[\d\w\s_]"], r"[0-90-9A-Za-z_ \t\n\r\f_]"),
+    (r"[\D]", [r"[\D]"], r"[\x00-\x2f\x3a-\U0010ffff]"),
+    (r"[\W\S]", [r"[\W\S]"], r"[\x00-\x2f\x3a-\x40\x5b-\x5e\x60\x7b-\U0010ffff\x00-\x08\x0b\x0e-\x1f\x21-\U0010ffff]"),
+    (r"[-a\]^]", [r"[-a\]^]"], r"[\-a\]\^]"),
+    ("(a)(?:b)", ["(", "a", ")", "(?:", "b", ")"], "(a)(?:b)"),
+    ("a|b|", ["a", "|", "b", "|"], "a|b|"),
+    ("a*b+c?", ["a", "*", "b", "+", "c", "?"], "a*b+c?"),
+    ("a{2}b{2,}c{2,5}", ["a", "{2}", "b", "{2,}", "c", "{2,5}"], "a{2}b{2,}c{2,5}"),
+    ("^ab$", ["^", "a", "b", "$"], "ab"),
+    ("", [], ""),
+]
+REJECTED = [
+    ("(?i)abc", "(?i"), ("(?x)a", "(?x"), ("(?a)a", "(?a"), ("(?=x)", "(?="), ("(?!x)", "(?!"),
+    ("(?<=A)B", "(?<"), ("(?P<n>a)", "(?P"), ("(?#c)", "(?#"), ("(?>a)", "(?>"),
+    (r"(a)\1", r"\1"), ("\\" + "u0041", r"\u"), (r"\N{LATIN SMALL LETTER A}", r"\N"), (r"\p{L}+", r"\p"),
+    (r"\Aab", r"\A"), (r"ab\Z", r"\Z"), (r"a\b", r"\b"), (r"a\B", r"\B"), (r"\n", r"\n"), ("a\\", "\\"),
+    ("[[:alpha:]]", "["), (r"[\b]", r"\b"), ("[]", "[]"), ("[^]", "[^]"), ("[abc", "["), ("[z-a]", "z-a"),
+    (r"[\d-z]", "-"), ("[a-c-e]", "-"),
+    ("a{,2}", "{,2}"), ("a{x}", "{x}"), ("a{2", "{"), ("a{3,2}", "{3,2}"), ("a{1001}", "{1001}"),
+    ("a*?", "*?"), ("a+?", "+?"), ("a??", "??"), ("a{2}?", "{2}?"), ("a++", "++"), ("a*+", "*+"), ("a?+", "?+"),
+    ("*a", "*"), ("a**", "*"), ("(+)", "+"), ("a|*", "*"), ("^*", "*"),
+    ("a^", "^"), ("a$b", "$"), ("(a$)", "$"), ("(a", "("), ("a)", ")"), ("a]", "]"), ("a}", "}"),
+]
+
+
+@pytest.mark.parametrize("pattern,tokens,engine", ALLOWED)
+def test_allowed_pattern_tokens(pattern, tokens, engine):
+    assert C.pattern_tokens(pattern) == tokens
+    assert C.compile_pattern(pattern).pattern == engine
+
+
+@pytest.mark.parametrize("pattern,token", REJECTED)
+def test_rejected_pattern_names_the_token(pattern, token):
+    with pytest.raises(C.ContractError) as e:
+        C.pattern_tokens(pattern)
+    assert str(e.value) == f"invalid pattern: {token}"
+
+
+def test_rejected_pattern_in_a_contract(tmp_path):
     text = GOOD_YAML.replace("{name: id, type: integer, required: true, meaning: the id}",
-                             "{name: id, type: string, required: true, meaning: x, pattern: '%s'}" % pattern)
+                             "{name: id, type: string, required: true, meaning: x, pattern: 'a{,2}'}")
     with pytest.raises(C.ContractError) as e:
         C.load_contract(write_contract(tmp_path, text))
-    assert "schema.fields[0].pattern" in str(e.value) and what in str(e.value)
+    assert str(e.value) == "schema.fields[0].pattern: invalid pattern: {,2}"
+
+
+def test_classes_are_ascii():
+    assert not C.compile_pattern(r"\d").fullmatch("٣")
+    assert not C.compile_pattern(r"\w").fullmatch("é")
+    assert not C.compile_pattern(r"\s").fullmatch(" ")
+    assert not C.compile_pattern(r"\s").fullmatch("\v")
+    assert C.compile_pattern(r"\S").fullmatch("\v")
+    assert C.compile_pattern(r"[\S]").fullmatch("\v") and C.compile_pattern(r"[\D]").fullmatch("٣")
 
 
 def test_pattern_is_a_full_match():
@@ -287,9 +345,14 @@ def test_pattern_is_a_full_match():
     out = C.validate(c, [{"c": "AB\n", "d": "abc1"}])
     assert v("pattern", "c", False, 'row 1: "AB\\n" does not match ^[A-Z]{2}$') in out
     assert v("pattern", "d", False, 'row 1: "abc1" does not match [a-z]+') in out
-    assert C._unsupported(r"\++") is None and C._unsupported("[*+]+") is None
 
 
 def test_negative_age_days_is_a_usage_error(tmp_path):
     with pytest.raises(SystemExit):
         C.main(["a.yaml", "b.jsonl", "--age-days", "-3"])
+
+
+@pytest.mark.parametrize("age", ["-3", "\u0663", "1_0"])
+def test_bad_age_days_is_a_usage_error(age):
+    with pytest.raises(SystemExit):
+        C.main(["a.yaml", "b.jsonl", "--age-days", age])
