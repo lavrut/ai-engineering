@@ -362,7 +362,7 @@ describe('lesson 4 (the runner): the numbers it states', () => {
     expect(l).toContain('all of `MAX_TOKENS = 2000` output tokens: $0.0436 for the same 40');
     expect(l).toContain('`(900, 700)` for triage and `(1400, 900)` for the judge');
     expect(l).toContain('The cost lands well under the $0.0176 estimate');
-    expect(/"--max-cost", type=float, default=10\.0/.test(lab)).toBe(true);
+    expect(/"--max-cost", type=cost_arg, default=10\.0/.test(lab)).toBe(true);
     expect(l).toContain('A cap, `--max-cost`, $10 by default');
   });
   it('the recorded v2_rules calls: 180 lines averaging about 1,546 input and 215 output tokens', () => {

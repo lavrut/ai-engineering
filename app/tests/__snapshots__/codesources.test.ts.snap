@@ -84,22 +84,22 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
   },
   "harness/08-reliability.mdx #2": {
     "go": {
-      "lines": 136,
-      "sha256": "e9aec58710e8311f7d26964397a2ab3bc944d7d0b022e9e5c406ee29c215a06e",
+      "lines": 140,
+      "sha256": "f94a5168a71f41a0ba862601a78285e04b24816f7fe83bfc519b52fd4c39a363",
     },
     "python": {
-      "lines": 99,
-      "sha256": "cbf7eeb935236b3e0c96afd93f7a7a8aaddcad28c2a23e5d1934f2c1c8e929e1",
+      "lines": 102,
+      "sha256": "fe4aca83a91d934fd32fa6ba421cb80f579c9844054bfe50e199f6ff69dbebbd",
     },
   },
   "harness/09-capstone.mdx #1": {
     "go": {
-      "lines": 555,
-      "sha256": "046ad916e12070c0690ae16a8d57b3a32a5b537d8f4863c96c8c82dd25980e8e",
+      "lines": 560,
+      "sha256": "b062e292d0600e10cdbf78613f94d812aee2caf921204882da79afc73ae33339",
     },
     "python": {
-      "lines": 319,
-      "sha256": "123318ab75355e386466d7b479378d890fb880241cf8b864162c27e3786ae223",
+      "lines": 323,
+      "sha256": "5213ceb2a25c8c6b9069b63dacbad99ebb7caa68da6da864e5777573c97c4599",
     },
   },
   "llms/01-what.mdx #1": {
@@ -145,11 +145,11 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
   "llms/04-runner.mdx #1": {
     "go": {
       "lines": 288,
-      "sha256": "c3451ee6bfb809f8ab370fa85f94a8e9ab22641d24a766e79ca5b6442d186849",
+      "sha256": "20e204f301461fd81b05e07acd5b4c12ef2d3dc30327d957a27ad9ac5867fc93",
     },
     "python": {
       "lines": 106,
-      "sha256": "14a9d13791ec0b0534202e2589d44efc820f37eb449eff3339b891c9b0d3e6f1",
+      "sha256": "6d1658aeef1ba01bb9e96f38dbaed5eddd0d148342a418b17cf4c258f0a21e0c",
     },
   },
   "llms/04-runner.mdx #2": {
@@ -269,19 +269,19 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
   },
   "llms/10-capstone.mdx #2": {
     "go": {
-      "lines": 1408,
-      "sha256": "c859d43a7d7396d265580b52aeeceb26c5e58428559ef2aaa081c67562cde6fa",
+      "lines": 1411,
+      "sha256": "74b8b8f5da7b6e3c46b2b34fd356e3a80d73f7a9bbbbc284cda7e48919d32314",
     },
     "python": {
-      "lines": 866,
-      "sha256": "c6809ef69253541a03ac3745430d3c02bd3829e0b36507763c990bbabc46bf40",
+      "lines": 876,
+      "sha256": "9cb44d5f03f82930ebe721165eeb60d14ba977663c72c8a08d1b6b65b51bcf52",
     },
   },
   "llms/11-framework.mdx #1": {
     "go": null,
     "python": {
       "lines": 106,
-      "sha256": "fb12ad7702f681662ca5aeb25dc1a21c763b95e87326d968f7cfc10ee29ac5e6",
+      "sha256": "c92d71259a24380e7a3cedb7880a1de0c1014ed1646eaae15bb13ea951ca8e9a",
     },
   },
   "llms/11-framework.mdx #2": {

@@ -122,3 +122,11 @@ def test_missing_key_is_a_message_not_a_traceback(ws, monkeypatch, capsys):
 def test_eof_at_the_permission_prompt_is_no(ws, monkeypatch):
     monkeypatch.setattr(sys, "stdin", io.StringIO(""))
     assert harness.approve("write_file", {"path": "x"}) is False
+
+
+@pytest.mark.parametrize("bad", ["nan", "inf", "-inf", "0", "-1"])
+def test_max_cost_must_be_finite_and_positive(ws, monkeypatch, capsys, bad):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(sys, "stdin", io.StringIO("hi\n"))
+    assert harness.main([f"--max-cost={bad}"]) == 2
+    assert "--max-cost must be a finite number above 0. Nothing was called." in capsys.readouterr().out

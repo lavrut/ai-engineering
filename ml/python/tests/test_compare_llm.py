@@ -111,7 +111,7 @@ def test_cap_stops_new_calls_and_keeps_finished_lines(ml, monkeypatch):
 def test_paid_commands_without_yes_make_no_call(ml, capsys, cmd):
     assert cl.main([cmd, "--ml-dir", str(ml)]) == 1
     out = capsys.readouterr().out
-    assert Counter.calls == 0 and "Not confirmed" in out and "Estimated cost" in out
+    assert Counter.calls == 0 and "Not confirmed. Nothing was called. Run it in a terminal and answer y." in out and "Estimated cost" in out
     assert not (ml / "data" / "llm_responses").exists()
 
 
@@ -225,3 +225,11 @@ def test_failed_answers_count_as_wrong_and_are_still_paid_for(ml):
 def test_record_limit_makes_a_pilot_of_n_calls(ml):
     record_some(ml, 5)
     assert Counter.calls == 5
+
+
+@pytest.mark.parametrize("bad", ["nan", "inf", "0", "-1"])
+def test_max_cost_must_be_finite_and_positive(ml, capsys, bad):
+    with pytest.raises(SystemExit) as e:
+        cl.main(["record", "--ml-dir", str(ml), "--max-cost", bad])
+    assert e.value.code == 2 and Counter.calls == 0
+    assert "must be a finite number above 0" in capsys.readouterr().err

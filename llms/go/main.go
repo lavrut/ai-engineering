@@ -337,7 +337,7 @@ func callModel(ctx context.Context, params anthropic.MessageNewParams, key strin
 			return line, err
 		}
 		return Line{}, &ReplayMiss{fmt.Sprintf("no saved response for %s / %s / %s / case %s (rep %d). "+
-			"Record it: python triage_lab.py record ...", cfg.Kind, cfg.Model, cfg.PromptVersion, caseID, cfg.Rep)}
+			"Record it: ../../.venv-llms/bin/python triage_lab.py record ...", cfg.Kind, cfg.Model, cfg.PromptVersion, caseID, cfg.Rep)}
 	case "record":
 		saved, ok, err := latestLine(path, key)
 		if err != nil {
@@ -1009,7 +1009,7 @@ func confirm(w io.Writer, rows []costRow, yes bool, limit float64) bool {
 		answer = readAnswer()
 	}
 	if a := strings.ToLower(strings.TrimSpace(answer)); a != "y" && a != "yes" {
-		fmt.Fprintln(w, "Not confirmed. Nothing was called. Add --yes to approve.")
+		fmt.Fprintln(w, "Not confirmed. Nothing was called. Run it in a terminal and answer y.")
 		return false
 	}
 	return true
@@ -1372,6 +1372,9 @@ func cli(args []string, caller modelCaller, stdout, stderr io.Writer) int {
 	}
 	if err == nil && command == "judge" {
 		err = oneOf("order", o.order, "before", "after")
+	}
+	if err == nil && (command == "run" || command == "judge") && (math.IsNaN(o.maxCost) || math.IsInf(o.maxCost, 0) || o.maxCost <= 0) {
+		err = fmt.Errorf("--max-cost must be a finite number above 0")
 	}
 	if err == nil && sub.NArg() > 0 {
 		err = fmt.Errorf("unrecognized arguments: %s", strings.Join(sub.Args(), " "))

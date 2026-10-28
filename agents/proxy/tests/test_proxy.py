@@ -138,7 +138,7 @@ def test_replay_miss_404_with_command(running):
     key8 = proxy.request_key("POST", "/v1/messages", BODY)[:8]
     assert r.status_code == 404
     assert r.json() == {"type": "error", "error": {"type": "replay_miss", "message":
-                        f"no recording for {key8}; record with: python agents/proxy/proxy.py --mode record --set hand"}}
+                        f"no recording for {key8}; record with: .venv-agents/bin/python agents/proxy/proxy.py --mode record --set hand"}}
     assert upstream.calls == []
 
 
@@ -901,3 +901,11 @@ def test_lazy_names_resolve_when_proxy_py_is_loaded_by_path(tmp_path):
     assert r.stdout.split() == ["make_server:proxy_server", "serve:proxy_server", "ProxyServer:proxy_server",
                                 "Handler:proxy_handler", "confirm:proxy_cost", "NotConfirmed:proxy_cost",
                                 "ledger_cost:proxy_cost"]
+
+
+@pytest.mark.parametrize("bad", ["nan", "inf", "0", "-1"])
+def test_max_cost_must_be_finite_and_positive(bad, capsys):
+    with pytest.raises(SystemExit) as e:
+        proxy.parse_args(["--max-cost", bad])
+    assert e.value.code == 2
+    assert "must be a finite number above 0" in capsys.readouterr().err

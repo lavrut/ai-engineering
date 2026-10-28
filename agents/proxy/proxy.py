@@ -10,15 +10,16 @@ estimate, asks y/N, then forwards each new request to api.anthropic.com with the
 environment, checks the cost cap before every call, and saves the reply.
 
 Run:
-    python agents/proxy/proxy.py                                  # replay on 127.0.0.1:8790
-    python agents/proxy/proxy.py --mode replay --set langgraph    # replay one recording set
-    export ANTHROPIC_API_KEY=sk-ant-...                           # record mode only
-    python agents/proxy/proxy.py --mode record --set hand --max-cost 2   # estimate, then y/N
+    .venv-agents/bin/python agents/proxy/proxy.py                                # replay on 127.0.0.1:8790
+    .venv-agents/bin/python agents/proxy/proxy.py --mode replay --set desk-langgraph   # replay one recording set
+    read -rs ANTHROPIC_API_KEY && export ANTHROPIC_API_KEY                       # record mode only; the key is not echoed
+    .venv-agents/bin/python agents/proxy/proxy.py --mode record --set desk-hand --max-cost 2   # estimate, then y/N
 
-The proxy is four files, and `import proxy` reaches all of it: this one (configuration, the replay key, the
+The proxy is four modules, and `import proxy` reaches all of them: this one (configuration, the replay key, the
 store, recorded responses, the command line), proxy_cost.py (the cap's worst case, the reply's usage, the
 ledger, the estimate and the y/N), proxy_handler.py (one HTTP request: the guard, then replay or record) and
-proxy_server.py (the server, make_server and serve).
+proxy_server.py (the server, make_server and serve). The parts import this file by the name `proxy`, so run
+it as a script or put agents/proxy on the path; a copy loaded under another name gets its own parts.
 
 Why the HTTP level: the hand-built desk, LangGraph and the Claude Agent SDK's bundled CLI all
 speak the Messages API over HTTP, so one recorder covers all three without touching their code.
@@ -26,6 +27,7 @@ speak the Messages API over HTTP, so one recorder covers all three without touch
 from __future__ import annotations
 
 import argparse
+import math
 import copy
 import hashlib
 import importlib
@@ -81,7 +83,7 @@ DEFAULT_MAX_COST = 10.0            # dollars
 EST_INPUT_TOKENS = 6000            # typical input per agent call, for the up-front estimate only
 STORE_DIR = Path(__file__).resolve().parents[1] / "data" / "recordings"
 HEADERS_ALLOWLIST = ("content-type",)    # the only response header stored; nothing auth-related
-RECORD_COMMAND = "python agents/proxy/proxy.py --mode record"
+RECORD_COMMAND = ".venv-agents/bin/python agents/proxy/proxy.py --mode record"
 
 # Record mode forwards only these (method, path) pairs; anything else is a 400 (ruling R10).
 RECORD_ALLOWLIST = {("POST", "/v1/messages"), ("POST", "/v1/messages?beta=true"),
@@ -313,13 +315,24 @@ def playback_bytes(response: dict) -> bytes:
 
 
 # ── 5. Command line ─────────────────────────────────────────────────────────
+def cost_arg(text: str) -> float:
+    """argparse type for --max-cost: a finite number above 0 (nan would make every cap test false)."""
+    try:
+        value = float(text)
+    except ValueError:
+        value = float("nan")
+    if not math.isfinite(value) or value <= 0:
+        raise argparse.ArgumentTypeError("must be a finite number above 0")
+    return value
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Record/replay proxy for the Anthropic Messages API (127.0.0.1 only).")
     p.add_argument("--mode", choices=["replay", "record"], default="replay")
     p.add_argument("--port", type=int, default=DEFAULT_PORT)
     p.add_argument("--store", default=str(STORE_DIR), help="recordings directory")
     p.add_argument("--set", dest="set_name", default=None, help="recording set: <store>/<set>/")
-    p.add_argument("--max-cost", type=float, default=DEFAULT_MAX_COST, help="dollars; checked before every call")
+    p.add_argument("--max-cost", type=cost_arg, default=DEFAULT_MAX_COST, help="dollars; checked before every call")
     p.add_argument("--max-calls", type=int, default=MAX_CALLS, help="paid calls allowed in this run")
     p.add_argument("--yes", action="store_true", help="skip the y/N prompt (only after the user approved)")
     return p.parse_args(argv)

@@ -1,8 +1,8 @@
 import type { Diagram } from '../../lib/diagram';
 
 // Layout (default node 150x56). Row 1: the command, connecting, discovering, calling, the JSON
-// printed. The answerer sits under "Call a tool". Code links point at mcp/python/client.py and
-// mcp/go/client/main.go (same section numbers); each caption ends with its section.
+// printed. The answerer sits under "Call a tool". Code links point at mcp/python/client.py, client_connect.py
+// and client_calls.py (each step's `source` names the file) and mcp/go/client/main.go; each caption ends with its section.
 export const mcpClient: Diagram = {
   id: 'mcp-client',
   title: 'What the Lumen client does',

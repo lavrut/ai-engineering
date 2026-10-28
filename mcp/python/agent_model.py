@@ -247,5 +247,5 @@ def terminal_ask(prompt: str) -> str:
 def confirmed(yes: bool, ask: Callable[[str], str]) -> bool:
     if yes or ask("Make these paid calls? [y/N] ").strip().lower() in ("y", "yes"):
         return True
-    print("Not confirmed. Nothing was called. Add --yes to approve.")
+    print("Not confirmed. Nothing was called. Run it in a terminal and answer y.")
     return False

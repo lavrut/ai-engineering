@@ -202,7 +202,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
                    help="record mode: re-record even what the store holds (every call is paid)")
     p.add_argument("--dry-run", action="store_true", help="print the recording estimate and exit; calls nothing")
     p.add_argument("--yes", action="store_true", help="approve the paid calls without asking (only after the user approved)")
-    p.add_argument("--max-cost", type=float, default=proxy.DEFAULT_MAX_COST, help="dollars for the whole run of the set")
+    p.add_argument("--max-cost", type=proxy.cost_arg, default=proxy.DEFAULT_MAX_COST, help="dollars for the whole run of the set")
     p.add_argument("--max-calls", type=int, default=None,
                    help=f"paid calls per ticket (default {DEFAULT_MAX_CALLS}, supervisor {SUPERVISOR_MAX_CALLS}; at most {MAX_CALLS_LIMIT})")
     p.add_argument("--port", type=int, default=proxy.DEFAULT_PORT, help=argparse.SUPPRESS)

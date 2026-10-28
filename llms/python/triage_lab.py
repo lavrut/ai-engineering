@@ -169,7 +169,7 @@ def call_model(params: dict, *, key, config, case_id, mode="replay", client=None
                     return line
         raise ReplayMiss(
             f"no saved response for {config['kind']} / {config['model']} / {config['prompt_version']} "
-            f"/ case {case_id} (rep {config['rep']}). Record it: python triage_lab.py record ...")
+            f"/ case {case_id} (rep {config['rep']}). Record it: ../../.venv-llms/bin/python triage_lab.py record ...")
     if mode not in ("record", "live"):
         raise ValueError(f"unknown mode {mode!r}")
 
@@ -608,7 +608,7 @@ def _confirm(rows: list[dict], yes: bool, cap: float | None) -> bool:
         except EOFError:
             pass
     if answer.strip().lower() not in ("y", "yes"):
-        print("Not confirmed. Nothing was called. Add --yes to approve.")
+        print("Not confirmed. Nothing was called. Run it in a terminal and answer y.")
         return False
     return True
 
@@ -809,6 +809,16 @@ def cmd_record(args, client) -> int:
     return 0
 
 
+def cost_arg(text: str) -> float:
+    try:
+        value = float(text)
+    except ValueError:
+        value = float("nan")
+    if not math.isfinite(value) or value <= 0:
+        raise argparse.ArgumentTypeError("must be a finite number above 0")
+    return value
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="triage_lab.py", description="Evaluate LLM support-ticket triage.")
     parser.add_argument("--data", default=DATA_DIR, help="data root (default: llms/data)")
@@ -819,7 +829,7 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--effort", default=None, help="low | medium | high ...; omit to send none")
     common.add_argument("--workers", type=int, default=8)
     paid = argparse.ArgumentParser(add_help=False)
-    paid.add_argument("--max-cost", type=float, default=10.0,
+    paid.add_argument("--max-cost", type=cost_arg, default=10.0,
                       help="stop when the real spend passes this many dollars (default 10, the spec's cap)")
     paid.add_argument("--yes", action="store_true", help="approve the printed estimate without asking")
     sub = parser.add_subparsers(dest="command", required=True)

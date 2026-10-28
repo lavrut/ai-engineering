@@ -15,6 +15,7 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -502,6 +503,10 @@ func repl(args []string, call modelCaller) int {
 	budget := fs.Float64("max-cost", maxCost, "dollars this session may spend")
 	yes := fs.Bool("yes", false, "scripted runs only: approve every task without asking")
 	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if math.IsNaN(*budget) || math.IsInf(*budget, 0) || *budget <= 0 { // nan would make every "over the cap?" test false
+		fmt.Println("--max-cost must be a finite number above 0. Nothing was called.")
 		return 2
 	}
 	if os.Getenv("ANTHROPIC_API_KEY") == "" {

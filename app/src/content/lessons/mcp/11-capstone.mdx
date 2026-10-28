@@ -42,7 +42,7 @@ Ticket `t061` looks like a normal question: "How do I export all my notes to a P
 
 The agent from lesson 5 gets the task "Review ticket t061 and act on it", with both servers: `lumen-read` to read and `lumen-ops` to write. Two settings matter:
 
-- **The guard** (`--guard`): the untrusted-read rule from `agent.py`, explained below. When it fires, it asks a person, scripted by `--approve`.
+- **The guard** (`--guard`): the untrusted-read rule from `agent_host.py`, explained below. When it fires, it asks a person, scripted by `--approve`.
 - **The server's confirmation** (`--elicit`): the answer to `lumen-ops`' own question from lesson 8.
 
 In every run here, `--elicit accept`: the server's question is answered yes. That models a host, or a hurried person, who approves whatever is asked. So with the guard on and `--approve decline`, the guard is the only thing between the model and the write.

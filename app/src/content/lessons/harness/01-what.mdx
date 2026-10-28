@@ -102,4 +102,4 @@ This is the harness's money gate. The typical figure assumes a short task like t
 
 You should see lines such as `-> list_files({"path": "."})` and `-> read_file({"path": "notes.txt"})` as the harness runs each tool, then `agent >` with a short answer. Type `exit` to quit. A new `trace.jsonl` file in the same folder holds one line per event; you will read it in lesson 8.
 
-To run the Go version instead: `cd harness/go && go run .` (the workspace folder is `harness/go/workspace`). It prints the same estimate and asks the same way.
+To run the Go version instead: `cd ../go && mkdir -p workspace && cp ../python/workspace/notes.txt workspace/ && go run .` (the workspace folder is `harness/go/workspace`). It prints the same estimate and asks the same way.

@@ -176,3 +176,15 @@ func TestEOFAtThePermissionPromptIsNo(t *testing.T) {
 		t.Fatal("end of input must deny")
 	}
 }
+
+func TestMaxCostMustBeFiniteAndPositive(t *testing.T) {
+	setup(t)
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
+	for _, bad := range []string{"nan", "inf", "-inf", "0", "-1"} {
+		var code int
+		out := capture(t, func() { code = repl([]string{"--max-cost=" + bad}, nil) })
+		if code != 2 || !strings.Contains(out, "--max-cost must be a finite number above 0. Nothing was called.") {
+			t.Fatalf("%s: code %d\n%s", bad, code, out)
+		}
+	}
+}

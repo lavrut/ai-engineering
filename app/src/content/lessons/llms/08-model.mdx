@@ -198,6 +198,6 @@ Now ask for a configuration that was never recorded, Sonnet at `medium`:
 ../../.venv-llms/bin/python triage_lab.py run --model claude-sonnet-5-5 --effort medium
 ```
 
-Replay stops with `error: no saved response for triage / claude-sonnet-5-5 / v2_rules / case t001 (rep 0). Record it: python triage_lab.py record ...`. The effort is part of the key, so `medium` has no answers yet.
+Replay stops with `error: no saved response for triage / claude-sonnet-5-5 / v2_rules / case t001 (rep 0). Record it: ../../.venv-llms/bin/python triage_lab.py record ...`. The effort is part of the key, so `medium` has no answers yet.
 
 Recording it costs money. Adding `--mode record` prints the estimate and asks first: 40 Sonnet calls, `$0.35`, worst case `$0.87`. Opus at `medium` would be `$0.70`, worst case `$1.74`. Before you pay, ask what the result could change. Haiku already clears a 90% bar at $0.25 per 1,000 tickets, and any score between Sonnet's low and high would sit inside the same band.

@@ -262,7 +262,7 @@ describe('lesson 9: costs, sizes and the test count', () => {
       cases += (src.match(/^def test_/gm) ?? []).length;
       for (const m of src.matchAll(/@pytest\.mark\.parametrize\("\w+", \[([^\]]*)\]\)/g)) cases += m[1].split(',').length - 1;
     }
-    expect(cases).toBe(28);
+    expect(cases).toBe(33);
     expect(lesson('09')).toContain(`You should see \`${cases} passed\` for Python`);
   });
 });

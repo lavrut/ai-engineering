@@ -350,7 +350,7 @@ def main(argv: list[str] | None = None, *, traces_dir: Path = TRACES_DIR, store_
     p.add_argument("--refresh", action="store_true",
                    help="with --record-judge: re-record even what the judge set holds (every call is paid)")
     p.add_argument("--yes", action="store_true", help="approve the paid calls without asking (only after the user approved)")
-    p.add_argument("--max-cost", type=float, default=proxy.DEFAULT_MAX_COST, help="dollars for the judge set")
+    p.add_argument("--max-cost", type=proxy.cost_arg, default=proxy.DEFAULT_MAX_COST, help="dollars for the judge set")
     p.add_argument("--port", type=int, default=0, help=argparse.SUPPRESS)
     args = p.parse_args(argv)
     from judge_set import judge_plan, print_judge_estimate, record_judge

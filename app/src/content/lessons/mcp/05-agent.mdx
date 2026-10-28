@@ -6,7 +6,7 @@ title: An agent that uses MCP
 goal: Run the Track 1 harness on MCP tools by replaying a real recorded run, explain how an MCP tool becomes a harness tool, and read the cost estimate that comes before any paid recording.
 minutes: 30
 quiz:
-  - question: The harness calls Tool.fn from worker threads, and the MCP Client is async. How does agent.py join the two?
+  - question: The harness calls Tool.fn from worker threads, and the MCP Client is async. How does agent_host.py join the two?
     options:
       - It rewrites the harness to be async
       - It runs the servers in separate processes and reads their output files

@@ -25,6 +25,7 @@ Record (paid: prints the estimate, asks y/N, stops at --max-cost; ANTHROPIC_API_
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import sys
 import tempfile
@@ -88,6 +89,17 @@ def run_scenario(scenario: str, *, guard: bool, elicit: str, labels_path: Path, 
 
 
 # ── 2. Entry point ──────────────────────────────────────────────────────────
+def cost_arg(text: str) -> float:
+    """argparse type for --max-cost: a finite number above 0 (nan would make every cap test false)."""
+    try:
+        value = float(text)
+    except ValueError:
+        value = float("nan")
+    if not math.isfinite(value) or value <= 0:
+        raise argparse.ArgumentTypeError("must be a finite number above 0")
+    return value
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description="The harness agent on the Lumen MCP servers (replay by default).")
     ap.add_argument("--scenario", required=True, choices=sorted(SCENARIOS))
@@ -100,7 +112,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--model", choices=MODELS, default=MODEL, help="the agent's model (prices from the lab's PRICES)")
     ap.add_argument("--framing", choices=FRAMINGS, default="none",
                     help="training: put TRAINING_NOTE before the system prompt (default: none)")
-    ap.add_argument("--max-cost", type=float, default=MAX_COST, help="record mode stops past this many dollars")
+    ap.add_argument("--max-cost", type=cost_arg, default=MAX_COST, help="record mode stops past this many dollars")
     ap.add_argument("--dry-run", action="store_true", help="print the record estimate and exit; calls nothing")
     ap.add_argument("--yes", action="store_true", help="approve the paid calls without asking")
     ap.add_argument("--labels", type=Path, default=None,

@@ -315,7 +315,7 @@ def test_estimate_printed_before_any_call(tmp_path, capsys):
     assert rc == 1
     assert made == []                  # no client was created, so no call could be made
     assert "Estimated cost $" in out and "worst case $" in out and "Cap: $10.00" in out
-    assert "Not confirmed. Nothing was called." in out
+    assert "Not confirmed. Nothing was called. Run it in a terminal and answer y." in out
     assert not (tmp_path / "rec").exists()
 
 
@@ -494,3 +494,11 @@ def test_dry_run_any_model_and_framing(capsys):
     out = capsys.readouterr().out
     assert "Recording capstone-noguard-sonnet-5-5-training: claude-sonnet-5-5" in out
     assert "framing training" in out and "Dry run: nothing was called." in out
+
+
+@pytest.mark.parametrize("bad", ["nan", "inf", "0", "-1"])
+def test_max_cost_must_be_finite_and_positive(bad, capsys):
+    with pytest.raises(SystemExit) as e:
+        agent.build_parser().parse_args(["--max-cost", bad])
+    assert e.value.code == 2
+    assert "must be a finite number above 0" in capsys.readouterr().err

@@ -119,7 +119,7 @@ def saved_line(kind, model, prompt_version, effort, key, root) -> dict:
             if line["key"] == key:
                 return line
     raise ReplayMiss(f"no saved response for {kind} / {model} / {prompt_version}. "
-                     f"Record it: python triage_lab.py record ...")
+                     f"Record it: ../../.venv-llms/bin/python triage_lab.py record ...")
 
 
 REPLY_MARK = "\n\nReply:\n"
@@ -132,7 +132,7 @@ def parse_judge_message(text: str, rubric: str) -> tuple[str, str, str]:
     rubric_part = "\n\nRubric:\n" + rubric
     # Contrived edge: a "before"-order reply that itself ends with this rubric suffix would parse as "after".
     if not text.startswith("Ticket:\n"):
-        raise ReplayMiss(f"unrecognised judge message {text[:40]!r}. Record it: python triage_lab.py record ...")
+        raise ReplayMiss(f"unrecognised judge message {text[:40]!r}. Record it: ../../.venv-llms/bin/python triage_lab.py record ...")
     body = text[len("Ticket:\n"):]
     if body.endswith(rubric_part):                    # after: ticket, reply, rubric
         order, body = "after", body[: -len(rubric_part)]
@@ -142,9 +142,9 @@ def parse_judge_message(text: str, rubric: str) -> tuple[str, str, str]:
         ticket, _, reply = body.partition(rubric_part + REPLY_MARK)
         sep = REPLY_MARK
     else:
-        raise ReplayMiss(f"unrecognised judge message {text[:40]!r}. Record it: python triage_lab.py record ...")
+        raise ReplayMiss(f"unrecognised judge message {text[:40]!r}. Record it: ../../.venv-llms/bin/python triage_lab.py record ...")
     if not sep:
-        raise ReplayMiss(f"judge message has no reply {text[:40]!r}. Record it: python triage_lab.py record ...")
+        raise ReplayMiss(f"judge message has no reply {text[:40]!r}. Record it: ../../.venv-llms/bin/python triage_lab.py record ...")
     return ticket, reply, order
 
 
@@ -184,7 +184,7 @@ class ReplayAPI(ModelAPI):
             line = saved_line("judge", self.model_name, order, None, key, self.root)
         else:
             raise ReplayMiss(f"no saved response for {self.model_name}: unknown system prompt "
-                             f"{system[:60]!r}. Record it: python triage_lab.py record ...")
+                             f"{system[:60]!r}. Record it: ../../.venv-llms/bin/python triage_lab.py record ...")
         return self._output(line)
 
     def _output(self, line: dict) -> ModelOutput:

@@ -210,8 +210,8 @@ describe('lesson 7 (record and replay): the numbers it states', () => {
     expect(key.slice(0, 8)).toBe('3c84397c');
     says('07-replay', `-d '{"model": "claude-haiku-5-5", "max_tokens": 100, "messages": [{"role": "user", "content": "Hello"}]}'`);
     expect(proxyPy).toContain('f"no recording for {key[:8]}; record with: {srv.record_command()}"');
-    expect(proxyPy).toContain('RECORD_COMMAND = "python agents/proxy/proxy.py --mode record"');
-    says('07-replay', '"no recording for 3c84397c; record with: python agents/proxy/proxy.py --mode record --set desk-hand"');
+    expect(proxyPy).toContain('RECORD_COMMAND = ".venv-agents/bin/python agents/proxy/proxy.py --mode record"');
+    says('07-replay', '"no recording for 3c84397c; record with: .venv-agents/bin/python agents/proxy/proxy.py --mode record --set desk-hand"');
   });
 
   it('the dry run for the SDK supervisor on t001: $0.0100 typical, $0.1601 worst (run.py estimate, R52)', () => {

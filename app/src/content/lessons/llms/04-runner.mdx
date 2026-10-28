@@ -196,7 +196,7 @@ rep 1  both 97.5%  wrong ['t034']
 rep 2  both 95.0%  wrong ['t018', 't034']
 band for one run of 40: +/-15.8%
 5d1983c4d25c 053094d77cfe
-ReplayMiss: no saved response for triage / claude-haiku-5-5 / v2_rules / case t001 (rep 0). Record it: python triage_lab.py record ...
+ReplayMiss: no saved response for triage / claude-haiku-5-5 / v2_rules / case t001 (rep 0). Record it: ../../.venv-llms/bin/python triage_lab.py record ...
 ```
 
 Two words added to the prompt give a different key, and replay refuses to grade old answers against it. The change is only in memory, so `prompts.json` is untouched.

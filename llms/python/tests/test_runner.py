@@ -407,3 +407,11 @@ def test_a_failed_call_stops_the_runner():
     with pytest.raises(OSError, match="disk full"):
         lab.run(list(range(40)), fn, workers=4)
     assert len(called) < 40
+
+
+@pytest.mark.parametrize("bad", ["nan", "inf", "0", "-1", "abc"])
+def test_max_cost_must_be_finite_and_positive(bad, capsys):
+    with pytest.raises(SystemExit) as e:
+        lab.build_parser().parse_args(["run", "--max-cost", bad])
+    assert e.value.code == 2
+    assert "must be a finite number above 0" in capsys.readouterr().err

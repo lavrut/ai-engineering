@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 import time
@@ -280,6 +281,9 @@ def main(argv: list[str] | None = None, call: Callable[..., Any] = call_model) -
     ap.add_argument("--max-cost", type=float, default=MAX_COST, help="dollars this session may spend")
     ap.add_argument("--yes", action="store_true", help="scripted runs only: approve every task without asking")
     args = ap.parse_args(argv)
+    if not math.isfinite(args.max_cost) or args.max_cost <= 0:  # nan would make every "over the cap?" test false
+        print("--max-cost must be a finite number above 0. Nothing was called.")
+        return 2
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("Set ANTHROPIC_API_KEY first (lesson 2). Nothing was called.")
         return 1

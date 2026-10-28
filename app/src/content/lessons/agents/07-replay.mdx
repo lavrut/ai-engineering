@@ -211,7 +211,7 @@ curl -s -i http://127.0.0.1:8790/v1/messages -H 'content-type: application/json'
   -d '{"model": "claude-haiku-5-5", "max_tokens": 100, "messages": [{"role": "user", "content": "Hello"}]}'
 ```
 
-You should see `HTTP/1.1 404 Not Found`, an `x-replay-hint` header, and the body `{"type": "error", "error": {"type": "replay_miss", "message": "no recording for 3c84397c; record with: python agents/proxy/proxy.py --mode record --set desk-hand"}}`. The proxy's terminal logs the same `MISS`. Nothing was sent anywhere. Stop the proxy with Ctrl-C.
+You should see `HTTP/1.1 404 Not Found`, an `x-replay-hint` header, and the body `{"type": "error", "error": {"type": "replay_miss", "message": "no recording for 3c84397c; record with: .venv-agents/bin/python agents/proxy/proxy.py --mode record --set desk-hand"}}`. The proxy's terminal logs the same `MISS`. Nothing was sent anywhere. Stop the proxy with Ctrl-C.
 
 See what recording that one ticket again would cost, without calling anything:
 
