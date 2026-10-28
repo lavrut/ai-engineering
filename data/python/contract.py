@@ -18,6 +18,8 @@ Free and offline: no model calls.
 A contract has exactly five sections:
     info       id, version, status (active | deprecated), owner (a track), description, sunset
     schema     fields: name, type, required, meaning, and enum or pattern where it applies
+               (a pattern is a full match, like ^...$ in Go's RE2; lookarounds, backreferences,
+               possessive quantifiers and \\A \\Z are rejected so both languages agree)
     quality    row_count {min, max}, unique [fields], enum_coverage [fields]
     servicing  freshness {max_age_days}
     consumers  name, version, reads
@@ -102,6 +104,42 @@ def _check_info(info: Any) -> None:
         _text(info, "generated_at", "info")
 
 
+def _unsupported(pat: str) -> str | None:
+    """Name the first construct Python's re has and Go's RE2 lacks, or None.
+
+    A contract pattern is a full match (re.fullmatch here; ^...$ in RE2), so
+    the two engines agree on the subset this lets through.
+    """
+    in_class, i = False, 0
+    while i < len(pat):
+        c = pat[i]
+        nxt = pat[i + 1] if i + 1 < len(pat) else ""
+        if c == "\\":
+            if nxt in "AZ":
+                return f"\\{nxt} anchor"
+            if nxt in "123456789":
+                return f"backreference \\{nxt}"
+            i += 2
+            continue
+        if in_class:
+            in_class = c != "]"
+        elif c == "[":
+            in_class = True
+            if nxt == "^":
+                i += 1
+            if pat[i + 1:i + 2] == "]":
+                i += 1
+        elif c == "(" and nxt == "?":
+            for tok, name in (("=", "lookahead"), ("!", "lookahead"), ("<=", "lookbehind"),
+                              ("<!", "lookbehind"), (">", "atomic group"), ("P=", "backreference")):
+                if pat.startswith(tok, i + 2):
+                    return f"{name} (?{tok}"
+        elif c in "*+?}" and nxt == "+":
+            return f"possessive quantifier {c}+"
+        i += 1
+    return None
+
+
 def _check_schema(schema: Any) -> None:
     schema = _mapping(schema, "schema")
     fields = schema.get("fields")
@@ -120,13 +158,22 @@ def _check_schema(schema: Any) -> None:
         if not isinstance(fld.get("required"), bool):
             raise ContractError(f"{where}.required must be true or false")
         _text(fld, "meaning", where)
-        if "enum" in fld and (not isinstance(fld["enum"], list) or not fld["enum"]):
-            raise ContractError(f"{where}.enum must be a non-empty list")
+        if "enum" in fld:
+            if not isinstance(fld["enum"], list) or not fld["enum"]:
+                raise ContractError(f"{where}.enum must be a non-empty list")
+            for e in fld["enum"]:
+                if not _type_ok(e, fld["type"]):
+                    raise ContractError(f"{where}.enum value {_show(e)} is not of type {fld['type']}")
         if "pattern" in fld:
             if fld["type"] != "string":
                 raise ContractError(f"{where}.pattern needs type string")
+            if not isinstance(fld["pattern"], str):
+                raise ContractError(f"{where}.pattern must be a string")
+            bad = _unsupported(fld["pattern"])
+            if bad:
+                raise ContractError(f"{where}.pattern ({name}) uses syntax Go RE2 lacks: {bad}")
             try:
-                re.compile(str(fld["pattern"]))
+                re.compile(fld["pattern"])
             except re.error as e:
                 raise ContractError(f"{where}.pattern is not a valid pattern: {e}") from None
 
@@ -145,6 +192,8 @@ def _check_quality(quality: Any, fields: dict[str, dict]) -> None:
                 raise ContractError(f"quality.row_count.{key} must be a non-negative integer")
         if not rc:
             raise ContractError("quality.row_count needs min or max")
+        if "min" in rc and "max" in rc and rc["min"] > rc["max"]:
+            raise ContractError("quality.row_count.min is above max")
     for key in ("unique", "enum_coverage"):
         if key not in quality:
             continue
@@ -209,8 +258,9 @@ def export_text(contract: dict) -> str:
 
 
 def export_path(path: Path) -> Path:
-    """tickets.v1.yaml -> tickets.v1.yaml.contract.json, beside the source."""
-    return path.with_name(path.name + EXPORT_SUFFIX)
+    """tickets.v1.yaml -> tickets.v1.contract.json, beside the source."""
+    stem = path.stem if path.suffix == ".yaml" else path.name
+    return path.with_name(stem + EXPORT_SUFFIX)
 
 
 def export_contract(path: Path) -> Path:
@@ -380,7 +430,7 @@ def _field_rules(fld: dict, rows: list[dict]) -> list[dict]:
         fails = [
             f"row {i}: {_show(r[name])} does not match {fld['pattern']}"
             for i, r in enumerate(rows, 1)
-            if isinstance(r.get(name), str) and not rx.search(r[name])
+            if isinstance(r.get(name), str) and not rx.fullmatch(r[name])
         ]
         out.append(_verdict("pattern", name, *_first(fails, "all values match")))
     return out
@@ -456,6 +506,11 @@ def validate(contract: dict, rows: list[dict], *, file_age_days: float | None = 
     out.extend(_extra_fields(set(fields), rows))
     out.extend(_quality_rules(contract["quality"], fields, rows))
     out.append(_freshness(contract["servicing"], file_age_days))
+    if not rows:
+        # nothing to check is not a failure; the row_count rule alone says whether empty is allowed
+        for x in out:
+            if x["rule"] not in ("row_count", "freshness", "parse"):
+                x["ok"], x["detail"] = True, "no rows"
     return sorted(out, key=lambda x: (x["rule"], x["field"] or ""))
 
 
@@ -471,10 +526,20 @@ def format_lines(verdicts: list[dict]) -> list[str]:
 
 
 # ── 5. Command line ─────────────────────────────────────────────────────────
+def _non_negative(ap: argparse.ArgumentParser, text: str) -> float:
+    try:
+        x = float(text)
+    except ValueError:
+        ap.error(f"--age-days needs a number, got {text!r}")
+    if x < 0:
+        ap.error("--age-days must not be negative")
+    return x
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Validate a dataset against its data contract.")
     ap.add_argument("paths", nargs="*", help="<contract.yaml> <dataset>, or <contract.yaml> with --export")
-    ap.add_argument("--age-days", type=float, default=None, help="age of the dataset file in days (from git)")
+    ap.add_argument("--age-days", type=lambda s: _non_negative(ap, s), default=None, help="age of the dataset file in days (from git)")
     ap.add_argument("--export", action="store_true", help="write <contract>.contract.json for the Go twin")
     ap.add_argument("--check", action="store_true", help="with --export: fail if data/contracts exports are stale")
     args = ap.parse_args(argv)

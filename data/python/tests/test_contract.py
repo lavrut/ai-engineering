@@ -77,6 +77,18 @@ def test_row_count_bounds_and_empty_file(tmp_path):
     assert v("row_count", None, False, "0 rows, below min 1") in C.validate(c, C.read_rows(empty))
 
 
+def test_empty_dataset_only_row_count_fails():
+    c = make([f("id", "integer", True, enum=[1, 2]), f("c", pattern="^a$")],
+             {"row_count": {"min": 1}, "unique": ["id"], "enum_coverage": ["id"]})
+    out = C.validate(c, [])
+    assert [x["rule"] for x in out if not x["ok"]] == ["row_count"]
+    for x in out:
+        if x["rule"] not in ("row_count", "freshness"):
+            assert x["detail"] == "no rows", x
+    assert v("enum_coverage", "id", True, "no rows") in out
+    assert v("unique", "id", True, "no rows") in out
+
+
 def test_unique_key():
     c = make([f("id", "integer")], {"unique": ["id"]})
     assert v("unique", "id", False, "row 3: duplicate of row 1") in C.validate(c, [{"id": 1}, {"id": 2}, {"id": 1}])
@@ -151,7 +163,15 @@ def test_load_contract_ok_and_keeps_dates_as_strings(tmp_path):
     ("{name: c, version: 1, reads: x.jsonl}", "{name: c}", "consumers[0]"),
     ("status: active", "status: retired", "info.status"),
     ("status: active", "status: deprecated", "info.sunset"),
+    ("{name: id, type: integer, required: true, meaning: the id}",
+     "{name: id, type: string, required: true, meaning: x, pattern: 2026}", "schema.fields[0].pattern must be a string"),
+    ("{name: id, type: integer, required: true, meaning: the id}",
+     "{name: id, type: string, required: true, meaning: x, enum: open}", "schema.fields[0].enum must be a non-empty list"),
+    ("{name: id, type: integer, required: true, meaning: the id}",
+     "{name: id, type: integer, required: true, meaning: x, enum: ['1']}", "schema.fields[0].enum value"),
+    ("row_count: {min: 1}", "row_count: {min: 5, max: 2}", "quality.row_count.min"),
 ])
+
 def test_bad_contract_names_section(tmp_path, old, new, needle):
     p = write_contract(tmp_path, GOOD_YAML.replace(old, new))
     with pytest.raises(C.ContractError) as e:
@@ -216,7 +236,7 @@ def test_cli_prints_lines_and_exit_code(tmp_path, capsys):
 def test_export_writes_sorted_json_and_check_detects_stale(tmp_path, capsys):
     cp = write_contract(tmp_path, GOOD_YAML)
     assert C.main(["--export", str(cp)]) == 0
-    out = tmp_path / "c.yaml.contract.json"
+    out = tmp_path / "c.contract.json"
     text = out.read_text()
     assert text.endswith("}\n") and text.startswith('{\n "consumers"')
     assert json.loads(text) == C.load_contract(cp)
@@ -224,7 +244,7 @@ def test_export_writes_sorted_json_and_check_detects_stale(tmp_path, capsys):
     d.mkdir()
     (d / "a.yaml").write_text(GOOD_YAML)
     assert C.export_check(d) == 1  # no export yet: stale
-    assert "a.yaml.contract.json" in capsys.readouterr().out
+    assert "a.contract.json" in capsys.readouterr().out
     C.export_contract(d / "a.yaml")
     assert C.export_check(d) == 0
     (d / "a.yaml").write_text(GOOD_YAML.replace("min: 1", "min: 2"))
@@ -247,3 +267,29 @@ def test_every_fixture_case_reproduces():
         got = C.validate(case["contract"], rows, file_age_days=case["age_days"])
         assert got == case["expect"], case["name"]
     assert len(names) == len(lines)
+
+
+@pytest.mark.parametrize("pattern,what", [
+    ("(?=x)", "lookahead"), ("(?!x)", "lookahead"), ("(?<=A)B", "lookbehind"), ("(?<!A)B", "lookbehind"),
+    (r"(a)\1", "backreference"), ("a++", "possessive"), ("a*+", "possessive"), ("a?+", "possessive"),
+    (r"\Aab", "anchor"), (r"ab\Z", "anchor"),
+])
+def test_pattern_outside_shared_subset_is_rejected(tmp_path, pattern, what):
+    text = GOOD_YAML.replace("{name: id, type: integer, required: true, meaning: the id}",
+                             "{name: id, type: string, required: true, meaning: x, pattern: '%s'}" % pattern)
+    with pytest.raises(C.ContractError) as e:
+        C.load_contract(write_contract(tmp_path, text))
+    assert "schema.fields[0].pattern" in str(e.value) and what in str(e.value)
+
+
+def test_pattern_is_a_full_match():
+    c = make([f("c", pattern="^[A-Z]{2}$"), f("d", pattern="[a-z]+")])
+    out = C.validate(c, [{"c": "AB\n", "d": "abc1"}])
+    assert v("pattern", "c", False, 'row 1: "AB\\n" does not match ^[A-Z]{2}$') in out
+    assert v("pattern", "d", False, 'row 1: "abc1" does not match [a-z]+') in out
+    assert C._unsupported(r"\++") is None and C._unsupported("[*+]+") is None
+
+
+def test_negative_age_days_is_a_usage_error(tmp_path):
+    with pytest.raises(SystemExit):
+        C.main(["a.yaml", "b.jsonl", "--age-days", "-3"])
