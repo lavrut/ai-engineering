@@ -787,3 +787,76 @@ def test_ledger_prices_cache_tokens_by_their_multipliers(running, tmp_path, monk
     want = (100 * p_in + 400 * 1.25 * p_in + 2000 * 0.10 * p_in + 50 * p_out) / 1_000_000
     assert entry["cost_usd"] == pytest.approx(want)
     assert entry["cost_usd"] < proxy.call_cost("claude-haiku-5-5", 2500, 50)   # cheaper than all at full price
+
+
+# ── Polish 2026-10-28: review minors ─────────────────────────────────────────
+def _straggler(running, method: str) -> bytes:
+    """A request that starts on a kept-alive connection just before the run closes: its request line is on
+    the wire, the rest arrives after server_close. The handler is busy from the first byte, so the close leaves
+    the connection open and the straggler is answered (503), never reset."""
+    server, url, *_ = running("replay")
+    port = server.server_address[1]
+    s = socket.create_connection(("127.0.0.1", port), timeout=10)
+    try:
+        s.sendall(f"{method} /v1/messages HTTP/1.1\r\n".encode())
+        deadline = time.monotonic() + 5
+        while not any(h.busy for h in list(server.connections.values())):
+            assert time.monotonic() < deadline, "the handler never became busy on the request line"
+            time.sleep(0.01)
+        server.shutdown()
+        server.server_close()
+        body = json.dumps(BODY).encode()
+        s.sendall((f"Host: 127.0.0.1:{port}\r\ncontent-type: application/json\r\n"
+                   f"content-length: {len(body)}\r\n\r\n").encode() + body)
+        reply = b""
+        while chunk := s.recv(65536):
+            reply += chunk
+        return reply
+    finally:
+        s.close()
+
+
+def test_straggler_during_close_gets_503(running):
+    reply = _straggler(running, "POST")
+    assert reply.startswith(b"HTTP/1.1 503"), reply[:80]
+    assert b"this proxy run has ended" in reply
+
+
+def test_head_straggler_during_close_gets_503(running):
+    reply = _straggler(running, "HEAD")
+    assert reply.startswith(b"HTTP/1.1 503"), reply[:80]
+
+
+def test_idle_kept_alive_connection_is_not_busy(running):
+    """Busy means a request has started: a connection waiting for its next request stays idle, so close drops it."""
+    server, url, *_ = running("replay")
+    with httpx.Client(timeout=10) as c:
+        assert c.head(url + "/api/hello").status_code == 200
+        time.sleep(0.1)
+        assert server.connections and not any(h.busy for h in server.connections.values())
+
+
+def test_internal_error_message_is_truncated(running, monkeypatch, tmp_path):
+    log = tmp_path / "proxy.log"
+    _, url, *_ = running("replay", log_file=log)
+    monkeypatch.setattr(proxy, "request_key", lambda *a: (_ for _ in ()).throw(RuntimeError("x" * 5000)))
+    r = post(url, BODY)
+    assert r.status_code == 500
+    what = r.json()["error"]["message"].removeprefix("proxy: internal error (").removesuffix(")")
+    assert len(what) == 300 and what.startswith("RuntimeError: xxx")
+    assert "x" * 400 not in log.read_text()
+
+
+def test_log_write_does_not_take_the_server_lock(running, tmp_path):
+    """The proxy.log append is serialised by its own lock: a handler logging never waits on srv.lock (the cost
+    accounting's), so slow disk I/O cannot stall the cap check."""
+    log = tmp_path / "proxy.log"
+    server, *_ = running("replay", log_file=log)
+    h = proxy.Handler.__new__(proxy.Handler)
+    h.server = server
+    done = threading.Event()
+    with server.lock:
+        t = threading.Thread(target=lambda: (h._log("while the accounting lock is held"), done.set()), daemon=True)
+        t.start()
+        assert done.wait(2), "_log waited on srv.lock"
+    assert "while the accounting lock is held" in log.read_text()

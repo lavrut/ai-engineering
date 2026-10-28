@@ -116,7 +116,7 @@ def test_delete_removes_the_orphans_and_keeps_every_used_file(world, capsys):
 
 def test_sets_json_reports_judge_orphans(world):
     doc = derive.build_sets(world["traces"], world["store"])
-    assert doc["judge"] == {"recordings": 8, "orphans": 1, "record": "python agents/evals/run_evals.py --record-judge"}
+    assert doc["judge"] == {"recordings": 8, "missing": 0, "orphans": 1, "record": "python agents/evals/run_evals.py --record-judge"}
     assert doc["sets"]["desk-hand"]["orphans"] == 1
     prune.main(["--delete"], traces_dir=world["traces"], store_dir=world["store"])
     doc = derive.build_sets(world["traces"], world["store"])

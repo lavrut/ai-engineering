@@ -49,6 +49,7 @@ DEFAULT_MODEL = "claude-haiku-5-5"
 MAX_TOKENS = 4000                  # the track's per-call output limit; the worst case never assumes less
 MAX_TOKENS_LIMIT = 128000          # the largest max_tokens accepted (the Agent SDK's default request)
 MAX_BODY_BYTES = 32 * 1024 * 1024  # the API's own request size limit; larger bodies are refused unread
+MAX_ERROR_CHARS = 300             # a 500 names its exception in at most this many characters (reply and log)
 MAX_CALLS = 12                     # at most this many paid calls per proxy run (one engine run)
 DEFAULT_MAX_COST = 10.0            # dollars
 EST_INPUT_TOKENS = 6000            # typical input per agent call, for the up-front estimate only
@@ -461,6 +462,7 @@ class ProxyServer(ThreadingHTTPServer):
         self._api_key = api_key           # held in memory only; never printed, never stored
         self.client = client
         self.lock = threading.Lock()
+        self.log_lock = threading.Lock()   # proxy.log appends only: disk I/O never holds up the accounting lock
         self.key_locks: dict[str, threading.Lock] = {}
         self.spent = self.reserved = 0.0
         self.paid_calls = 0
@@ -526,7 +528,28 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         pass                              # the default log line is noisy; _log says what matters
 
-    busy = False      # handling a request now (server_close lets it answer, then the connection closes)
+    busy = False      # a request has started (its first byte is here): server_close lets it answer, then closes
+
+    def handle_one_request(self) -> None:
+        """Wait for the next request's first byte, then mark the handler busy BEFORE the request line is read, so a
+        straggler arriving as the run closes is answered 503 rather than reset. A connection waiting between
+        requests stays idle, so server_close still drops it (R59)."""
+        try:
+            first = self.rfile.peek(1)
+        except OSError:
+            first = b""
+        if not first:                     # the client closed (or close dropped us) between requests
+            self.close_connection = True
+            return
+        with self.server.lock:
+            self.busy = True
+        try:
+            super().handle_one_request()
+        finally:
+            with self.server.lock:
+                self.busy = False
+            if self.server.closed:
+                self.close_connection = True
 
     def setup(self) -> None:
         super().setup()
@@ -544,7 +567,7 @@ class Handler(BaseHTTPRequestHandler):
         line = f"[proxy {self.server.mode}] {text}"
         print(line, file=sys.stderr, flush=True)
         if self.server.log_file is not None:
-            with self.server.lock, open(self.server.log_file, "a", encoding="utf-8") as f:
+            with self.server.log_lock, open(self.server.log_file, "a", encoding="utf-8") as f:
                 f.write(line + "\n")
 
     def _send(self, status: int, data: bytes, headers: dict[str, str]) -> None:
@@ -602,7 +625,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self) -> None:
         # The Agent SDK's CLI probes HEAD /api/hello before its first call (unless nonessential
         # traffic is off). Answered locally in both modes, never forwarded or stored.
-        if self._read_body() is not None and self._guard(need_json=False):
+        if self._read_body() is None:
+            return
+        if self.server.closed:
+            self._error(503, "api_error", "proxy: this proxy run has ended; reconnect")
+        elif self._guard(need_json=False):
             self._send(200, b"", {})
 
     def do_GET(self) -> None:
@@ -612,7 +639,6 @@ class Handler(BaseHTTPRequestHandler):
         self._safely()
 
     def _safely(self) -> None:
-        self.busy = True
         try:
             raw = self._read_body()
             if raw is not None and self.server.closed:   # a request that reached a run already closing (R59)
@@ -620,16 +646,12 @@ class Handler(BaseHTTPRequestHandler):
             elif raw is not None and self._guard(need_json=True):
                 self._handle(raw)
         except Exception as e:            # answer, never drop the connection; say what failed (R59)
-            what = f"{type(e).__name__}: {e}"
+            what = f"{type(e).__name__}: {e}"[:MAX_ERROR_CHARS]   # a huge exception text never floods a reply
             self._log(f"{self.command} {self.path} internal error: {what}")
             try:
                 self._error(500, "api_error", f"proxy: internal error ({what})")
             except OSError:
                 pass
-        finally:
-            self.busy = False
-            if self.server.closed:
-                self.close_connection = True
 
     def _handle(self, raw: bytes) -> None:
         srv = self.server
@@ -703,7 +725,7 @@ class Handler(BaseHTTPRequestHandler):
                 refused = None
                 srv.reserved += worst          # reserved under the same lock as the check (no cap race)
                 srv.paid_calls += 1
-        if refused is not None:            # logged outside srv.lock: _log takes it to append to proxy.log
+        if refused is not None:            # logged outside srv.lock: no file I/O while the accounting lock is held
             self._log(f"Stopped before calling: {refused}. Recordings so far are saved.")
             return self._error(402, "cost_cap", f"proxy: {refused}; not called")
         headers = {k: v for k, v in self.headers.items() if k.lower() not in DROP_HEADERS}

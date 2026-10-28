@@ -121,7 +121,7 @@ def world(tmp_path, monkeypatch):
                 reviews = 3 if (desk == "supervisor" and t == "t061") else 1
                 write(traces, desk_doc(engine, desk, t, reviews=reviews, traced_label=engine in ("hand", "hand-go"),
                                        cost=0.001 if desk == "single" else 0.004, ms=100 if desk == "single" else 300))
-    for s, n in (("patterns", 3), ("desk-hand", 2)):
+    for s, n in (("patterns", 3), ("desk-hand", 8)):     # the desk-hand store holds every key its runs use
         (store / s).mkdir(parents=True)
         for i in range(n):
             (store / s / f"{i:064x}.json").write_text("{}", encoding="utf-8")
@@ -230,7 +230,12 @@ def test_sets_shape(world):
     hand = doc["sets"]["desk-hand"]
     assert hand["complete"] is True and hand["recordings"] == 8 and hand["orphans"] == 0
     sdk = doc["sets"]["desk-sdk"]
-    assert sdk["complete"] is False and sdk["recordings"] == 4 and sdk["orphans"] == 0   # t061 (8 calls) missing; no store dir
+    # t061 (8 calls) missing; no store dir, so its 4 referenced keys are missing, not counted as recordings
+    assert sdk["complete"] is False and sdk["recordings"] == 0 and sdk["missing"] == 4 and sdk["orphans"] == 0
+    assert pat["missing"] == 0 and hand["missing"] == 0
+    # this world has no judge store: the judge requests its scores ask for are all missing, none counted
+    assert doc["judge"]["recordings"] == 0 and doc["judge"]["missing"] == 2
+    assert "missing" in doc["about"]
     assert "orphans" in doc["about"] and "distinct" in doc["about"]["recordings"]
     assert doc["sets"]["desk-hand"]["replay"] == "python agents/run.py --set desk-hand"
 
@@ -258,6 +263,31 @@ def test_excerpt_function():
     cut = derive.excerpt("y" * 50, 10)
     assert len(cut) == 10 and cut.endswith("…")
     assert derive.excerpt(None, 10) is None
+
+
+def test_sets_report_a_referenced_key_with_no_store_file(world, tmp_path):
+    """A recording a trace references but the store no longer holds is reported as missing, never counted."""
+    store = tmp_path / "recordings" / "desk-hand"
+    victim = sorted(store.glob("*.json"))[0]
+    victim.unlink()
+    hand = build(world)["sets.json"]["sets"]["desk-hand"]
+    assert hand["recordings"] == 7 and hand["missing"] == 1 and hand["orphans"] == 0
+
+
+@pytest.mark.parametrize("text", [
+    "Here is the fix: ```python\n" + "x = 1\n" * 60 + "``` and that is all.",
+    "```\n" + "line\n" * 80 + "```",
+    "Before ```a``` then ```sh\n" + "echo hi\n" * 40 + "```",
+])
+def test_excerpt_never_leaves_a_code_fence_open(text):
+    cut = derive.excerpt(text, 120)
+    assert len(cut) <= 120 and cut.count("```") % 2 == 0, cut
+    assert not cut.rstrip("…").endswith("`") or cut.endswith("```"), cut   # no half fence marker left at the cut
+
+
+def test_excerpt_with_closed_fences_is_unchanged():
+    text = "Run ```ls``` first. " + "word " * 60
+    assert derive.excerpt(text, 120) == derive.re.sub(r"\s+", " ", text).strip()[:119].rstrip() + "…"
 
 
 # ── not recorded yet ────────────────────────────────────────────────────────

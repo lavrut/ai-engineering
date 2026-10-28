@@ -65,6 +65,7 @@ STEP_CAP = 240                                     # a step's result excerpt
 REPLY_CAP = 400                                    # a run's final reply excerpt
 ARGS_CAP = 120                                     # a tool call's arguments, a handoff's task, an error
 COST_DIGITS = 8
+FENCE = "```"                                       # a Markdown code fence; an excerpt never leaves one open
 RULINGS = {
     "R62": "cost and latency come from the recording: the sum of the trace's proxy_calls cost_usd and ms, served "
            "again on replay; never what one run paid (spent, cost_usd) or measured locally (a record's ms)",
@@ -77,11 +78,23 @@ RULINGS = {
 
 # ── 2. Reading a trace ──────────────────────────────────────────────────────
 def excerpt(text: Any, cap: int) -> str | None:
-    """At most `cap` characters, whitespace collapsed; a cut ends in an ellipsis (counted in the cap)."""
+    """At most `cap` characters, whitespace collapsed; a cut ends in an ellipsis (counted in the cap). A cut never
+    leaves a ``` code fence open: it cuts before the open fence, or, when the excerpt starts with it, closes it."""
     if text is None:
         return None
     s = re.sub(r"\s+", " ", text if isinstance(text, str) else json.dumps(text, sort_keys=True, ensure_ascii=False)).strip()
-    return s if len(s) <= cap else s[: cap - 1].rstrip() + "…"
+    if len(s) <= cap:
+        return s
+    head = s[: cap - 1]
+    if s[cap - 1] == "`":                 # never split a fence marker: back off over the backticks at the cut
+        head = head.rstrip("`")
+    head = head.rstrip()
+    if head.count(FENCE) % 2 == 0:
+        return head + "…"
+    before = head[: head.rfind(FENCE)].rstrip()
+    if before:                            # the cut falls inside a fenced block: cut before its opening fence
+        return before + "…"
+    return head[: cap - len(" " + FENCE) - 1].rstrip("` ") + "… " + FENCE   # the excerpt is the block: close it
 
 
 def args_text(args: Any) -> str | None:
@@ -500,7 +513,7 @@ def judge_set(traces_dir: Path, store_dir: Path) -> dict:
     import run_evals
     wanted = run_evals.judge_keys(traces_dir)
     on_disk = store_keys(store_dir, run_evals.JUDGE_SET)
-    return {"recordings": len(on_disk & wanted), "orphans": len(on_disk - wanted),
+    return {"recordings": len(on_disk & wanted), "missing": len(wanted - on_disk), "orphans": len(on_disk - wanted),
             "record": "python agents/evals/run_evals.py --record-judge"}
 
 
@@ -518,7 +531,8 @@ def build_sets(traces_dir: Path, store_dir: Path) -> dict:
                       "model_calls": sum(len(ledger(d)) for d in present),
                       "recorded_cost_usd": _cost(_sum(costs)),
                       "distinct_recorded_cost_usd": _cost(_sum(list(used.values()))),
-                      "recordings": len(used), "orphans": len(on_disk - set(used)),
+                      "recordings": len(set(used) & on_disk), "missing": len(set(used) - on_disk),
+                      "orphans": len(on_disk - set(used)),
                       "replay": f"python agents/run.py --set {name}",
                       "record": f"python agents/run.py --set {name} --mode record --max-cost {MAX_COST}"}
     return {"about": about(
@@ -532,6 +546,8 @@ def build_sets(traces_dir: Path, store_dir: Path) -> dict:
         distinct_recorded_cost_usd="the ledger cost of each distinct recording the runs used, counted once",
         recordings="R67: the distinct recordings the set's runs used (distinct proxy_calls keys over its traces); "
                    "a replay of the set serves exactly these",
+        missing="the keys the set's runs (or, for the judge set, the current requests) reference that the store "
+                "does not hold: a replay of those calls would miss; 0 when the store is whole",
         orphans="R67: the store files for the set that no run references (superseded by a later re-record); "
                 "replay never reads them, and agents/prune.py deletes them (R73)",
         judge="the eval's judge set (agents/evals/run_evals.py): recordings = the judge requests the current "
