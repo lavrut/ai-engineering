@@ -498,6 +498,12 @@ describe('lesson 6 (checking the judge): the numbers it states', () => {
     expect(judged('after').every((x) => x.output)).toBe(true);
     expect(l).toContain('None of these 30 were ungraded');
   });
+  it('REVIEWED 2026-10-28: lesson 7 cites the judge check as 28 to 29 of 30 per criterion against human-reviewed labels', () => {
+    const counts = RUBRIC_IDS.map((rid) => Math.round(agree('after', rid) * 30));
+    expect([Math.min(...counts), Math.max(...counts)]).toEqual([28, 29]);
+    expect(read('07-prompt')).toContain('the judge agrees with human-reviewed labels on 28 to 29 of 30 replies per criterion, not all 30 (lesson 6)');
+    expect(read('07-prompt')).not.toMatch(/Claude-drafted/);
+  });
   it('REVIEWED 2026-10-28: kappa 0.81, 0.76, 0.92 after and 0.81, 0.76, 0.84 before; one more disagreement takes 0.92 to 0.84; the worked pe 0.64', () => {
     expect(RUBRIC_IDS.map((rid) => kappa('after', rid).toFixed(2))).toEqual(['0.81', '0.76', '0.92']);
     expect(RUBRIC_IDS.map((rid) => kappa('before', rid).toFixed(2))).toEqual(['0.81', '0.76', '0.84']);
