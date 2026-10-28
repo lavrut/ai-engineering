@@ -650,17 +650,14 @@ def test_failed_refresh_keeps_the_old_recordings_and_trace(dirs, monkeypatch, ca
     assert go(argv, dirs) == 0                                      # and it still replays
 
 
-def test_patching_the_facade_reaches_the_parts(monkeypatch):
-    """M3: run.py re-exports its parts' names. Patching one on `run` patches it in every part that holds it,
-    so the code sees the patch wherever it looks the name up; undoing the patch restores them all."""
+def test_run_re_exports_its_parts_and_a_patch_goes_on_the_owner(monkeypatch):
+    """run.py re-exports its parts' names as plain names (run.X is the part's own X). A test patches the module
+    whose code looks the name up: trace_doc in run_traces reads run_traces.MODEL."""
     import run_sets
     import run_traces
-    was = run_sets.MODEL
-    monkeypatch.setattr(run, "MODEL", "claude-patched")
-    assert (run.MODEL, run_sets.MODEL, run_traces.MODEL) == ("claude-patched",) * 3
-    sentinel = object()
-    monkeypatch.setattr(run, "preflight", sentinel)
-    assert run_engines.preflight is sentinel
-    monkeypatch.undo()
-    assert (run.MODEL, run_sets.MODEL, run_traces.MODEL) == (was,) * 3
-    assert run_engines.preflight is run.preflight is not sentinel
+    assert run.preflight is run_engines.preflight and run.trace_doc is run_traces.trace_doc
+    assert run.MODEL == run_sets.MODEL == run_traces.MODEL
+    monkeypatch.setattr(run_traces, "MODEL", "claude-patched")
+    doc = run.trace_doc(set_name="desk-hand", engine_name="hand", desk="single", ticket_id="t001", mode="replay",
+                        result={"trace": []}, spent=0.0, paid_calls=0)
+    assert doc["model"] == "claude-patched"

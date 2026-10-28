@@ -32,7 +32,6 @@ import json
 import re
 import statistics
 import sys
-import types
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -47,23 +46,7 @@ import run  # noqa: E402  (agents/run.py: the sets, the trace layout, the record
 from derive_read import (ARGS_CAP, COST_DIGITS, FENCE, MAX_COST, REPLY_CAP, STEP_CAP, WRITE_TOOLS,  # noqa: E402,F401
                          _cost, _num, _sum, args_text, excerpt, ledger, load, model_step, not_recorded, steps_of,
                          tool_step, totals)
-import derive_read  # noqa: E402  (the part itself, for the patch rule below)
 
-
-# A patch on this module reaches the parts (M3). The names above are copies of the parts' names, so patching one
-# here (monkeypatch.setattr(derive, "ARGS_CAP", ...)) also sets it in every part that holds that name, and the
-# patched value is what the code sees wherever it looks the name up. Undoing the patch sets the old value back
-# the same way. Reading a name works as before.
-class _Facade(types.ModuleType):
-    def __setattr__(self, name: str, value: Any) -> None:
-        for part in _PARTS:
-            if name in vars(part):
-                setattr(part, name, value)
-        super().__setattr__(name, value)
-
-
-_PARTS = (derive_read,)
-sys.modules[__name__].__class__ = _Facade
 
 core = run.core
 

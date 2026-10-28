@@ -406,14 +406,12 @@ def test_engine_scores_untouched(world):
     assert (world["out"] / "engine_scores.json").read_bytes() == before
 
 
-def test_patching_the_facade_reaches_derive_read(monkeypatch):
-    """M3: derive.py re-exports derive_read's caps and readers. A cap patched on `derive` reaches the reader
-    that uses it (args_text in derive_read caps at ARGS_CAP)."""
+def test_derive_re_exports_derive_read_and_a_patch_goes_on_the_owner(monkeypatch):
+    """derive.py re-exports derive_read's caps and readers as plain names. A test patches the module that owns
+    a name (derive_read.ARGS_CAP), because that is where args_text looks it up."""
     import derive_read
+    assert derive.args_text is derive_read.args_text and derive.ARGS_CAP == derive_read.ARGS_CAP
     long_args = {"query": "x" * 200}
     assert len(derive.args_text(long_args)) > 50
-    monkeypatch.setattr(derive, "ARGS_CAP", 9)
-    assert derive_read.ARGS_CAP == 9
+    monkeypatch.setattr(derive_read, "ARGS_CAP", 9)
     assert len(derive.args_text(long_args)) <= 9
-    monkeypatch.undo()
-    assert derive_read.ARGS_CAP == derive.ARGS_CAP != 9

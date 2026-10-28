@@ -29,7 +29,6 @@ import math
 import os
 import sys
 import tempfile
-import types
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -53,25 +52,6 @@ from client import Answerer, always, connect, deny  # noqa: E402,F401
 from ops_server import build_ops_server  # noqa: E402,F401
 from read_server import build_read_server  # noqa: E402,F401
 from triage_lab import PRICES, call_cost  # noqa: E402,F401  (the lab's price table, dollars per million tokens)
-import agent_config  # noqa: E402  (the parts themselves, for the patch rule below)
-import agent_host  # noqa: E402
-import agent_model  # noqa: E402
-
-
-# A patch on this module reaches the parts (M3). The names above are copies of the parts' names, so patching one
-# here (monkeypatch.setattr(agent, "CALL_TIMEOUT", ...)) also sets it in every part that holds that name, and the
-# patched value is what the code sees wherever it looks the name up. Undoing the patch sets the old value back
-# the same way. Reading a name works as before.
-class _Facade(types.ModuleType):
-    def __setattr__(self, name: str, value: Any) -> None:
-        for part in _PARTS:
-            if name in vars(part):
-                setattr(part, name, value)
-        super().__setattr__(name, value)
-
-
-_PARTS = (agent_config, agent_host, agent_model)
-sys.modules[__name__].__class__ = _Facade
 
 
 # ── 1. Running a scenario ───────────────────────────────────────────────────
