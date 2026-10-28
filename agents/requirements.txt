@@ -1,0 +1,22 @@
+langgraph==1.2.18
+langchain==1.4.7
+langchain-anthropic==1.7.6
+claude-agent-sdk==0.2.174
+mcp==2.3.0
+anthropic==1.17.0
+httpx==0.28.1
+# LangGraph's own packages, pinned to the versions the recordings were made with (pip freeze of .venv-agents): a
+# newer one can change the request bytes LangGraph sends, and so every replay key, turning a free replay into misses.
+langchain-core==1.7.0
+langgraph-prebuilt==1.1.1
+langgraph-checkpoint==4.3.1
+langgraph-sdk==0.4.10
+pytest==9.2.0
+brotli==1.2.1  # older brotli makes every API call fail with "Connection error" under the SDK's HTTP client
+# lumen-read's classify_complaint (lumen_core.classify) imports ml/serve/server.py (FastAPI) and ml/python/train.py,
+# which import numpy, scipy and scikit-learn at module level. The same lines as mcp/requirements.txt (R59), with
+# fastapi pinned to the installed version here.
+scikit-learn==1.8.0
+numpy==2.5.4
+scipy==1.17.1
+fastapi==0.162.0

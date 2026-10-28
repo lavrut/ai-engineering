@@ -1,0 +1,116 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "hand-go",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "The ticket already has the category \"account,\" which fits the content, so I didn't relabel it. The classifier's suggestion was low-confidence and used a different category set, so I disregarded it.\n\nReply to the customer:\n\n\"Thanks for reaching out, and sorry for the trouble getting back into your account. Since the reset link is going to your old inbox, our support team will need to help confirm your identity and update the email address on your account. Please reply with the new work email address you'd like to use and any details that help us verify the account.\"",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t003"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "text": "I changed my email address at work and can no longer get into my Lumen account. The reset link goes to my old inbox. How do I switch it?"
+    },
+    "is_error": false,
+    "tool": "classify_complaint"
+   }
+  ]
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002413,
+   "input_tokens": 933,
+   "key": "9cbbf7fdf040b005538a34e9ef489f4e3016f7f2f525e4d43d6688322a47e527",
+   "model": "claude-haiku-5-5",
+   "ms": 2987,
+   "output_tokens": 296,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0003743,
+   "input_tokens": 1373,
+   "key": "585bbbb52bb79259948894c0549eeeeeeeddce8e3e139b9714a4ecfd36325690",
+   "model": "claude-haiku-5-5",
+   "ms": 3286,
+   "output_tokens": 474,
+   "replayed": false
+  }
+ ],
+ "set": "desk-hand-go",
+ "spent": 0.000616,
+ "ticket": "t003",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2989,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 933,
+   "tokens_out": 296
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 4,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 627,
+   "name": "classify_complaint",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 3287,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1373,
+   "tokens_out": 474
+  }
+ ]
+}

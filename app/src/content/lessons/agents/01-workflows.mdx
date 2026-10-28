@@ -1,0 +1,139 @@
+---
+track: agents
+order: 1
+slug: workflows
+title: Workflows or agents?
+goal: Tell a workflow from an agent, name the five patterns from Anthropic's "Building effective agents", and pick the simplest one that does a job.
+minutes: 20
+quiz:
+  - question: What separates a workflow from an agent?
+    options:
+      - A workflow uses one model call and an agent uses several
+      - In a workflow, code decides the path and the model fills in each step. In an agent, the model decides which tool to call next and when to stop
+      - A workflow has no tools and an agent has tools
+      - A workflow runs offline and an agent needs the network
+    answer: 1
+    explanation: Both kinds can make many calls and use tools. The difference is who chooses the next step. The chain in this track always makes the same two calls because its code says so; the single agent made 3 calls on t001 because the model chose to.
+  - question: A ticket only ever needs "classify it, then write the reply". Which design fits best, and why?
+    options:
+      - An agent with every tool, because it can handle anything
+      - A supervisor with four workers, because more checks are always better
+      - A prompt chain, because the steps are known in advance, so code can fix them and check the category between them
+      - Evaluator-optimizer, because every reply should be judged
+    answer: 2
+    explanation: '"Building effective agents" advises the simplest solution that works. When the steps are known, a chain does them in a fixed order for a fixed number of calls, and its code gate catches a bad category before the second call pays for it.'
+  - question: Why does the single agent's loop have a cap, MAX_TURNS = 8, when the chain needs none?
+    options:
+      - The API refuses more than 8 calls
+      - The model decides when to stop, so without a cap a confused agent could keep calling the model and keep spending money
+      - The cap makes the agent faster
+      - Eight is the number of tools it has
+    answer: 1
+    explanation: The chain's length is in its code, so it cannot run on. An agent stops only when the model gives a reply with no tool call. The cap is the code's limit on a path the model chooses, as the agent loop in the Harness track had MAX_TURNS.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+In the Harness track you built an <Term t="agent loop" />: call the model, run the tools it asks for, send the results back, repeat. In the MCP track the same loop reached its tools through servers. This track asks a design question first: does the job need a loop at all?
+
+Anthropic's post ["Building effective agents"](https://www.anthropic.com/engineering/building-effective-agents) (December 2024) gives the vocabulary this track uses. It calls both kinds "agentic systems" and splits them in two:
+
+- A <Term t="workflow" /> runs model calls and tools along paths written in code. The code decides what happens next. The model fills in each step.
+- An <Term t="agent" /> lets the model decide its own path: which tool to call next, and when it is done.
+
+The post names five workflow patterns. This track builds each one on the Lumen support desk, in Python and Go:
+
+- <Term t="prompt chaining" />: a fixed sequence of calls with a check in code between them. Lesson 2.
+- <Term t="routing" />: one call sorts the input, and a prompt made for that kind of input handles it. Lesson 2.
+- <Term t="parallelization" />: independent calls run side by side, then the results are combined. Lesson 3.
+- <Term t="orchestrator-workers" />: a lead call plans the subtasks at run time, and workers do them. Lesson 3.
+- <Term t="evaluator-optimizer" />: one call drafts, another judges, and the draft is revised. Lesson 4.
+
+The post's main advice is to find the simplest solution that works and add steps only when they measurably help. Every extra call adds cost and time.
+
+### Where the dial sits
+
+A workflow is predictable. Its path is in the code, so you can count its calls before it runs. An agent is flexible. It handles a ticket nobody planned for, and you learn its cost only afterwards.
+
+The recorded runs show both ends. On ticket `t001` (Maria, charged twice), the chain made 2 model calls, because its code has two. The single agent made 3, because the model chose to read the ticket, try a label, then reply. Over the 13 eval tickets the single agent made between 2 and 4 calls. The multi-agent supervisor of lesson 5 made between 11 and 18.
+
+### What this track builds
+
+The running example is the Lumen desk from the MCP track: tickets in `lumen-read`, labels written by `lumen-ops` only after a person says yes.
+
+- Lessons 1 to 4: the five patterns, hand-built.
+- Lessons 5 and 6: a single agent and a supervisor with four worker agents, and when the extra agents pay.
+- Lessons 7 to 9: a record-and-replay proxy, then the same desk in LangGraph and in the Claude Agent SDK.
+- Lessons 10 and 11: one eval suite that scores every engine, and a gate that decides which one ships.
+
+Every model call in the track was recorded with `claude-haiku-5-5` through a local proxy. Replaying a recording is free and gives the same answer, so every command in these lessons runs without an API key.
+
+## See it
+
+Press **Next** through the diagram. Watch where the next call is decided. In steps 2 to 6 fixed workflow code decides it. In step 7 the agent and its tools pass calls back and forth in a loop, and the model chooses each turn.
+
+<FlowDiagram diagram="agent-patterns" />
+
+The diagram showed the same ticket entering either a workflow, where code picks one of five fixed shapes, or an agent, where the model picks the next tool call until it stops.
+
+## The code
+
+The five patterns live in `agents/desk/python/patterns.py`, with a Go twin in `agents/desk/go/patterns.go` whose numbered sections match. Section 1 holds the limits that make each workflow's length knowable.
+
+<CodeTabs source="agents-patterns" section={1} />
+
+- `ROUTES = ("billing", "bug", "account", "other")` is the router's closed set. Code rejects any other answer.
+- `MAX_ROUNDS = 3` caps the evaluator-optimizer's judge calls, so its worst case is known.
+- `MAX_SUBTASKS = 3` and `MAX_WORKER_STEPS = 3` cap the orchestrator's plan and each worker's tool loop.
+- `LOOKUPS = ("get_ticket", "search_tickets", "search_tickets")` lists the parallel pattern's three lookups. Lesson 3 shows what the repeat costs.
+- `RULES = (...)` is appended to every prompt: the ticket is customer data, and the reply promises no refunds, dates or fixes.
+
+The agent end of the dial is the single agent in `agents/desk/python/supervisor.py`, section 2. It is the Harness track's loop over the MCP tools.
+
+<CodeTabs source="agents-supervisor" section={2} />
+
+- `session.read_untrusted.set()` marks the session before the first call, because the ticket text is in the first message. Lesson 5 explains why that matters for writes.
+- `for _ in range(MAX_TURNS):` is the cap. Section 1 sets `MAX_TURNS = 8`: the model chooses the path, and the code limits its length.
+- `response = _ask(run, call, "single", "act", SINGLE_SYSTEM, messages, schema)` offers every desk tool, read and write, on every turn.
+- `if not uses:` ends the loop when the model replies without a tool call. That is the model deciding it is done.
+- `results = [_tool(run, run_tool, "single", u, allowed) for u in uses]` runs the requested tools one at a time, in the order asked.
+- `_stop(run, "single", "max_turns")` leaves a stop record in the trace when the cap ends the run instead of the model.
+
+<Callout kind="note" title="Frameworks come later on purpose">
+  "Building effective agents" advises starting with direct API calls, because a framework's layers can hide the prompts and responses you need to debug. This track hand-builds the patterns and the desk first. Lessons 8 and 9 rebuild the desk in LangGraph and the Claude Agent SDK, and the evals compare all of them on the same tickets.
+</Callout>
+
+## Try it
+
+### Set up
+
+The track needs Python 3.12 or later, as `mcp/requirements.txt` requires for the MCP servers the desks use, and Go 1.27.2 or later, the version `agents/desk/go/go.mod` requires. From the repo root, make the track's virtual environment and install the pinned packages. Never install into your base Python.
+
+```bash
+python3 -m venv .venv-agents
+.venv-agents/bin/pip install -r agents/requirements.txt
+```
+
+### Replay a workflow and an agent
+
+Nothing here costs money. Each command starts the record/replay proxy on `127.0.0.1`, runs the engine against it, and answers every model call from `agents/data/recordings/`. No API key is needed.
+
+Run the chain on `t001`:
+
+```bash
+.venv-agents/bin/python agents/run.py --engine hand --desk pattern:chain --tickets t001
+```
+
+You should see two `replayed` lines from the proxy, then `hand pattern:chain t001: ok, 2 model calls, spent $0.0000; matches the recorded trace (kept)`.
+
+Now run the single agent on the same ticket:
+
+```bash
+.venv-agents/bin/python agents/run.py --engine hand --desk single --tickets t001
+```
+
+You should see a guard line, `asking the person about label_ticket({"id": "t001", "label": "billing"}) -> no (scripted)`, then `hand single t001: ok, 3 model calls`. The agent chose to label the ticket. The guard asked a person, the scripted person said no, and the agent replied anyway. The chain could not have tried a write: none is in its code.

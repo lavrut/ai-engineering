@@ -1,0 +1,121 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "langgraph",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "interrupts": [],
+  "reply": "The ticket already has the category \"bug,\" so I haven't relabeled it. The classifier's output (credit reporting, low confidence) doesn't fit this report, so I ignored it.\n\nReply to the customer:\n\nThanks for the report. We're sorry that pasting Google Sheets tables into notes is collapsing the columns into one line, especially since it worked last week. We've logged it as a bug with your Lumen web version (Chrome 131) details so the team can look into it.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t002"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "text": "When I paste a table from Google Sheets into a note, the columns collapse into one long line of text. Using Lumen web on Chrome 131. It worked fine last week."
+    },
+    "is_error": false,
+    "tool": "classify_complaint"
+   }
+  ],
+  "tool_results": [
+   "{\"category\": \"bug\", \"id\": \"t002\", \"priority\": \"normal\", \"untrusted_body\": \"When I paste a table from Google Sheets into a note, the columns collapse into one long line of text. Using Lumen web on Chrome 131. It worked fine last week.\"}",
+   "{\"label\": \"Credit reporting or other personal consumer reports\", \"low_confidence\": true, \"model_version\": \"v1\", \"scores\": {\"Checking or savings account\": 0.10160201158017025, \"Credit card\": 0.11297711412177062, \"Credit reporting or other personal consumer reports\": 0.4151000618507931, \"Debt collection\": 0.1069633397562357, \"Money transfer, virtual currency, or money service\": 0.16156055901889937, \"Mortgage\": 0.10179691367213098}}"
+  ]
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00025269999999999996,
+   "input_tokens": 847,
+   "key": "de15973a033de05079bc94bef3aba74a7ea867d1fd7eaa772770c48d68d6de1a",
+   "model": "claude-haiku-5-5",
+   "ms": 2613,
+   "output_tokens": 336,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0003398,
+   "input_tokens": 1498,
+   "key": "b64a77ff2d8782374a2a9a53a5a71d27fb3a5c3f41b7459c8f8f8da6421a2da2",
+   "model": "claude-haiku-5-5",
+   "ms": 3281,
+   "output_tokens": 380,
+   "replayed": false
+  }
+ ],
+ "set": "desk-langgraph",
+ "spent": 0.000592,
+ "ticket": "t002",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2619,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 847,
+   "tokens_out": 336
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 4,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 3,
+   "name": "classify_complaint",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 3286,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1498,
+   "tokens_out": 380
+  }
+ ]
+}

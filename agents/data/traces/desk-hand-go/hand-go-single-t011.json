@@ -1,0 +1,116 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "hand-go",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "This ticket is already categorized as a feature request, and the classifier's output was low-confidence and didn't fit the text, so I left the existing label in place.\n\nReply to the customer:\n\nThank you for the detailed feedback. Being able to see who edited a note and when, with a version history that shows names, is a useful idea, especially for a team of 12 working daily in Lumen. We have logged your request for the product team to review, but we can't confirm whether or when it will be available.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t011"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "text": "Our team of 12 uses Lumen daily. We would pay extra for a way to see who edited a note and when, like a version history with names. Right now we cannot tell who deleted a paragraph."
+    },
+    "is_error": false,
+    "tool": "classify_complaint"
+   }
+  ]
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002652,
+   "input_tokens": 952,
+   "key": "7587934f483b1ab4c902d9b9344f85a8481d90d2790ebd1a886cf637eb42b233",
+   "model": "claude-haiku-5-5",
+   "ms": 1839,
+   "output_tokens": 340,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0003108,
+   "input_tokens": 1433,
+   "key": "43168105df25f530b97f034b6eb23ead008ffd8495cd2c98002f5b6ac3fdb72b",
+   "model": "claude-haiku-5-5",
+   "ms": 2345,
+   "output_tokens": 335,
+   "replayed": false
+  }
+ ],
+ "set": "desk-hand-go",
+ "spent": 0.000576,
+ "ticket": "t011",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1841,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 952,
+   "tokens_out": 340
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 3,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 596,
+   "name": "classify_complaint",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2346,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1433,
+   "tokens_out": 335
+  }
+ ]
+}

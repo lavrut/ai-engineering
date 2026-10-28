@@ -1,0 +1,72 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "pattern:chain",
+ "elicit": "accept",
+ "engine": "hand",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "classifier",
+    "role": "classify"
+   },
+   {
+    "agent": "writer",
+    "role": "reply"
+   }
+  ],
+  "result": {
+   "category": "billing",
+   "reply": "Hi Maria, thanks for reaching out, and sorry for the trouble with the duplicate charge. I've received your report of two $9.99 charges for Lumen Plus dated the 3rd, and our billing team will review your account to confirm the duplicate. I'll follow up with you once that review is complete."
+  }
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002242,
+   "input_tokens": 1272,
+   "key": "07c1973f57ec07813ac1ce3b55f971ab7ba8c6d047db8ce149f969dd7c2ee074",
+   "model": "claude-haiku-5-5",
+   "ms": 2328,
+   "output_tokens": 194,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 6.56e-05,
+   "input_tokens": 156,
+   "key": "7aada34bc66ac9d926d6b97c003f080a7f5bc30ac142924d59d794bea997a683",
+   "model": "claude-haiku-5-5",
+   "ms": 953,
+   "output_tokens": 100,
+   "replayed": false
+  }
+ ],
+ "set": "patterns",
+ "spent": 0.00029,
+ "ticket": "t001",
+ "trace": [
+  {
+   "agent": "classifier",
+   "kind": "model",
+   "ms": 2346,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1272,
+   "tokens_out": 194
+  },
+  {
+   "agent": "writer",
+   "kind": "model",
+   "ms": 958,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 156,
+   "tokens_out": 100
+  }
+ ]
+}

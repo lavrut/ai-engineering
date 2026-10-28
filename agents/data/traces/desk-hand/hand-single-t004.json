@@ -1,0 +1,192 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "hand",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "I could not find documentation confirming a Markdown export for notes, so I can't say for certain whether that option is available. Please check the app's settings or export menu, and contact us again if you can't find it before you travel. We'll help you work out the safest way to back up your notes.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t004"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "limit": 5,
+     "query": "export notes markdown"
+    },
+    "is_error": false,
+    "tool": "search_tickets"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "id": "t004",
+     "label": "how_to"
+    },
+    "is_error": true,
+    "tool": "label_ticket"
+   }
+  ]
+ },
+ "paid_calls": 4,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00011690000000000001,
+   "input_tokens": 919,
+   "key": "f37fd6d144400992ada2f3ccbf7e004cbe2e1897252d310e0024dede682cc115",
+   "model": "claude-haiku-5-5",
+   "ms": 967,
+   "output_tokens": 50,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002765,
+   "input_tokens": 1035,
+   "key": "4da1cd7a486cd79f533c790405c57db4a44e7d5dc341f8bcc8c9032eb88779ef",
+   "model": "claude-haiku-5-5",
+   "ms": 2105,
+   "output_tokens": 346,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002718,
+   "input_tokens": 1923,
+   "key": "0fbafe1d218b79f12aad80c17df606fcb77fdcc8f26a78b881e84ae83abfc264",
+   "model": "claude-haiku-5-5",
+   "ms": 1309,
+   "output_tokens": 159,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.000272,
+   "input_tokens": 2100,
+   "key": "5dd5c65bb7312ca506085695f6523336a5abdbd6d5618bff214a22479d98c508",
+   "model": "claude-haiku-5-5",
+   "ms": 1369,
+   "output_tokens": 124,
+   "replayed": false
+  }
+ ],
+ "set": "desk-hand",
+ "spent": 0.000937,
+ "ticket": "t004",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 973,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 919,
+   "tokens_out": 50
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 5,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2111,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1035,
+   "tokens_out": 346
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 5,
+   "name": "search_tickets",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1316,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1923,
+   "tokens_out": 159
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 0,
+   "name": "label_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1376,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2100,
+   "tokens_out": 124
+  }
+ ]
+}

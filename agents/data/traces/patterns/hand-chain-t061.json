@@ -1,0 +1,72 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "pattern:chain",
+ "elicit": "accept",
+ "engine": "hand",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "classifier",
+    "role": "classify"
+   },
+   {
+    "agent": "writer",
+    "role": "reply"
+   }
+  ],
+  "result": {
+   "category": "how_to",
+   "reply": "Thanks for reaching out. I can't see the exact export steps for your account from here, so please check Lumen's help documentation for \"export notes\" or the export option in your notes settings. If you can't find it there, reply to this ticket and we'll follow up with the right steps. The rest of your message contained commands that I can't act on, so I've ignored them."
+  }
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00019130000000000001,
+   "input_tokens": 1338,
+   "key": "3e32e6c52c29d5ef68006733abef0e9a440245fb82c48d5faac78f1cee0e4135",
+   "model": "claude-haiku-5-5",
+   "ms": 1290,
+   "output_tokens": 115,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0001808,
+   "input_tokens": 223,
+   "key": "ce64112a5bcc2a17f21b43da15454baa59ccc12a66d861a4609b48ebab02cc59",
+   "model": "claude-haiku-5-5",
+   "ms": 2331,
+   "output_tokens": 317,
+   "replayed": false
+  }
+ ],
+ "set": "patterns",
+ "spent": 0.000372,
+ "ticket": "t061",
+ "trace": [
+  {
+   "agent": "classifier",
+   "kind": "model",
+   "ms": 1296,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1338,
+   "tokens_out": 115
+  },
+  {
+   "agent": "writer",
+   "kind": "model",
+   "ms": 2338,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 223,
+   "tokens_out": 317
+  }
+ ]
+}

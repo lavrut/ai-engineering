@@ -1,0 +1,166 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "pattern:parallel",
+ "elicit": "accept",
+ "engine": "hand-go",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "lookup-1",
+    "role": "lookup"
+   },
+   {
+    "agent": "lookup-2",
+    "role": "lookup"
+   },
+   {
+    "agent": "lookup-3",
+    "role": "lookup"
+   },
+   {
+    "agent": "summarizer",
+    "role": "summarize"
+   }
+  ],
+  "result": {
+   "lookups": [
+    {
+     "args": {
+      "id": "t007"
+     },
+     "is_error": false,
+     "tool": "get_ticket"
+    },
+    {
+     "args": {
+      "limit": 5,
+      "query": "annual plan charge cancelled March $120"
+     },
+     "is_error": false,
+     "tool": "search_tickets"
+    },
+    {
+     "args": {
+      "limit": 5,
+      "query": "annual plan charge cancelled March $120"
+     },
+     "is_error": false,
+     "tool": "search_tickets"
+    }
+   ],
+   "summary": "Ticket t007 is an urgent billing complaint: the customer says they were charged $120 for the annual plan after cancelling in March, has a confirmation email, and threatens a bank dispute if it isn't reversed today. The search returned four other billing tickets (t019, t041, t042, t001), but each describes a different issue, so none appears to be a duplicate of t007."
+  }
+ },
+ "paid_calls": 3,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0001537,
+   "input_tokens": 547,
+   "key": "1ac4566305e4d752e2498ec48c0a470324ceb4b19cfae94a4f7251d5260b82b4",
+   "model": "claude-haiku-5-5",
+   "ms": 1485,
+   "output_tokens": 198,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0001308,
+   "input_tokens": 583,
+   "key": "60fb626eb303cc47d9d23558c437673a45a6882fad8e9e835ef6b002353f5a63",
+   "model": "claude-haiku-5-5",
+   "ms": 1011,
+   "output_tokens": 145,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0001308,
+   "input_tokens": 583,
+   "key": "60fb626eb303cc47d9d23558c437673a45a6882fad8e9e835ef6b002353f5a63",
+   "model": "claude-haiku-5-5",
+   "ms": 1011,
+   "output_tokens": 145,
+   "replayed": true
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.000274,
+   "input_tokens": 1260,
+   "key": "de05c8bf9268ed32df9369c0eb5cc1caee3354982605ae40bcdbdac789f71b9b",
+   "model": "claude-haiku-5-5",
+   "ms": 1785,
+   "output_tokens": 296,
+   "replayed": false
+  }
+ ],
+ "set": "patterns-go",
+ "spent": 0.000558,
+ "ticket": "t007",
+ "trace": [
+  {
+   "agent": "lookup-1",
+   "kind": "model",
+   "ms": 1487,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 547,
+   "tokens_out": 198
+  },
+  {
+   "agent": "lookup-2",
+   "kind": "model",
+   "ms": 1013,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 583,
+   "tokens_out": 145
+  },
+  {
+   "agent": "lookup-3",
+   "kind": "model",
+   "ms": 1,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 583,
+   "tokens_out": 145
+  },
+  {
+   "agent": "parallel",
+   "kind": "tool",
+   "ms": 7,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "parallel",
+   "kind": "tool",
+   "ms": 3,
+   "name": "search_tickets",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "parallel",
+   "kind": "tool",
+   "ms": 2,
+   "name": "search_tickets",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "summarizer",
+   "kind": "model",
+   "ms": 1786,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1260,
+   "tokens_out": 296
+  }
+ ]
+}

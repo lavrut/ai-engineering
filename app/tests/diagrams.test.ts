@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { codeProblems } from '../src/lib/codeSourceText';
+import { codeProblems, resolveCode } from '../src/lib/codeSourceText';
 import { codeKey, validateDiagram, type Diagram } from '../src/lib/diagram';
 import { evalPipeline } from '../src/data/diagrams/eval-pipeline';
 import { inspectPipeline } from '../src/data/diagrams/inspect-pipeline';
@@ -12,6 +12,8 @@ import { mlLoop } from '../src/data/diagrams/ml-loop';
 import { mlPipeline } from '../src/data/diagrams/ml-pipeline';
 import { requestResponse } from '../src/data/diagrams/request-response';
 import { toolRoundtrip } from '../src/data/diagrams/tool-roundtrip';
+import { agentPatterns } from '../src/data/diagrams/agent-patterns';
+import { replayProxy } from '../src/data/diagrams/replay-proxy';
 
 const all: [string, Diagram][] = [
   ['harness-flow', harnessFlow],
@@ -25,6 +27,8 @@ const all: [string, Diagram][] = [
   ['mcp-client', mcpClient],
   ['mcp-http', mcpHttp],
   ['mcp-oauth', mcpOauth],
+  ['agent-patterns', agentPatterns],
+  ['replay-proxy', replayProxy],
 ];
 
 describe('diagram data', () => {
@@ -160,6 +164,79 @@ describe('diagram data', () => {
       expect(mcpOauth.steps[1].caption).toContain('pre-registered public client lumen-cli is the main path');
       expect(mcpOauth.steps[2].caption).toContain('PKCE (S256 only)');
       expect(mcpOauth.steps[2].caption).toContain('127.0.0.1 and nothing else');
+    });
+  });
+
+  // The AI Agents diagrams: each linked step ends its caption with "In the code: section N.",
+  // pinned against its link, so a renumbered file breaks the build, not the lesson.
+  describe('agents diagrams', () => {
+    const agents: [string, Diagram, Record<number, [string, number] | null>][] = [
+      [
+        'agent-patterns',
+        agentPatterns,
+        { 1: null, 2: ['agents-patterns', 2], 3: ['agents-patterns', 3], 4: ['agents-patterns', 4], 5: ['agents-patterns', 5], 6: ['agents-patterns', 6], 7: ['agents-supervisor', 2] },
+      ],
+      [
+        'replay-proxy',
+        replayProxy,
+        { 1: ['agents-proxy', 1], 2: ['agents-proxy', 2], 3: ['agents-proxy', 5], 4: ['agents-proxy', 6], 5: ['agents-proxy', 4], 6: ['agents-proxy', 6], 7: ['agents-proxy', 3] },
+      ],
+    ];
+
+    it.each(agents)('%s: every step links to the pinned source and section', (_name, d, want) => {
+      expect(d.steps).toHaveLength(Object.keys(want).length);
+      const got = Object.fromEntries(d.steps.map((s) => [s.n, s.code ? [s.code.source, s.code.section] : null]));
+      expect(got).toEqual(want);
+    });
+
+    it.each(agents)('%s: every linked caption ends with "In the code: section N." matching its link', (_name, d) => {
+      for (const s of d.steps) {
+        const m = /In the code: section (\d+)\.$/.exec(s.caption);
+        if (!s.code) {
+          expect(m, `step ${s.n} has no link, so no section`).toBeNull();
+          continue;
+        }
+        expect(m, `step ${s.n} caption`).not.toBeNull();
+        expect(Number(m![1]), `step ${s.n}`).toBe(s.code.section);
+      }
+    });
+
+    // Each link is pinned to what its section holds, not only to its number, so a caption about the
+    // y/N prompt cannot keep pointing at section 4 after the prompt moves.
+    it.each([
+      ['agent-patterns', agentPatterns, { 2: 'def chain(', 3: 'def route(', 4: 'def parallel(', 5: 'def orchestrate(', 6: 'def evaluate_optimize(', 7: 'def single_agent(' }],
+      [
+        'replay-proxy',
+        replayProxy,
+        { 1: 'HOST = "127.0.0.1"', 2: 'def request_key(', 3: 'def playback_bytes(', 4: 'replay_miss', 5: 'def confirm(', 6: 'would pass --max-cost', 7: 'latest wins' },
+      ],
+    ] as const)('%s: each linked section holds what its caption describes', (_name, d, want) => {
+      const got = Object.fromEntries(d.steps.filter((s) => s.code).map((s) => [s.n, resolveCode(s.code!).python]));
+      expect(Object.keys(got).map(Number)).toEqual(Object.keys(want).map(Number));
+      for (const [n, text] of Object.entries(want)) expect(got[Number(n)], `step ${n}`).toContain(text);
+    });
+
+    it('agent-patterns shows the five patterns as workflows, beside the agent loop', () => {
+      expect(agentPatterns.nodes.map((n) => n.label)).toEqual([
+        'Ticket', 'Workflow: code decides', 'Prompt chaining', 'Routing', 'Parallelization', 'Orchestrator-workers', 'Evaluator-optimizer',
+        'Claude (model)', 'Agent: model decides', 'Tools',
+      ]);
+      expect(agentPatterns.steps[0].caption).toContain('Building effective agents');
+      expect(agentPatterns.steps[6].caption).toContain('the model decides');
+    });
+
+    it('replay-proxy keeps the API behind record mode, the key, the cap and the y/N question', () => {
+      expect(replayProxy.nodes.map((n) => n.id)).toEqual(['engine', 'proxy', 'gate', 'api', 'store']);
+      expect(replayProxy.nodes.find((n) => n.id === 'proxy')?.label).toBe('Proxy on 127.0.0.1');
+      expect(replayProxy.nodes.find((n) => n.id === 'api')?.label).toBe('api.anthropic.com');
+      expect(replayProxy.edges.find((e) => e.to === 'gate')?.label).toBe('record mode only');
+      expect(replayProxy.steps[0].caption).toContain('ANTHROPIC_BASE_URL to http://127.0.0.1:8790');
+      expect(replayProxy.steps[3].caption).toContain('404');
+      expect(replayProxy.steps[3].caption).toContain('never forwarded');
+      expect(replayProxy.steps[4].caption).toContain('y/N');
+      expect(replayProxy.steps[5].caption).toContain('--max-cost');
+      expect(replayProxy.steps[5].caption).toContain('from the environment');
+      expect(replayProxy.steps[6].caption).toContain('latest wins');
     });
   });
 

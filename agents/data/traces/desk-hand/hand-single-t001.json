@@ -1,0 +1,146 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "hand",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "I haven't applied the billing label to ticket t001, because the label change was declined. The ticket is already filed under billing.\n\nReply to the customer:\n\n\"Hi Maria, thank you for letting us know about the two $9.99 charges for Lumen Plus on your statement dated the 3rd. We've passed the duplicate charge to our billing team to review. We'll get back to you with an update once they've looked into it.\"",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t001"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "id": "t001",
+     "label": "billing"
+    },
+    "is_error": true,
+    "tool": "label_ticket"
+   }
+  ]
+ },
+ "paid_calls": 3,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002044,
+   "input_tokens": 954,
+   "key": "b825473ae43d0826e5b7204c7c41642c1b8a9d90d47e592f6a26bd5c37dd27c1",
+   "model": "claude-haiku-5-5",
+   "ms": 2615,
+   "output_tokens": 218,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002178,
+   "input_tokens": 1273,
+   "key": "1b88a111b9fff07de1398d46b95e6442898142a1f4029f62e5a9a49592b0fbcb",
+   "model": "claude-haiku-5-5",
+   "ms": 1172,
+   "output_tokens": 181,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00023170000000000002,
+   "input_tokens": 1472,
+   "key": "af7cf04765dbf890873acf4b3d3a60b373bcaaa726b4864765fcd51122e510f2",
+   "model": "claude-haiku-5-5",
+   "ms": 2658,
+   "output_tokens": 169,
+   "replayed": false
+  }
+ ],
+ "set": "desk-hand",
+ "spent": 0.000654,
+ "ticket": "t001",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2627,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 954,
+   "tokens_out": 218
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 3,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1177,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1273,
+   "tokens_out": 181
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 0,
+   "name": "label_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2663,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1472,
+   "tokens_out": 169
+  }
+ ]
+}

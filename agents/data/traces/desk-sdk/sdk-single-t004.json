@@ -1,0 +1,200 @@
+{
+ "approve": "decline",
+ "cost_usd": 0.0007556500000000001,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "sdk",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "I couldn't confirm a Markdown export option, so I can't tell you yet whether one exists. I also didn't label ticket t004 as how_to, because the labeling action was denied. The ticket's existing category is already how_to. Please check the product's export or settings documentation, or ask the support team to confirm the export options before you travel.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t004"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "limit": 5,
+     "query": "export notes Markdown"
+    },
+    "is_error": false,
+    "tool": "search_tickets"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "id": "t004",
+     "label": "how_to"
+    },
+    "is_error": true,
+    "tool": "label_ticket"
+   }
+  ],
+  "usage": {
+   "claude-haiku-5-5": {
+    "cacheCreationInputTokens": 1956,
+    "cacheReadInputTokens": 6735,
+    "canonicalModel": "claude-haiku-5-5",
+    "contextWindow": 1000000,
+    "costBasis": "list",
+    "costUSD": 0.0007556500000000001,
+    "inputTokens": 8,
+    "maxOutputTokens": 128000,
+    "outputTokens": 886,
+    "provider": "firstParty",
+    "thinkingTokens": 546,
+    "webSearchRequests": 0
+   }
+  }
+ },
+ "paid_calls": 4,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 474,
+   "cache_read_input_tokens": 960,
+   "cost_usd": 0.00016205,
+   "input_tokens": 2,
+   "key": "c2f645ea662ed1074608458381830698220fa41146632810fb102373429cf42a",
+   "model": "claude-haiku-5-5",
+   "ms": 1494,
+   "output_tokens": 186,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 276,
+   "cache_read_input_tokens": 1434,
+   "cost_usd": 0.00022654,
+   "input_tokens": 2,
+   "key": "1574335ca77f53813181dd82dc01f2efc30e7e7cc37911158009b4c0ca4feb58",
+   "model": "claude-haiku-5-5",
+   "ms": 2266,
+   "output_tokens": 355,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 921,
+   "cache_read_input_tokens": 1710,
+   "cost_usd": 0.000240425,
+   "input_tokens": 2,
+   "key": "acd9e2cc76d5d1b93363e04137123880313fff63b2359cb3a98d1b9b3bb07a5d",
+   "model": "claude-haiku-5-5",
+   "ms": 1520,
+   "output_tokens": 216,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 285,
+   "cache_read_input_tokens": 2631,
+   "cost_usd": 0.000126635,
+   "input_tokens": 2,
+   "key": "2c9782539979ea406f0b42ae14a8333cf7118a2da1579ba5446a4ae9e0242f45",
+   "model": "claude-haiku-5-5",
+   "ms": 1225,
+   "output_tokens": 129,
+   "replayed": false
+  }
+ ],
+ "set": "desk-sdk",
+ "spent": 0.001313,
+ "ticket": "t004",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 10,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 7,
+   "name": "search_tickets",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  }
+ ]
+}

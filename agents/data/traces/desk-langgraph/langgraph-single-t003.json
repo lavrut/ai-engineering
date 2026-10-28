@@ -1,0 +1,170 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "langgraph",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "interrupts": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t003",
+     "label": "account"
+    },
+    "decision": "reject",
+    "tool": "label_ticket"
+   }
+  ],
+  "reply": "The ticket is an account issue. I tried to label it \"account,\" but you declined that action, so it remains unlabeled. The classifier's suggestion was low confidence and didn't fit this ticket, so I didn't use it.\n\n**Draft reply to the customer:**\n\nThanks for reaching out. Changing the email address on your Lumen account is handled through our account support process, because we need to verify your identity before we can update it. Please reply with the new work email address and the old one on the account, and our support team will follow up with the next steps.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t003"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "text": "I changed my email address at work and can no longer get into my Lumen account. The reset link goes to my old inbox. How do I switch it?"
+    },
+    "is_error": false,
+    "tool": "classify_complaint"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "id": "t003",
+     "label": "account"
+    },
+    "is_error": true,
+    "tool": "label_ticket"
+   }
+  ],
+  "tool_results": [
+   "{\"category\": \"account\", \"id\": \"t003\", \"priority\": \"high\", \"untrusted_body\": \"I changed my email address at work and can no longer get into my Lumen account. The reset link goes to my old inbox. How do I switch it?\"}",
+   "{\"label\": \"Money transfer, virtual currency, or money service\", \"low_confidence\": true, \"model_version\": \"v1\", \"scores\": {\"Checking or savings account\": 0.16077886443752978, \"Credit card\": 0.10806978470853695, \"Credit reporting or other personal consumer reports\": 0.25561096165721, \"Debt collection\": 0.1183856802966944, \"Money transfer, virtual currency, or money service\": 0.28526480184704106, \"Mortgage\": 0.07188990705298787}}",
+   "rejected at the interrupt: label_ticket"
+  ]
+ },
+ "paid_calls": 3,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00021810000000000002,
+   "input_tokens": 836,
+   "key": "0f7f1d4ef26f817d077cbaac2f12c41ed98303d540c72b05b3573c4b192646a4",
+   "model": "claude-haiku-5-5",
+   "ms": 1610,
+   "output_tokens": 269,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00027820000000000004,
+   "input_tokens": 1407,
+   "key": "73874bdece44684d9c4f2b7f2fe0c0e254223df1ebef0e108c5efc1cdbc34b06",
+   "model": "claude-haiku-5-5",
+   "ms": 1683,
+   "output_tokens": 275,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00033580000000000003,
+   "input_tokens": 1768,
+   "key": "77d417da62607115ca974153118583906f39e42abb4fd0d855bf6bf16e690f5e",
+   "model": "claude-haiku-5-5",
+   "ms": 2177,
+   "output_tokens": 318,
+   "replayed": false
+  }
+ ],
+ "set": "desk-langgraph",
+ "spent": 0.000832,
+ "ticket": "t003",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1615,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 836,
+   "tokens_out": 269
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 6,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 4,
+   "name": "classify_complaint",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1694,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1407,
+   "tokens_out": 275
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2189,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1768,
+   "tokens_out": 318
+  }
+ ]
+}

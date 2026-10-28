@@ -1,0 +1,81 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "pattern:evaluate_optimize",
+ "elicit": "accept",
+ "engine": "hand-go",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "writer",
+    "role": "draft"
+   },
+   {
+    "agent": "judge",
+    "role": "judge"
+   }
+  ],
+  "result": {
+   "final": "Thanks for reaching out, and I'm sorry this charge has caused you frustration. I understand you cancelled in March and have a confirmation email, and I've noted that you need this resolved quickly. I'm looking into your account and the billing history now, and I'll follow up with you on what I find.",
+   "rounds": [
+    {
+     "draft": "Thanks for reaching out, and I'm sorry this charge has caused you frustration. I understand you cancelled in March and have a confirmation email, and I've noted that you need this resolved quickly. I'm looking into your account and the billing history now, and I'll follow up with you on what I find.",
+     "verdict": {
+      "addresses_issue": true,
+      "no_false_promises": true,
+      "tone": true
+     }
+    }
+   ]
+  }
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 6.26e-05,
+   "input_tokens": 156,
+   "key": "2f2a97036e03bf84b059bd9b4ea8ea863341b49a591a7fe4d87ac6ea2f809c13",
+   "model": "claude-haiku-5-5",
+   "ms": 1085,
+   "output_tokens": 94,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002469,
+   "input_tokens": 444,
+   "key": "50f37c01758184867550e2f908dc34b03b7e3fd48ab8104defdfd95dac3b5ba7",
+   "model": "claude-haiku-5-5",
+   "ms": 2132,
+   "output_tokens": 405,
+   "replayed": false
+  }
+ ],
+ "set": "patterns-go",
+ "spent": 0.000309,
+ "ticket": "t007",
+ "trace": [
+  {
+   "agent": "writer",
+   "kind": "model",
+   "ms": 1088,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 156,
+   "tokens_out": 94
+  },
+  {
+   "agent": "judge",
+   "kind": "model",
+   "ms": 2133,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 444,
+   "tokens_out": 405
+  }
+ ]
+}

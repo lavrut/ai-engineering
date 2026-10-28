@@ -1,0 +1,120 @@
+---
+track: agents
+order: 4
+slug: evaluator
+title: Evaluator-optimizer
+goal: Build a draft, judge and revise loop with a capped number of rounds, read its recorded runs, and say what a judge on the writer's own model can and cannot catch.
+minutes: 20
+quiz:
+  - question: With MAX_ROUNDS = 3, what is the most model calls one evaluator-optimizer run can make, and why is the cap there?
+    options:
+      - 3, one per round
+      - 6, the first draft, three judge calls and two revisions; the cap bounds the cost of a judge that never passes
+      - 4, one draft and three judge calls
+      - There is no maximum; it stops when the judge passes
+    answer: 1
+    explanation: Each round is one judge call, and a revision follows every failed round except the last, whose draft is final either way. The Python run on t061 used all six. Without the cap, a judge that keeps failing would keep the loop, and the bill, running.
+  - question: On t061 the Python judge failed the first draft, which said it could not confirm the export steps. The draft that passed told the customer to "open the Export option in the app, choose PDF, and select all notes". What is the lesson?
+    options:
+      - The loop worked perfectly
+      - The judge rewarded answering the question, and the writer met that by stating steps that no tool had confirmed. A loop optimizes toward its judge, not toward the truth
+      - The first draft broke the rules
+      - The judge should have been skipped for t061
+    answer: 1
+    explanation: The evaluator-optimizer pattern here has no tools, so nothing checked whether Lumen has that menu. The rubric's addresses_issue item pushed the writer from an honest "I can't confirm" to confident steps. Feedback improves a draft only on what the judge can actually check.
+  - question: The judge here is claude-haiku-5-5, the same model as the writer, called through the same function. How does that differ from the LLMs track's judge?
+    options:
+      - It is the same judge
+      - The LLMs track graded replies with claude-opus-5-5, a stronger and more expensive model. A same-model judge is cheaper but is more likely to share the writer's blind spots
+      - The same-model judge is stricter
+      - The LLMs track used no judge
+    answer: 1
+    explanation: Here the judge runs on the engine's own model through the same call, so it is recorded and replayed like every other call. It uses the lab's judge prompt and rubric, but not the lab's judge model. Lesson 10 grades the desks' final replies with a judge call of its own.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import PatternStepper from '../../../components/agents/PatternStepper.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+The last workflow pattern puts a check inside the loop. One call drafts a reply. A second call, the judge, grades the draft against written criteria. If the draft fails, the writer gets the judge's reasons and tries again.
+
+"Building effective agents" says this pattern fits when two things hold:
+
+- there is a clear criterion that a second call can check;
+- feedback measurably improves the draft.
+
+The Lumen judge reuses the LLMs track's <Term t="LLM judge" /> prompt and its <Term t="rubric" />: three pass-or-fail items, `addresses_issue`, `tone` and `no_false_promises`. The loop stops on the first draft that passes all three, or after `MAX_ROUNDS = 3` judge calls. The last draft is final either way, so the worst case is fixed: one draft, three judge calls and two revisions, six calls in all.
+
+### A cheaper judge, with a cost
+
+In the LLMs track the judge was `claude-opus-5-5`, a stronger model than the one writing the replies. Here the judge runs on the engine's own model, `claude-haiku-5-5`, through the same call as the writer. That makes it cheap, and it is recorded and replayed like any other call.
+
+The cost is independence. A judge on the same model tends to share the writer's blind spots. It also only checks what its rubric asks. It cannot check facts that nobody gave it.
+
+## See it
+
+Pick ticket `t061` in Python and step through all six calls. Read each draft and the judge's verdict after it. Then switch to Go on the same ticket.
+
+<PatternStepper patterns={['evaluate_optimize']} ticket="t061" engine="hand" />
+
+On `t001` and `t007` the judge passed the first draft in both languages: 2 calls each. On `t061`, a how-to question about exporting notes to PDF, Python used every round.
+
+1. The first draft said: "I can't confirm the exact PDF export steps for your account, so I'd rather not guess." The judge failed it on `addresses_issue`.
+2. The revision gave generic steps for "most note apps". The judge failed it on `addresses_issue` again.
+3. The third draft told the customer to "open the Export option in the app, choose PDF, and select all notes." The judge passed all three items.
+
+The pattern has no tools, so nothing checked that Lumen has such a menu. The first draft was the honest one. The loop moved the writer toward what the judge rewards, a direct answer, and the writer supplied one. The judge's `no_false_promises` item did not catch it, because the draft promised nothing; it only stated steps as fact.
+
+Go's first draft on `t061` suggested looking for an export option in settings, and the judge passed it at once: 2 calls. The two languages send slightly different request bytes, so they got different drafts, and the loop ran a different number of times.
+
+## The code
+
+Section 6 holds the judge and the loop.
+
+<CodeTabs source="agents-patterns" section={6} />
+
+- `got = _json(_text(_ask(run, call, "judge", "judge", _judge_system(load_prompts()), msg)), "judge")` asks the judge through the same `call` as the writer, with the lab's judge prompt.
+- `return {r: got[r]["pass"] for r in RUBRIC_IDS}, {r: str(got[r].get("reason", "")) for r in RUBRIC_IDS}` splits the judge's answer into a verdict and its reasons. A reply without a boolean `pass` for each item raises instead.
+- `draft = _text(_ask(run, call, "writer", "draft", writer, _ticket_msg(ticket)))` is the first draft.
+- `for n in range(max_rounds):` is the cap: one judge call per round.
+- `if all(verdict.values()) or n == max_rounds - 1:` stops on the first full pass, or after the last judge call.
+- `failed = "; ".join(f"{r}: {reasons[r]}" for r in RUBRIC_IDS if not verdict[r])` collects only the failed items' reasons. The writer sees exactly what to fix.
+- `draft = _text(_ask(run, call, "writer", "revise", writer, ...))` revises with the previous draft and the reasons in the message.
+- `run.output = {"rounds": rounds, "final": draft}` keeps every draft and verdict, so a reader can see how the reply changed.
+
+<Callout kind="warning" title="Give the judge what it needs to check">
+  A judge can only grade what it can see. This one sees the ticket and the draft, so it can check tone and whether the draft answers the question, but not whether the answer is true. If facts matter, give the writer tools that look them up, and give the judge the same facts.
+</Callout>
+
+## How Go does it
+
+The Go tab above shows `judge` and `EvaluateOptimize`. Two details differ.
+
+- **Map order.** Go's `verdict` is a `map[string]bool`, and Go iterates a map in a random order. So the Go code never ranges over the map: `for _, id := range RubricIDs` walks the fixed list instead, both to decide whether all passed and to build the failed reasons. The reasons reach the writer in the same order as Python's, so the revision prompt is the same text.
+- **Errors as values.** `judge` returns `(map[string]bool, map[string]string, error)`. A judge reply without a boolean `pass` becomes an error that `EvaluateOptimize` returns to its caller, where Python raises `ValueError`. The contract has three such cases: a reply that is not JSON, a missing `pass` and a `pass` that is not a boolean.
+
+## Try it
+
+Replay the loop on `t061` in both languages. Free:
+
+```bash
+.venv-agents/bin/python agents/run.py --engine hand --desk pattern:evaluate_optimize --tickets t061
+.venv-agents/bin/python agents/run.py --engine hand-go --desk pattern:evaluate_optimize --tickets t061
+```
+
+You should see `6 model calls` for Python and `2 model calls` for Go, each ending `matches the recorded trace (kept)`.
+
+Then read the rounds. Each holds the draft and the judge's verdict on it:
+
+```bash
+.venv-agents/bin/python -c '
+import json
+doc = json.load(open("agents/data/traces/patterns/hand-evaluate_optimize-t061.json"))
+for r in doc["output"]["result"]["rounds"]:
+    print(r["verdict"])
+'
+```
+
+You should see three lines: `addresses_issue` is `False` in the first two and `True` in the third, and `no_false_promises` and `tone` are `True` in all three. Compare the first draft with `final` in the same file and decide which one you would rather send.

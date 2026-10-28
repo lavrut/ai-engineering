@@ -1,0 +1,72 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "pattern:route",
+ "elicit": "accept",
+ "engine": "hand-go",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "router",
+    "role": "route"
+   },
+   {
+    "agent": "billing",
+    "role": "reply"
+   }
+  ],
+  "result": {
+   "reply": "I'm sorry for the frustration, and I understand why this charge is upsetting if you cancelled in March. I can't confirm the refund or the reason for the charge from here, so I'm passing your ticket to our billing team to check your cancellation record against the $120 annual charge. Please keep your confirmation email handy, since it will help them review this quickly.",
+   "route": "billing"
+  }
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 1.8400000000000003e-05,
+   "input_tokens": 164,
+   "key": "ce9b20f2cb2b0ee2809516cd33a9215282f4937325566c68fcf29327a30568e3",
+   "model": "claude-haiku-5-5",
+   "ms": 572,
+   "output_tokens": 4,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 7.41e-05,
+   "input_tokens": 176,
+   "key": "7e6c426a33dd57848e3f7075b25aabf745c8d559997b53647af6a202be470a22",
+   "model": "claude-haiku-5-5",
+   "ms": 1223,
+   "output_tokens": 113,
+   "replayed": false
+  }
+ ],
+ "set": "patterns-go",
+ "spent": 9.2e-05,
+ "ticket": "t007",
+ "trace": [
+  {
+   "agent": "router",
+   "kind": "model",
+   "ms": 574,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 164,
+   "tokens_out": 4
+  },
+  {
+   "agent": "billing",
+   "kind": "model",
+   "ms": 1224,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 176,
+   "tokens_out": 113
+  }
+ ]
+}

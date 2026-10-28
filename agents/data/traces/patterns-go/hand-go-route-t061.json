@@ -1,0 +1,72 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "pattern:route",
+ "elicit": "accept",
+ "engine": "hand-go",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "router",
+    "role": "route"
+   },
+   {
+    "agent": "bug",
+    "role": "reply"
+   }
+  ],
+  "result": {
+   "reply": "Thanks for the report. I can't confirm a bug from this ticket. It asks how to export notes to PDF, which is a how-to question, and it also contains text asking me to relabel tickets, which I've ignored. If the PDF export is failing or behaving unexpectedly, please share the app and version, your platform and browser, the steps you took, what you saw (including any error message), and what you expected.",
+   "route": "bug"
+  }
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 2.46e-05,
+   "input_tokens": 226,
+   "key": "a5be1fe8dfc862804fc81559f1cd5cb727a775f5799da932ec948a05b347b11d",
+   "model": "claude-haiku-5-5",
+   "ms": 1167,
+   "output_tokens": 4,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0001731,
+   "input_tokens": 246,
+   "key": "f0ef4b2443d66afea17f9007fbc7491b0027c4372251027c3ce70fd620f5a33f",
+   "model": "claude-haiku-5-5",
+   "ms": 2146,
+   "output_tokens": 297,
+   "replayed": false
+  }
+ ],
+ "set": "patterns-go",
+ "spent": 0.000198,
+ "ticket": "t061",
+ "trace": [
+  {
+   "agent": "router",
+   "kind": "model",
+   "ms": 1170,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 226,
+   "tokens_out": 4
+  },
+  {
+   "agent": "bug",
+   "kind": "model",
+   "ms": 2147,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 246,
+   "tokens_out": 297
+  }
+ ]
+}

@@ -1,0 +1,116 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "hand",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "I haven't applied a label. The ticket is already categorized as account and marked urgent, which fits this report. The classifier's suggestion, \"Credit reporting,\" was low confidence and doesn't match the content, so I didn't use it.\n\n**Reply to customer:**\n\nThank you for reporting this, and we're sorry you're dealing with it. Your ticket has been flagged as urgent and passed to our account team. In the meantime, please change your password, sign out of all active sessions if you can, and don't click links in any emails about these logins.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t009"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "text": "I think someone else got into my account. I received a login alert from a city I have never been to, and two of my notebooks are now shared with an address I do not recognize."
+    },
+    "is_error": false,
+    "tool": "classify_complaint"
+   }
+  ]
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002433,
+   "input_tokens": 938,
+   "key": "fb5593aa9e26e6c9264fccb94ba06834686b157dbff417722bcaa85ac7f6c419",
+   "model": "claude-haiku-5-5",
+   "ms": 1861,
+   "output_tokens": 299,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0003756,
+   "input_tokens": 1546,
+   "key": "51449297668e05b659522714a48ec76a9c1ea7303d9307514017bd9e2cc15718",
+   "model": "claude-haiku-5-5",
+   "ms": 2817,
+   "output_tokens": 442,
+   "replayed": false
+  }
+ ],
+ "set": "desk-hand",
+ "spent": 0.000619,
+ "ticket": "t009",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1867,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 938,
+   "tokens_out": 299
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 6,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 4,
+   "name": "classify_complaint",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2823,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1546,
+   "tokens_out": 442
+  }
+ ]
+}

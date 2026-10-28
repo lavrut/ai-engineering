@@ -1,6 +1,6 @@
 # AI Engineering
 
-An interactive masterclass on AI engineering, with Python and Go side by side. Four tracks are live: **Agent Harness** (build the loop, tools, context handling and guardrails around a model), **LLMs** (evaluate, judge and tune an LLM feature), **Machine Learning** (train a classic text classifier on real complaints, then track, register, serve, monitor and retrain it) and **MCP** (build, connect, secure and ship Model Context Protocol servers and clients).
+An interactive masterclass on AI engineering, with Python and Go side by side. Five tracks are live: **Agent Harness** (build the loop, tools, context handling and guardrails around a model), **LLMs** (evaluate, judge and tune an LLM feature), **Machine Learning** (train a classic text classifier on real complaints, then track, register, serve, monitor and retrain it), **MCP** (build, connect, secure and ship Model Context Protocol servers and clients) and **AI Agents** (design agent workflows and a multi-agent desk, rebuild it in LangGraph and the Claude Agent SDK, record and replay every engine, and evaluate them fairly).
 
 Hosted page: https://claude.ai/artifact/MH9ZBPk8GC1duTWc4Ke5cw (private until shared from the page's Share menu)
 
@@ -12,7 +12,8 @@ Hosted page: https://claude.ai/artifact/MH9ZBPk8GC1duTWc4Ke5cw (private until sh
 - `llms/data/` — tickets, prompts, reply labels and saved model responses; see [llms/data/README.md](llms/data/README.md).
 - `ml/` — the Machine Learning track: `ml/python/` (`train.py`, `mlops.py`, `with_mlflow.py`, `monitor.py`, `compare_llm.py`, `bench.py`), `ml/serve/server.py` (FastAPI), `ml/go/` (the Go server and drift command), and the committed data sample, models, runs, registry and reports; see [ml/data/README.md](ml/data/README.md).
 - `mcp/` — the MCP track: `mcp/core/` (the shared ticket, classifier and label code, Python and Go), `mcp/python/` (`read_server.py`, `ops_server.py`, `client.py`, `auth_server.py`, `agent.py`, `simulate.py`, `derive.py`, the App in `app/`), `mcp/go/` (`readserver`, `opsserver`, `client`, `auth`), the shared contract in `mcp/fixtures/`, and the recordings, simulated transcripts and derived lesson data in `mcp/data/`; see [mcp/fixtures/README.md](mcp/fixtures/README.md) and [mcp/data/recordings/README.md](mcp/data/recordings/README.md).
-- `app/` — the Astro site that teaches all four tracks (lessons, diagrams, simulators, quizzes).
+- `agents/` — the AI Agents track: `agents/proxy/proxy.py` (the record/replay proxy), `agents/desk/python/` and `agents/desk/go/` (the five patterns and the supervisor desk, matching numbered sections), `agents/frameworks/` (`langgraph_desk.py`, `sdk_desk.py`), `agents/evals/` (`scorers.py`, `run_evals.py`, the 13 eval tickets), `agents/run.py` (runs any engine through the proxy), `agents/derive.py` (the lesson data), the shared contract in `agents/fixtures/`, and the recordings, traces and derived data in `agents/data/`; see [agents/data/recordings/README.md](agents/data/recordings/README.md).
+- `app/` — the Astro site that teaches all five tracks (lessons, diagrams, simulators, quizzes).
 
 ## Run a harness
 
@@ -279,6 +280,63 @@ No test calls the Claude API. The model is a fake or a recording.
 .venv-mcp/bin/python mcp/python/derive.py --check           # the lesson data matches the real servers and recordings
 .venv-mcp/bin/python mcp/python/simulate.py --check         # the simulated transcripts match the real agent
 bash mcp/scripts/inspector_smoke.sh                         # optional: the pinned MCP Inspector, both protocol eras (Node 22.19+)
+```
+
+## Run the AI Agents track
+
+The Lumen support desk in four engines (hand-built Python, hand-built Go, LangGraph and the Claude Agent SDK), all talking to Claude through one record/replay proxy on `127.0.0.1:8790`. Everything below replays offline and free from the committed recordings. The only paid steps are new recordings, which print an estimate and ask first; the approved ones are committed.
+
+### Setup
+
+```sh
+python3 -m venv .venv-agents && .venv-agents/bin/pip install -r agents/requirements.txt
+```
+
+- Python 3.12 or later, in the `.venv-agents/` virtual environment at the repo root (git-ignored). `agents/requirements.txt` pins `langgraph==1.2.18`, `langchain==1.4.7`, `langchain-anthropic==1.7.6`, `claude-agent-sdk==0.2.174` (it bundles its own Claude Code CLI) and `mcp==2.3.0`, plus the ML stack that `classify_complaint` loads. The MCP servers run from this venv too.
+- Go 1.27.2 (`agents/desk/go/go.mod`) for the hand-built Go engine; `run.py` builds it on first use. That first build fetches the module's dependencies (`github.com/modelcontextprotocol/go-sdk` v1.8.0 and what it requires) once, unless your Go module cache already holds them, so it needs the network that one time; every replay after it is offline.
+
+### Replay (free)
+
+Each run gets its own proxy run in replay mode: every model call comes from `agents/data/recordings/<set>/`, the lumen tools really run, and a request with no recording stops with a 404 naming the command that records it. It never falls back to a paid call.
+
+```sh
+.venv-agents/bin/python agents/run.py --set patterns          # the five patterns in Python (patterns-go for Go)
+.venv-agents/bin/python agents/run.py --set desk-hand         # single + supervisor on 13 tickets (desk-hand-go, desk-langgraph, desk-sdk)
+.venv-agents/bin/python agents/run.py --engine sdk --desk supervisor --tickets t001
+.venv-agents/bin/python agents/proxy/proxy.py --set desk-hand # the proxy on its own, replaying one set; stop it with Ctrl-C
+```
+
+Each run prints `ok, N model calls, spent $0.0000; matches the recorded trace (kept)`: a replay never replaces a recorded trace, it checks the run still matches it.
+
+### Scores and lesson data
+
+```sh
+.venv-agents/bin/python agents/evals/run_evals.py             # score every engine x desk, apply the capstone gate, write engine_scores.json
+.venv-agents/bin/python agents/evals/run_evals.py --check     # the committed scores match the traces
+.venv-agents/bin/python agents/derive.py --check              # the lesson data in agents/data/derived/ matches the traces
+```
+
+Both replay the judge's recorded calls (set `judge`), so they are free. After a new recording, run them without `--check` to rebuild the files, then rebuild the app.
+
+### Recording (costs money)
+
+Look at the estimate first; it calls nothing:
+
+```sh
+.venv-agents/bin/python agents/run.py --set desk-hand --dry-run
+.venv-agents/bin/python agents/evals/run_evals.py --judge-dry-run
+```
+
+Then the record commands the dry run prints (`--mode record --max-cost 10`, or `run_evals.py --record-judge`) call the Claude API with `ANTHROPIC_API_KEY` from your environment. The key is read by the proxy only, never by an engine, and never logged or stored. Each command prints the estimate and worst case again and asks `y/N` (input that is not a terminal counts as no), the proxy checks the cap before every call, and a set the cap stops is scored "incomplete", never partly. `--refresh` pays for every call again, atomically per ticket. Record only after you have read and approved the printed estimate. `--yes` answers the question in advance: it exists for a scripted run after you have approved the estimate, and the dry runs never print it, so a pasted command always asks. See [agents/data/recordings/README.md](agents/data/recordings/README.md).
+
+### Test the AI Agents code
+
+No test calls the Claude API. The models are fakes, the Agent SDK runs against a fake CLI or a local stub, and the proxy records against a fake upstream into a temporary folder.
+
+```sh
+.venv-agents/bin/python -m pytest agents -q
+(cd agents/desk/go && go test -race ./...)
+.venv-agents/bin/python agents/fixtures/gen_contract.py --check   # the shared Python/Go contract is up to date
 ```
 
 ## The site

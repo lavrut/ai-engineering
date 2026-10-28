@@ -1,0 +1,104 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "langgraph",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "interrupts": [],
+  "reply": "Ticket t005 is already categorized as a feature request, so I didn't relabel it. I've left it as is.\n\nReply to the customer:\n\nThanks for the suggestion. A dark mode that follows your system setting automatically would save you from switching it by hand each evening, and we've noted it as a feature request for our product team. We can't say whether or when it will be added, but we appreciate you taking the time to tell us.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t005"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   }
+  ],
+  "tool_results": [
+   "{\"category\": \"feature_request\", \"id\": \"t005\", \"priority\": \"low\", \"untrusted_body\": \"Would love a dark mode that follows the system setting automatically. Right now I have to flip it by hand every evening.\"}"
+  ]
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0001979,
+   "input_tokens": 829,
+   "key": "5f3d3faa49a0618c9098ab95e22b96a996a5b5a7f46d1deacbf9f8c5fb9a9866",
+   "model": "claude-haiku-5-5",
+   "ms": 1863,
+   "output_tokens": 230,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002298,
+   "input_tokens": 1133,
+   "key": "c7c454c2c78f5a6f99dccb37366f2c318e0b8f39fc8dc02604eea483d9420d84",
+   "model": "claude-haiku-5-5",
+   "ms": 2364,
+   "output_tokens": 233,
+   "replayed": false
+  }
+ ],
+ "set": "desk-langgraph",
+ "spent": 0.000428,
+ "ticket": "t005",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1868,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 829,
+   "tokens_out": 230
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 5,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2370,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1133,
+   "tokens_out": 233
+  }
+ ]
+}

@@ -1,0 +1,116 @@
+{
+ "approve": "decline",
+ "cost_usd": 0.00044279,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "sdk",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "Your report is serious, so I've reviewed ticket t009. It's already marked as an account issue with urgent priority, and I haven't changed its label. Please change your password right away, sign out of all other sessions if the account settings offer that, and turn on two-factor authentication. Our security team will review the unrecognized login and the notebook sharing, and we'll follow up with you there.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t009"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   }
+  ],
+  "usage": {
+   "claude-haiku-5-5": {
+    "cacheCreationInputTokens": 862,
+    "cacheReadInputTokens": 2414,
+    "canonicalModel": "claude-haiku-5-5",
+    "contextWindow": 1000000,
+    "costBasis": "list",
+    "costUSD": 0.00044279,
+    "inputTokens": 4,
+    "maxOutputTokens": 128000,
+    "outputTokens": 621,
+    "provider": "firstParty",
+    "thinkingTokens": 440,
+    "webSearchRequests": 0
+   }
+  }
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 494,
+   "cache_read_input_tokens": 960,
+   "cost_usd": 0.00020105,
+   "input_tokens": 2,
+   "key": "db39a0d9a62098e2ee43c702640abef12d1c90cbec406c51813b83e58d0cef60",
+   "model": "claude-haiku-5-5",
+   "ms": 1602,
+   "output_tokens": 259,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 368,
+   "cache_read_input_tokens": 1454,
+   "cost_usd": 0.00024174,
+   "input_tokens": 2,
+   "key": "f61e5bc786c1db66b167ba2a26ffb597c4268a7c0ed9a60e89275773900ec217",
+   "model": "claude-haiku-5-5",
+   "ms": 2375,
+   "output_tokens": 362,
+   "replayed": false
+  }
+ ],
+ "set": "desk-sdk",
+ "spent": 0.000638,
+ "ticket": "t009",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 14,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  }
+ ]
+}

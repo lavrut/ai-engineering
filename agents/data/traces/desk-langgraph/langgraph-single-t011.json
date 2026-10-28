@@ -1,0 +1,121 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "langgraph",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "interrupts": [],
+  "reply": "This ticket is already categorized as a feature request, so I didn't relabel it. I ignored the complaint classifier's output because its low-confidence result (credit reporting) doesn't fit this message. Here is the reply to the customer:\n\n\"Thank you for the detailed suggestion. A version history that shows who edited a note and when, including who deleted content, would be useful for a team of your size. We've passed it to our product team as a feature request, though we can't commit to whether or when it will be built.\"",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t011"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "text": "Our team of 12 uses Lumen daily. We would pay extra for a way to see who edited a note and when, like a version history with names. Right now we cannot tell who deleted a paragraph."
+    },
+    "is_error": false,
+    "tool": "classify_complaint"
+   }
+  ],
+  "tool_results": [
+   "{\"category\": \"feature_request\", \"id\": \"t011\", \"priority\": \"normal\", \"untrusted_body\": \"Our team of 12 uses Lumen daily. We would pay extra for a way to see who edited a note and when, like a version history with names. Right now we cannot tell who deleted a paragraph.\"}",
+   "{\"label\": \"Credit reporting or other personal consumer reports\", \"low_confidence\": true, \"model_version\": \"v1\", \"scores\": {\"Checking or savings account\": 0.08786528861584136, \"Credit card\": 0.08690439265660493, \"Credit reporting or other personal consumer reports\": 0.3052708854040996, \"Debt collection\": 0.169060562226966, \"Money transfer, virtual currency, or money service\": 0.11558047608076889, \"Mortgage\": 0.23531839501571927}}"
+  ]
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002795,
+   "input_tokens": 855,
+   "key": "2f04fe003a138cebd57d0f712bd7c17533eb4b6ab655370ad95d80f8025c388d",
+   "model": "claude-haiku-5-5",
+   "ms": 2542,
+   "output_tokens": 388,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00031620000000000004,
+   "input_tokens": 1567,
+   "key": "dbefe47f7fa41d4ca649e9d93d9efeb2939b6fff3aadcc595a5a9f23c2959bc1",
+   "model": "claude-haiku-5-5",
+   "ms": 2277,
+   "output_tokens": 319,
+   "replayed": false
+  }
+ ],
+ "set": "desk-langgraph",
+ "spent": 0.000596,
+ "ticket": "t011",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2546,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 855,
+   "tokens_out": 388
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 5,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 3,
+   "name": "classify_complaint",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2281,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1567,
+   "tokens_out": 319
+  }
+ ]
+}

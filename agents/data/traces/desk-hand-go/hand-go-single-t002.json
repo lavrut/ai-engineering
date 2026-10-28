@@ -1,0 +1,116 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "hand-go",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "I didn't apply a label. The ticket already reads as a bug in the desk's system, but the classifier returned \"Credit reporting\" with low confidence (0.42), which doesn't fit a formatting issue. I'm not confident enough in any of the six categories to write one, so I've left it for you to decide.\n\nSuggested reply to the customer:\n\n\"Thanks for the detailed report. We're sorry the table formatting broke after pasting from Google Sheets into a note on Lumen web with Chrome 131. We've passed this to the team as a bug, and your note about it working last week will help them look into what changed.\"",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t002"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "text": "When I paste a table from Google Sheets into a note, the columns collapse into one long line of text. Using Lumen web on Chrome 131. It worked fine last week."
+    },
+    "is_error": false,
+    "tool": "classify_complaint"
+   }
+  ]
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00025540000000000003,
+   "input_tokens": 944,
+   "key": "6d066f2439ccce73e01fd25f2291a9f8ec36cc9105298b4558ca2557044bdb4c",
+   "model": "claude-haiku-5-5",
+   "ms": 1937,
+   "output_tokens": 322,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0003698,
+   "input_tokens": 1408,
+   "key": "a996d414696a9ee112687eadc4fb2858b581b58ad4cb2bfd48b21edd39b45f2e",
+   "model": "claude-haiku-5-5",
+   "ms": 2920,
+   "output_tokens": 458,
+   "replayed": false
+  }
+ ],
+ "set": "desk-hand-go",
+ "spent": 0.000625,
+ "ticket": "t002",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1938,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 944,
+   "tokens_out": 322
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 4,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 742,
+   "name": "classify_complaint",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2922,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1408,
+   "tokens_out": 458
+  }
+ ]
+}

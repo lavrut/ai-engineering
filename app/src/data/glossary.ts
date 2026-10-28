@@ -192,6 +192,44 @@ export const glossary = {
     'An HTML page a server ships with a tool, as a ui:// resource. A host that supports the Apps extension shows it in a sandboxed frame beside the call.',
   'prompt injection':
     'Instructions hidden in data a model reads, such as a ticket body or a web page, written in the hope that the model obeys them instead of its user.',
+  workflow:
+    'An agentic system whose path is written in code: the code decides which model calls and tools run, in what order, and the model fills in each step.',
+  agent:
+    'An agentic system in which the model decides its own path: which tool to call next and when it is done, in a loop the code caps.',
+  'prompt chaining':
+    'A workflow pattern: a fixed sequence of model calls, each taking the previous one’s output, with checks in code between the steps.',
+  routing:
+    'A workflow pattern: one call sorts the input into one of a closed set of routes, and a prompt written for that route handles it.',
+  parallelization:
+    'A workflow pattern: model calls that do not depend on each other run at the same time (sectioning), or one task runs several times and the answers are compared (voting).',
+  'orchestrator-workers':
+    'A workflow pattern: a lead call plans the subtasks at run time, a worker does each one, and a last call combines their results.',
+  'evaluator-optimizer':
+    'A workflow pattern: one call drafts, a second call judges the draft against written criteria, and the draft is revised with the judge’s reasons, for a capped number of rounds.',
+  'code gate':
+    'A check in plain code between model calls, such as "the category must be one of six", that stops a run before a bad answer reaches the next step.',
+  'multi-agent system':
+    'A system that splits a job between several agents, each with its own prompt and tools, coordinated by code or by another agent.',
+  supervisor:
+    'An agent whose tools are other agents: it hands tasks to worker agents, reads their results, and decides what happens next.',
+  handoff:
+    'One agent passing a task to another. In the Lumen desk it is a tool call, handoff(worker, task), whose result is the worker’s answer.',
+  'shared state':
+    'The small, explicit record that a supervisor and its workers read and update, such as the category, the draft and the review, with every change logged.',
+  'record/replay proxy':
+    'A local server between an agent and a model API. It answers each request from a saved recording (replay) or, only when asked and approved, forwards it and saves the reply (record).',
+  'replay key':
+    'The name a recording is filed under: a hash of the request with the parts that change on every run removed, so the same request always finds the same recording.',
+  'agent framework':
+    'A library that supplies the agent loop, tool calling and state, such as LangGraph or the Claude Agent SDK, so your code describes the agent and the library runs it.',
+  'human-in-the-loop':
+    'A pause in an agent run where a person must approve or reject an action before it runs.',
+  subagent:
+    'An agent that another agent starts for one task, with its own prompt and tools. It hands its result back to the agent that started it.',
+  hook:
+    'Your code that a framework calls at a fixed point in a run, such as just before a tool runs. It can let the call through, change it or refuse it.',
+  trajectory:
+    'The path an agent took in one run: which tools and agents it called, in what order, and with which arguments.',
 } as const satisfies Record<string, string>;
 
 export type GlossaryKey = keyof typeof glossary;

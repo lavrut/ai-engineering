@@ -1,0 +1,162 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "hand",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "I'm sorry you're locked out after your work email change. I haven't changed the category on your ticket, and I can't update the email on your account from here, so I can't promise how or when it will be switched. Please reply to this ticket with your name, your Lumen username, and your new work email so our account team can check your identity and help you update it.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t003"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "text": "I changed my email address at work and can no longer get into my Lumen account. The reset link goes to my old inbox. How do I switch it?"
+    },
+    "is_error": false,
+    "tool": "classify_complaint"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "id": "t003",
+     "label": "account"
+    },
+    "is_error": true,
+    "tool": "label_ticket"
+   }
+  ]
+ },
+ "paid_calls": 3,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00022730000000000002,
+   "input_tokens": 933,
+   "key": "9cbbf7fdf040b005538a34e9ef489f4e3016f7f2f525e4d43d6688322a47e527",
+   "model": "claude-haiku-5-5",
+   "ms": 1721,
+   "output_tokens": 268,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0003578,
+   "input_tokens": 1503,
+   "key": "8214cd32efff797f3391435bdadb4a5a3ffca0bbbabf946edfde2037351858a2",
+   "model": "claude-haiku-5-5",
+   "ms": 2776,
+   "output_tokens": 415,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002616,
+   "input_tokens": 1936,
+   "key": "7f2582aca9042bf9eaad5b5c9551f49d6ec65568a8052c7ad68b047a779f8b1b",
+   "model": "claude-haiku-5-5",
+   "ms": 1297,
+   "output_tokens": 136,
+   "replayed": false
+  }
+ ],
+ "set": "desk-hand",
+ "spent": 0.000847,
+ "ticket": "t003",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1726,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 933,
+   "tokens_out": 268
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 5,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 4,
+   "name": "classify_complaint",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2781,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1503,
+   "tokens_out": 415
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 0,
+   "name": "label_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1302,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1936,
+   "tokens_out": 136
+  }
+ ]
+}

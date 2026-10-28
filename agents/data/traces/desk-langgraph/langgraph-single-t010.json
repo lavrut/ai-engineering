@@ -1,0 +1,153 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "langgraph",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "interrupts": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t010",
+     "label": "how_to"
+    },
+    "decision": "reject",
+    "tool": "label_ticket"
+   }
+  ],
+  "reply": "Thanks for reaching out. I haven't been able to record a category on your ticket, so it's still open. A member of our team will follow up with instructions for sharing a notebook. If you can tell us which Lumen app or plan you're using, please reply with that so we can point you to the right steps.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t010"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "id": "t010",
+     "label": "how_to"
+    },
+    "is_error": true,
+    "tool": "label_ticket"
+   }
+  ],
+  "tool_results": [
+   "{\"category\": \"how_to\", \"id\": \"t010\", \"priority\": \"low\", \"untrusted_body\": \"how do i share a notebook\"}",
+   "rejected at the interrupt: label_ticket"
+  ]
+ },
+ "paid_calls": 3,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00017519999999999998,
+   "input_tokens": 802,
+   "key": "83386a746d2c789272316f8d6acd3c84b95d811c3cb521eb5ec151adf55fdc1c",
+   "model": "claude-haiku-5-5",
+   "ms": 1620,
+   "output_tokens": 190,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0001404,
+   "input_tokens": 1039,
+   "key": "1d5d08000c428382a5677d993a7e3b1edef5baf6c2b99785492e2284b6e9b370",
+   "model": "claude-haiku-5-5",
+   "ms": 724,
+   "output_tokens": 73,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0001962,
+   "input_tokens": 1197,
+   "key": "5c5a7e8a2ed21d2e1650332a0846551546af7e5158298812f029fccc58a1373a",
+   "model": "claude-haiku-5-5",
+   "ms": 1389,
+   "output_tokens": 153,
+   "replayed": false
+  }
+ ],
+ "set": "desk-langgraph",
+ "spent": 0.000512,
+ "ticket": "t010",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1625,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 802,
+   "tokens_out": 190
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 3,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 727,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1039,
+   "tokens_out": 73
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1393,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1197,
+   "tokens_out": 153
+  }
+ ]
+}

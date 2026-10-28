@@ -1,0 +1,154 @@
+{
+ "approve": "decline",
+ "cost_usd": 0.00045009000000000005,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "sdk",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "I did not label ticket t008 because the label action was denied. The ticket's existing category is \"bug\", which matches the report of notes with PDFs crashing the iOS app after an update.\n\nSuggested reply to the customer:\n\n\"Thank you for letting us know that your notes with attached PDFs are closing the app on iOS since the latest update, and we understand how urgent this is with your exam on Friday. We have logged this as a bug for our team to investigate. We will update you as soon as we have more information.\"",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t008"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "id": "t008",
+     "label": "bug"
+    },
+    "is_error": true,
+    "tool": "label_ticket"
+   }
+  ],
+  "usage": {
+   "claude-haiku-5-5": {
+    "cacheCreationInputTokens": 1012,
+    "cacheReadInputTokens": 4149,
+    "canonicalModel": "claude-haiku-5-5",
+    "contextWindow": 1000000,
+    "costBasis": "list",
+    "costUSD": 0.00045009000000000005,
+    "inputTokens": 6,
+    "maxOutputTokens": 128000,
+    "outputTokens": 563,
+    "provider": "firstParty",
+    "thinkingTokens": 262,
+    "webSearchRequests": 0
+   }
+  }
+ },
+ "paid_calls": 3,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 497,
+   "cache_read_input_tokens": 960,
+   "cost_usd": 0.00015392500000000001,
+   "input_tokens": 2,
+   "key": "095f3f27694da379bd13c9c008149ff0d2d50e2b3dc3338b53531d1d8286c4d5",
+   "model": "claude-haiku-5-5",
+   "ms": 1457,
+   "output_tokens": 164,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 275,
+   "cache_read_input_tokens": 1457,
+   "cost_usd": 0.00013464500000000002,
+   "input_tokens": 2,
+   "key": "fd72ca2f135d04748902e2d1883dedc17bea19d036c308c76ce2c0bbe920f0f8",
+   "model": "claude-haiku-5-5",
+   "ms": 1357,
+   "output_tokens": 171,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 240,
+   "cache_read_input_tokens": 1732,
+   "cost_usd": 0.00016152,
+   "input_tokens": 2,
+   "key": "1b57e60cfb57f9814878e6889f9d3fcf552957cccfeb48fd8308996fdcc79e60",
+   "model": "claude-haiku-5-5",
+   "ms": 1840,
+   "output_tokens": 228,
+   "replayed": false
+  }
+ ],
+ "set": "desk-sdk",
+ "spent": 0.000798,
+ "ticket": "t008",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 22,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  }
+ ]
+}

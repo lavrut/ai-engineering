@@ -1,0 +1,146 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "hand-go",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "I couldn't apply the label to ticket t004 because the action was denied, so the ticket keeps its existing `how_to` category.\n\nCustomer reply:\n\n\"Thanks for reaching out about backing up your notes before your trip. I don't have confirmed details on a Markdown export option, so I don't want to point you to steps that may not apply. Our team can check what export options are available for your account, and we'll follow up with you on that.\"",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t004"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "id": "t004",
+     "label": "how_to"
+    },
+    "is_error": true,
+    "tool": "label_ticket"
+   }
+  ]
+ },
+ "paid_calls": 3,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0001989,
+   "input_tokens": 919,
+   "key": "f37fd6d144400992ada2f3ccbf7e004cbe2e1897252d310e0024dede682cc115",
+   "model": "claude-haiku-5-5",
+   "ms": 1485,
+   "output_tokens": 214,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002615,
+   "input_tokens": 1035,
+   "key": "b4e3e74288100a1847749b998260347ad207c3692d18236d65b5a180834b4a69",
+   "model": "claude-haiku-5-5",
+   "ms": 1949,
+   "output_tokens": 316,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002531,
+   "input_tokens": 1126,
+   "key": "d6430e0851b646748b40a89e9ca06a1ed9f2e855cff1c2e9c539cdb0e48d5385",
+   "model": "claude-haiku-5-5",
+   "ms": 2065,
+   "output_tokens": 281,
+   "replayed": false
+  }
+ ],
+ "set": "desk-hand-go",
+ "spent": 0.000714,
+ "ticket": "t004",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1487,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 919,
+   "tokens_out": 214
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 4,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1950,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1035,
+   "tokens_out": 316
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 0,
+   "name": "label_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2067,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1126,
+   "tokens_out": 281
+  }
+ ]
+}

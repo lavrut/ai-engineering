@@ -1,6 +1,6 @@
 id: agents
 title: AI Agents
 order: 5
-status: planned
-summary: "Designing agents and coordinating several of them."
-subsections: ["Multi-agent systems"]
+status: live
+summary: "Design agents and multi-agent desks, rebuild one in LangGraph and the Claude Agent SDK, and evaluate them fairly from recordings."
+subsections: ["Design", "Multi-agent", "Tools", "Frameworks", "Evals"]

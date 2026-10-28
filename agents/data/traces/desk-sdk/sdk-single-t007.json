@@ -1,0 +1,154 @@
+{
+ "approve": "decline",
+ "cost_usd": 0.00043345000000000005,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "sdk",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "I've flagged this as a billing issue, but I wasn't able to apply the label to ticket t007 because the action was denied. Please assign it manually if needed. I'm sorry for the trouble with the $120 charge. Your cancellation confirmation from March is important, and our billing team will review your account and the charge, though I can't confirm an outcome or timeline yet.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t007"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "id": "t007",
+     "label": "billing"
+    },
+    "is_error": true,
+    "tool": "label_ticket"
+   }
+  ],
+  "usage": {
+   "claude-haiku-5-5": {
+    "cacheCreationInputTokens": 1074,
+    "cacheReadInputTokens": 4210,
+    "canonicalModel": "claude-haiku-5-5",
+    "contextWindow": 1000000,
+    "costBasis": "list",
+    "costUSD": 0.00043345000000000005,
+    "inputTokens": 6,
+    "maxOutputTokens": 128000,
+    "outputTokens": 513,
+    "provider": "firstParty",
+    "thinkingTokens": 250,
+    "webSearchRequests": 0
+   }
+  }
+ },
+ "paid_calls": 3,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 513,
+   "cache_read_input_tokens": 960,
+   "cost_usd": 0.00016092500000000002,
+   "input_tokens": 2,
+   "key": "7db06935e965b0347b9ee0d02c7494cc9bd7a436c6eb94bde9d701e3fad13e13",
+   "model": "claude-haiku-5-5",
+   "ms": 1590,
+   "output_tokens": 174,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 304,
+   "cache_read_input_tokens": 1473,
+   "cost_usd": 0.00014693,
+   "input_tokens": 2,
+   "key": "ddc5077d75992bd93f57f6554ffbf30cb9e295c28dfba4025350a32c82145755",
+   "model": "claude-haiku-5-5",
+   "ms": 1920,
+   "output_tokens": 188,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 257,
+   "cache_read_input_tokens": 1777,
+   "cost_usd": 0.000125595,
+   "input_tokens": 2,
+   "key": "ce58cd84310dc6f5de3c636e333d1f30836cdc55b2e5c33c6d8e938c05ef8c3e",
+   "model": "claude-haiku-5-5",
+   "ms": 1564,
+   "output_tokens": 151,
+   "replayed": false
+  }
+ ],
+ "set": "desk-sdk",
+ "spent": 0.000785,
+ "ticket": "t007",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 9,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  }
+ ]
+}

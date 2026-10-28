@@ -1,0 +1,16 @@
+---
+// Build-time wrapper: passes patterns.json's recorded runs of the patterns a lesson names (all five by
+// default), on t001, t007 and t061, in Python and Go. Lesson 2: patterns={['chain', 'route']}.
+import PatternStepperIsland from './PatternStepper.tsx';
+import { loadAgentsData, patternStepperProps, type PatternEngine, type PatternId } from '../../lib/agentsData';
+
+interface Props {
+  patterns?: PatternId[];
+  ticket?: string;
+  engine?: PatternEngine;
+}
+
+const props = patternStepperProps(loadAgentsData().patterns, Astro.props);
+---
+
+<PatternStepperIsland client:visible {...props} />

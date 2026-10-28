@@ -1,0 +1,81 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "pattern:evaluate_optimize",
+ "elicit": "accept",
+ "engine": "hand-go",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "writer",
+    "role": "draft"
+   },
+   {
+    "agent": "judge",
+    "role": "judge"
+   }
+  ],
+  "result": {
+   "final": "Hi Maria, thanks for reaching out, and sorry for the trouble with the duplicate charge. We've received your ticket about the two $9.99 charges dated the 3rd and will look into your account to confirm the duplicate. We'll follow up with you here once we've reviewed it.",
+   "rounds": [
+    {
+     "draft": "Hi Maria, thanks for reaching out, and sorry for the trouble with the duplicate charge. We've received your ticket about the two $9.99 charges dated the 3rd and will look into your account to confirm the duplicate. We'll follow up with you here once we've reviewed it.",
+     "verdict": {
+      "addresses_issue": true,
+      "no_false_promises": true,
+      "tone": true
+     }
+    }
+   ]
+  }
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 6.220000000000001e-05,
+   "input_tokens": 152,
+   "key": "1f8746d761a00e5c7035643e444f650d55844eabf365550f0b8487f00d8dc894",
+   "model": "claude-haiku-5-5",
+   "ms": 1053,
+   "output_tokens": 94,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002235,
+   "input_tokens": 440,
+   "key": "404533298cb8a89cb46b8347f37e0752b12b73721d92e360c06aec8223607eb4",
+   "model": "claude-haiku-5-5",
+   "ms": 2040,
+   "output_tokens": 359,
+   "replayed": false
+  }
+ ],
+ "set": "patterns-go",
+ "spent": 0.000286,
+ "ticket": "t001",
+ "trace": [
+  {
+   "agent": "writer",
+   "kind": "model",
+   "ms": 1056,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 152,
+   "tokens_out": 94
+  },
+  {
+   "agent": "judge",
+   "kind": "model",
+   "ms": 2042,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 440,
+   "tokens_out": 359
+  }
+ ]
+}

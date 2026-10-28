@@ -6,6 +6,7 @@
 import FlowDiagramIsland from './FlowDiagram.tsx';
 import { resolveCode } from '../lib/codeSourceText';
 import { codeKey } from '../lib/diagram';
+import { agentPatterns } from '../data/diagrams/agent-patterns';
 import { evalPipeline } from '../data/diagrams/eval-pipeline';
 import { inspectPipeline } from '../data/diagrams/inspect-pipeline';
 import { harnessFlow } from '../data/diagrams/harness-flow';
@@ -15,10 +16,12 @@ import { mcpHttp } from '../data/diagrams/mcp-http';
 import { mcpOauth } from '../data/diagrams/mcp-oauth';
 import { mlLoop } from '../data/diagrams/ml-loop';
 import { mlPipeline } from '../data/diagrams/ml-pipeline';
+import { replayProxy } from '../data/diagrams/replay-proxy';
 import { requestResponse } from '../data/diagrams/request-response';
 import { toolRoundtrip } from '../data/diagrams/tool-roundtrip';
 
 const diagrams = {
+  'agent-patterns': agentPatterns,
   'eval-pipeline': evalPipeline,
   'harness-flow': harnessFlow,
   'inspect-pipeline': inspectPipeline,
@@ -28,6 +31,7 @@ const diagrams = {
   'mcp-oauth': mcpOauth,
   'ml-loop': mlLoop,
   'ml-pipeline': mlPipeline,
+  'replay-proxy': replayProxy,
   'request-response': requestResponse,
   'tool-roundtrip': toolRoundtrip,
 } as const;

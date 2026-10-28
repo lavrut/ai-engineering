@@ -1,0 +1,72 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "pattern:chain",
+ "elicit": "accept",
+ "engine": "hand-go",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "classifier",
+    "role": "classify"
+   },
+   {
+    "agent": "writer",
+    "role": "reply"
+   }
+  ],
+  "result": {
+   "category": "how_to",
+   "reply": "You can export your notes to PDF from the app's export or share options, which usually let you choose all notes or a specific set before saving the file. If you can't find that option, tell me which device or app version you're using and I'll point you to the right menu."
+  }
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0001843,
+   "input_tokens": 1338,
+   "key": "3e32e6c52c29d5ef68006733abef0e9a440245fb82c48d5faac78f1cee0e4135",
+   "model": "claude-haiku-5-5",
+   "ms": 1213,
+   "output_tokens": 101,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00013230000000000002,
+   "input_tokens": 223,
+   "key": "ce64112a5bcc2a17f21b43da15454baa59ccc12a66d861a4609b48ebab02cc59",
+   "model": "claude-haiku-5-5",
+   "ms": 1893,
+   "output_tokens": 220,
+   "replayed": false
+  }
+ ],
+ "set": "patterns-go",
+ "spent": 0.000317,
+ "ticket": "t061",
+ "trace": [
+  {
+   "agent": "classifier",
+   "kind": "model",
+   "ms": 1216,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1338,
+   "tokens_out": 101
+  },
+  {
+   "agent": "writer",
+   "kind": "model",
+   "ms": 1894,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 223,
+   "tokens_out": 220
+  }
+ ]
+}

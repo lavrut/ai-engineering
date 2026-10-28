@@ -1,0 +1,116 @@
+{
+ "approve": "decline",
+ "cost_usd": 0.000339225,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "sdk",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "Thanks for flagging this. I'm sorry the mobile app has been unavailable on three Monday mornings in a row, and I understand why that's frustrating. Your report is already logged as a high-priority outage so the team can look into the recurring Monday issue.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t018"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   }
+  ],
+  "usage": {
+   "claude-haiku-5-5": {
+    "cacheCreationInputTokens": 797,
+    "cacheReadInputTokens": 2420,
+    "canonicalModel": "claude-haiku-5-5",
+    "contextWindow": 1000000,
+    "costBasis": "list",
+    "costUSD": 0.000339225,
+    "inputTokens": 4,
+    "maxOutputTokens": 128000,
+    "outputTokens": 430,
+    "provider": "firstParty",
+    "thinkingTokens": 285,
+    "webSearchRequests": 0
+   }
+  }
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 500,
+   "cache_read_input_tokens": 960,
+   "cost_usd": 0.0001643,
+   "input_tokens": 2,
+   "key": "6c053b9088f6e4e1b0ee42ea36aae0cb905627c0cd17a14ec3246ac944327c36",
+   "model": "claude-haiku-5-5",
+   "ms": 1223,
+   "output_tokens": 184,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 297,
+   "cache_read_input_tokens": 1460,
+   "cost_usd": 0.000174925,
+   "input_tokens": 2,
+   "key": "441e6a75c0400abf5ee4ee3a38d634f8f857e17ae1fdcb8df7ebe5ebaa29e188",
+   "model": "claude-haiku-5-5",
+   "ms": 1550,
+   "output_tokens": 246,
+   "replayed": false
+  }
+ ],
+ "set": "desk-sdk",
+ "spent": 0.000537,
+ "ticket": "t018",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 9,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  }
+ ]
+}

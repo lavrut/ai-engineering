@@ -1,0 +1,146 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "hand-go",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "I couldn't apply the \"account\" label to ticket t009 because the label action was denied. The ticket is already marked as account with urgent priority in the system.\n\nSuggested reply to the customer:\n\n\"Thank you for reporting this, and we're sorry you're dealing with it. Please change your password right away, sign out of all other sessions if you can, and check that your recovery email and phone number are yours. Our account security team is reviewing the login alert and the notebook sharing you described, and they will follow up with you.\"",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t009"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "id": "t009",
+     "label": "account"
+    },
+    "is_error": true,
+    "tool": "label_ticket"
+   }
+  ]
+ },
+ "paid_calls": 3,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0001878,
+   "input_tokens": 938,
+   "key": "fb5593aa9e26e6c9264fccb94ba06834686b157dbff417722bcaa85ac7f6c419",
+   "model": "claude-haiku-5-5",
+   "ms": 1753,
+   "output_tokens": 188,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002608,
+   "input_tokens": 1073,
+   "key": "e1c338d720256896a6d4ac948a09db7b5baa4710f9d0594498c6302159070e73",
+   "model": "claude-haiku-5-5",
+   "ms": 2590,
+   "output_tokens": 307,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00025969999999999997,
+   "input_tokens": 1162,
+   "key": "7dc2ff0c24f819a6517dfaaa82b15e3dc026e589fd649d77d14687ebce89f529",
+   "model": "claude-haiku-5-5",
+   "ms": 2817,
+   "output_tokens": 287,
+   "replayed": false
+  }
+ ],
+ "set": "desk-hand-go",
+ "spent": 0.000708,
+ "ticket": "t009",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1755,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 938,
+   "tokens_out": 188
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 6,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2591,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1073,
+   "tokens_out": 307
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 0,
+   "name": "label_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2820,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1162,
+   "tokens_out": 287
+  }
+ ]
+}

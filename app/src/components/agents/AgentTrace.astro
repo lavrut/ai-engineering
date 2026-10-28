@@ -1,0 +1,17 @@
+---
+// Build-time wrapper: passes traces.json's recorded desk runs (single and supervisor, on t001, t004,
+// t007 and t061) for the engines a lesson names, all four by default. Lesson 5:
+// engines={['hand', 'hand-go']}; lesson 8: engines={['langgraph']}; lesson 9: engines={['sdk']}.
+import AgentTraceIsland from './AgentTrace.tsx';
+import { agentTraceProps, loadAgentsData, type Desk, type Engine } from '../../lib/agentsData';
+
+interface Props {
+  engines?: Engine[];
+  desk?: Desk;
+  ticket?: string;
+}
+
+const props = agentTraceProps(loadAgentsData().traces, Astro.props);
+---
+
+<AgentTraceIsland client:visible {...props} />

@@ -1,0 +1,162 @@
+---
+track: agents
+order: 8
+slug: langgraph
+title: The desk in LangGraph
+goal: Rebuild the Lumen desk on LangGraph, keep its tools on the gated path, and explain how the framework's own pause and the harness guard ask about the same write.
+minutes: 30
+quiz:
+  - question: LangChain has an adapter that turns MCP servers straight into LangChain tools. Why does the desk not use it, even apart from the version conflict?
+    options:
+      - The adapter is slower
+      - An adapter-built tool calls the server directly, so the call skips the harness permission gate, the untrusted-read guard and the per-session lock that open_desk_tools puts in front of every call
+      - LangGraph cannot call MCP tools at all
+      - The adapter needs an API key
+    answer: 1
+    explanation: The gates live in run_tool, the function open_desk_tools hands back. A tool that reaches the server another way never passes them. Wrapping the gated tools as LangChain tools keeps every engine on the same checks, so lesson 10 compares frameworks, not safety layers.
+  - question: In every recorded LangGraph run, the scripted person said no at LangGraph's interrupt. Which layer refused the label, and what did the harness guard do?
+    options:
+      - The guard refused it, after the interrupt let it through
+      - lumen-ops refused it, because the person declined its confirmation
+      - The interrupt refused it, so the call never ran and the guard was never asked. A test with the interrupt saying yes shows the guard still refusing on its own
+      - Both refused it at the same moment
+    answer: 2
+    explanation: LangGraph asks before any tool of the turn runs. A rejected call is never executed, so run_tool, where the guard lives, is never reached. The two layers read the same scripted answer, so they agree; the guard is the one that does not depend on the framework.
+  - question: The LangGraph supervisor's model asks for a worker named "billing". What does it get back?
+    options:
+      - A handoff error naming the four workers, as in the hand-built desk
+      - Nothing; the call is dropped
+      - LangGraph's own error, "billing is not a valid tool, try one of [...]". That list names every tool on the agent, label_ticket included even before a review passed, but the run-time gate still refuses a label that was not offered
+      - A new worker named billing
+    answer: 2
+    explanation: In LangGraph the workers are tools, so a made-up worker is a made-up tool, and the framework answers it. Its message leaks the full tool list, which the hand-built desk never shows. The leak is cosmetic because the gate that refuses the label runs when the tool runs, not when it is listed.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import AgentTrace from '../../../components/agents/AgentTrace.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+Lessons 5 and 6 built the desk by hand: the loop, the handoffs, the state, the gates. An <Term t="agent framework" /> supplies the loop for you. This lesson rebuilds the same desk on LangGraph, and the next one on the Claude Agent SDK, so the evals can compare frameworks on the same tickets.
+
+The versions are pinned: `langgraph==1.2.18`, `langchain==1.4.7` and `langchain-anthropic==1.7.6`. Older tutorials use names that have since moved:
+
+- `create_react_agent` is deprecated. The desk uses `langchain.agents.create_agent`, which builds a LangGraph graph and runs it.
+- The `langgraph-supervisor` package is archived. LangChain now recommends building a supervisor as an agent whose tools are the workers, which is what the hand-built desk already does.
+
+The desk keeps the hand-built prompts, state, worker checks and gates, imported from `supervisor.py`. Only the loop is LangGraph's.
+
+### Tools: the gated path
+
+LangChain has an adapter, `langchain-mcp-adapters`, that turns MCP servers into LangChain tools. It would look like this. It is shown here as text only, and not run in this course:
+
+```python
+from langchain_mcp_adapters.client import MultiServerMCPClient
+
+client = MultiServerMCPClient({
+    "lumen-read": {"transport": "stdio", "command": "python", "args": ["mcp/python/read_server.py"]},
+})
+tools = await client.get_tools()      # LangChain tools that call the server directly
+```
+
+It cannot run here. Version 0.3.2, the latest when we checked on 2026-10-27, requires `mcp<2`, and this track pins `mcp==2.3.0`, so it fails to import.
+
+The desk would not use it anyway. An adapter-built tool calls the server directly. The desk's tools come from `open_desk_tools`, as in every engine, and every call goes through its `run_tool`: the harness permission gate, the untrusted-read guard and a lock that keeps one MCP session per ticket in order. The desk wraps each of those tools as a LangChain tool, so LangGraph calls our gate, and our gate calls the server.
+
+### Two layers of asking
+
+The write, `label_ticket`, gets LangGraph's own <Term t="human-in-the-loop" /> pause, `HumanInTheLoopMiddleware`. Before any tool of a model turn runs, LangGraph stops the graph and asks about each label in that turn. The desk answers with the scripted person.
+
+That pause is the framework's layer. The harness guard is ours, and it still runs inside `run_tool`. After the guard, `lumen-ops` asks for its own confirmation. Both asking layers read the same scripted answer, the `approve` setting, which was `decline` in every recorded run, so they always agree:
+
+- **A no at the interrupt.** The call never runs, so the guard is never asked. This is what happened in every recorded run: the person said no to all 13 LangGraph label attempts at the interrupt.
+- **A yes at the interrupt, a no at the guard.** The call runs and the guard refuses it. No recorded run does this, because both answers are scripted the same. A test does it: `test_guard_blocks_a_write_after_an_untrusted_read` makes the interrupt say yes and checks that nothing is written.
+
+Why keep both? The interrupt is how a LangGraph app pauses for a person, and a real app would show it in its UI. The guard is the check that does not depend on any framework, and it is the same in all four engines.
+
+### Where LangGraph shows through
+
+- **A made-up tool name.** In LangGraph the workers are tools, so a worker the model makes up is a tool it makes up. LangGraph answers with its own error, `"<name> is not a valid tool, try one of [...]"`. That list is every tool on the agent, so before a review passes it names `label_ticket`, which the request did not offer. The leak is cosmetic: the run-time gate still refuses the label. The call goes to the run's `errors`, never `tool_calls`, and the eval counts a made-up worker here as a forbidden tool. No recorded LangGraph run made one.
+- **Where a refusal is logged.** A call rejected at the interrupt never runs. The desk logs it in `tool_calls` when the interrupt is answered, which is before that turn's other tool calls ran, with the result `rejected at the interrupt: label_ticket`. In the hand-built desk a refused call sits where it ran. The eval allows for that difference.
+- **Asked, then refused.** The interrupt asks once per model turn, before any tool runs. A label asked for beside a drafter's handoff in the same turn can be approved at the interrupt, then refused when it runs, because the new draft cleared the review first.
+- **One tool call at a time.** LangGraph runs a turn's tool calls in parallel threads. The desk passes `max_concurrency=1`, so they run one at a time, in the order the model asked, as in every engine.
+
+## See it
+
+The aid opens on the LangGraph supervisor for `t001`. Step through it and find the end: the review passed, the supervisor asked for `label_ticket`, and the label was refused. Then try `t004` and compare it with lesson 5's hand-built run.
+
+<AgentTrace engines={['langgraph']} />
+
+On `t001` the LangGraph supervisor made 11 model calls, the same as the hand-built Python supervisor. The four handoffs ran in order, and the label was refused at the interrupt.
+
+On `t004` the reviewer failed both drafts, as it failed every `t004` draft in every engine. The hand-built supervisor kept asking until `MAX_TURNS`. The LangGraph supervisor stopped by itself after 13 calls, with a note for the log: "Ticket t004 is not finished. The reviewer has failed the draft twice, and I have not labeled the ticket." One run is one sample, so read this as how this run went, not as a LangGraph feature.
+
+Over the 13 tickets, the LangGraph supervisor succeeded on 76.9%, against 69.2% for the hand-built Python one. The 7.7-point gap is well inside the 27.7-point band, so the two are not shown to differ. Its single agent succeeded on 69.2%. On 9 of 13 tickets it read that the ticket was already filed under a category and left the label alone, as in "Ticket t001 is already categorized as billing, so I haven't relabeled it." Lesson 10 shows how the scorer counts a category the agent confirmed rather than relabelled.
+
+## The code
+
+Section 2 of `langgraph_desk.py` wraps a gated desk tool as a LangChain tool.
+
+<CodeTabs source="agents-langgraph" section={2} />
+
+- `out, is_error = run_tool(name, args)` is the only way the tool reaches a server. The permission gate, the guard and the session lock all run inside it.
+- `reason = refuse(args) if refuse else None` runs a code gate first. The supervisor passes one for `label_ticket`; a refused call never reaches `run_tool`.
+- `raise ToolException(out)` turns a failed call into a tool message with status "error", which the model reads, as the hand-built desk's `is_error` result.
+
+Section 3 is the loop's middleware, the interrupt and the driver.
+
+<CodeTabs source="agents-langgraph" section={3} />
+
+- `tools = self.offer(list(request.tools)) if self.offer else list(request.tools)` in `wrap_model_call` rebuilds the offered tools for every model call. That is the hand-built "offer `label_ticket` only after a passed review", in middleware.
+- `if self.n >= self.cap:` in `before_model` stops the agent at its cap and leaves a "stop" record, as `MAX_TURNS` does by hand.
+- `elif call["name"] not in self.skip:` in `wrap_tool_call` sends any name that is neither an MCP tool nor a worker to `errors`, with LangGraph's own error text.
+- `return HumanInTheLoopMiddleware({WRITE_TOOL: config})` in `_hitl` is LangGraph's pause before `label_ticket`.
+- `while out.get("__interrupt__"):` in `drive` answers each pause with the scripted person and resumes the graph with `Command(resume={"decisions": decisions})`.
+- `run["tool_results"].append(f"rejected at the interrupt: {req['name']}")` logs a rejected call when the interrupt is answered, since it will never run.
+
+Section 5 is the supervisor, built as tools.
+
+<CodeTabs source="agents-langgraph" section={5} />
+
+- `def handoff(worker: str) -> StructuredTool:` makes each worker a tool. Its function runs the hand-built worker and applies the update with `sv._apply`, so the state and its log are the hand-built ones.
+- `def offer(tools: list) -> list:` drops `label_ticket` until `sv._passed(state)`.
+- `def refuse(args: dict) -> str | None:` checks again when the tool runs: offered in this request, the review still passed, and the arguments bound to this ticket and its category.
+- `middleware=[loop, _hitl(when=lambda req: refuse(req.tool_call["args"]) is None)]` asks the person only about a label the code gate would let through. A refused label is never put to a person.
+
+<Callout kind="go" title="Why Python only">
+  LangGraph is a Python library here (`langgraph==1.2.18`), and this track builds no Go version of it. The Go side of the track is the hand-built desk of lessons 2 to 6, which already runs the same contract as Python. Comparing a framework with the Go desk would compare languages as well as frameworks, so the framework lessons stay in one language.
+</Callout>
+
+## Try it
+
+Replay the LangGraph supervisor on `t001` and on `t004`. Free:
+
+```bash
+.venv-agents/bin/python agents/run.py --engine langgraph --desk supervisor --tickets t001,t004
+```
+
+Between LangChain's own `HTTP Request:` log lines you should see `langgraph supervisor t001: ok, 11 model calls` and `langgraph supervisor t004: ok, 13 model calls`, each ending `matches the recorded trace (kept)`. There is no guard line: every label was refused at the interrupt, before the guard.
+
+Print the interrupt log and where the rejection sits in `tool_calls`:
+
+```bash
+.venv-agents/bin/python -c '
+import json
+doc = json.load(open("agents/data/traces/desk-langgraph/langgraph-supervisor-t001.json"))
+out = doc["output"]
+print(out["interrupts"])
+print(out["tool_calls"][-1])
+print(out["tool_results"][-1])
+'
+```
+
+You should see one interrupt with `'decision': 'reject'`, the `label_ticket` call with `'is_error': True`, and `rejected at the interrupt: label_ticket`.
+
+Run the LangGraph desk's tests, which use a fake chat model and no API:
+
+```bash
+.venv-agents/bin/python -m pytest agents/frameworks/tests/test_langgraph.py -q
+```
+
+You should see `20 passed`, including `test_guard_blocks_a_write_after_an_untrusted_read` and the two `r35` tests for made-up names.

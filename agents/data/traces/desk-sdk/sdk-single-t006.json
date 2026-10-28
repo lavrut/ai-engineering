@@ -1,0 +1,116 @@
+{
+ "approve": "decline",
+ "cost_usd": 0.00041146,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "sdk",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "Thanks for reporting this, and I'm sorry you're hitting this right before your presentation. Your ticket is already logged as an urgent outage, and we're treating it as a priority. We can't confirm a fix or timeline yet, but please check the app again and let us know if the error continues.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t006"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   }
+  ],
+  "usage": {
+   "claude-haiku-5-5": {
+    "cacheCreationInputTokens": 842,
+    "cacheReadInputTokens": 2431,
+    "canonicalModel": "claude-haiku-5-5",
+    "contextWindow": 1000000,
+    "costBasis": "list",
+    "costUSD": 0.00041146,
+    "inputTokens": 4,
+    "maxOutputTokens": 128000,
+    "outputTokens": 563,
+    "provider": "firstParty",
+    "thinkingTokens": 410,
+    "webSearchRequests": 0
+   }
+  }
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 511,
+   "cache_read_input_tokens": 960,
+   "cost_usd": 0.000174675,
+   "input_tokens": 2,
+   "key": "f17a21cc611f5308128659b9f506fab517cb4fea264cd0a33992004dc5efc37e",
+   "model": "claude-haiku-5-5",
+   "ms": 1683,
+   "output_tokens": 202,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 331,
+   "cache_read_input_tokens": 1471,
+   "cost_usd": 0.000236785,
+   "input_tokens": 2,
+   "key": "539e5871b01b96e68a745c9cfe2523efc2df082f6e09d8de1fba2fef00d59c80",
+   "model": "claude-haiku-5-5",
+   "ms": 3099,
+   "output_tokens": 361,
+   "replayed": false
+  }
+ ],
+ "set": "desk-sdk",
+ "spent": 0.000609,
+ "ticket": "t006",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 12,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  }
+ ]
+}

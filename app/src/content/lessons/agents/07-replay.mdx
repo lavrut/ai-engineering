@@ -1,0 +1,234 @@
+---
+track: agents
+order: 7
+slug: replay
+title: Record and replay any agent
+goal: Put a record/replay proxy between any agent and the Claude API, explain what its key leaves out and what each recording stores, and replay a whole engine for free with the same result every time.
+minutes: 30
+quiz:
+  - question: The proxy masks the Agent SDK's "# Environment" lines (working directory, platform, OS version, today's date) before it hashes a request. What would happen without that mask?
+    options:
+      - Nothing; the lines are short, so the key would barely change
+      - The proxy would store the reader's working directory in the repo
+      - Every request would get a new key on another machine or another day, so no recording would ever replay outside the run that made it
+      - The API would refuse the request
+    answer: 2
+    explanation: The key is a hash of the whole request, so any byte that changes changes the key. Those lines differ per machine and per day, so an unmasked recording would miss everywhere but where and when it was made. The mask is narrow on purpose, so that a real change to a request still misses loudly.
+  - question: Replaying the Agent SDK supervisor on t001 spends $0.0000, yet the scorecard lists that run at $0.00327. Which is right?
+    options:
+      - The replay; a replayed run is free, so its cost is zero
+      - Both, for different questions. The replay paid nothing, but the scorecard asks what the run's model calls cost, and that comes from the usage stored with each recording, the same on every replay
+      - The scorecard is out of date and must be rebuilt
+      - Neither; the cost is the Agent SDK's own estimate
+    answer: 1
+    explanation: A store hit is free and takes about a millisecond, but the work it stands for was not. Each recording keeps the recorded call's tokens and time, the proxy adds them to a per-run ledger, and every trace carries that ledger. So every engine is costed from its recordings, whether the run replayed or paid.
+  - question: You re-record one ticket with --refresh, and the run stops at its call cap halfway through. What is in the store afterwards?
+    options:
+      - The old recordings and the old trace, unchanged. A refreshed run's new recordings are held until the ticket finishes, and a run that stops early has them discarded
+      - The new recordings up to the cap, mixed with the old ones after it
+      - Nothing; --refresh deletes the old recordings first
+      - The new recordings, and the old trace marked incomplete
+    answer: 0
+    explanation: A half-refreshed ticket would leave recordings that no trace matches. So --refresh is atomic per ticket. The proxy stages the new recordings and writes them over the store only when the run finished and its trace was written.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+import { loadAgentsData } from '../../../lib/agentsData';
+
+export const sets = loadAgentsData().sets.sets;
+
+## Concept
+
+Every run in this track so far replayed for free, in four engines, with the same result each time. This lesson shows the piece that makes that possible.
+
+The hand-built desks, LangGraph and the Claude Agent SDK all reach Claude the same way: HTTP requests to the Messages API. So one program in the middle can serve all of them without touching their code. That program is a <Term t="record/replay proxy" />, `agents/proxy/proxy.py`. Each engine sets its base URL to `http://127.0.0.1:8790`, and the proxy answers there.
+
+### The key
+
+The proxy turns every request into a <Term t="replay key" />: the SHA-256 of canonical JSON over the request's `{method, path, body}`. Headers are never part of it, and never stored, so no API key, session id or account detail is either.
+
+A key only works if the same request gives the same key every time. Some parts of a request change on every run without changing what is asked, so the proxy masks them before it hashes:
+
+- `metadata.user_id`. The Agent SDK puts a fresh session id in it on every run.
+- The Agent SDK's `# Environment` lines: the working directory, the git flag, the platform, the shell, the OS version and today's date. They differ per machine and per day.
+- The footer of an Agent SDK sub-agent's hand-back, `agentId` and `duration_ms`. A fresh id and a wall-clock time arrive with every result a worker sends back.
+
+Each mask is as narrow as it can be. The hand-back mask matches only that footer at the very end of the result, and the CLI's trailing `<total_tokens>` line stays in the key, because replay reproduces it. A request that really changed must miss.
+
+### Replay and record
+
+Replay is the default. A key in the store is answered from disk, streamed replies byte for byte. A key that is not there gets a 404 `replay_miss` that names the command to record it, plus an `x-replay-hint` header naming the closest recording and the fields that differ. A miss is never forwarded to the API.
+
+Record mode is the only way out, and it is paid. It prints an estimate and asks `y/N`. Input that is not a terminal counts as no. The API key is read from the environment only, by the proxy, never by an engine. Before every call it refuses when what it spent plus the call's worst case would pass `--max-cost`, $10 by default. Each ticket runs on its own proxy run, capped at 12 paid calls, or 20 for a supervisor.
+
+### What a recording stores
+
+Each recording is one file, `<set>/<key>.json`, holding the request it answers, the response, and `upstream`: what the recorded call itself took. That is `ms`, from sending to the last byte, the `model`, and the API's four usage fields kept apart: `input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens` and `output_tokens`.
+
+The proxy keeps a ledger for every run: one row per model call it served, with that recording's `upstream` and its price. `run.py` writes the ledger into the run's trace as `proxy_calls`. The evals read cost and latency from it, so a replayed run costs and takes what its recorded calls did. A store hit is free and takes about a millisecond, but the work it stands for was not free.
+
+The ledger prices cached input the way Anthropic bills it: a cache write at 1.25 times the input price, a cache read at 0.10 times. The Agent SDK's CLI uses prompt caching on most calls, so this matters. Its supervisor on `t001` made 12 calls with 24 uncached input tokens, 13,174 tokens written to the cache, 31,753 read from it and 2,611 output tokens. The ledger prices that at $0.00327. While recording, the proxy's own spend for that run read $0.005801, because the cap counts every cached token at the full input price. The cap may overestimate. It must never underestimate.
+
+### Re-recording
+
+`--mode record --refresh` pays for every call again, even ones the store already holds, and replaces them. It is atomic per ticket: the proxy holds the new recordings until the ticket's run finishes, and writes them over the old ones only then. A run that stops early leaves the old recordings and the old trace as they were, consistent with each other.
+
+A re-record leaves the superseded files in the store. They are never read again, because no trace's ledger names their keys. The table below counts them apart, as orphans.
+
+Orphans still ship with the repo, so they are pruned. `agents/prune.py` keeps exactly the keys the traces' ledgers name, and for the judge set the requests the current traces ask for, and deletes the rest. It only lists them unless you pass `--delete`, and it leaves alone any set with a missing trace, whose unfinished runs may still need its files. One pruned file shows why it matters: a superseded Agent SDK reply had repeated the per-user temp directory the CLI tells the model. A committed test, `agents/tests/test_data_hygiene.py`, now scans every recording, trace and derived file for local paths, user ids, email addresses and key prefixes, joining a streamed reply's pieces first.
+
+## See it
+
+Step through the proxy. Watch steps 3 and 4, where a replay is answered from disk or refused, and step 6, where record mode checks the cap before every paid call.
+
+<FlowDiagram diagram="replay-proxy" />
+
+Replay never reaches the API. Only record mode passes the gate on the right, and only after a person said yes.
+
+Here is what each recording set holds, read from `agents/data/derived/sets.json` when this page was built. "Recordings used" counts the distinct keys in the runs' ledgers: exactly what a replay of the set reads. The cost is the ledger's, over the set's runs.
+
+<table>
+  <thead>
+    <tr>
+      <th scope="col">Set</th>
+      <th scope="col">Engine</th>
+      <th scope="col">Runs</th>
+      <th scope="col">Model calls</th>
+      <th scope="col">Recordings used</th>
+      <th scope="col">Orphans</th>
+      <th scope="col">Ledger cost</th>
+    </tr>
+  </thead>
+  <tbody>
+    {Object.entries(sets).map(([name, s]) => (
+      <tr>
+        <td><code>{name}</code></td>
+        <td><code>{s.engine}</code></td>
+        <td>{s.runs} of {s.expected_runs}</td>
+        <td>{s.model_calls}</td>
+        <td>{s.recordings}</td>
+        <td>{s.orphans}</td>
+        <td>{s.recorded_cost_usd === null ? 'not recorded' : `$${s.recorded_cost_usd.toFixed(4)}`}</td>
+      </tr>
+    ))}
+  </tbody>
+</table>
+
+Every set is complete: 134 runs, 15 for each language's patterns and 26 for each desk engine. The ledger prices them at $0.211 together. In the `patterns` set, 60 model calls used 57 recordings: lesson 3's two lookups that ask the same search share one. Every orphan count is 0 because the store was pruned to what the traces use. The judge set holds 101 recordings, one per distinct reply judged, and 0 orphans too.
+
+### What the first round found
+
+The first recording round found three bugs that no test with a fake model had caught:
+
+- `claude-haiku-5-5` sends thinking blocks, and the hand-built Python desk read one as a tool call and crashed.
+- `classify_complaint` failed because `.venv-agents` lacked the ML track's packages, and the models read "Error executing tool" as the answer.
+- LangChain keeps its HTTP connection open between requests. The connection outlived one ticket's proxy run, so the next ticket's request went down it to a proxy run that had already closed.
+
+The fakes never sent a thinking block, never ran the real classifier in that environment, and never started a second proxy run in one process. Each fix now has a test, the fake models send thinking blocks, and `run.py` calls every `lumen-read` tool once before a set starts paying. That pre-flight check exists because of the second bug. A recording round is also a test round: it is the first time the code meets the real API.
+
+## The code
+
+Section 2 of `proxy.py` is the key.
+
+<CodeTabs source="agents-proxy" section={2} />
+
+- `VOLATILE_BODY_FIELDS: list[tuple[str, ...]] = [("metadata", "user_id")]` is the one field removed outright.
+- `ENV_LINES = [...]` masks the `# Environment` lines line by line, each to a fixed placeholder such as `<cwd>` or `<date>`.
+- `HANDBACK_FOOTER = re.compile(...)` matches only the hand-back footer, anchored at the very end of the text with `\Z`.
+- `agent_ids = _agent_tool_ids(body.get("messages") or [])` in `normalize` limits that mask to the results of `Agent` tool calls. A tool result from any other tool keeps every byte.
+- `canonical = json.dumps(request_summary(method, path, body), sort_keys=True, separators=(",", ":"), ensure_ascii=False)` is the canonical JSON: sorted keys and no spaces, so two equal requests give the same bytes.
+- `return hashlib.sha256(canonical.encode("utf-8")).hexdigest()` is the key.
+
+Section 3 is the store.
+
+<CodeTabs source="agents-proxy" section={3} />
+
+- `record: dict[str, Any] = {"request_summary": request_summary, "response": response}` is what a recording holds, with `record["upstream"] = upstream` added for every Messages call.
+- `tmp = self.dir / f".{key}.{threading.get_ident()}.tmp"` and `os.replace(tmp, self.path(key))` write atomically, so a reader never sees half a recording.
+- `def closest_diff(store: Store, summary: dict) -> str:` builds the miss hint: it flattens the request and every recording and names the one with the fewest differing fields.
+
+Section 4 prices the calls.
+
+<CodeTabs source="agents-proxy" section={4} />
+
+- `CACHE_WRITE_MULTIPLIER = 1.25` and `CACHE_READ_MULTIPLIER = 0.10` are the published multipliers, in one named place.
+- `def ledger_cost(model: str | None, usage: dict) -> float | None:` prices one recorded call, each kind of input token at its own rate, and returns `None` rather than a guess when a field is missing.
+- `def worst_call(body: dict) -> float:` is the cap's view: the input estimate plus every output token the call may use, never fewer than `MAX_TOKENS` of them.
+- `def confirm(yes: bool) -> bool:` is the `y/N`. `if sys.stdin.isatty():` is why a script or a pipe can never answer yes.
+
+## How Go does it
+
+The proxy is Python only, and the Go engine needs nothing of its own to use it. `run.py` starts the Go desk with `-proxy` set to the proxy run's URL, and the Go process inherits nothing from your environment but `PATH`, `TMPDIR` and the locale, so no key reaches it.
+
+Go does record its own sets, though. Go writes the first request of a desk with the same bytes as Python, so the same key, but nothing holds every later request to the same bytes: a tool result's number formatting, for one, where Python writes `1.0` and Go writes `1`. One changed byte is another key. So `patterns-go` and `desk-hand-go` are separate sets, and the table above shows Go's 56 pattern calls against Python's 60.
+
+## Try it
+
+Replay one run. It is free, and every model call comes from the store:
+
+```bash
+.venv-agents/bin/python agents/run.py --engine sdk --desk supervisor --tickets t001
+```
+
+You should see one `replayed` line per call, the guard asking the scripted person about `label_ticket`, and then `sdk supervisor t001: ok, 12 model calls, spent $0.0000; matches the recorded trace (kept)`.
+
+Replay it twice more into a temporary folder and compare the traces byte for byte, and with the recorded one:
+
+```bash
+.venv-agents/bin/python -c '
+import json, sys, tempfile
+from pathlib import Path
+sys.path.insert(0, "agents")
+import run
+argv = ["--engine", "sdk", "--desk", "supervisor", "--tickets", "t001"]
+texts = []
+for _ in range(2):
+    with tempfile.TemporaryDirectory() as tmp:
+        run.main(argv, traces_dir=Path(tmp))
+        texts.append(next(Path(tmp).rglob("*.json")).read_text())
+recorded = json.loads(Path("agents/data/traces/desk-sdk/sdk-supervisor-t001.json").read_text())
+replayed = json.loads(texts[0])
+print("byte-identical:", texts[0] == texts[1])
+print("same as the recording:", run.comparable(replayed) == run.comparable(recorded))
+print("differs only in:", sorted(k for k in recorded if recorded[k] != replayed[k]))
+'
+```
+
+You should see `byte-identical: True`, `same as the recording: True` and `differs only in: ['mode', 'paid_calls', 'proxy_calls', 'spent', 'trace']`. Those are the fields that say how the run was served: the mode, what it paid, each ledger row's `replayed` flag and the engine's own local timings. `run.comparable` sets exactly those aside.
+
+Now ask the proxy for something it never recorded. Start it in one terminal, on the `desk-hand` set:
+
+```bash
+.venv-agents/bin/python agents/proxy/proxy.py --set desk-hand
+```
+
+In a second terminal:
+
+```bash
+curl -s -i http://127.0.0.1:8790/v1/messages -H 'content-type: application/json' \
+  -d '{"model": "claude-haiku-5-5", "max_tokens": 100, "messages": [{"role": "user", "content": "Hello"}]}'
+```
+
+You should see `HTTP/1.1 404 Not Found`, an `x-replay-hint` header, and the body `{"type": "error", "error": {"type": "replay_miss", "message": "no recording for 3c84397c; record with: python agents/proxy/proxy.py --mode record --set desk-hand"}}`. The proxy's terminal logs the same `MISS`. Nothing was sent anywhere. Stop the proxy with Ctrl-C.
+
+See what recording that one ticket again would cost, without calling anything:
+
+```bash
+.venv-agents/bin/python agents/run.py --engine sdk --desk supervisor --tickets t001 --dry-run
+```
+
+It prints a typical cost of $0.0100 and a worst case of $0.1601, then `Dry run: nothing was called.` The ledger above says the recorded run cost $0.00327: the estimate assumes no caching, so it errs high.
+
+Check that the store holds nothing the traces do not use:
+
+```bash
+.venv-agents/bin/python agents/prune.py
+```
+
+It prints a line per set with `0 to delete`, and ends `0 to delete in all; dry run: nothing deleted`.
+
+<Callout kind="warning" title="Recording costs money">
+  The record command the dry run prints calls the Claude API with your own key, from `ANTHROPIC_API_KEY` in your environment. It prints the estimate again and asks `y/N` before any call. `--yes` answers that question in advance; it exists for a scripted run after you have approved the estimate, and the printed command never carries it. Add `--refresh` only when you mean to pay for every call again.
+</Callout>

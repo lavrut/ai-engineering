@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { codeProblems, resolveCode, sourceTexts } from '../src/lib/codeSourceText';
 import { CODE_SOURCES, fileName, parseCodeTabsTag, type CodeSourceId } from '../src/lib/codeSources';
 import { listSections } from '../src/lib/regions';
+import { PATTERNS } from '../src/lib/agentsAids';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const lessonsDir = join(here, '../src/content/lessons');
@@ -50,6 +51,7 @@ describe('code source registry', () => {
       [
         'harness', 'llms', 'llms-inspect', 'lora', 'ml-fetch', 'ml-llm', 'ml-mlflow', 'ml-mlops', 'ml-monitor', 'ml-serve', 'ml-train',
         'mcp-agent', 'mcp-app', 'mcp-auth', 'mcp-auth-server', 'mcp-client', 'mcp-ops', 'mcp-read', 'mcp-simulate',
+        'agents-proxy', 'agents-patterns', 'agents-supervisor', 'agents-langgraph', 'agents-sdk', 'agents-evals', 'agents-run-evals',
       ].sort(),
     );
     expect(CODE_SOURCES['ml-serve']).toMatchObject({ python: 'ml/serve/server.py', go: 'ml/go/main.go' });
@@ -169,6 +171,52 @@ describe('code source registry', () => {
       expect(v.python).toContain('class ');
       expect(v.go!.split('\n')[0]).toMatch(/^\/\/ ── 2\. Token verifier/);
       expect(resolveCode({ source: 'mcp-auth-server', section: 3 }).python.split('\n')[0]).toMatch(/^# ── 3\. The provider/);
+    });
+  });
+
+  // The AI Agents track: which sections each source has (listed from the real files), so a lesson
+  // can quote any of them by number. Python and Go number the patterns and the supervisor alike.
+  describe('agents sources', () => {
+    const nums = (t: string | undefined) => listSections(t ?? '').map((x) => x.n);
+    it.each([
+      ['agents-proxy', 'agents/proxy/proxy.py', [1, 2, 3, 4, 5, 6, 7], undefined],
+      ['agents-patterns', 'agents/desk/python/patterns.py', [1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6]],
+      ['agents-supervisor', 'agents/desk/python/supervisor.py', [1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6]],
+      ['agents-langgraph', 'agents/frameworks/langgraph_desk.py', [1, 2, 3, 4, 5, 6], undefined],
+      ['agents-sdk', 'agents/frameworks/sdk_desk.py', [1, 2, 3, 4, 5, 6, 7, 8, 9], undefined],
+      ['agents-evals', 'agents/evals/scorers.py', [1, 2, 3, 4, 5, 6, 7], undefined],
+      ['agents-run-evals', 'agents/evals/run_evals.py', [1, 2, 3, 4, 5, 6, 7, 8], undefined],
+    ] as const)('%s lists its numbered sections', (id, py, sections, go) => {
+      expect(CODE_SOURCES[id].python).toBe(py);
+      const t = sourceTexts(id);
+      expect(nums(t.python)).toEqual(sections);
+      expect(go ? nums(t.go) : t.go).toEqual(go);
+      expect(CODE_SOURCES[id].goSections).toBeUndefined();
+    });
+
+    // PatternStepper's captions name the section of patterns.py and patterns.go that holds each pattern:
+    // pinned here against the files' own section titles, so a renumbered file fails, not a lesson.
+    it("names each pattern's section in PatternStepper's caption", () => {
+      const src = sourceTexts('agents-patterns');
+      const title = (t: string, n: number) => listSections(t).find((s) => s.n === n)?.title;
+      for (const p of PATTERNS) {
+        expect(title(src.python, p.section), p.id).toBe(p.name);
+        expect(title(src.go!, p.section), p.id).toBe(p.name);
+        expect(p.caption).toBe(`In the code: patterns.py and patterns.go, section ${p.section}.`);
+      }
+    });
+
+    it('pairs the hand-built desk with its Go files, section for section', () => {
+      expect(CODE_SOURCES['agents-patterns'].go).toBe('agents/desk/go/patterns.go');
+      expect(CODE_SOURCES['agents-supervisor'].go).toBe('agents/desk/go/supervisor.go');
+      const p = resolveCode({ source: 'agents-patterns', section: 6 });
+      expect(p.python.split('\n')[0]).toMatch(/^# ── 6\. Evaluator-optimizer/);
+      expect(p.go!.split('\n')[0]).toMatch(/^\/\/ ── 6\. Evaluator-optimizer/);
+      const s = resolveCode({ source: 'agents-supervisor', section: 5 });
+      expect(s.python.split('\n')[0]).toMatch(/^# ── 5\. The supervisor/);
+      expect(s.go!.split('\n')[0]).toMatch(/^\/\/ ── 5\. The supervisor/);
+      expect(fileName('agents-evals', 'python')).toBe('scorers.py');
+      expect(resolveCode({ source: 'agents-run-evals', section: 6 }).python.split('\n')[0]).toMatch(/^# ── 6\. The gate/);
     });
   });
 

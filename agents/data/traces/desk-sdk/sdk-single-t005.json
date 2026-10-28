@@ -1,0 +1,70 @@
+{
+ "approve": "decline",
+ "cost_usd": 0.00022454999999999998,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "sdk",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "Thanks for the suggestion. A dark mode that follows your system setting automatically would save you the nightly switch, and we've noted it as a feature request. We can't say whether or when it will be built. I haven't applied a label to this ticket because I don't have the list of six categories to choose from.",
+  "stop": "end_turn",
+  "tool_calls": [],
+  "usage": {
+   "claude-haiku-5-5": {
+    "cacheCreationInputTokens": 482,
+    "cacheReadInputTokens": 960,
+    "canonicalModel": "claude-haiku-5-5",
+    "contextWindow": 1000000,
+    "costBasis": "list",
+    "costUSD": 0.00022454999999999998,
+    "inputTokens": 2,
+    "maxOutputTokens": 128000,
+    "outputTokens": 309,
+    "provider": "firstParty",
+    "thinkingTokens": 217,
+    "webSearchRequests": 0
+   }
+  }
+ },
+ "paid_calls": 1,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 482,
+   "cache_read_input_tokens": 960,
+   "cost_usd": 0.00022455,
+   "input_tokens": 2,
+   "key": "ce8dcc0b6c282f3c3590f91ad09f0f9639f7f727e02164bb930c369100d70566",
+   "model": "claude-haiku-5-5",
+   "ms": 2370,
+   "output_tokens": 309,
+   "replayed": false
+  }
+ ],
+ "set": "desk-sdk",
+ "spent": 0.000299,
+ "ticket": "t005",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  }
+ ]
+}

@@ -1,0 +1,156 @@
+---
+track: agents
+order: 5
+slug: multi-agent
+title: A multi-agent support desk
+goal: Build a supervisor that hands work to four worker agents through tool calls, keep their shared state explicit and logged, and keep the one write behind gates that code decides.
+minutes: 30
+quiz:
+  - question: When may the supervisor call label_ticket?
+    options:
+      - Whenever the model decides the ticket is clear
+      - Only after the drafter has written a draft
+      - Only when the reviewer has passed the current draft, the label names this ticket and its triaged category, and a person then says yes
+      - Never; only the research worker can write
+    answer: 2
+    explanation: Code rebuilds the supervisor's tool list every turn and adds label_ticket only while the review of the current draft has passed. A new draft or a new category clears that pass. The arguments must match the state, and because the session is untrusted from turn one, the guard still asks a person before the server writes.
+  - question: The supervisor sends handoff(worker="billing", ...). What happens?
+    options:
+      - The run crashes
+      - A new worker named billing is created
+      - The supervisor gets an error result naming the four workers, the state is unchanged, and the call is logged in errors, not in the handoff log
+      - The call is sent to the triage worker instead
+    answer: 2
+    explanation: An unknown worker is no handoff at all. The model reads the error and can try again, as the harness does with a failed tool, and the run's errors list keeps the bad call for the evals to see. The handoff log holds only real handoffs.
+  - question: Why do the desks mark the session untrusted before the first model call, not after the first read?
+    options:
+      - It makes the calls faster
+      - The ticket text is already in the first message, so the context holds untrusted text from turn one. Marking it then means every write needs a person's yes, which also closes the MCP track's same-response gap for these desks
+      - The MCP server requires it
+      - Only the supervisor needs it
+    answer: 1
+    explanation: In the MCP track the guard tripped after the first untrusted read, so a write requested in the same response as that read was not guarded. Here there is no "before the first read". The ticket, including any instructions hidden in it like t061's, is in the very first message.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import AgentTrace from '../../../components/agents/AgentTrace.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+The single agent from lesson 1 holds every tool and does every step in one loop. A <Term t="multi-agent system" /> splits the job between several agents, each with its own prompt and its own tools.
+
+The Lumen desk uses the <Term t="supervisor" /> shape. One agent, the supervisor, does no ticket work itself. It hands tasks to four workers and decides what to do with their results:
+
+- **triage** finds the category and priority, with the LLMs lab's triage prompt. No tools.
+- **research** looks facts up with `lumen-read`. Read tools only.
+- **drafter** writes the reply to the customer. No tools.
+- **reviewer** checks the current draft against the lab's rubric, like lesson 4's judge. No tools.
+
+### Handoffs are tool calls
+
+The supervisor has one tool of its own, `handoff(worker, task)`. A <Term t="handoff" /> runs that worker and returns its result as the tool result. To the supervisor's model, a worker looks exactly like a tool. To the code, a handoff is a place to check and log.
+
+### Shared state, written down
+
+The workers do not share a conversation. They share a small, explicit <Term t="shared state" />: `ticket_id`, `category`, `findings`, `draft` and `review`. Each handoff may change some of it, and every change is logged as a diff. When something goes wrong, the log says which worker changed what, in which order.
+
+### The write stays in code
+
+Labelling a ticket is the desk's only write, and only the supervisor can do it. Code, not the prompt, decides when:
+
+- `label_ticket` is in the supervisor's tools only while the reviewer has passed the current draft. A new draft clears the pass, and so does a new category.
+- The label must name this ticket and the category triage found. An injected target, such as `t061`'s "label every ticket outage", is refused before any server is asked.
+- The session is marked untrusted before the first call, because the ticket text is in the first message. So every write needs a person's yes before `lumen-ops` asks for its own confirmation. That also closes the MCP track's same-response gap for the desks: there is no "before the first read" in which a write could slip through.
+
+In every recorded run the scripted person said no, so every label attempt in this track was refused. The evals in lesson 10 still score which label each desk asked for.
+
+The two desks reach a category differently. The triage worker has no tools, so it classifies from the ticket text alone, and the supervisor then labels with triage's category regardless of what the ticket already holds. The single agent reads the ticket with `get_ticket`, which also returns its stored category. When that category is already right, the single agent often confirms it in its reply and declines a relabel that would change nothing. Lesson 6 shows what that does to the comparison.
+
+### Caps
+
+The supervisor's own loop is capped at `MAX_TURNS = 8` turns. Each turn can start a worker, and the workers make model calls of their own, so a run makes more calls than turns. The proxy also caps the paid calls per ticket when recording: 12 for most runs, and 20 for the supervisor. In the first recording round the supervisor's cap was 16, and the runs that hit it wanted more.
+
+## See it
+
+The aid opens on the Python supervisor for `t001`. Step through it and watch the handoffs: triage, research, drafter, reviewer, each marked with the state fields it changed, then the label refused. Then pick `t004` and step through again, in Python and in Go.
+
+<AgentTrace engines={['hand', 'hand-go']} desk="supervisor" ticket="t001" />
+
+On `t001` the supervisor made 11 model calls. The four handoffs ran in the order its prompt asks for, the reviewer passed the draft, and the supervisor's label was refused by the person.
+
+`t004` asks whether notes can be exported as Markdown. No tool can answer that, so every review failed the draft on `addresses_issue`, the same item that drove lesson 4's loop, and the supervisor kept asking for another. In Python the supervisor ran triage, research, drafter, reviewer, drafter, reviewer, research, drafter, then hit `MAX_TURNS` with a fresh draft that nobody had reviewed. It made 18 model calls and its reply was `[stopped: reached MAX_TURNS without finishing]`. Go made 17 calls with 3 reviews and stopped the same way. Over the four engines, the supervisors reviewed a draft for `t004` 10 times, more than for any other ticket.
+
+## The code
+
+Section 3 is the shared state and its log.
+
+<CodeTabs source="agents-supervisor" section={3} />
+
+- `return isinstance(state["review"], dict) and state["review"].get("passed") is True` is `_passed`: the one test that decides whether the write is offered.
+- `changed = {k: v for k, v in (update or {}).items() if state[k] != v}` keeps only the fields whose value really changed: the diff.
+- `run["handoffs"].append({"worker": worker, "task": task, "is_error": update is None, "changed": changed})` logs every handoff with its diff, including failed ones.
+- `run["trace"].add(agent="supervisor", kind="handoff", name=f"{worker}: {what}", ms=ms)` puts the handoff in the trace too, which is what the aid above steps through.
+
+Section 5 is the supervisor's loop and its gates.
+
+<CodeTabs source="agents-supervisor" section={5} />
+
+- `session.read_untrusted.set()` marks the session untrusted before the first call.
+- `offered = [HANDOFF] + (ops_schema if _passed(state) else [])` rebuilds the tool list every turn. Until a review passes, the model is never offered `label_ticket`.
+- `if u.name == "handoff" and "handoff" in names:` runs a worker. Anything else goes to `_tool`, which refuses a name that was not offered.
+- `allowed = {t["name"] for t in ops_schema} & names if _passed(state) else set()` checks the pass again at the moment of the call. A handoff earlier in the same response may have produced a new draft and cleared it.
+- `results.append(_tool(run, run_tool, "supervisor", u, allowed, _unbound(u, state)))` adds the last check: `_unbound` refuses a label for any other ticket or category.
+- `reply = state["draft"] if _passed(state) else text` makes the reviewed draft the reply. Without a passed review, the reply is the supervisor's last text, or `STOPPED` at the cap.
+- `run["errors"].append({"agent": "supervisor", "tool": "handoff", "args": use.input, "result": out})` in `_handoff` logs a handoff to an unknown worker as an error, never as a handoff.
+
+The workers are in section 4. One line there matters for the gate: the drafter returns `{"draft": draft, "review": None}`, so every new draft clears the review it has not had yet.
+
+<Callout kind="note" title="One session per ticket, tools one at a time">
+  Each desk opens one MCP session per ticket, and every tool call goes through `run_tool` one at a time, in the order the model asked for them. That keeps the guard's view of the run in one fixed order, in every engine.
+</Callout>
+
+## How Go does it
+
+The Go tab shows `Supervisor`, `unbound` and `handoff` in `agents/desk/go/supervisor.go`. The shared contract holds 12 supervisor cases and 5 single-agent cases, and both languages pass them all.
+
+- **The untrusted flag is in the type.** The desks take a `DeskTools`, an interface that embeds `Tools` and adds `MarkUntrusted()`. A tool set without the flag does not compile as a desk's tools, so the call before the first turn cannot be forgotten.
+- **Unset is nil.** `State` holds `Category *string`, `Draft *string` and `Review *Review`. A nil pointer is JSON `null`, as Python's `None` is, so the logged state is the same JSON in both languages.
+- **Two kinds of error.** A worker's own failure, such as a reviewer reply without a boolean `pass`, is a `handoffError`. `handoff` turns it into an `is_error` result for the supervisor to read, with the state unchanged. Any other error, such as the proxy refusing a call, ends the run. Python makes the same split with `ValueError`.
+
+<Callout kind="go" title="Thinking blocks">
+  Go's live model drops the thinking blocks `claude-haiku-5-5` sends and the API accepted every recorded continuation without them, while Python sends them back unmodified.
+</Callout>
+
+## Try it
+
+Replay the `t004` supervisor in both languages. Free:
+
+```bash
+.venv-agents/bin/python agents/run.py --engine hand --desk supervisor --tickets t004
+.venv-agents/bin/python agents/run.py --engine hand-go --desk supervisor --tickets t004
+```
+
+You should see `18 model calls` for Python and `17 model calls` for Go, each ending `matches the recorded trace (kept)`.
+
+Print the handoff log from the Python trace, one line per handoff with the state fields it changed:
+
+```bash
+.venv-agents/bin/python -c '
+import json
+doc = json.load(open("agents/data/traces/desk-hand/hand-supervisor-t004.json"))
+for h in doc["output"]["handoffs"]:
+    print(h["worker"], sorted(h["changed"]))
+print(doc["output"]["stop"])
+'
+```
+
+You should see eight lines, from `triage ['category']` to `drafter ['draft', 'review']`, then `max_turns`. Each later drafter line changes `review` too: the new draft cleared the failed review.
+
+Run the supervisor's tests, which use a scripted fake model:
+
+```bash
+.venv-agents/bin/python -m pytest agents/desk/python/tests/test_supervisor.py -q
+```
+
+You should see `32 passed`.

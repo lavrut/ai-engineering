@@ -1,0 +1,116 @@
+{
+ "approve": "decline",
+ "cost_usd": 0.00037697999999999996,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "sdk",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "Thanks for reaching out. Your ticket is already filed under account issues, so I've left the category as it is. I can't change the email address on your account from this desk, so please contact the support team with your new work address and they can point the account to it. Please don't promise a timeline to the customer until the support team confirms one.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t003"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   }
+  ],
+  "usage": {
+   "claude-haiku-5-5": {
+    "cacheCreationInputTokens": 872,
+    "cacheReadInputTokens": 2408,
+    "canonicalModel": "claude-haiku-5-5",
+    "contextWindow": 1000000,
+    "costBasis": "list",
+    "costUSD": 0.00037697999999999996,
+    "inputTokens": 4,
+    "maxOutputTokens": 128000,
+    "outputTokens": 487,
+    "provider": "firstParty",
+    "thinkingTokens": 331,
+    "webSearchRequests": 0
+   }
+  }
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 488,
+   "cache_read_input_tokens": 960,
+   "cost_usd": 0.0002113,
+   "input_tokens": 2,
+   "key": "55a53d27f2af8170d1b558475abaa0f9ef00a7ee5ece53d487000ae863b59cfa",
+   "model": "claude-haiku-5-5",
+   "ms": 1839,
+   "output_tokens": 281,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 384,
+   "cache_read_input_tokens": 1448,
+   "cost_usd": 0.00016568,
+   "input_tokens": 2,
+   "key": "3c134a7d2114971fa74c0a042ae232339e3cc4142ccdb04840e76e9517718205",
+   "model": "claude-haiku-5-5",
+   "ms": 1576,
+   "output_tokens": 206,
+   "replayed": false
+  }
+ ],
+ "set": "desk-sdk",
+ "spent": 0.000572,
+ "ticket": "t003",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 11,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  }
+ ]
+}

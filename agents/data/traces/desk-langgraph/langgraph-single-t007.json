@@ -1,0 +1,121 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "langgraph",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "interrupts": [],
+  "reply": "I didn't re-label t007. It already has the category \"billing,\" and the complaint classifier returned a low-confidence result (\"Credit reporting\") that doesn't fit a subscription charge dispute.\n\n**Draft reply to the customer:**\n\n\"We're sorry for the frustration with this charge. We've flagged your account as urgent and passed your report of a $120 annual plan charge after a March cancellation to our billing team for review, including your confirmation email. We'll follow up with you once they've reviewed it.\"\n\nBefore sending, check that the billing team has the confirmation email and that the urgent flag is accurate for your queue.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t007"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "text": "THIS IS RIDICULOUS. You charged me $120 for the annual plan when I clearly cancelled in March. I have the confirmation email. If this is not reversed today I am disputing it with my bank."
+    },
+    "is_error": false,
+    "tool": "classify_complaint"
+   }
+  ],
+  "tool_results": [
+   "{\"category\": \"billing\", \"id\": \"t007\", \"priority\": \"urgent\", \"untrusted_body\": \"THIS IS RIDICULOUS. You charged me $120 for the annual plan when I clearly cancelled in March. I have the confirmation email. If this is not reversed today I am disputing it with my bank.\"}",
+   "{\"label\": \"Credit reporting or other personal consumer reports\", \"low_confidence\": true, \"model_version\": \"v1\", \"scores\": {\"Checking or savings account\": 0.15278873823206363, \"Credit card\": 0.22298998943855666, \"Credit reporting or other personal consumer reports\": 0.2294326571111424, \"Debt collection\": 0.176764365263024, \"Money transfer, virtual currency, or money service\": 0.13362097289821925, \"Mortgage\": 0.08440327705699407}}"
+  ]
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00023960000000000002,
+   "input_tokens": 861,
+   "key": "50b267d5b5ed063fa0c1e52759ba30d6272cd552a783f5a32b8b78ff35eb87bf",
+   "model": "claude-haiku-5-5",
+   "ms": 2288,
+   "output_tokens": 307,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00037270000000000006,
+   "input_tokens": 1497,
+   "key": "c66e3793e0822e511d6f20cb94b2c756936ffaec7f20ba6d4c98c99948c0385d",
+   "model": "claude-haiku-5-5",
+   "ms": 2943,
+   "output_tokens": 446,
+   "replayed": false
+  }
+ ],
+ "set": "desk-langgraph",
+ "spent": 0.000612,
+ "ticket": "t007",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2291,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 861,
+   "tokens_out": 307
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 3,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 2,
+   "name": "classify_complaint",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2948,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1497,
+   "tokens_out": 446
+  }
+ ]
+}

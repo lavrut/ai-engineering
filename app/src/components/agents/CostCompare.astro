@@ -1,0 +1,10 @@
+---
+// Build-time wrapper: passes cost_compare.json's single and supervisor desks for every engine over the
+// 13 tickets (lesson 6), or the record commands for a desk with missing tickets.
+import CostCompareIsland from './CostCompare.tsx';
+import { costCompareProps, loadAgentsData } from '../../lib/agentsData';
+
+const props = costCompareProps(loadAgentsData().costCompare);
+---
+
+<CostCompareIsland client:visible {...props} />

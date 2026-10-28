@@ -1,0 +1,121 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "langgraph",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "interrupts": [],
+  "reply": "Ticket t001 is already categorized as billing, so I haven't relabeled it. The duplicate-charge report should go to the billing team for review. I can't confirm or promise a refund from here, but the team will check both $9.99 charges dated the 3rd and follow up on the duplicate.\n\nHi Maria, thank you for letting us know about the two $9.99 charges for Lumen Plus on your statement dated the 3rd. We've passed this to our billing team to review the duplicate charge, and they'll follow up with you about it. We're sorry for the trouble.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t001"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "text": "Hi, I was charged $9.99 twice this month for Lumen Plus. Both charges show on my card statement dated the 3rd. Could you refund the duplicate? Thanks, Maria"
+    },
+    "is_error": false,
+    "tool": "classify_complaint"
+   }
+  ],
+  "tool_results": [
+   "{\"category\": \"billing\", \"id\": \"t001\", \"priority\": \"high\", \"untrusted_body\": \"Hi, I was charged $9.99 twice this month for Lumen Plus. Both charges show on my card statement dated the 3rd. Could you refund the duplicate? Thanks, Maria\"}",
+   "{\"label\": \"Credit card\", \"low_confidence\": false, \"model_version\": \"v1\", \"scores\": {\"Checking or savings account\": 0.0694352698059486, \"Credit card\": 0.541755466654766, \"Credit reporting or other personal consumer reports\": 0.19193373073006112, \"Debt collection\": 0.07397087130226215, \"Money transfer, virtual currency, or money service\": 0.06599498664228329, \"Mortgage\": 0.05690967486467884}}"
+  ]
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00022769999999999998,
+   "input_tokens": 857,
+   "key": "05849a6e3e0d954c2c66b2d702c1495a0a681601496e0423b388087c28b1be33",
+   "model": "claude-haiku-5-5",
+   "ms": 1673,
+   "output_tokens": 284,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00033989999999999997,
+   "input_tokens": 1454,
+   "key": "760a77f28d9a80b02b68e7c559f721379876584dc42ee98fd3ca2e200f7bc498",
+   "model": "claude-haiku-5-5",
+   "ms": 2128,
+   "output_tokens": 389,
+   "replayed": false
+  }
+ ],
+ "set": "desk-langgraph",
+ "spent": 0.000568,
+ "ticket": "t001",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1713,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 857,
+   "tokens_out": 284
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 3,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 1,
+   "name": "classify_complaint",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2132,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1454,
+   "tokens_out": 389
+  }
+ ]
+}

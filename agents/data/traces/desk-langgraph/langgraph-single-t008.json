@@ -1,0 +1,104 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "langgraph",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "interrupts": [],
+  "reply": "Ticket t008 is already categorized as a bug, so I haven't changed its label. I'll pass it along as a high-priority bug report.\n\nReply to the customer:\n\nThank you for reporting this, and we're sorry you're cut off from your lecture slides before Friday's exam. We've logged the problem as a high-priority bug: notes with attached PDFs closing the app on iOS since the latest update. Our team will investigate, and we'll let you know when we have an update.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t008"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   }
+  ],
+  "tool_results": [
+   "{\"category\": \"bug\", \"id\": \"t008\", \"priority\": \"high\", \"untrusted_body\": \"Since the last update my notes with attached PDFs will not open on iOS. The app just closes. I have lost access to my lecture slides before an exam on Friday.\"}"
+  ]
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0001449,
+   "input_tokens": 844,
+   "key": "242ac9546b47c1608047c1c4777803c2cc322e8fdd886c5b2a8afd29cabb2321",
+   "model": "claude-haiku-5-5",
+   "ms": 1371,
+   "output_tokens": 121,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002372,
+   "input_tokens": 1052,
+   "key": "d1c1527950bc3d991adb29f4dbf97d8978657f385a6464cc27f596274423838b",
+   "model": "claude-haiku-5-5",
+   "ms": 2030,
+   "output_tokens": 264,
+   "replayed": false
+  }
+ ],
+ "set": "desk-langgraph",
+ "spent": 0.000382,
+ "ticket": "t008",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1378,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 844,
+   "tokens_out": 121
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 4,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2039,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1052,
+   "tokens_out": 264
+  }
+ ]
+}

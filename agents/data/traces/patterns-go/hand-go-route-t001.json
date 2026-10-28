@@ -1,0 +1,72 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "pattern:route",
+ "elicit": "accept",
+ "engine": "hand-go",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "router",
+    "role": "route"
+   },
+   {
+    "agent": "billing",
+    "role": "reply"
+   }
+  ],
+  "result": {
+   "reply": "Hi Maria, thanks for flagging this. I'm sorry for the duplicate $9.99 charge on Lumen Plus. I can see your report and will look into the two charges dated the 3rd so we can confirm the duplicate and start the refund process. I can't guarantee the exact timing of the refund, but we'll update you by email once the review is complete.",
+   "route": "billing"
+  }
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 1.8e-05,
+   "input_tokens": 160,
+   "key": "b496e77220ee8b2e3f0f2f2b4902b307df0eff9474a0f2e5385d51217796c047",
+   "model": "claude-haiku-5-5",
+   "ms": 802,
+   "output_tokens": 4,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 7.52e-05,
+   "input_tokens": 172,
+   "key": "61345348dda18f64551bf4f29a0fb57555c935482acb2c9ac2e1ecc96815790c",
+   "model": "claude-haiku-5-5",
+   "ms": 1116,
+   "output_tokens": 116,
+   "replayed": false
+  }
+ ],
+ "set": "patterns-go",
+ "spent": 9.3e-05,
+ "ticket": "t001",
+ "trace": [
+  {
+   "agent": "router",
+   "kind": "model",
+   "ms": 806,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 160,
+   "tokens_out": 4
+  },
+  {
+   "agent": "billing",
+   "kind": "model",
+   "ms": 1117,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 172,
+   "tokens_out": 116
+  }
+ ]
+}

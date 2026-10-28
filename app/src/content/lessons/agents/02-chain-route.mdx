@@ -1,0 +1,154 @@
+---
+track: agents
+order: 2
+slug: chain-route
+title: Chaining and routing
+goal: Build a prompt chain with a code gate between its steps and a router over a closed set of routes, and say what each costs and where each breaks.
+minutes: 25
+quiz:
+  - question: The chain's classifier answers "refund" instead of one of the lab's six categories. What happens, and why is that the point of the gate?
+    options:
+      - The writer gets "refund" and writes a reply for it
+      - The code raises an error before the writer is called, so a bad first step never pays for a second call
+      - The model is asked again until it gives a valid category
+      - The chain falls back to the router
+    answer: 1
+    explanation: The gate is `if category not in CATEGORIES`, checked in code between the two calls. A bad step fails loudly and early, and the second call is never made. The contract file has a case for exactly this.
+  - question: On t061, a how-to question, the Python router chose "other" and the Go router chose "bug". What does that show?
+    options:
+      - The Go version has a bug
+      - The router is random and cannot be used
+      - The closed set only guarantees a valid route, not the right one. When a ticket fits no route well, two near-identical requests can land on different routes
+      - Go uses a different model
+    answer: 2
+    explanation: Both used claude-haiku-5-5 with the same prompt text, but Go's request bytes differ slightly, so they are separate recordings with separate answers. "How do I export to PDF" fits none of billing, bug or account well. Code can check that an answer is one of four; it cannot check that it is the best of four.
+  - question: Why did routing t001 cost less than a third of chaining it, when both make two calls?
+    options:
+      - The router uses a cheaper model
+      - The chain's classifier sends the LLMs lab's long triage prompt (1,272 tokens in), while the router's prompt is one line and its answer is one word
+      - Routing skips the reply
+      - The chain makes three calls
+    answer: 1
+    explanation: Cost follows tokens. The chain reuses the lab's v2_rules triage prompt, examples and all, and the model wrote 194 tokens before its JSON answer. The router read 160 tokens and wrote 4. Same model, same number of calls, very different bill.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import PatternStepper from '../../../components/agents/PatternStepper.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+The two simplest patterns both split one job into two model calls. They differ in what sits between the calls.
+
+### Prompt chaining
+
+A chain is a fixed sequence of calls, where each call's output is the next call's input. The Lumen chain has two steps:
+
+1. Classify the ticket into one of the LLMs lab's six categories.
+2. Write the first reply for a ticket of that category.
+
+Between the steps sits a <Term t="code gate" />: plain code that checks the first answer before the second call is made. If the classifier answers anything outside the six categories, the chain stops with an error. A bad step costs one call, not two.
+
+Each call has one job, so each prompt stays short and easy to test. The price is latency: two calls in a row take longer than one.
+
+### Routing
+
+A router makes one cheap call to sort the input, then hands it to a prompt written for that kind of input. The Lumen router picks one of four routes (`billing`, `bug`, `account`, `other`), and each route has its own specialist prompt.
+
+This is separation of concerns. Four focused prompts are easier to improve than one prompt that must handle everything. The routes are a closed set, so code can reject an answer outside it.
+
+### Where each breaks
+
+- A chain is wrong when its steps cannot be fixed in advance, or when one call would do as well. Then the second call is only latency.
+- A router is wrong when the categories blur. If a ticket often fits two routes, the router's choice is close to a coin toss, and code can only check that the answer is valid, not that it is right.
+
+### Python, Go and the contract
+
+Both patterns exist in Python and in Go. A shared contract, `agents/fixtures/contract.jsonl`, holds 50 cases that run each language against a fake model with scripted replies. Both languages pass every case with identical results.
+
+With the real model, each language recorded its own set. Go's JSON spacing and escaping differ from Python's, so its requests are different bytes and get different recording keys. The two languages make the same calls, but they get separate answers from the model.
+
+## See it
+
+Step through the chain on `t001` in Python. Watch the first step's token counts: the classifier sends the LLMs lab's full triage prompt. Then switch the pattern to **Routing** and compare the first call. Finally pick ticket `t061` and switch between Python and Go.
+
+<PatternStepper patterns={['chain', 'route']} ticket="t001" engine="hand" />
+
+On `t001` the chain's classifier read 1,272 tokens, wrote 194 and answered `billing`. The router read 160 tokens, wrote 4 and also answered `billing`. Same answer, same number of calls, and the route cost under a third as much.
+
+On `t061` both chains classified the ticket as `how_to`, its real category. The routers disagreed: Python routed it to `other`, Go to `bug`. The ticket asks how to export notes to PDF, which fits none of the first three routes. Both answers are valid routes, so both passed the check.
+
+## The code
+
+Section 2 is the chain.
+
+<CodeTabs source="agents-patterns" section={2} />
+
+- `system = load_prompts()["triage"]["v2_rules"] + ...` reuses the LLMs lab's best triage prompt, so the classifier is the one you measured in that track. It is also why this call is the expensive one.
+- `got = _json(_text(_ask(run, call, "classifier", "classify", system, _ticket_msg(ticket))), "classify")` makes the first call and reads the first JSON value from the reply. Models often wrap JSON in a sentence or a code fence.
+- `if category not in CATEGORIES:` is the gate. The `raise ValueError(...)` below it ends the chain before the writer is called.
+- `reply = _ask(run, call, "writer", "reply", ...)` is the second call. Its system prompt names the category the first call found.
+- `run.output = {"category": category, "reply": _text(reply)}` is what the contract compares across languages.
+
+Section 3 is the router.
+
+<CodeTabs source="agents-patterns" section={3} />
+
+- `system = f"Route this Lumen support ticket. Answer with exactly one word from: {', '.join(ROUTES)}. {RULES}"` is the whole routing prompt. Short in, one word out.
+- `chosen = _ascii_lower(_text(...))` lowercases A to Z only. Python's `str.lower()` also folds other letters, which Go's `strings.ToLower` would not match, so both languages use the ASCII-only version.
+- `if chosen not in ROUTES:` rejects anything outside the closed set, the same kind of gate as the chain's.
+- `reply = _ask(run, call, chosen, "reply", f"{ROUTE_STYLE[chosen]} Two or three sentences. {RULES}", _ticket_msg(ticket))` sends the ticket to the specialist prompt for that route. The agent name in the trace is the route itself.
+
+<Callout kind="note" title="The gate catches invalid answers, not wrong ones">
+  Both gates check that an answer belongs to a set. Neither can tell whether `bug` was the best route for a how-to question. That needs an evaluation on labelled tickets, which is lesson 10's job.
+</Callout>
+
+## How Go does it
+
+The Go tabs above show `Chain` and `Route` in `agents/desk/go/patterns.go`. The steps are the same; three things differ.
+
+- **Errors are values.** Python raises `ValueError` at the gate. Go returns `fmt.Errorf("classify: category must be one of %v, got %v", ...)` with the partial `Run`, and the caller checks it. The contract has error cases (a bad route, a bad category) that both languages must fail the same way.
+- **The prompts come in as an argument.** `Chain(t Ticket, m Model, pr Prompts)` takes the lab's prompts, which `LoadPrompts` reads from `llms/data/prompts.json`. Python's `load_prompts()` reads the same file.
+- **The model is an interface.** `m Model` is anything with a `Call` method: a scripted fake in the contract tests, or the client in `agents/desk/go/live` that posts to the record/replay proxy.
+
+`asciiLower` and the ASCII-only trim exist so that the two languages normalise a route exactly alike, byte for byte.
+
+## Try it
+
+Run these from the repo root after the setup in lesson 1. All of them are free.
+
+Replay the router on `t061` in Python, then in Go:
+
+```bash
+.venv-agents/bin/python agents/run.py --engine hand --desk pattern:route --tickets t061
+.venv-agents/bin/python agents/run.py --engine hand-go --desk pattern:route --tickets t061
+```
+
+Each should print `ok, 2 model calls, spent $0.0000; matches the recorded trace (kept)`. Open `agents/data/traces/patterns/hand-route-t061.json` and `agents/data/traces/patterns-go/hand-go-route-t061.json` and compare `output.result.route`: `other` in Python, `bug` in Go.
+
+Run the shared contract in both languages. It uses a scripted fake model, so it never calls the API:
+
+```bash
+.venv-agents/bin/python -m pytest agents/desk/python/tests/test_patterns.py -q
+(cd agents/desk/go && go test -run TestContract .)
+```
+
+You should see `28 passed` from pytest and `ok lumen-agents` from Go.
+
+Then break the gate on purpose. `ScriptedModel` is the fake model the contract uses: it plays back canned replies in order. Give the classifier a category that is not one of the six:
+
+```bash
+.venv-agents/bin/python -c '
+import sys; sys.path.insert(0, "agents/desk/python")
+from patterns import chain
+from scripted_model import ScriptedModel
+fake = ScriptedModel(["{\"category\": \"refund\"}", "never sent"])
+try:
+    chain({"id": "t001", "text": "I was charged twice."}, call=fake)
+except ValueError as e:
+    print(e)
+print("model calls:", len(fake.calls))
+'
+```
+
+You should see `classify: category must be one of ['billing', 'bug', 'account', 'how_to', 'feature_request', 'outage'], got 'refund'` and then `model calls: 1`. The writer's reply was never asked for.

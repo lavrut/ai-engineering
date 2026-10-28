@@ -1,0 +1,154 @@
+{
+ "approve": "decline",
+ "cost_usd": 0.0005977500000000001,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "sdk",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "Hi Maria, thanks for flagging the duplicate $9.99 charge for Lumen Plus on the 3rd. I've noted it as a billing issue, but I wasn't able to apply a label to the ticket, so it may need to be routed manually. I can't approve or promise a refund from here, but the billing team will review both charges on your account.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t001"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "id": "t001",
+     "label": "billing"
+    },
+    "is_error": true,
+    "tool": "label_ticket"
+   }
+  ],
+  "usage": {
+   "claude-haiku-5-5": {
+    "cacheCreationInputTokens": 2122,
+    "cacheReadInputTokens": 3340,
+    "canonicalModel": "claude-haiku-5-5",
+    "contextWindow": 1000000,
+    "costBasis": "list",
+    "costUSD": 0.0005977500000000001,
+    "inputTokens": 6,
+    "maxOutputTokens": 128000,
+    "outputTokens": 597,
+    "provider": "firstParty",
+    "thinkingTokens": 340,
+    "webSearchRequests": 0
+   }
+  }
+ },
+ "paid_calls": 3,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 1469,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.000322325,
+   "input_tokens": 2,
+   "key": "d8c949335a5e52eb7e91b8faa6dbe1f6eb353589afc41ec6b7e842d9236e6b27",
+   "model": "claude-haiku-5-5",
+   "ms": 2260,
+   "output_tokens": 277,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 402,
+   "cache_read_input_tokens": 1469,
+   "cost_usd": 0.00015613999999999998,
+   "input_tokens": 2,
+   "key": "2c7cb69f7dceea793c2bf0b3b3a1fad08203f4bd91fe523c86f6e041d004343a",
+   "model": "claude-haiku-5-5",
+   "ms": 1449,
+   "output_tokens": 182,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 251,
+   "cache_read_input_tokens": 1871,
+   "cost_usd": 0.000119285,
+   "input_tokens": 2,
+   "key": "5456ade158a5ec784916debeab5960c335753bd13f5ee11b9304aa0770d6d8d0",
+   "model": "claude-haiku-5-5",
+   "ms": 1184,
+   "output_tokens": 138,
+   "replayed": false
+  }
+ ],
+ "set": "desk-sdk",
+ "spent": 0.000845,
+ "ticket": "t001",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 13,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  }
+ ]
+}

@@ -1,0 +1,116 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "hand",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "The ticket is already categorized as a bug, which matches its content. The classifier's output (credit reporting, low confidence) doesn't fit this ticket, so I haven't relied on it and I haven't written a new label.\n\nReply to the customer:\n\nThank you for letting us know that your PDF notes stopped opening on iOS after the latest update, and I'm sorry this is happening before your exam on Friday. We've logged this as a high-priority bug for our team to investigate. We'll keep you updated as we learn more.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t008"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "text": "Since the last update my notes with attached PDFs will not open on iOS. The app just closes. I have lost access to my lecture slides before an exam on Friday."
+    },
+    "is_error": false,
+    "tool": "classify_complaint"
+   }
+  ]
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00023060000000000002,
+   "input_tokens": 941,
+   "key": "1ed82f0ecf45243bcdc5369509db11defc378816c42ee47e3b11dd8a666961f0",
+   "model": "claude-haiku-5-5",
+   "ms": 1997,
+   "output_tokens": 273,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0003359,
+   "input_tokens": 1524,
+   "key": "121e7d8fa515f7511b29e1c1c1a5c9eebefe40b9f5dec6c7a292da59e1b222c5",
+   "model": "claude-haiku-5-5",
+   "ms": 2463,
+   "output_tokens": 367,
+   "replayed": false
+  }
+ ],
+ "set": "desk-hand",
+ "spent": 0.000566,
+ "ticket": "t008",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2002,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 941,
+   "tokens_out": 273
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 5,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 4,
+   "name": "classify_complaint",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2469,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1524,
+   "tokens_out": 367
+  }
+ ]
+}

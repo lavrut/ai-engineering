@@ -1,0 +1,166 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "pattern:parallel",
+ "elicit": "accept",
+ "engine": "hand",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "lookup-1",
+    "role": "lookup"
+   },
+   {
+    "agent": "lookup-2",
+    "role": "lookup"
+   },
+   {
+    "agent": "lookup-3",
+    "role": "lookup"
+   },
+   {
+    "agent": "summarizer",
+    "role": "summarize"
+   }
+  ],
+  "result": {
+   "lookups": [
+    {
+     "args": {
+      "id": "t001"
+     },
+     "is_error": false,
+     "tool": "get_ticket"
+    },
+    {
+     "args": {
+      "limit": 5,
+      "query": "duplicate charge Lumen Plus $9.99"
+     },
+     "is_error": false,
+     "tool": "search_tickets"
+    },
+    {
+     "args": {
+      "limit": 5,
+      "query": "duplicate charge Lumen Plus $9.99"
+     },
+     "is_error": false,
+     "tool": "search_tickets"
+    }
+   ],
+   "summary": "The ticket (t001) is a high-priority billing report from Maria that she was charged $9.99 twice for Lumen Plus, both dated the 3rd, and she asks for the duplicate to be refunded. The search found no other ticket about this same duplicate charge; the other results covered different issues, such as a $480 charge (t036), a Team plan upgrade (t019), a table-paste bug (t002), and an email change (t003)."
+  }
+ },
+ "paid_calls": 3,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0001363,
+   "input_tokens": 543,
+   "key": "32fc4f6fb97ea0db65b24a2f6c3b29b38fb6952a849d6d719f198b26dd76918e",
+   "model": "claude-haiku-5-5",
+   "ms": 1328,
+   "output_tokens": 164,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0001364,
+   "input_tokens": 579,
+   "key": "ae0a412cdcb18da443f08252bf4348deb74f4457f4ce42ce52a9c9662c81ee96",
+   "model": "claude-haiku-5-5",
+   "ms": 1270,
+   "output_tokens": 157,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0001364,
+   "input_tokens": 579,
+   "key": "ae0a412cdcb18da443f08252bf4348deb74f4457f4ce42ce52a9c9662c81ee96",
+   "model": "claude-haiku-5-5",
+   "ms": 1270,
+   "output_tokens": 157,
+   "replayed": true
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00031069999999999996,
+   "input_tokens": 1247,
+   "key": "0824eac69de96d3050eb199fb31bc25125ae559f0e08a69a92d27098ecc651dd",
+   "model": "claude-haiku-5-5",
+   "ms": 2208,
+   "output_tokens": 372,
+   "replayed": false
+  }
+ ],
+ "set": "patterns",
+ "spent": 0.000583,
+ "ticket": "t001",
+ "trace": [
+  {
+   "agent": "lookup-1",
+   "kind": "model",
+   "ms": 1333,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 543,
+   "tokens_out": 164
+  },
+  {
+   "agent": "lookup-2",
+   "kind": "model",
+   "ms": 1274,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 579,
+   "tokens_out": 157
+  },
+  {
+   "agent": "lookup-3",
+   "kind": "model",
+   "ms": 4,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 579,
+   "tokens_out": 157
+  },
+  {
+   "agent": "parallel",
+   "kind": "tool",
+   "ms": 5,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "parallel",
+   "kind": "tool",
+   "ms": 3,
+   "name": "search_tickets",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "parallel",
+   "kind": "tool",
+   "ms": 2,
+   "name": "search_tickets",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "summarizer",
+   "kind": "model",
+   "ms": 2213,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1247,
+   "tokens_out": 372
+  }
+ ]
+}

@@ -7,7 +7,7 @@ import { parseCodeTabsTag, type CodeSourceId } from '../src/lib/codeSources';
 
 // A lesson's walkthrough bullets quote code. The quotes drifted from the source once
 // (`app = build_http_app()` after the code became `build_http_app(port=args.port)`), so this
-// checks them: in the MCP lessons, every backticked span in a bullet that follows a <CodeTabs>
+// checks them: in the MCP and AI Agents lessons, every backticked span in a bullet that follows a <CodeTabs>
 // block and looks like code (contains "(" or "=") must appear in the source file that block quotes
 // (the whole file, since bullets often point just outside the shown section), in the Python or the Go text.
 //
@@ -21,7 +21,7 @@ import { parseCodeTabsTag, type CodeSourceId } from '../src/lib/codeSources';
 //  - whitespace is collapsed, and a literal "..." in a span means "anything here": each piece
 //    between the dots must appear, in order.
 const here = dirname(fileURLToPath(import.meta.url));
-const dir = join(here, '../src/content/lessons/mcp');
+const lessonsDir = join(here, '../src/content/lessons');
 
 const squash = (t: string) => t.replace(/\s+/g, ' ').replace(/\( /g, '(').replace(/ \)/g, ')');
 
@@ -64,16 +64,7 @@ export function appearsIn(span: string, haystack: string): boolean {
   return true;
 }
 
-describe('MCP lesson walkthrough quotes', () => {
-  const files = readdirSync(dir).filter((f) => f.endsWith('.mdx')).sort();
-
-  it('finds the lessons and a useful number of checked spans', () => {
-    expect(files.length).toBeGreaterThanOrEqual(11);
-    let n = 0;
-    for (const f of files) for (const b of bulletsAfterCodeTabs(readFileSync(join(dir, f), 'utf8'))) for (const x of b.bullets) n += codeSpans(x).length;
-    expect(n).toBeGreaterThan(40);
-  });
-
+describe('walkthrough quote helpers', () => {
   it('matches the helper on known cases', () => {
     expect(appearsIn('build_http_app(port=args.port)', 'app = build_http_app(port=args.port)')).toBe(true);
     expect(appearsIn('app = build_http_app()', 'app = build_http_app(port=args.port)')).toBe(false);
@@ -83,6 +74,23 @@ describe('MCP lesson walkthrough quotes', () => {
     expect(appearsIn('http_target2(url)', 'def http_target(url: str)')).toBe(false);
     expect(appearsIn('f(x="b")', 'f(x="a")')).toBe(false);
     expect(codeSpans('- `x = 1` and `name` and `f()` and `def g(a)`')).toEqual(['x = 1', 'f()']);
+  });
+});
+
+// The AI Agents lessons quote their sources the same way (agents-patterns, agents-supervisor, ...), so the
+// same check runs on them, with thresholds for their own size.
+describe.each([
+  { track: 'mcp', title: 'MCP', minFiles: 11, minSpans: 40 },
+  { track: 'agents', title: 'AI Agents', minFiles: 6, minSpans: 30 },
+])('$title lesson walkthrough quotes', ({ track, minFiles, minSpans }) => {
+  const dir = join(lessonsDir, track);
+  const files = readdirSync(dir).filter((f) => f.endsWith('.mdx')).sort();
+
+  it('finds the lessons and a useful number of checked spans', () => {
+    expect(files.length).toBeGreaterThanOrEqual(minFiles);
+    let n = 0;
+    for (const f of files) for (const b of bulletsAfterCodeTabs(readFileSync(join(dir, f), 'utf8'))) for (const x of b.bullets) n += codeSpans(x).length;
+    expect(n).toBeGreaterThan(minSpans);
   });
 
   it.each(files)('%s: quoted code appears in the quoted source file', (f) => {

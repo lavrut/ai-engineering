@@ -1,0 +1,17 @@
+---
+// Build-time wrapper: passes engine_scores.json's rows (every engine x desk: success, band, trajectory,
+// safety, cost, latency), the capstone gate's verdict as run_evals.py wrote it, and each run's tickets
+// for the drill-down (lessons 10 and 11), with the SDK's own cost estimate beside the ledger cost on SDK
+// runs. With 13 tickets no engine clears the gate (ruling R66). drillDown={false} drops the per-ticket
+// rows (about 10 KB as shipped): lesson 11 needs only the verdict and the table.
+import EngineScorecardIsland from './EngineScorecard.tsx';
+import { engineScorecardProps, loadAgentsData } from '../../lib/agentsData';
+
+interface Props {
+  drillDown?: boolean;
+}
+
+const props = engineScorecardProps(loadAgentsData().engineScores, Astro.props);
+---
+
+<EngineScorecardIsland client:visible {...props} />

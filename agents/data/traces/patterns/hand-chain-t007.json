@@ -1,0 +1,72 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "pattern:chain",
+ "elicit": "accept",
+ "engine": "hand",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "classifier",
+    "role": "classify"
+   },
+   {
+    "agent": "writer",
+    "role": "reply"
+   }
+  ],
+  "result": {
+   "category": "billing",
+   "reply": "Thank you for reaching out, and I'm sorry this charge has caused frustration. I understand you're expecting a clear answer, and I've noted that you have a cancellation confirmation from March, which is important for looking into this. I'm passing your ticket to our billing team now so they can review your account and the cancellation record."
+  }
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0001331,
+   "input_tokens": 1276,
+   "key": "ac2f5d1f7a32d2a0bad02fdcec3159c46d867397e50c0c25c6f46f7d1acd706a",
+   "model": "claude-haiku-5-5",
+   "ms": 803,
+   "output_tokens": 11,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 6.65e-05,
+   "input_tokens": 160,
+   "key": "91513d0d664ccb8f05eaa13fa8b6214bbc7496553777c650a2b92248b2b1a49b",
+   "model": "claude-haiku-5-5",
+   "ms": 1651,
+   "output_tokens": 101,
+   "replayed": false
+  }
+ ],
+ "set": "patterns",
+ "spent": 0.0002,
+ "ticket": "t007",
+ "trace": [
+  {
+   "agent": "classifier",
+   "kind": "model",
+   "ms": 811,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1276,
+   "tokens_out": 11
+  },
+  {
+   "agent": "writer",
+   "kind": "model",
+   "ms": 1656,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 160,
+   "tokens_out": 101
+  }
+ ]
+}

@@ -1,0 +1,116 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "hand",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "I didn't apply a label to t005. The ticket is a feature request, which the ticket record already shows. The complaint classifier returned a low-confidence financial category that doesn't fit this text, so I left the label unchanged.\n\nReply to the customer:\n\nThanks for the suggestion. A dark mode that follows your system setting automatically would save you from switching it by hand each evening. We've passed your request to the product team for consideration, but we can't say whether or when it will be available.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t005"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "text": "Would love a dark mode that follows the system setting automatically. Right now I have to flip it by hand every evening."
+    },
+    "is_error": false,
+    "tool": "classify_complaint"
+   }
+  ]
+ },
+ "paid_calls": 2,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002566,
+   "input_tokens": 926,
+   "key": "fbd72c020481a3090374ab4055f9445aec12157e1667e8846474a74ebe3f7459",
+   "model": "claude-haiku-5-5",
+   "ms": 2118,
+   "output_tokens": 328,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00028460000000000003,
+   "input_tokens": 1551,
+   "key": "376180da7fcc07ec9f89ec9f65c967173fd5cd24ff9b1f4a2f5f9e5d91056712",
+   "model": "claude-haiku-5-5",
+   "ms": 1933,
+   "output_tokens": 259,
+   "replayed": false
+  }
+ ],
+ "set": "desk-hand",
+ "spent": 0.000541,
+ "ticket": "t005",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2122,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 926,
+   "tokens_out": 328
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 3,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 2,
+   "name": "classify_complaint",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1937,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1551,
+   "tokens_out": 259
+  }
+ ]
+}

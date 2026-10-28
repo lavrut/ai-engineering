@@ -1,0 +1,153 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "langgraph",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "interrupts": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t004",
+     "label": "how_to"
+    },
+    "decision": "reject",
+    "tool": "label_ticket"
+   }
+  ],
+  "reply": "Thanks for reaching out about backing up your notes before your trip. I haven't been able to confirm the exact steps for exporting notes as Markdown files, so I don't want to point you to a menu path that may be wrong. A support agent can check which export options are available on your account and walk you through them.",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t004"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "id": "t004",
+     "label": "how_to"
+    },
+    "is_error": true,
+    "tool": "label_ticket"
+   }
+  ],
+  "tool_results": [
+   "{\"category\": \"how_to\", \"id\": \"t004\", \"priority\": \"low\", \"untrusted_body\": \"Is there a way to export all my notes as Markdown files? I want a backup before I travel.\"}",
+   "rejected at the interrupt: label_ticket"
+  ]
+ },
+ "paid_calls": 3,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00018519999999999998,
+   "input_tokens": 822,
+   "key": "0d5da1301b261f04b789bbc8d7836ee70352ce957b9c5cf93228c42488a0b3b2",
+   "model": "claude-haiku-5-5",
+   "ms": 1289,
+   "output_tokens": 206,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0001459,
+   "input_tokens": 1094,
+   "key": "a6344c1baafb4c0f191ce46f27af0d03037297aec46540c49fe1465badd92e5f",
+   "model": "claude-haiku-5-5",
+   "ms": 584,
+   "output_tokens": 73,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00020410000000000003,
+   "input_tokens": 1251,
+   "key": "2f8e6894d9cdcee51639fc947fea53150f9bfd447a59b34edac0e323443060c1",
+   "model": "claude-haiku-5-5",
+   "ms": 1202,
+   "output_tokens": 158,
+   "replayed": false
+  }
+ ],
+ "set": "desk-langgraph",
+ "spent": 0.000535,
+ "ticket": "t004",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1294,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 822,
+   "tokens_out": 206
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 4,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 589,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1094,
+   "tokens_out": 73
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1207,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1251,
+   "tokens_out": 158
+  }
+ ]
+}

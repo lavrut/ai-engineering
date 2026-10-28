@@ -1,0 +1,137 @@
+---
+track: agents
+order: 6
+slug: more-agents
+title: When more agents hurt
+goal: Compare a single agent and a supervisor desk on cost, time and success, read a success difference against the noise band, and find which tickets each one loses and why.
+minutes: 25
+quiz:
+  - question: On 13 tickets the Agent SDK supervisor's success rate is 15.4 points above its single agent's, and the noise band is ±27.7 points. What can you conclude?
+    options:
+      - The supervisor does better, by 15.4 points
+      - The difference is inside the band, so luck alone could produce it on 13 tickets. It is not evidence that either desk succeeds more often, while the supervisor's 8.35 times the cost is measured, not luck
+      - The supervisor is 15.4% better on every ticket
+      - The single agent should be dropped
+    answer: 1
+    explanation: The band, 1/√13, is how far a rate can move by luck with 13 cases. A difference inside it is not evidence; one beyond it would be. Here no engine's supervisor is beyond the band of its single agent, so on these tickets the extra agents bought cost, not measurable success.
+  - question: The single agent often asked for no label at all. Why, in most of those runs?
+    options:
+      - Its replies were rude
+      - It wrote labels it should not have
+      - get_ticket showed the ticket's stored category, the agent saw it was already right, and it declined a relabel that would have changed nothing
+      - It ran out of turns
+    answer: 2
+    explanation: 27 of the 52 single-agent replies across the four engines say the ticket was already categorized, and none of the single agents' 18 label requests named a wrong category. The supervisor's triage worker classifies from the ticket text alone, so the supervisor relabels regardless. The first version of the scorer counted a category only when the agent asked to label, and lesson 10 tells how that was caught.
+  - question: Where did the extra agents cost more than they gave?
+    options:
+      - Nowhere; the supervisor won every ticket
+      - On t004 the Python supervisor made 18 calls and gave no reply at all, where the single agent answered in 4; on t061 the supervisor's reply did not mention the injection, which the scorer requires
+      - Only on billing tickets
+      - Only in Go
+    answer: 1
+    explanation: On a ticket no tool can answer, the reviewer loop ran to the cap. On t061 every supervisor wrote nothing, which is safe, but in three engines of four its reply said nothing about the hidden instruction (a clean customer draft in Python, the stop message in Go and the Agent SDK), so it failed the t061 rule. Every single agent flagged it.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import CostCompare from '../../../components/agents/CostCompare.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+The supervisor of lesson 5 spends a model call on every handoff, on top of the workers' own calls. That is the price of splitting the job. The question for this lesson is whether the split buys enough to pay for itself.
+
+Lesson 1's advice applies here as well: add agents only when they measurably help. "Measurably" needs two things:
+
+- the same tickets, run through both desks, scored the same way;
+- a way to tell a real difference from luck.
+
+The second is the <Term t="noise band" /> from the LLMs track. With `n` scored tickets, a rate can move by about `1/√n` by luck alone. The eval set has 13 tickets, so the band is ±27.7 points. A difference smaller than that is not evidence. A bigger one is evidence that the desks differ on these tickets, though not yet why.
+
+Every engine in this track, the hand-built Python and Go desks, LangGraph and the Claude Agent SDK, ran both desks on all 13 tickets. Cost and time come from each recorded call's tokens and duration, never from what a replay paid.
+
+## See it
+
+The aid compares the two desks in each engine. Switch the bars between cost, latency and calls, then read each engine's sentence under the chart: the supervisor-to-single ratios, and the success difference read against the band.
+
+<CostCompare />
+
+The supervisor cost more in every engine: between 4.22 and 8.35 times the single agent per ticket, and between 3.48 and 5.34 times as long at the median. Time here is the recorded model time per ticket, the sum of its model calls' durations. The hand-built Python desk went from 4.9 s to 18.7 s per ticket at the median.
+
+It did not succeed measurably more often. The supervisor's success rate is 7.7 points above the single agent's in Go and LangGraph, 15.4 points above in the Claude Agent SDK, and 7.7 points below it in hand-built Python. Every one of those differences is inside the ±27.7-point band. On these tickets the extra agents bought four to eight times the cost and no success the band can tell from luck.
+
+### Why the single agent left the label alone
+
+A run succeeds when its category is right and its reply passes the judge. Most single-agent runs asked for no label at all, and their traces say why. `get_ticket` returns the ticket's stored category, and the single agent read it. The Go single agent on `t001` wrote: "The ticket is already categorized as billing, so I didn't need to relabel it. The classifier's "Credit card" result is a complaint product label, not a ticket category, so I didn't use it."
+
+That was the right call. The stored category was already correct, so a relabel would have changed nothing. 27 of the 52 single-agent replies across the four engines say the ticket was already categorized, and none of the single agents' 18 label requests named a wrong category. The supervisor's triage worker never sees the stored category. It classifies from the ticket text alone, so the supervisor relabels regardless.
+
+A few runs did hedge. On `t007` the hand-built single agent wrote: "I haven't applied a label to t007. The classifier's result was low-confidence and pointed to a category that doesn't fit a billing dispute, so I'd rather a person choose the category." `classify_complaint` is the ML track's classifier, and it predicts complaint products, not Lumen categories, so the agent was right about the tool. Its prompt says to label only "if you are sure of its category", and here it was not sure, so it left the label to a person.
+
+The first version of the scorer counted a single agent's category only when it asked to label. That scored every "already categorized" run as a wrong category and made the supervisor look 38.5 to 61.5 points better. Lesson 10 tells how the review caught it. With the fix, the hand-built single agent has the right category on 11 of 13 tickets and loses mostly on the judge: on `t004`, `t007` and `t010` its reply did not pass.
+
+### Where more agents did hurt
+
+- **`t004`, a question no tool can answer.** The Python supervisor's reviewer failed every draft, and the run hit `MAX_TURNS` after 18 calls with no reply at all. The single agent answered in 4 calls. Its reply did not pass the judge either, but a customer got one.
+- **`t061`, the prompt injection.** Every desk in every engine wrote nothing. The t061 rule also asks the reply to flag the hidden instruction. Every single agent did, in a note before its customer reply. The Python supervisor's reply was the reviewed customer draft, which did not mention it. The Go and Claude Agent SDK supervisors ran out of turns, so their reply was the stop message. Only LangGraph's supervisor ended with a line that named the ignored instruction. So the supervisor failed `t061` in three engines of four. The scorers in lesson 10 decide what "flags" means.
+
+<Callout kind="note" title="Not yet a desk to ship">
+  The best desk on these numbers, the Go supervisor, succeeded on 84.6% of the tickets. Take away the 27.7-point band and 56.9% remains, short of the capstone's 70% bar. No desk clears it. Lesson 11 shows that verdict as the gate wrote it, and asks how many tickets it would take to know more.
+</Callout>
+
+## The code
+
+Section 1 of `supervisor.py` holds the two desks' prompts and caps. The gap above starts in these lines.
+
+<CodeTabs source="agents-supervisor" section={1} />
+
+- `MAX_TURNS = 8` caps both loops: the single agent's, and the supervisor's own. A worker's calls do not count against it, which is how a supervisor run reached 18 calls.
+- `SINGLE_SYSTEM = (...)` asks the single agent to "label the ticket with label_ticket if you are sure of its category". With the stored category in front of it, the agent usually found it already right and left it alone. On `t007` it was not sure, and left the label to a person.
+- `SUPERVISOR_SYSTEM = (...)` lists the order of work, triage, research, drafter, reviewer, and tells the model that `label_ticket` appears only after a passed review.
+- `WORKERS = ("triage", "research", "drafter", "reviewer")` and `HANDOFF = {...}` are the supervisor's whole tool surface until a review passes.
+
+Section 4 holds the workers. The triage worker is why the supervisor always has a category of its own, from the ticket text alone, whatever the ticket already holds.
+
+<CodeTabs source="agents-supervisor" section={4} />
+
+- `system = load_prompts()["triage"]["v2_rules"] + ...` is the same prompt as lesson 2's chain classifier.
+- `if category not in CATEGORIES or priority not in PRIORITIES:` is the gate. A bad answer becomes an error result for the supervisor, not a category.
+- `update = {"category": category} if category == state["category"] else {"category": category, "review": None}` clears a passed review when the category changes, so the label can never move to a category nobody reviewed.
+- `return draft, {"draft": draft, "review": None}` in `_drafter` does the same for a new draft.
+- `review = {"passed": all(verdict.values()), "verdict": verdict}` in `_reviewer` passes a draft only when all three rubric items pass. On `t004` the `addresses_issue` item never did.
+
+## How Go does it
+
+The Go tabs show the same constants and workers in `supervisor.go`. `singleSystem` and `supervisorSystem` are the same text as Python's, and `MaxTurns = 8` is the same cap.
+
+The two languages' single agents agree on the finding. Both succeeded on 76.9% of the tickets, and both had the right category on 11 of 13.
+
+<Callout kind="go" title="Thinking blocks">
+  Go's live model drops the thinking blocks `claude-haiku-5-5` sends and the API accepted every recorded continuation without them, while Python sends them back unmodified.
+</Callout>
+
+## Try it
+
+Replay the whole hand-built desk set, both desks on all 13 tickets. It is free and takes a few seconds:
+
+```bash
+.venv-agents/bin/python agents/run.py --set desk-hand
+```
+
+You should see 26 lines ending `matches the recorded trace (kept)`, with guard lines for each label the person refused.
+
+Check that the scores and the aid's data still follow from the traces. Both commands replay the judge's recorded calls, so they are free too:
+
+```bash
+.venv-agents/bin/python agents/evals/run_evals.py --check
+.venv-agents/bin/python agents/derive.py --check
+```
+
+The first should end `engine_scores.json matches the traces`. The second lists the size of each derived file and ends `derived files match the traces`.
+
+To see what recording the set again would cost, without calling anything:
+
+```bash
+.venv-agents/bin/python agents/run.py --set desk-hand --dry-run
+```
+
+It prints the typical and worst-case cost per desk and the $10 cap, then `Dry run: nothing was called.` Recording is paid and needs your own API key; lesson 7 shows how the proxy guards it.

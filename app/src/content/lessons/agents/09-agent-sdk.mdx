@@ -1,0 +1,148 @@
+---
+track: agents
+order: 9
+slug: agent-sdk
+title: The desk in the Claude Agent SDK
+goal: Rebuild the Lumen desk on the Claude Agent SDK with hermetic settings, enforce its gates in hooks that fail closed, and read the SDK's own cost estimate beside the recorded cost.
+minutes: 30
+quiz:
+  - question: The SDK desk runs the CLI in an empty temporary folder that is not a git repository. Why does that matter for a replayable run?
+    options:
+      - The CLI refuses to start inside a repository
+      - Inside a repository the CLI puts its git status (branch, changed files, recent commits) into every subagent's first message. That leaks the machine's state into the requests and changes the replay key with every commit
+      - An empty folder makes the CLI faster
+      - The proxy only accepts requests from temporary folders
+    answer: 1
+    explanation: Whatever the CLI reads from its surroundings ends up in the request, and the request is the key. An empty folder that is no repository holds nothing of the machine's, so the same ticket sends the same bytes on any machine and any day.
+  - question: A PreToolUse hook throws an exception while checking a label_ticket call. What should happen, and why?
+    options:
+      - The call should run; a broken check is not a refusal
+      - The run should crash
+      - The call should be refused. Left alone, the SDK reports a control error and the CLI runs the tool anyway, so the desk catches every exception in the hook and answers deny
+      - The hook should be retried until it succeeds
+    answer: 2
+    explanation: A gate that opens when it breaks is no gate. The desk wraps both hooks so any failure is a deny before the tool runs, or a failed handoff after it. That is what "fail closed" means.
+  - question: On the SDK runs, the scorecard shows the SDK's own estimate (total_cost_usd) beside the ledger cost, and here they agree to within a millionth of a dollar. Why is the ledger still the cost of record?
+    options:
+      - The ledger is always lower
+      - The SDK estimate is in another currency
+      - The estimate is the CLI's client-side calculation from its own price table, not a bill, and only the SDK has one. The ledger prices every engine's recorded usage the same way, so the engines can be compared
+      - The SDK estimate is only available in record mode
+    answer: 2
+    explanation: Agreement on these runs is good to see, but it is not a guarantee. During the build, against a local stub, the same field read 2.0 for a 10-token reply. A comparison needs one method for every engine, and the recordings' usage is the one thing every engine has.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import AgentTrace from '../../../components/agents/AgentTrace.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+The Claude Agent SDK takes a different shape from LangGraph. `query()` starts the Claude Code CLI, which ships inside the Python wheel, as a subprocess, and streams its messages back. The pinned `claude-agent-sdk==0.2.174` bundles CLI 2.1.310. The CLI runs the agent loop; your code sets the options and gets a say through hooks.
+
+The supervisor's four workers become SDK <Term t="subagent" />s, one `AgentDefinition` each, with the hand-built workers' prompts. The supervisor hands work to them with the CLI's built-in `Agent` tool. The state, the worker checks and the gates are the hand-built ones, imported, as in LangGraph.
+
+### Hermetic settings
+
+The CLI is a full coding agent. By default it reads your settings, your project's `CLAUDE.md`, your login and your shell environment, and it offers file, shell and web tools. A desk run needs none of that. Every option below exists because the default would leak something into the requests, or change them from one run to the next, which breaks replay:
+
+- **`tools=[]`.** The single agent gets no built-in tool at all. The supervisor gets `tools=["Agent"]` only, because with `tools=[]` the CLI drops the `Agent` tool too and no subagent can run. `Agent` delegates and does nothing else.
+- **`setting_sources=[]`.** No user or project settings, `CLAUDE.md` or skills are read.
+- **An empty working folder that is no git repository.** Inside a repository, the CLI puts its git status into every subagent's first message: a leak of the machine's state, and a new replay key with every commit. `includeGitInstructions: false` turns it off as well.
+- **Built-in agents and auto-memory off.** Only the four workers can run, and nothing is remembered between runs.
+- **Retries off.** `CLAUDE_CODE_MAX_RETRIES=0`. Without it, one 500 from the API became 11 requests: 11 paid calls in record mode.
+- **A deny-by-default environment.** The SDK starts the CLI with your whole environment plus the options'. So the desk blanks every inherited variable except `PATH`, `TMPDIR` and the locale, always empties the ones that could send traffic past the proxy or add a credential, and points `HOME` at the run's own empty config folder. It pins `CLAUDE_CODE_ENTRYPOINT=sdk-py`, because that value goes into a header inside the prompt, and so into the key.
+- **`permission_mode="dontAsk"`** with `allowed_tools` set to exactly the desk's tools. The CLI refuses anything else without asking, so the decisions that matter are the desk's own.
+
+The tools take the gated path, as in LangGraph: in-process MCP servers named `lumen-read` and `lumen-ops`, whose handlers call `run_tool`. The SDK is never given the MCP servers to start itself, because then the CLI would call them directly and skip the gate.
+
+### Hooks: the gates, failing closed
+
+A <Term t="hook" /> is your code that the CLI calls at a fixed point. The desk uses `PreToolUse`, before a tool runs, and `PostToolUse`, after. They carry what the hand-built desk did in its loop:
+
+- **The guard.** A write after untrusted text asks the scripted person, and a no denies it before the tool runs. A yes is asked again by the harness gate in `run_tool`, then `lumen-ops` asks for its own confirmation: two layers of asking, as in LangGraph.
+- **The ops gate.** The CLI offers a session one tool list for the whole run, so `label_ticket` is always in the supervisor's tools. The hook refuses it unless the review is passed now, by a handoff in an earlier model response, and the arguments name this ticket and its category.
+- **The handoffs.** Before a worker runs, the hook rewrites its prompt into the hand-built task message and keeps it in the foreground. After, it runs the hand-built worker's checks on the subagent's answer and updates the shared state.
+- **One handoff at a time.** The CLI runs a response's `Agent` calls at the same time. The hook refuses a second one while the first is still running. On `t018` the SDK supervisor asked for triage and research in one response, and research got "One handoff at a time: the triage handoff is still running. Ask research again once it has finished." It asked again later, and research ran.
+- **Failing closed.** If a hook throws, the SDK reports a control error and the CLI runs the tool anyway. So the desk catches every exception: in `PreToolUse` it becomes a deny, in `PostToolUse` a failed handoff that changed nothing.
+
+### What the SDK reports about cost
+
+At the end of a run the SDK reports `total_cost_usd`. That is the CLI's own estimate, computed on your machine from its price table. It is not a bill. The scorecard's cost column uses the proxy's ledger for every engine, as lesson 7 showed, and shows `sdk_cost_usd` beside it on SDK runs.
+
+On these recordings the two agree: equal on 23 of the 26 SDK runs, and a hundred-millionth of a dollar apart on the other 3. During the build, against a local stub of the API, the same field read 2.0 for a reply of 10 input and 1 output tokens. An estimate can be right and still not be the cost of record.
+
+## See it
+
+The aid opens on the SDK supervisor for `t001`. Step through it and read the totals: the ledger cost with the SDK's own estimate beside it, and how many input tokens came from the cache.
+
+<AgentTrace engines={['sdk']} />
+
+On `t001` the supervisor made 12 calls. Only 24 input tokens were uncached; 31,753 were read from the cache. The ledger and the SDK both say $0.00327.
+
+Across the 13 tickets the SDK supervisor read 35,877 cached tokens per ticket on average, and it still cost the most of the four supervisors, $0.003418 per ticket. Its single agent was the cheapest desk of all, $0.000409 per ticket, and the fastest, 3.9 s at the median.
+
+The supervisor stopped at `MAX_TURNS` on `t004`, `t007` and `t061`. On `t007` the review had already passed, so its reply was still the reviewed draft and the ticket counted as a success.
+
+## The code
+
+Section 2 of `sdk_desk.py` builds the hermetic options.
+
+<CodeTabs source="agents-sdk" section={2} />
+
+- `blank = {k: "" for k in parent if k not in ENV_KEEP and k != "CLAUDECODE"}` in `sdk_env` empties every inherited variable but `PATH`, `TMPDIR` and the locale.
+- `return {**blank, **{k: "" for k in NEUTRALISE}, **SDK_ENV, "CLAUDE_CONFIG_DIR": config_dir, "HOME": config_dir}` then empties the risky ones whether inherited or not, adds the desk's own settings, and gives the CLI an empty home.
+- `root = Path(tmp).resolve()` in `cli_dirs` uses the real path: given a symlinked folder, the CLI adds a line the proxy does not mask.
+- `tools=tools, allowed_tools=allowed, setting_sources=[], settings=CLI_SETTINGS, strict_mcp_config=True` in `build_options` is the hermetic core in one call, with `permission_mode=PERMISSION_MODE` and `env=sdk_env(config_dir), cwd=work_dir` beside it.
+- `return {"triage": define("triage", triage, [], 1), ...}` in `worker_agents` gives research the read tools and up to `MAX_WORKER_STEPS` turns, and the other workers no tool and one turn.
+
+Section 4 is the hooks.
+
+<CodeTabs source="agents-sdk" section={4} />
+
+- `except Exception as e:` in `pre` turns any failure into `_deny(...)`: the hook fails closed.
+- `if bare not in self._allowed(agent):` refuses a desk tool that is not this agent's job, such as a read by the supervisor, which the static tool list offers it.
+- `reason = await self._ops_gate(tool_use_id, args)` is the label's code gate. `here <= passed_in` refuses a label in the same model response as the review that passed it, or an earlier one.
+- `if not self.human(bare, args):` is the guard. On a no it answers `return _deny("The user denied this action.")`, before the tool runs.
+- `if self.pending:` in `_handoff` refuses a second handoff while one runs. `pending` is set in the same synchronous step, so two concurrent calls cannot both get through.
+- `"updatedInput": {**args, "prompt": prompt, "run_in_background": False}` rewrites the worker's prompt and keeps it in the foreground. Without it, the CLI launches a subagent in the background and hands back "launched".
+
+<Callout kind="note" title="The CLI repeats a 404">
+  The CLI sends a request that got a 404 once more. In replay that is a second miss on the same key, harmless, since nothing is forwarded. Its own error text for a 404 names the model, not the replay miss, so the desk reads the HTTP status to tell a miss from a real error.
+</Callout>
+
+<Callout kind="go" title="Why Python only">
+  The Agent SDK used here is a Python package that drives the bundled CLI, and this track builds no Go version of it. The Go side of the track is the hand-built desk of lessons 2 to 6. Comparing the SDK with the Go desk would compare languages as well as frameworks, so the framework lessons stay in one language.
+</Callout>
+
+## Try it
+
+Replay the SDK supervisor on `t018`, the run where one handoff waited for another. Free:
+
+```bash
+.venv-agents/bin/python agents/run.py --engine sdk --desk supervisor --tickets t018
+```
+
+You should see the guard refuse a `label_ticket` for `t018`, then `sdk supervisor t018: ok, 11 model calls, spent $0.0000; matches the recorded trace (kept)`.
+
+Print its handoff log, and the SDK's estimate beside the ledger's cost:
+
+```bash
+.venv-agents/bin/python -c '
+import json
+doc = json.load(open("agents/data/traces/desk-sdk/sdk-supervisor-t018.json"))
+for h in doc["output"]["handoffs"]:
+    print(h["worker"], "error" if h["is_error"] else sorted(h["changed"]))
+print("SDK estimate", round(doc["cost_usd"], 8), "ledger", round(sum(c["cost_usd"] for c in doc["proxy_calls"]), 8))
+'
+```
+
+You should see `research error` first, the refused handoff, then `triage ['category']`, `research ['findings']`, `drafter ['draft']` and `reviewer ['review']`, and two equal costs: `0.00353755`.
+
+Run the SDK desk's tests. They use a fake CLI, so they need no network and no key:
+
+```bash
+.venv-agents/bin/python -m pytest agents/frameworks/tests/test_sdk.py -q
+```
+
+You should see `28 passed`.

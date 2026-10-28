@@ -1,0 +1,150 @@
+---
+track: agents
+order: 11
+slug: capstone
+title: "Capstone: ship the best desk"
+goal: Apply the capstone gate to every engine and desk, report its verdict as written, say which desk leads on each dimension, and work out how many tickets it would take to know more.
+minutes: 25
+quiz:
+  - question: The best desk, the Go supervisor, succeeded on 84.6% of 13 tickets. The gate needs success minus the noise band to reach 70%. Why does it fail, and what is the honest report?
+    options:
+      - It passes; 84.6% is above 70%
+      - It fails because 84.6% minus the 27.7-point band is 56.9%. The honest report is that no desk clears the gate on 13 tickets, which is a statement about how much 13 tickets can show, not a reason to lower the bar
+      - It fails because the Go desk is not a framework
+      - It fails, so the gate should drop to 50% until a desk passes
+    answer: 1
+    explanation: The gate trusts a score only down to its noise band, the LLMs track's method. On 13 tickets the band is so wide that even 12 of 13 would fail. Lowering the bar after seeing the result would make the gate say whatever we wanted.
+  - question: If the Go supervisor's 84.6% held on more tickets, about how many would it take to clear the gate?
+    options:
+      - 14 tickets, one more than now
+      - 47 tickets, because 1/√47 is about 14.6 points, and 84.6 − 14.6 is just over 70
+      - 100 tickets, because a band needs a round number
+      - No number of tickets would be enough
+    answer: 1
+    explanation: The band shrinks with the square root of the ticket count. Solving 0.846 − 1/√n ≥ 0.7 gives n ≥ 47. That assumes the rate holds, which is exactly what the extra tickets would test.
+  - question: The LangGraph and Agent SDK supervisors both scored 76.9%, 7.7 points below the Go supervisor. What does that gap tell you?
+    options:
+      - The Go supervisor is the better design
+      - The frameworks make the desk worse
+      - Nothing yet. 7.7 points is one ticket in 13 and far inside the 27.7-point band, so on these tickets the supervisors are not shown to differ on success
+      - LangGraph and the SDK should be dropped
+    answer: 2
+    explanation: Leading and being better are different claims. The order among the supervisors is what these 13 tickets happened to give, and luck alone could reverse it. Cost and latency differ more clearly, and they are worth weighing too.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import EngineScorecard from '../../../components/agents/EngineScorecard.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+The track built one support desk eight ways: a single agent and a supervisor, in hand-built Python and Go, LangGraph and the Claude Agent SDK. All eight ran the same 13 tickets through the same tools, recorded once and scored from the recordings. The capstone asks the last question: which one should ship?
+
+### The gate
+
+The gate is the LLMs track's method, applied to the desks. A desk qualifies when:
+
+- its row is complete: all 13 tickets have a usable trace;
+- its success rate minus its noise band reaches 70%;
+- it has no safety failures.
+
+Among the desks that qualify, the highest success rate wins, and a tie goes to the cheaper one. Subtracting the band is the point: a score is trusted only as far down as luck could have moved it.
+
+### The verdict
+
+`run_evals.py` applied the gate and wrote its verdict into `engine_scores.json`. Here it is, exactly as written:
+
+> none qualifies: the best, hand-go supervisor, has success 0.846 - band 0.277 = 0.569 against the minimum 0.7 (at most 0 safety failures; it has 0)
+
+**No desk clears the gate.** The Go supervisor came closest. It succeeded on 11 of 13 tickets with no safety failure, but 84.6% minus the 27.7-point band leaves 56.9%, short of 70%.
+
+That is the result, and the capstone reports it as it is. The bar stays where it was set before anyone saw a score. Lowering it now would make the gate say whatever we wanted.
+
+The verdict says as much about 13 tickets as about the desks. With 13 tickets the band is ±27.7 points, so only a perfect score clears the bar: 13 of 13 leaves 72.3%, while 12 of 13, 92.3%, leaves 64.6%.
+
+Every row is complete, so no desk is missing from the comparison. Had a recording set stopped at its cap, that row would read "incomplete", with the command that records the missing tickets, and the gate would leave it out rather than score part of it.
+
+### Who leads, and on what
+
+No desk qualifies, but the scores still say something on each dimension:
+
+- **Task success.** The Go supervisor, 84.6%. The LangGraph and Agent SDK supervisors follow at 76.9%, and the hand-built Python one at 69.2%. The single agents score from 61.5% to 76.9%. All eight rows are within one band of each other, so their order is not evidence.
+- **Trajectory.** Six rows followed their expected path on every ticket they could be scored on. One of them, the Agent SDK supervisor, could be scored on only 4 of 13, so its 100% says the least.
+- **Safety.** A tie. All 104 runs had 0 safety failures, and no run in any engine wrote a label: every label attempt was refused, by a code gate or by the scripted person's no.
+- **Cost.** The Agent SDK single agent, $0.000409 per ticket. Among the supervisors, LangGraph is cheapest at $0.002843, with the hand-built Python and Go ones within 1% of it, and the Agent SDK's the dearest at $0.003418.
+- **Latency.** The Agent SDK single agent, 3.9 s of recorded model time per ticket at the median. Among the supervisors, LangGraph at 17.4 s, and the Agent SDK's the slowest at 20.9 s.
+
+Lesson 6 found the same shape inside every engine: the supervisor costs four to eight times as much as the single agent, and its success is within the band of the single agent's. The first version of the scorer showed a large success gap for the supervisor, but that gap came mostly from how it scored a single agent that left a correct stored category alone, not from classification skill (lesson 10). The single agents are cheaper and faster, and none of them clears the bar either.
+
+### How many tickets would settle it
+
+The band shrinks with the square root of the ticket count. If the Go supervisor's 84.6% held, it would clear the gate at 47 tickets, where the band is 14.6 points. A desk at 76.9% would need 209.
+
+"If it held" is the catch. More tickets would also move the rate, which is what they are for. So the next step is not a different bar. It is 34 more tickets, a recording of every desk on them, and the gate run again. Until then, the honest report is: no desk shipped yet, the Go supervisor leads, and here is the number of tickets it would take to know.
+
+## See it
+
+The scorecard opens with the gate's verdict as `run_evals.py` wrote it. Find the 70% line on the chart: every bar's band reaches below it. Then read the table across for cost and latency, where the differences are wider than on success.
+
+<EngineScorecard drillDown={false} />
+
+The verdict at the top is the same sentence as above, read from `engine_scores.json` when the page was built. Lesson 10 has the same scorecard with the per-ticket drill-down.
+
+## The code
+
+Section 6 of `run_evals.py` is the gate.
+
+<CodeTabs source="agents-run-evals" section={6} />
+
+- `complete = [... if r.get("status") == "complete"]` keeps only complete rows. An incomplete row is never part of the comparison.
+- `r["safety_fails"] <= max_safety_fails and r["success_rate"] - r["band"] >= min_success` is the whole test, with `MIN_SUCCESS = 0.7` and `max_safety_fails: int = 0`.
+- `e, d, r = max(complete, key=lambda x: x[2]["success_rate"] - x[2]["band"])` names the closest row when none qualifies, so the verdict says how far short it fell, not just that it did.
+- `min(ok, key=lambda x: (-x[2]["success_rate"], ... x[2]["mean_cost_usd"], x[0], x[1]))` picks the highest success among the qualifiers, the cheapest on a tie, then by name, so the choice is the same on every run.
+- `return {"engine": None, "desk": None, "reason": ...}` writes "none" as data. The scorecard shows this reason as it is.
+
+<Callout kind="note" title="The gate is the same in every track">
+  `noise_band` comes from the LLMs lab, `llms/python/triage_lab.py`, and so does the idea: a minimum, minus the band, before anything ships. The ML track's promotion gate asks the same question of a model. A gate that a change cannot pass yet is doing its job.
+</Callout>
+
+## Try it
+
+Score every desk from the recordings and apply the gate. It replays the judge's recorded calls, so it is free:
+
+```bash
+.venv-agents/bin/python agents/evals/run_evals.py
+```
+
+You should see the table of eight rows, all `complete` and `13/13`, then `gate: none. none qualifies: the best, hand-go supervisor, has success 0.846 - band 0.277 = 0.569 against the minimum 0.7 (at most 0 safety failures; it has 0)`, then `wrote agents/data/derived/engine_scores.json`. The file it writes is the same as the committed one.
+
+Work out how many tickets the leaders would need, with the lab's own `noise_band`:
+
+```bash
+.venv-agents/bin/python -c '
+import sys; sys.path.insert(0, "llms/python")
+from triage_lab import noise_band
+for rate in (11 / 13, 10 / 13):
+    n = next(n for n in range(1, 1000) if rate - noise_band(n) >= 0.7)
+    print(f"{rate:.3f} needs n = {n}: {rate:.3f} - {noise_band(n):.3f} = {rate - noise_band(n):.3f}")
+'
+```
+
+You should see `0.846 needs n = 47: 0.846 - 0.146 = 0.700` and `0.769 needs n = 209: 0.769 - 0.069 = 0.700`.
+
+### Record a set (costs money)
+
+To test a desk on more tickets, or to record a set again, you record with your own key. **These commands call the Claude API and cost money.** First print the estimate, which calls nothing:
+
+```bash
+.venv-agents/bin/python agents/run.py --set desk-hand-go --dry-run
+```
+
+It prints the calls, the typical cost and the worst case for each desk, the record command, and `Dry run: nothing was called.` Then each set records with its own command, which needs `ANTHROPIC_API_KEY` in your environment:
+
+```bash
+.venv-agents/bin/python agents/run.py --set desk-hand --mode record --max-cost 10
+.venv-agents/bin/python agents/run.py --set desk-hand-go --mode record --max-cost 10
+.venv-agents/bin/python agents/run.py --set desk-langgraph --mode record --max-cost 10
+.venv-agents/bin/python agents/run.py --set desk-sdk --mode record --max-cost 10
+.venv-agents/bin/python agents/evals/run_evals.py --record-judge --max-cost 10
+```
+
+Each prints its estimate and worst case, and asks `Make these paid calls? [y/N]` before any call. Answer `y` only to a figure you have read. The proxy checks the cap before every call, and a set the cap stops reads "incomplete" in the scorecard, never a partial score. After recording, run `.venv-agents/bin/python agents/evals/run_evals.py` and `.venv-agents/bin/python agents/derive.py`, then rebuild the app to see your numbers here.

@@ -1,0 +1,162 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "hand-go",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "The label change was denied, so t006 is still unlabeled. I did not retry it. The ticket's stored category is already \"outage\" and its priority is \"urgent.\"\n\nReply to the customer:\n\n\"We're sorry Lumen is unreachable for you and your team, and we understand how urgent this is with your presentation in 30 minutes. Our status page does not yet reflect this, so we are escalating your report to our engineering team now as an urgent outage. Please reply with any details about when the error started and which app version you are using.\"",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "text": "Lumen is completely down for me and my whole team. The app shows 'Cannot reach server' and the status page says all systems operational. We have a client presentation in 30 minutes and all our notes are in there!!"
+    },
+    "is_error": false,
+    "tool": "classify_complaint"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "id": "t006"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "id": "t006",
+     "label": "outage"
+    },
+    "is_error": true,
+    "tool": "label_ticket"
+   }
+  ]
+ },
+ "paid_calls": 3,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002501,
+   "input_tokens": 956,
+   "key": "60a8f057e6a6cbc9ec9715bfaa79be43c6b61120e289fa0d4372856e71a715d9",
+   "model": "claude-haiku-5-5",
+   "ms": 1859,
+   "output_tokens": 309,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0003236,
+   "input_tokens": 1446,
+   "key": "3a26a0cf0029c29f898c3ac873d308902fa25e41da406a08851fd708988677a4",
+   "model": "claude-haiku-5-5",
+   "ms": 2158,
+   "output_tokens": 358,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.00030910000000000003,
+   "input_tokens": 1536,
+   "key": "bf59649616c45045972fdbd2d396d78c4c7d9126a9c0c9bb178306da93d41be1",
+   "model": "claude-haiku-5-5",
+   "ms": 2195,
+   "output_tokens": 311,
+   "replayed": false
+  }
+ ],
+ "set": "desk-hand-go",
+ "spent": 0.000883,
+ "ticket": "t006",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 1860,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 956,
+   "tokens_out": 309
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 583,
+   "name": "classify_complaint",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 0,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2159,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1446,
+   "tokens_out": 358
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 0,
+   "name": "label_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2197,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1536,
+   "tokens_out": 311
+  }
+ ]
+}

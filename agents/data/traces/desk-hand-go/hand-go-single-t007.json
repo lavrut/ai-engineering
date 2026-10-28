@@ -1,0 +1,162 @@
+{
+ "approve": "decline",
+ "cost_usd": null,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "hand-go",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   },
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "I haven't labeled ticket t007, because the label request was declined. The ticket already shows a billing category.\n\nSuggested reply to the customer:\n\n\"We're sorry for the frustration with this $120 charge for the annual plan. We've received your concern about a cancellation in March, and your confirmation email is helpful for reviewing it. Our billing team will look into the charge and follow up with you.\"",
+  "stop": "end_turn",
+  "tool_calls": [
+   {
+    "agent": "single",
+    "args": {
+     "id": "t007"
+    },
+    "is_error": false,
+    "tool": "get_ticket"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "text": "THIS IS RIDICULOUS. You charged me $120 for the annual plan when I clearly cancelled in March. I have the confirmation email. If this is not reversed today I am disputing it with my bank."
+    },
+    "is_error": false,
+    "tool": "classify_complaint"
+   },
+   {
+    "agent": "single",
+    "args": {
+     "id": "t007",
+     "label": "billing"
+    },
+    "is_error": true,
+    "tool": "label_ticket"
+   }
+  ]
+ },
+ "paid_calls": 3,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002518,
+   "input_tokens": 958,
+   "key": "8e5a612c20ebf5a1879d34804fc3771d7ac67f5c08f33a4e7e88ccec2fa2bd1b",
+   "model": "claude-haiku-5-5",
+   "ms": 2073,
+   "output_tokens": 312,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0003595,
+   "input_tokens": 1450,
+   "key": "953b52dff75c44164c739fe29a0ab7e8c96773355c2e14290a33b438e2ba276f",
+   "model": "claude-haiku-5-5",
+   "ms": 2443,
+   "output_tokens": 429,
+   "replayed": false
+  },
+  {
+   "cache_creation_input_tokens": 0,
+   "cache_read_input_tokens": 0,
+   "cost_usd": 0.0002765,
+   "input_tokens": 1540,
+   "key": "991e9d1a4023ee6644350d721f98fe624a87193d645c126af18abddfe4e7504e",
+   "model": "claude-haiku-5-5",
+   "ms": 3097,
+   "output_tokens": 245,
+   "replayed": false
+  }
+ ],
+ "set": "desk-hand-go",
+ "spent": 0.000888,
+ "ticket": "t007",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2074,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 958,
+   "tokens_out": 312
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 3,
+   "name": "get_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 574,
+   "name": "classify_complaint",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 2444,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1450,
+   "tokens_out": 429
+  },
+  {
+   "agent": "single",
+   "kind": "tool",
+   "ms": 0,
+   "name": "label_ticket",
+   "tokens_in": null,
+   "tokens_out": null
+  },
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": 3099,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 1540,
+   "tokens_out": 245
+  }
+ ]
+}

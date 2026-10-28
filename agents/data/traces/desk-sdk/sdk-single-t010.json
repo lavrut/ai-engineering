@@ -1,0 +1,70 @@
+{
+ "approve": "decline",
+ "cost_usd": 0.0002428,
+ "desk": "single",
+ "elicit": "accept",
+ "engine": "sdk",
+ "errors": [],
+ "mode": "record",
+ "model": "claude-haiku-5-5",
+ "output": {
+  "calls": [
+   {
+    "agent": "single",
+    "role": "act",
+    "tools": [
+     "classify_complaint",
+     "get_ticket",
+     "label_ticket",
+     "search_tickets"
+    ]
+   }
+  ],
+  "reply": "Thanks for reaching out. I don't have the steps for sharing notebooks in front of me, so I don't want to guess at the menu names. Could you tell us which Lumen app or version you're using and whether you want to share with a specific person or with a link? With that, we can point you to the right steps.",
+  "stop": "end_turn",
+  "tool_calls": [],
+  "usage": {
+   "claude-haiku-5-5": {
+    "cacheCreationInputTokens": 456,
+    "cacheReadInputTokens": 960,
+    "canonicalModel": "claude-haiku-5-5",
+    "contextWindow": 1000000,
+    "costBasis": "list",
+    "costUSD": 0.0002428,
+    "inputTokens": 2,
+    "maxOutputTokens": 128000,
+    "outputTokens": 352,
+    "provider": "firstParty",
+    "thinkingTokens": 259,
+    "webSearchRequests": 0
+   }
+  }
+ },
+ "paid_calls": 1,
+ "proxy_calls": [
+  {
+   "cache_creation_input_tokens": 456,
+   "cache_read_input_tokens": 960,
+   "cost_usd": 0.00024280000000000002,
+   "input_tokens": 2,
+   "key": "9ba72fb87d8354c1e7866ff0990d8f1e08738b8485c93a63acbb1be47ce0b3b3",
+   "model": "claude-haiku-5-5",
+   "ms": 2663,
+   "output_tokens": 352,
+   "replayed": false
+  }
+ ],
+ "set": "desk-sdk",
+ "spent": 0.000318,
+ "ticket": "t010",
+ "trace": [
+  {
+   "agent": "single",
+   "kind": "model",
+   "ms": null,
+   "name": "claude-haiku-5-5",
+   "tokens_in": 2,
+   "tokens_out": null
+  }
+ ]
+}

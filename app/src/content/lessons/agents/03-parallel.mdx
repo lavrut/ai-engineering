@@ -1,0 +1,128 @@
+---
+track: agents
+order: 3
+slug: parallel
+title: Parallel work and orchestrator-workers
+goal: Fan independent model calls out side by side, let an orchestrator plan subtasks at run time for capped read-only workers, and read what each costs in calls and time.
+minutes: 25
+quiz:
+  - question: In the recorded parallel runs, lookup-2 and lookup-3 always made the same search. Why, and what does it teach?
+    options:
+      - The proxy merged them to save money
+      - Both got the same prompt, the same ticket and the same single tool, so they sent the same request and got the same answer. Parallel sections pay only when each does a different job
+      - The model ran out of ideas after the first search
+      - Python's thread pool ran the same job twice by mistake
+    answer: 1
+    explanation: The two slots differ only in their agent name, which is not part of the request. Identical requests give identical answers, so the third lookup bought nothing. In the recording set this shows up as 60 model calls served by 57 recordings.
+  - question: The orchestrator planned "verify the charges in the billing system" for t001. What did the worker do, and why could it not do more?
+    options:
+      - It verified the charges with get_ticket
+      - It labelled the ticket as billing instead
+      - It reported that none of its tools could reach a billing system. Workers are given lumen-read only, so they can read tickets and nothing else
+      - It asked the orchestrator for a new plan
+    answer: 2
+    explanation: The plan is the model's, but the tools are the code's. A plan can ask for anything; a worker can only do what its tools allow. That keeps a worker that is talked into a write from finding a write tool, and it also means the plan can ask for work nobody can do.
+  - question: The ledger shows the Python parallel run on t001 took 6.1 s. Why would three real workers take less?
+    options:
+      - The ledger adds up every call's recorded time, as if they ran one after another. With three workers the lookups overlap, so they cost about as long as the slowest one
+      - Three workers use a faster model
+      - The summary is skipped with three workers
+      - The ledger counts the time to start the proxy
+    answer: 0
+    explanation: The runs were recorded with workers=1 so the call order is fixed for replay. Each recording keeps its own call time, and the ledger sums them. With the lookups overlapped, their 1.3 s, 1.3 s and 1.3 s cost about 1.3 s, and only the 2.2 s summary follows.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import PatternStepper from '../../../components/agents/PatternStepper.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+Lesson 2's patterns run one call after another. The next two patterns run several pieces of work for one ticket, and differ in who decides what the pieces are.
+
+### Parallelization
+
+When several steps do not depend on each other, they can run at the same time. "Building effective agents" names two kinds:
+
+- **Sectioning:** split the job into independent parts and run them side by side.
+- **Voting:** run the same task several times and compare the answers.
+
+The Lumen parallel pattern is sectioning. Three lookups each make one model call that asks for one tool: `get_ticket`, then `search_tickets`, then `search_tickets` again. A fourth call summarizes what they found.
+
+Only the model calls overlap. The tool calls then run one at a time, in slot order, so the untrusted-read guard from the MCP track always sees the same order. The lookups use `get_ticket` and `search_tickets` only. `lumen-read`'s third tool, `classify_complaint`, needs the ML track's serving code, so it stays out.
+
+### Orchestrator-workers
+
+Sometimes the subtasks depend on the ticket and cannot be listed in advance. Then a lead call, the orchestrator, writes the plan at run time: here a JSON list of at most `MAX_SUBTASKS = 3` subtasks. A worker does each one in its own capped tool loop, and a last call, the synthesizer, writes the reply from their results.
+
+The plan is the model's. The limits are the code's: the plan length is checked, each worker has at most `MAX_WORKER_STEPS = 3` model calls, and workers see `lumen-read` only. A worker that a ticket talks into labelling something finds no `label_ticket` tool to call.
+
+### What they cost
+
+Both patterns spend more calls than a chain. Parallelization's calls are fixed: four on every ticket. The orchestrator's are not: they depend on the plan and on how many tool turns each worker takes.
+
+## See it
+
+Step through **Parallelization** on `t001`. Watch the three lookups' results: two of them are the same search. Then switch to **Orchestrator-workers** and read the plan in the first step, then what worker-1 says at the end of its loop.
+
+<PatternStepper patterns={['parallel', 'orchestrate']} ticket="t001" engine="hand" />
+
+The parallel run made 4 calls. Lookup-2 and lookup-3 sent the same search, `duplicate charge Lumen Plus $9.99`, because they had the same prompt, ticket and tool. They were byte-identical requests, so they got the same answer, on every ticket and in both languages. That is also why the 15 Python pattern runs made 60 model calls but used only 57 recordings: each parallel run's repeat was served by the recording of its twin.
+
+The orchestrator made 9 calls in Python and 8 in Go on `t001`, and cost about nine times the chain. Its plan began "Verify in the billing system that Maria's account has two $9.99 Lumen Plus charges". No worker can do that, and worker-1 said so: "I could not verify the charges. None of the tools I have can query the billing system". The plan can ask for anything. The workers can do only what their tools allow.
+
+## The code
+
+Section 4 is the parallel pattern.
+
+<CodeTabs source="agents-patterns" section={4} />
+
+- `open_desk_tools(("read",), guard=True, ...)` opens one `lumen-read` session for the ticket, behind the guard. No write tools exist in it.
+- `tools=[t for t in schema if t["name"] == LOOKUPS[i]]` offers each lookup exactly one tool, so slot `i` can only ask for `LOOKUPS[i]`.
+- `with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:` runs the model calls on a <Term t="thread pool" />. With `workers` above 1 the calls overlap; `workers=1` runs them in order.
+- `replies = list(pool.map(ask_lookup, range(len(LOOKUPS))))` keeps the replies in slot order, whatever order they finish in.
+- `out, is_error = run_tool(uses[0].name, uses[0].input)` runs the tools after all the model calls, one at a time, in slot order.
+- `summary = _ask(run, call, "summarizer", "summarize", ...)` sends every lookup's result to one last call.
+
+Section 5 is the orchestrator and its workers.
+
+<CodeTabs source="agents-patterns" section={5} />
+
+- `plan = _json(...)` reads the orchestrator's plan as JSON.
+- `if not (isinstance(plan, list) and 1 <= len(plan) <= MAX_SUBTASKS and all(isinstance(s, str) and s for s in plan)):` is the gate on the plan: one to three non-empty strings, or the run stops.
+- `results = [_work(run, call, f"worker-{i + 1}", sub, ticket, schema, run_tool) for i, sub in enumerate(plan)]` runs the workers in plan order. Each gets the read-only `schema`.
+- `for _ in range(MAX_WORKER_STEPS):` in `_work` is each worker's cap. A worker's result is its last text.
+- `messages = messages + [{"role": "assistant", "content": _blocks(reply)}, {"role": "user", "content": results}]` is the Harness track's loop step: the reply goes back with its tool results.
+
+<Callout kind="note" title="Recorded in order, replayed in order">
+  The contract and the recordings run the parallel pattern with `workers=1`. The requests are the same as with three workers, but the call order is fixed, so a replay finds each recording in the same place and Go matches Python call for call. Real overlapping model calls happen only with `workers` above 1. The ledger stores each recorded call's own time and adds them up, so the 6.1 s shown for `t001` is the time in sequence. Its longest lookup took 1.3 s and its summary 2.2 s.
+</Callout>
+
+## How Go does it
+
+The Go tabs above show `Parallel` and `Orchestrate`. The orchestrator is a direct translation. The fan-out is where the languages differ.
+
+- **A goroutine per lookup, with a semaphore.** Go starts one <Term t="goroutine" /> per slot. `sem := make(chan struct{}, max(1, workers))` is a buffered channel used as a semaphore: a goroutine must put a value in before it calls the model, so at most `workers` calls run at once. With `workers=1` they run one by one, like the Python pool.
+- **Slot order by index, not by result order.** Each goroutine writes `replies[i], errs[i] = m.Call(...)` into its own slot, and a <Term t="WaitGroup" /> waits for all of them. Python's `pool.map` gives the same order for free.
+- **The model must be safe for concurrent use.** With `workers` above 1, several goroutines call one `Model` at the same time. The live client's trace log holds a mutex for that reason.
+- **The plan is checked item by item.** JSON decodes into `[]any`, so `Orchestrate` keeps strings until the first item that is not a non-empty string, then rejects the plan if any were dropped. Python checks the same rule with `isinstance`.
+
+## Try it
+
+Replay the parallel pattern and the orchestrator on `t001`. All free:
+
+```bash
+.venv-agents/bin/python agents/run.py --engine hand --desk pattern:parallel --tickets t001
+.venv-agents/bin/python agents/run.py --engine hand --desk pattern:orchestrate --tickets t001
+.venv-agents/bin/python agents/run.py --engine hand-go --desk pattern:orchestrate --tickets t001
+```
+
+You should see `4 model calls`, then `9 model calls`, then `8 model calls` for Go, each ending `matches the recorded trace (kept)`. Open `agents/data/traces/patterns/hand-orchestrate-t001.json` and read `output.result.plan` and `output.result.results` side by side: each subtask, and what the worker could actually do.
+
+Run the two Go tests that pin the fan-out's order and the workers' tools:
+
+```bash
+(cd agents/desk/go && go test -run 'TestParallelWithWorkersKeepsSlotOrder|TestOrchestrateWorkersGetReadToolsOnly' -v .)
+```
+
+You should see `--- PASS` for both, then `ok lumen-agents`.
