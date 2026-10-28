@@ -25,10 +25,23 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
+AGENTS = HERE.parents[1]
 REPO = HERE.parents[2]
-sys.path.insert(0, str(REPO / "mcp" / "python"))
 
+
+def agents_first() -> None:
+    """Move every agents/ folder on sys.path ahead of the other tracks' folders, keeping each group's order.
+    Two tracks share a module name (agents/derive.py, mcp/python/derive.py), and the MCP modules put mcp/python
+    at the front each time they load, so after importing them the agents folders go first again."""
+    def ours(entry: str) -> bool:
+        path = Path(entry or ".").resolve()
+        return path == AGENTS or AGENTS in path.parents
+    sys.path[:] = [p for p in sys.path if ours(p)] + [p for p in sys.path if not ours(p)]
+
+
+sys.path.append(str(REPO / "mcp" / "python"))
 import agent as mcp_agent  # noqa: E402  (mcp/python/agent.py: import only, never edited)
+agents_first()
 
 # ── 1. Configuration ────────────────────────────────────────────────────────
 PROXY_URL = "http://127.0.0.1:8790"   # agents/proxy/proxy.py: HOST and DEFAULT_PORT

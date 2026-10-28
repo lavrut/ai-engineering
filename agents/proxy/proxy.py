@@ -42,7 +42,7 @@ from typing import Any
 import httpx
 
 # Prices live in the LLMs lab (import only, never edit).
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "llms" / "python"))
+sys.path.append(str(Path(__file__).resolve().parents[2] / "llms" / "python"))   # after the agents folders
 from triage_lab import PRICES, call_cost  # noqa: E402
 
 # The other three files sit beside this one; put their folder on the path, so they import even when this file is

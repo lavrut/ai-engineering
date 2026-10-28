@@ -3,5 +3,5 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-for sub in ("agents", "agents/evals", "agents/evals/tests", "agents/desk/python", "agents/proxy", "llms/python"):
+for sub in ("llms/python", "agents", "agents/evals", "agents/evals/tests", "agents/desk/python", "agents/proxy"):   # agents first
     sys.path.insert(0, str(ROOT / sub))
