@@ -255,6 +255,6 @@ export function announce(state: SimState): string {
   const calls = last.content.filter((b): b is ToolUse => b.type === 'tool_use').map(callLabel);
   const says = [text && `says "${short(text)}"`, calls.length > 0 && `asks for ${calls.join(', ')}`]
     .filter(Boolean)
-    .join(' and ');
+    .join(' and ') || 'replies with no text';
   return `Turn ${turn}: the assistant ${says}; stop_reason ${stopReason}.${done ? ' Done.' : ''}`;
 }

@@ -17,7 +17,7 @@ Hosted page: https://claude.ai/artifact/MH9ZBPk8GC1duTWc4Ke5cw (private until sh
 
 ## Run a harness
 
-Both harnesses call the Claude API, so every task you type costs money. Before the first call of each task the REPL prints an estimate (typical and worst case, with its assumptions) and asks `Run it? [y/N]`; anything but `y` skips the task, and with no terminal to ask the answer is no. `--max-cost` (default $10) is checked before every model call against what the session has spent plus the most that call could cost. `--yes` approves every task without asking: use it only for a scripted run you have already approved. They work inside `./workspace` (created if missing) and append events to `./trace.jsonl`.
+Both harnesses call the Claude API, so every task you type costs money. Before the first call of each task the REPL prints an estimate (typical, and a worst case that assumes every call stays at the context budget; it is not a ceiling) and asks `Run it? [y/N]`; anything but `y` skips the task, and with no terminal to ask the answer is no. `--max-cost` (default $10) is the hard stop: it is checked before every model call against what the session has spent plus the most that call could cost (an estimate, so the session stops at about the cap). `--yes` approves every task without asking: use it only for a scripted run you have already approved. They work inside `./workspace` (created if missing) and append events to `./trace.jsonl`.
 
 The key is read from `ANTHROPIC_API_KEY` only and is never printed or logged. Set it without putting it in your shell history:
 

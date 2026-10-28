@@ -11,8 +11,9 @@ import harness
 from conftest import block, reply, text
 
 ESTIMATE = ("Estimate: typical $0.10 a task (4 calls of ~4,000 input and ~400 output tokens); "
-            "worst case $23.00 (MAX_TURNS 25 calls of 150,000 input and 16,000 output tokens, "
-            "plus any compaction summaries), at $4.00 / $20.00 per million tokens.")
+            "worst case $23.00 if every call stays at CONTEXT_BUDGET (MAX_TURNS 25 calls of 150,000 input "
+            "and 16,000 output tokens, plus any compaction summaries), at $4.00 / $20.00 per million tokens; "
+            "the hard stop is --max-cost $10.00.")
 
 
 class Terminal(io.StringIO):
@@ -44,7 +45,7 @@ def test_prices_match_the_llms_lab():
 
 def test_estimate_lines(ws):
     lines = harness.estimate_lines(harness.Ledger(cap=10.0, spent=0.0))
-    assert lines == [ESTIMATE, "Spent $0.0000 this session; --max-cost stops it before $10.00."]
+    assert lines == [ESTIMATE, "Spent $0.0000 this session; each call is checked against the cap first, so the session stops at about $10.00."]
 
 
 def test_y_on_a_terminal_runs_the_task(ws, monkeypatch, capsys):

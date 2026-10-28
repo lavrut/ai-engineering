@@ -69,9 +69,9 @@ describe('lesson 1: the money gate in Try it', () => {
   const worst = MAX_TURNS * dollars(CONTEXT_BUDGET, MAX_TOKENS);
   const estimate =
     `Estimate: typical $${typical.toFixed(2)} a task (${T_CALLS} calls of ~${commas(T_IN)} input and ~${commas(T_OUT)} output tokens); ` +
-    `worst case $${worst.toFixed(2)} (MAX_TURNS ${MAX_TURNS} calls of ${commas(CONTEXT_BUDGET)} input and ${commas(MAX_TOKENS)} output tokens, ` +
-    `plus any compaction summaries), at $${P_IN.toFixed(2)} / $${P_OUT.toFixed(2)} per million tokens.`;
-  const spent = `Spent $0.0000 this session; --max-cost stops it before $${MAX_COST.toFixed(2)}.`;
+    `worst case $${worst.toFixed(2)} if every call stays at CONTEXT_BUDGET (MAX_TURNS ${MAX_TURNS} calls of ${commas(CONTEXT_BUDGET)} input and ${commas(MAX_TOKENS)} output tokens, ` +
+    `plus any compaction summaries), at $${P_IN.toFixed(2)} / $${P_OUT.toFixed(2)} per million tokens; the hard stop is --max-cost $${MAX_COST.toFixed(2)}.`;
+  const spent = `Spent $0.0000 this session; each call is checked against the cap first, so the session stops at about $${MAX_COST.toFixed(2)}.`;
 
   it('shows the estimate the harness prints, computed from its constants and the lab prices', () => {
     expect(estimate).toContain('typical $0.10 a task');

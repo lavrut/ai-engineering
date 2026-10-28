@@ -56,7 +56,8 @@ def test_request_shape_and_reply(ws, upstream):
     (req,) = seen
     assert req["path"] == "/v1/messages"
     assert req["headers"]["anthropic-beta"] == "server-side-fallback-2026-07-01"
-    assert "test-key" in req["headers"].get("x-api-key", req["headers"].get("authorization", ""))  # the dummy key
+    assert req["headers"]["authorization"] == "Bearer test-key"  # anthropic 2.3 sends the key this way
+    assert "x-api-key" not in req["headers"]
     body = req["body"]
     assert body["model"] == "claude-opus-5-5" and body["max_tokens"] == 16_000
     assert body["system"] == harness.SYSTEM_PROMPT

@@ -251,10 +251,11 @@ def estimate_lines(ledger: Ledger) -> list[str]:
     calls, tokens_in, tokens_out = TYPICAL_TASK
     typical, worst = calls * dollars(tokens_in, tokens_out), MAX_TURNS * dollars(CONTEXT_BUDGET, MAX_TOKENS)
     return [f"Estimate: typical ${typical:.2f} a task ({calls} calls of ~{tokens_in:,} input and ~{tokens_out:,} "
-            f"output tokens); worst case ${worst:.2f} (MAX_TURNS {MAX_TURNS} calls of {CONTEXT_BUDGET:,} input "
+            f"output tokens); worst case ${worst:.2f} if every call stays at CONTEXT_BUDGET (MAX_TURNS {MAX_TURNS} calls of {CONTEXT_BUDGET:,} input "
             f"and {MAX_TOKENS:,} output tokens, plus any compaction summaries), at ${PRICE_PER_MTOK[0]:.2f} / "
-            f"${PRICE_PER_MTOK[1]:.2f} per million tokens.",
-            f"Spent ${ledger.spent:.4f} this session; --max-cost stops it before ${ledger.cap:.2f}."]
+            f"${PRICE_PER_MTOK[1]:.2f} per million tokens; the hard stop is --max-cost ${ledger.cap:.2f}.",
+            f"Spent ${ledger.spent:.4f} this session; each call is checked against the cap first, "
+            f"so the session stops at about ${ledger.cap:.2f}."]
 
 
 def confirmed(yes: bool) -> bool:
@@ -308,6 +309,8 @@ def main(argv: list[str] | None = None, call: Callable[..., Any] = call_model) -
             print(f"API error {e.status_code}: {e.message}")
         except anthropic.APIConnectionError:
             print("Network error: could not reach the API.")
+        except Exception as e:  # anything else: report it and keep the REPL, as Go's main does
+            print(f"Error: {e}")
         print(f"  [${ledger.spent - before:.4f} this task, ${ledger.spent:.4f} this session]")
 
 

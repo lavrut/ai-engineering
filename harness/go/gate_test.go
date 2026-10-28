@@ -19,8 +19,9 @@ import (
 // every test passes a fake in place of callModel, with a dummy key in the environment.
 
 const estimate = "Estimate: typical $0.10 a task (4 calls of ~4,000 input and ~400 output tokens); " +
-	"worst case $23.00 (MAX_TURNS 25 calls of 150,000 input and 16,000 output tokens, " +
-	"plus any compaction summaries), at $4.00 / $20.00 per million tokens."
+	"worst case $23.00 if every call stays at CONTEXT_BUDGET (MAX_TURNS 25 calls of 150,000 input " +
+	"and 16,000 output tokens, plus any compaction summaries), at $4.00 / $20.00 per million tokens; " +
+	"the hard stop is --max-cost $10.00."
 
 // capture runs f and returns what it printed to standard output.
 func capture(t *testing.T, f func()) string {
@@ -70,7 +71,7 @@ func TestPricesMatchTheLLMsLab(t *testing.T) {
 
 func TestEstimateLines(t *testing.T) {
 	got := estimateLines(&ledger{cap: 10})
-	want := []string{estimate, "Spent $0.0000 this session; --max-cost stops it before $10.00."}
+	want := []string{estimate, "Spent $0.0000 this session; each call is checked against the cap first, so the session stops at about $10.00."}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("got\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}

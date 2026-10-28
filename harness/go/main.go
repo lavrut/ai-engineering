@@ -465,10 +465,11 @@ func estimateLines(l *ledger) []string {
 	worst := float64(maxTurns) * dollars(contextBudget, maxTokens)
 	return []string{
 		fmt.Sprintf("Estimate: typical $%.2f a task (%d calls of ~%s input and ~%s output tokens); worst case $%.2f "+
-			"(MAX_TURNS %d calls of %s input and %s output tokens, plus any compaction summaries), at $%.2f / $%.2f "+
-			"per million tokens.", typical, typicalCalls, commas(typicalIn), commas(typicalOut), worst, maxTurns,
-			commas(contextBudget), commas(maxTokens), pricePerMTok[0], pricePerMTok[1]),
-		fmt.Sprintf("Spent $%.4f this session; --max-cost stops it before $%.2f.", l.spent, l.cap),
+			"if every call stays at CONTEXT_BUDGET (MAX_TURNS %d calls of %s input and %s output tokens, plus any compaction summaries), at $%.2f / $%.2f "+
+			"per million tokens; the hard stop is --max-cost $%.2f.", typical, typicalCalls, commas(typicalIn), commas(typicalOut), worst, maxTurns,
+			commas(contextBudget), commas(maxTokens), pricePerMTok[0], pricePerMTok[1], l.cap),
+		fmt.Sprintf("Spent $%.4f this session; each call is checked against the cap first, "+
+			"so the session stops at about $%.2f.", l.spent, l.cap),
 	}
 }
 

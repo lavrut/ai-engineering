@@ -88,6 +88,10 @@ func TestCallModelRequestShapeAndReply(t *testing.T) {
 	if b["model"] != "claude-opus-5-5" || b["max_tokens"] != float64(16000) || b["fallbacks"] != "default" {
 		t.Errorf("body %v", b)
 	}
+	msgs, _ := json.Marshal(b["messages"])
+	if string(msgs) != `[{"content":[{"text":"hi","type":"text"}],"role":"user"}]` {
+		t.Errorf("messages %s", msgs)
+	}
 	system, _ := json.Marshal(b["system"])
 	if !strings.Contains(string(system), `"text":"You are a careful coding assistant working inside `) {
 		t.Errorf("system %s", system)

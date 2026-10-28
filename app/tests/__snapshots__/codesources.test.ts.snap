@@ -84,22 +84,22 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
   },
   "harness/08-reliability.mdx #2": {
     "go": {
-      "lines": 135,
-      "sha256": "5c3e081e22dfa57801717f286a8513e3598696a4dc76794438eb3bff5dfa15de",
+      "lines": 136,
+      "sha256": "e9aec58710e8311f7d26964397a2ab3bc944d7d0b022e9e5c406ee29c215a06e",
     },
     "python": {
-      "lines": 96,
-      "sha256": "788fed44c6ab1427f7d26c0327a9e76b614fd6560dfc4d0e2703aa9081e674c6",
+      "lines": 99,
+      "sha256": "cbf7eeb935236b3e0c96afd93f7a7a8aaddcad28c2a23e5d1934f2c1c8e929e1",
     },
   },
   "harness/09-capstone.mdx #1": {
     "go": {
-      "lines": 554,
-      "sha256": "fb44cba017e7e23c5251cb92a617e6d9b5112010915400b6542924924c01ed5d",
+      "lines": 555,
+      "sha256": "046ad916e12070c0690ae16a8d57b3a32a5b537d8f4863c96c8c82dd25980e8e",
     },
     "python": {
-      "lines": 316,
-      "sha256": "e1452c84ab920de4e1c77034ab2104d7be92b64921a469cc2589d913b5c3bf8d",
+      "lines": 319,
+      "sha256": "123318ab75355e386466d7b479378d890fb880241cf8b864162c27e3786ae223",
     },
   },
   "llms/01-what.mdx #1": {
