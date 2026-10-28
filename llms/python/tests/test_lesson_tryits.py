@@ -12,8 +12,9 @@ the estimate and declines, so nothing is called (the SDK client is replaced by o
 
 The other numbers the lessons state are pinned in app/tests/llmslessons.test.ts.
 
-RELABEL: lesson 6's `agreement` and `kappa_demo.py` blocks come from the 30 Claude-drafted reply labels;
-reviewing the labels changes them (see the RELABEL tests in app/tests/llmslessons.test.ts).
+REVIEWED 2026-10-28: lesson 6's `agreement` and `kappa_demo.py` blocks come from the 30 reply labels,
+drafted by Claude and reviewed by a human on 2026-10-28; changing the labels changes them (see the
+"REVIEWED 2026-10-28" tests in app/tests/llmslessons.test.ts).
 """
 import json
 import re

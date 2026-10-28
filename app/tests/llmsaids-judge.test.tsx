@@ -355,7 +355,7 @@ describe('AgreementView', () => {
       expect(within(row).getByText(k.toFixed(2))).toBeTruthy();
     }
     expect(within(statRow('addresses_issue')).getByText('75.0%')).toBeTruthy();
-    expect(screen.getByText(/drafted labels in reply_labels\.jsonl/)).toBeTruthy();
+    expect(screen.getByText('Human labels: the committed labels in reply_labels.jsonl (drafted by Claude, reviewed by a person on 2026-10-28).')).toBeTruthy();
   });
 
   it('Swap order shows the before run and changes only the flipped rows; flipped rows are marked in text', () => {
@@ -435,14 +435,14 @@ describe('LabelingPage', () => {
     fireEvent.click(within(screen.getByRole('radiogroup', { name: /tone/ })).getByRole('radio', { name: 'Fail' }));
     expect(progress()).toBe('1 of 4 reviewed');
     expect(stored().r002.labels).toEqual(labels(true, false, true));
-    expect(screen.getByText(/changed from the draft/)).toBeTruthy();
+    expect(screen.getByText(/changed from the committed labels/)).toBeTruthy();
     // Confirm r003 as drafted.
     fireEvent.click(screen.getByRole('button', { name: 'Next reply' }));
     fireEvent.click(screen.getByRole('button', { name: /Confirm/ }));
     expect(progress()).toBe('2 of 4 reviewed');
     expect(stored().r003).toEqual({ fp: props.cases[2].fp, labels: props.cases[2].labels });
-    // Back to the draft forgets the review.
-    fireEvent.click(screen.getByRole('button', { name: /Back to the draft/ }));
+    // Back to the committed labels forgets the review.
+    fireEvent.click(screen.getByRole('button', { name: /Back to the committed labels/ }));
     expect(progress()).toBe('1 of 4 reviewed');
     expect(stored().r003).toBeUndefined();
   });
@@ -525,16 +525,17 @@ describe('real recorded judge data', () => {
 
   // Pinned from the Python lab (replay mode, no API calls), run from the repo root:
   //   python3 llms/python/triage_lab.py agreement
-  //     before: addresses_issue 93.3% kappa 0.81, tone 96.7% 0.89, no_false_promises 96.7% 0.92
-  //     after:  addresses_issue 93.3% kappa 0.81, tone 96.7% 0.89, no_false_promises 100.0% 1.00
+  //     before: addresses_issue 93.3% kappa 0.81, tone 93.3% 0.76, no_false_promises 93.3% 0.84
+  //     after:  addresses_issue 93.3% kappa 0.81, tone 93.3% 0.76, no_false_promises 96.7% 0.92
   //     position flips: addresses_issue 0, tone 0, no_false_promises 1 of 30
   // and the exact values and flipped reply from llms/python:
   //   python3 -c "import triage_lab as T; p=T.load_prompts(); cs=T._label_cases(T.DATA_DIR, T.load_tickets());
   //     bo={o:[T.verdicts(T.judge(c['ticket'],c['reply'],order=o,prompts=p,case_id=c['id'])) for c in cs] for o in ('before','after')};
   //     print([(r, T.cohen_kappa([bool(v[r]) for v in bo['after']],[c['labels'][r] for c in cs])) for r in T.RUBRIC_IDS]);
   //     print([c['id'] for c,b,a in zip(cs,bo['before'],bo['after']) if b!=a])"
-  //   -> kappa 0.8148148148148149, 0.8888888888888888, 0.9180327868852459 (before nfp) / 1.0 (after nfp); flipped ['r029']
-  it('agreement, kappa and flips match the Python lab on the drafted labels', () => {
+  //   -> after kappa 0.8148148148148149, 0.761904761904762, 0.9180327868852459; before nfp 0.8412698412698413; flipped ['r029']
+  // REVIEWED 2026-10-28: these are the labels as reviewed by a human (r017 tone and r018 no_false_promises changed).
+  it('agreement, kappa and flips match the Python lab on the reviewed labels', () => {
     const p = agreementProps(real, key);
     expect(p.recorded).toBe(true);
     expect(p.cases).toHaveLength(30);
@@ -542,16 +543,18 @@ describe('real recorded judge data', () => {
     const after = agreementStats(p.cases, human, 'after');
     const before = agreementStats(p.cases, human, 'before');
     const pick = (s: typeof after, f: 'agreement' | 'kappa' | 'flips') => s.map((x) => x[f]);
-    expect(pick(after, 'agreement')).toEqual([28 / 30, 29 / 30, 1.0]);
-    expect(pick(before, 'agreement')).toEqual([28 / 30, 29 / 30, 29 / 30]);
+    expect(pick(after, 'agreement')).toEqual([28 / 30, 28 / 30, 29 / 30]);
+    expect(pick(before, 'agreement')).toEqual([28 / 30, 28 / 30, 28 / 30]);
     expect(pick(after, 'kappa')[0]).toBeCloseTo(0.8148148148148149, 12);
-    expect(pick(after, 'kappa')[1]).toBeCloseTo(0.8888888888888888, 12);
-    expect(pick(after, 'kappa')[2]).toBe(1.0);
-    expect(pick(before, 'kappa')[2]).toBeCloseTo(0.9180327868852459, 12);
+    expect(pick(after, 'kappa')[1]).toBeCloseTo(0.761904761904762, 12);
+    expect(pick(after, 'kappa')[2]).toBeCloseTo(0.9180327868852459, 12);
+    expect(pick(before, 'kappa')[0]).toBeCloseTo(0.8148148148148149, 12);
+    expect(pick(before, 'kappa')[1]).toBeCloseTo(0.761904761904762, 12);
+    expect(pick(before, 'kappa')[2]).toBeCloseTo(0.8412698412698413, 12);
     expect(pick(after, 'flips')).toEqual([0, 0, 1]);
     expect(p.cases.filter((c) => c.before.some((v, i) => v !== c.after[i])).map((c) => c.id)).toEqual(['r029']);
-    expect(after.map((s) => s.disagree)).toEqual([['r003', 'r022'], ['r012'], []]);
-    expect(before.map((s) => s.disagree)).toEqual([['r003', 'r022'], ['r012'], ['r029']]);
+    expect(after.map((s) => s.disagree)).toEqual([['r003', 'r022'], ['r012', 'r017'], ['r018']]);
+    expect(before.map((s) => s.disagree)).toEqual([['r003', 'r022'], ['r012', 'r017'], ['r018', 'r029']]);
   });
 
   it('the props stay small (R30)', () => {

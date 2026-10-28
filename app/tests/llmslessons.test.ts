@@ -32,17 +32,19 @@ import { judgeKey, triageKey } from '../src/lib/llmsKey';
 // re-record, a relabel or a code change fails this test and names the lesson to update. Sources:
 //  - llms/data (tickets, prompts, reply labels, responses/, label_audits/, label_changes.md, README.md,
 //    inspect_summary.json), recomputed with the app's mirror of the lab (llmsData.ts, llmsKey.ts);
-//  - git history for the lesson 2 story (the old labels at 3610e80, the first recording at b9981a6) and
-//    lesson 6's commit times; history never changes, so those pins only guard the prose;
+//  - git history for the lesson 2 story (the old labels at 3610e80, the first recording at b9981a6);
+//    history never changes, so those pins only guard the prose;
 //  - constants read from llms/python/triage_lab.py by regex;
 //  - the Try-it output blocks: llms/python/tests/test_lesson_tryits.py runs every Try-it command in
 //    replay and checks its block line for line, and checks every paid estimate a lesson quotes with the
 //    call declined. A number the prose repeats from a block is pinned here against the data.
 //
-// RELABEL: the tests marked "RELABEL" pin lesson 6 numbers that come from the 30 Claude-drafted reply
-// labels in llms/data/reply_labels.jsonl. When you review and change those labels, these fail; update
-// lesson 6 (the lines named in each test) and the agreement and kappa_demo blocks, which
-// test_lesson_tryits.py checks. Everything else in lesson 6 uses only the judge and does not move.
+// REVIEWED 2026-10-28: the tests marked "REVIEWED 2026-10-28" pin lesson 6 numbers that come from the 30
+// reply labels in llms/data/reply_labels.jsonl, drafted by Claude and reviewed by a human on 2026-10-28
+// (the review changed r017 tone false -> true and r018 no_false_promises true -> false). When anyone
+// changes those labels, these fail; update lesson 6 (the lines named in each test) and the agreement and
+// kappa_demo blocks, which test_lesson_tryits.py checks. Everything else in lesson 6 uses only the judge
+// and does not move.
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '../..');
 const lessonsDir = join(here, '../src/content/lessons/llms');
@@ -50,11 +52,11 @@ const src = (p: string) => readFileSync(join(repo, p), 'utf8');
 // LLMS_HISTORY_REPO points the history pins at another checkout (the shallow-clone check in task-4d-report.md).
 const historyRepo = process.env.LLMS_HISTORY_REPO ?? repo;
 const git = (...args: string[]) => execFileSync('git', args, { cwd: historyRepo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-/** The three history pins need the commits they quote. A shallow clone, a ZIP download or a tree without .git
- *  lacks them: those three pins skip, with this note in their names, and the other pins still run. */
+/** The two history pins need the commits they quote. A shallow clone, a ZIP download or a tree without .git
+ *  lacks them: those two pins skip, with this note in their names, and the other pins still run. */
 const hasHistory = (() => {
   try {
-    for (const c of ['3610e80', 'b9981a6', 'fbeb068']) git('cat-file', '-e', `${c}^{commit}`);
+    for (const c of ['3610e80', 'b9981a6']) git('cat-file', '-e', `${c}^{commit}`);
     git('cat-file', '-e', 'b9981a6:llms/data/tickets.jsonl');
     return true;
   } catch {
@@ -470,31 +472,45 @@ describe('lesson 6 (checking the judge): the numbers it states', () => {
   const agree = (order: 'before' | 'after', rid: string) => agreement(judgeV(order, rid), human(rid));
   const kappa = (order: 'before' | 'after', rid: string) => cohenKappa(judgeV(order, rid).map(Boolean), human(rid));
 
-  it('30 replies r001 to r030, pending review', () => {
+  it('30 replies r001 to r030, reviewed by a human on 2026-10-28; the review changed r017 tone and r018 no_false_promises', () => {
     expect(D.labels.map((r) => r.id)).toEqual(Array.from({ length: 30 }, (_, i) => `r${String(i + 1).padStart(3, '0')}`));
-    expect(src('llms/data/README.md')).toContain('These labels are Claude-drafted and pending your review.');
+    expect(src('llms/data/README.md')).toContain('These labels were drafted by Claude and reviewed by a human on 2026-10-28.');
+    expect(src('llms/data/README.md')).toContain('r017 `tone` (fail to pass) and r018 `no_false_promises` (pass to fail)');
+    const lab = (id: string) => D.labels.find((r) => r.id === id)!.labels;
+    expect([lab('r017').tone, lab('r018').no_false_promises]).toEqual([true, false]);
+    // In both, the reviewed label now disagrees with the judge in both orders (the drafted one matched it).
+    const i017 = D.labels.findIndex((r) => r.id === 'r017');
+    const i018 = D.labels.findIndex((r) => r.id === 'r018');
+    for (const order of ['before', 'after'] as const) {
+      expect(judgeV(order, 'tone')[i017]).toBe(false);
+      expect(judgeV(order, 'no_false_promises')[i018]).toBe(true);
+    }
+    expect(l).toContain('Claude drafted these labels, and a person reviewed all 30 on 2026-10-28. The review changed two of them: `r017` on `tone`, from fail to pass, and `r018` on `no_false_promises`, from pass to fail. In both, the drafted label had matched the judge and the reviewed one does not.');
+    expect(l).toContain('kappa on `tone` fell from 0.89 to 0.76 and on `no_false_promises` from 1.00 to 0.92');
+    expect(l).not.toMatch(/pending|not been reviewed/);
   });
-  itHistory(`the label fix at 19:31 and the first judge verdicts at 20:08 on 2026-10-25${NEEDS_HISTORY}`, () => {
-    expect(git('log', '-1', '--format=%ad', '--date=format:%Y-%m-%d %H:%M', 'fbeb068').trim()).toBe('2026-10-25 19:31');
-    expect(git('log', '-1', '--format=%ad', '--date=format:%Y-%m-%d %H:%M', 'b9981a6').trim()).toBe('2026-10-25 20:08');
-    expect(git('show', '--stat', '--format=', 'b9981a6')).toContain('judge__claude-opus-5-5__after__default.jsonl');
-    expect(l).toContain('the label fix committed at 19:31 on 2026-10-25 and the first judge verdicts at 20:08');
-  });
-  it('RELABEL: agreement after the reply 28, 29, 30 of 30 (93.3%, 96.7%, 100%); lesson 6 "Agreement" and "See it" paragraphs', () => {
-    expect(RUBRIC_IDS.map((rid) => Math.round(agree('after', rid) * 30))).toEqual([28, 29, 30]);
-    expect(l).toContain('the judge agrees on 28 of 30 replies for `addresses_issue` (93.3%), 29 of 30 for `tone` (96.7%) and 30 of 30 for `no_false_promises` (100%)');
-    expect(RUBRIC_IDS.map((rid) => pct(agree('before', rid)))).toEqual(['93.3%', '96.7%', '96.7%']);
-    expect(l).toContain('`no_false_promises` is at 100.0% and kappa 1.00. Swap to before and it drops to 96.7% and 0.92');
-    expect(l).toContain('`addresses_issue` stays at 93.3% (0.81) and `tone` at 96.7% (0.89) in both orders');
+  it('REVIEWED 2026-10-28: agreement after the reply 28, 28, 29 of 30 (93.3%, 93.3%, 96.7%); lesson 6 "Agreement" and "See it" paragraphs', () => {
+    expect(RUBRIC_IDS.map((rid) => Math.round(agree('after', rid) * 30))).toEqual([28, 28, 29]);
+    expect(l).toContain('the judge agrees on 28 of 30 replies for `addresses_issue` (93.3%), 28 of 30 for `tone` (93.3%) and 29 of 30 for `no_false_promises` (96.7%)');
+    expect(RUBRIC_IDS.map((rid) => pct(agree('before', rid)))).toEqual(['93.3%', '93.3%', '93.3%']);
+    expect(l).toContain('`no_false_promises` is at 96.7% and kappa 0.92. Swap to before and it drops to 93.3% and 0.84');
+    expect(l).toContain('`addresses_issue` stays at 93.3% (0.81) and `tone` at 93.3% (0.76) in both orders');
     expect(judged('after').every((x) => x.output)).toBe(true);
     expect(l).toContain('None of these 30 were ungraded');
   });
-  it('RELABEL: kappa 0.81, 0.89, 1.00 after and 0.92 before; one disagreement takes 1.00 to 0.92; the worked pe 0.64', () => {
-    expect(RUBRIC_IDS.map((rid) => kappa('after', rid).toFixed(2))).toEqual(['0.81', '0.89', '1.00']);
-    expect(kappa('before', 'no_false_promises').toFixed(2)).toBe('0.92');
-    expect(l).toContain('With the rubric after the reply, kappa is 0.81 for `addresses_issue`, 0.89 for `tone` and 1.00 for `no_false_promises`');
-    expect(l).toContain('one disagreement on `no_false_promises` takes kappa from 1.00 to 0.92');
-    expect(l).toContain('`no_false_promises` agreement is 29 of 30 and kappa 0.92. With it after, it is 30 of 30 and 1.00');
+  it('REVIEWED 2026-10-28: lesson 7 cites the judge check as 28 to 29 of 30 per criterion against human-reviewed labels', () => {
+    const counts = RUBRIC_IDS.map((rid) => Math.round(agree('after', rid) * 30));
+    expect([Math.min(...counts), Math.max(...counts)]).toEqual([28, 29]);
+    expect(read('07-prompt')).toContain('the judge agrees with human-reviewed labels on 28 to 29 of 30 replies per criterion, not all 30 (lesson 6)');
+    expect(read('07-prompt')).not.toMatch(/Claude-drafted/);
+  });
+  it('REVIEWED 2026-10-28: kappa 0.81, 0.76, 0.92 after and 0.81, 0.76, 0.84 before; one more disagreement takes 0.92 to 0.84; the worked pe 0.64', () => {
+    expect(RUBRIC_IDS.map((rid) => kappa('after', rid).toFixed(2))).toEqual(['0.81', '0.76', '0.92']);
+    expect(RUBRIC_IDS.map((rid) => kappa('before', rid).toFixed(2))).toEqual(['0.81', '0.76', '0.84']);
+    expect(l).toContain('With the rubric after the reply, kappa is 0.81 for `addresses_issue`, 0.76 for `tone` and 0.92 for `no_false_promises`');
+    expect(l).toContain('A common rough reading takes kappa above 0.8 as strong agreement. By that reading `tone`, at 0.76, falls just short.');
+    expect(l).toContain('one more disagreement on `no_false_promises` takes kappa from 0.92 to 0.84');
+    expect(l).toContain('`no_false_promises` agreement is 28 of 30 and kappa 0.84. With it after, it is 29 of 30 and 0.92. `r018` is a disagreement in both orders.');
     const j = judgeV('after', 'addresses_issue').filter(Boolean).length;
     const h = human('addresses_issue').filter(Boolean).length;
     expect([j, h]).toEqual([22, 24]);
@@ -502,19 +518,29 @@ describe('lesson 6 (checking the judge): the numbers it states', () => {
     expect(pe.toFixed(2)).toBe('0.64');
     expect(l).toContain('The judge passes 22 of 30 replies and the labels pass 24. By chance they would both say pass `(22/30) × (24/30)` of the time and both say fail `(8/30) × (6/30)` of the time, so `pe` is 0.64. `po` is 28/30, or 0.933');
   });
-  it('RELABEL: the labels pass 24, 25, 22 of 30, so always-pass agrees 80.0%, 83.3%, 73.3%', () => {
-    expect(RUBRIC_IDS.map((rid) => human(rid).filter(Boolean).length)).toEqual([24, 25, 22]);
-    expect(RUBRIC_IDS.map((rid) => pct(agreement(human(rid).map(() => true), human(rid))))).toEqual(['80.0%', '83.3%', '73.3%']);
-    expect(l).toContain('The drafted labels pass 24 of 30 replies on `addresses_issue`. A "judge" that says pass to everything, without reading a word, would agree 80% of the time.');
+  it('REVIEWED 2026-10-28: the labels pass 24, 26, 21 of 30, so always-pass agrees 80.0%, 86.7%, 70.0%', () => {
+    expect(RUBRIC_IDS.map((rid) => human(rid).filter(Boolean).length)).toEqual([24, 26, 21]);
+    expect(RUBRIC_IDS.map((rid) => pct(agreement(human(rid).map(() => true), human(rid))))).toEqual(['80.0%', '86.7%', '70.0%']);
+    expect(l).toContain('The labels pass 24 of 30 replies on `addresses_issue`. A "judge" that says pass to everything, without reading a word, would agree 80% of the time.');
   });
-  it('RELABEL: the three disagreements after the reply are r022, r003 (addresses_issue) and r012 (tone), the judge stricter in each', () => {
-    const dis = RUBRIC_IDS.flatMap((rid) => D.labels.map((r, i) => ({ id: r.id, rid, j: judgeV('after', rid)[i], h: r.labels[rid] }))
+  it('REVIEWED 2026-10-28: the five disagreements after the reply: r022, r003 (addresses_issue), r012, r017 (tone) with the judge stricter, r018 (no_false_promises) with the label stricter', () => {
+    const disOn = (order: 'before' | 'after') => RUBRIC_IDS.flatMap((rid) => D.labels.map((r, i) => ({ id: r.id, rid, j: judgeV(order, rid)[i], h: r.labels[rid] }))
       .filter((x) => x.j !== x.h));
-    expect(dis.map((x) => [x.id, x.rid]).sort()).toEqual([['r003', 'addresses_issue'], ['r012', 'tone'], ['r022', 'addresses_issue']]);
-    expect(dis.every((x) => x.j === false && x.h === true)).toBe(true);
+    const dis = disOn('after');
+    expect(dis.map((x) => [x.id, x.rid]).sort()).toEqual([['r003', 'addresses_issue'], ['r012', 'tone'], ['r017', 'tone'], ['r018', 'no_false_promises'], ['r022', 'addresses_issue']]);
+    expect(dis.filter((x) => x.j === false && x.h === true).map((x) => x.id).sort()).toEqual(['r003', 'r012', 'r017', 'r022']);
+    expect(dis.filter((x) => x.j === true && x.h === false).map((x) => x.id)).toEqual(['r018']);
+    // before adds r029 only
+    expect(disOn('before').map((x) => [x.id, x.rid]).sort()).toEqual([['r003', 'addresses_issue'], ['r012', 'tone'], ['r017', 'tone'], ['r018', 'no_false_promises'], ['r022', 'addresses_issue'], ['r029', 'no_false_promises']]);
+    expect(l).toContain('With the rubric after the reply there are five. In four the judge is stricter than the label:');
+    expect(l).toContain('In one the label is stricter:');
     expect(l).toContain('`r022`, `addresses_issue`');
     expect(l).toContain('`r003`, `addresses_issue`');
     expect(l).toContain('`r012`, `tone`');
+    expect(l).toContain('`r017`, `tone`');
+    expect(l).toContain('`r018`, `no_false_promises`');
+    expect(l).toContain('"The next update will be on the status page in 30 minutes."');
+    expect(D.labels.find((r) => r.id === 'r018')!.reply).toContain('The next update will be on the status page in 30 minutes.');
     const i029 = D.labels.findIndex((r) => r.id === 'r029');
     expect(D.labels[i029].labels.no_false_promises).toBe(true);
     expect(l).toContain('the judge fails `r029`, disagreeing with the label');

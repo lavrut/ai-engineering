@@ -73,7 +73,7 @@ export default function LabelingPage({ rubric, cases }: LabelingProps) {
     }
   }
 
-  const status = !mine[index] ? 'Draft: not reviewed yet.' : changed ? 'Reviewed: changed from the draft.' : 'Reviewed: confirmed as drafted.';
+  const status = !mine[index] ? 'Committed labels: not re-reviewed yet.' : changed ? 'Reviewed: changed from the committed labels.' : 'Reviewed: confirmed as committed.';
   const atStart = index === 0;
   const atEnd = index === total - 1;
 
@@ -89,7 +89,7 @@ export default function LabelingPage({ rubric, cases }: LabelingProps) {
         <span style={{ width: `${(reviewed / total) * 100}%` }} />
       </div>
       <p class="lp-intro">
-        Claude drafted these labels; they are pending your review. Read the ticket and the reply, then set each criterion:
+        Claude drafted these labels and a person reviewed them on 2026-10-28. Review them again: read the ticket and the reply, then set each criterion:
         changing a label or pressing Confirm marks the reply reviewed. Your labels stay in this browser.
       </p>
       {!saving && (
@@ -148,7 +148,7 @@ export default function LabelingPage({ rubric, cases }: LabelingProps) {
                     {pass ? 'Pass' : 'Fail'}
                   </label>
                 ))}
-                {mine[index] && current[id] !== draft && <span class="lp-was">draft: {draft ? 'pass' : 'fail'}</span>}
+                {mine[index] && current[id] !== draft && <span class="lp-was">committed: {draft ? 'pass' : 'fail'}</span>}
               </div>
             </div>
           );
@@ -163,7 +163,7 @@ export default function LabelingPage({ rubric, cases }: LabelingProps) {
           Confirm labels
         </button>
         <button type="button" class="lp-btn" aria-disabled={!mine[index]} onClick={backToDraft}>
-          Back to the draft
+          Back to the committed labels
         </button>
       </div>
 
@@ -173,7 +173,7 @@ export default function LabelingPage({ rubric, cases }: LabelingProps) {
         </button>
         <p class="lp-copy" aria-live="polite">
           {copy === 'copied'
-            ? `Copied ${total} lines. Paste them over llms/data/reply_labels.jsonl, then run python3 triage_lab.py agreement.`
+            ? `Copied ${total} lines. Paste them over llms/data/reply_labels.jsonl, then run .venv-llms/bin/python llms/python/triage_lab.py agreement from the repo root.`
             : copy === 'failed'
               ? 'Could not copy automatically: select the text below and copy it.'
               : ''}
