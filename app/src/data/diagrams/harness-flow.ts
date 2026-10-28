@@ -97,7 +97,7 @@ export const harnessFlow: Diagram = {
     {
       n: 9,
       highlight: ['context-manager', 'e-loop', 'context-builder'],
-      caption: 'The context manager checks the token budget and compacts the history if it is too big. Then the loop goes back to step 3.',
+      caption: 'The context manager checks the token budget and compacts the history if it is too big. Then the loop goes back to step 2, to build the next request, and step 3 sends it.',
       code: { file: 'python', section: 7 },
     },
     {

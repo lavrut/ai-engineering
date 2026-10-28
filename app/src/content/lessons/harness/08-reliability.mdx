@@ -62,17 +62,20 @@ The trace records your task text and the shape of the session. It does not recor
 
 ## See it
 
-Here is a trace from one session, shown as a table. The **Time** column counts from the first event; the **What it tells you** column is a note on each row. This session comes from a harness with one extra tool, `run_tests`, added the way lesson 3 showed.
+Here is a trace of one session, shown as a table. It is a hand-written sample in the exact format the Python harness writes, not a recording of a real run. The session uses a harness with one extra tool, `run_tests`, added the way lesson 3 showed. The **Time** column counts from the first event; the **What it tells you** column is a note on each row.
 
 <TraceView />
 
 Read it from the top:
 
 - **Turn 1.** `model_request` sends 1 message, your task. The `model_response` comes back after about 3.3 seconds with `stop_reason="tool_use"` and `input_tokens=1942`. Two `tool_result` rows follow: `read_file` in 4 ms and `run_tests` in 1318 ms. They ran in parallel (lesson 6), so the turn took as long as the test run. `run_tests` has `is_error=true` because the test failed, and that failure is what the model needs to see.
-- **Turn 2.** The request now holds 3 messages. The model asks for `write_file`, so a `permission` row shows you allowed it. The write takes 6 ms and the second test run passes.
-- **Turn 3.** 5 messages go out, and `stop_reason="end_turn"` ends the loop. `session_end` records 3 turns.
+- **Turn 2.** The request now holds 3 messages. The model asks for `write_file` and nothing else, so a `permission` row shows you allowed it, about 1.9 seconds after the reply arrived. The write takes 6 ms.
+- **Turn 3.** 5 messages go out. Only now does the model ask for `run_tests`, and this time the test run passes in 1301 ms.
+- **Turn 4.** 7 messages go out, and `stop_reason="end_turn"` ends the loop. `session_end` records 4 turns.
 
-Look for two patterns in any trace. `messages` grows by two per turn, and `input_tokens` grows with it (1942, 3410, 4102), which is the growth lesson 7 manages. And most of the 12.5 seconds is spent waiting for the model: the three `model_request` to `model_response` gaps add up to about 10 seconds.
+Why does the second test run get a turn of its own? The calls in one reply run in parallel (lesson 6). Had the model asked for `write_file` and `run_tests` together, the tests could have run before the write landed and checked the old file. A call that depends on another call's result belongs in a later turn.
+
+Look for two patterns in any trace. `messages` grows by two per turn, and `input_tokens` grows with it (1942, 3410, 3702, 4102), which is the growth lesson 7 manages. And most of the 16.2 seconds is spent waiting for the model: the four `model_request` to `model_response` gaps add up to about 11.7 seconds.
 
 ## The code
 
@@ -84,17 +87,23 @@ Section 2 is all of observability.
 - `TRACE_FILE.open("a")` opens `trace.jsonl` in append mode on every call. Earlier lines are never rewritten. The path is relative, so the file lands in the folder you ran the harness from.
 - `json.dumps(record, default=str)` writes one line. `default=str` turns any value JSON cannot hold into a string instead of raising.
 
-Section 9 is the entry point and the error handling.
+Section 9 is the entry point: the money gate, then the REPL and its error handling.
 
-<CodeTabs section={9} goNote="main reads lines with stdin.ReadString and returns on an error such as end of input. runAgent returns (string, error) instead of raising, and a switch picks the message. errors.As(err, &apiErr) checks whether the error is an *anthropic.Error; the first case also needs StatusCode == 429. Any other error, such as a network failure, falls to the err != nil case and prints Error: with the message." />
+<CodeTabs section={9} goNote="The gate has the same parts: dollars, a ledger struct, metered wrapping the modelCaller, estimateLines and confirmed. Stdin counts as a terminal when os.Stdin.Stat() reports a character device. repl reads --max-cost and --yes with a flag.FlagSet and the tasks with stdin.ReadString, returning on an error such as end of input; main only calls repl and exits with its code. runAgent returns (string, error) instead of raising, and a switch picks the message. A stop from the gate is a *costLimit error, so its case comes first. errors.As(err, &apiErr) checks whether the error is an *anthropic.Error; the first case also needs StatusCode == 429. Any other error, such as a network failure, falls to the err != nil case and prints Error: with the message." />
 
-- The outer `while True` reads tasks. `EOFError` and `KeyboardInterrupt` at the prompt end the program; `exit` and `quit` do too; an empty line is skipped.
-- Each task gets a fresh `run_agent`, so tasks do not share history.
+- `dollars` turns token counts into dollars with `PRICE_PER_MTOK` from section 1.
+- `metered` wraps the model call. Before each call it sizes the request (system prompt, tool schemas and messages as JSON, at `CHARS_PER_TOKEN` characters per token) and adds the call's `max_tokens` of output to get the most the call could cost. If what the `Ledger` has spent plus that worst case would pass the cap, it raises `CostLimit` and the call is never made. After the call it adds the real cost from `usage`. The summary call in `compact` goes through the same wrapper.
+- `estimate_lines` builds the two lines printed before each task: the typical cost from `TYPICAL_TASK`, the worst case of `MAX_TURNS` calls at `CONTEXT_BUDGET` input and `MAX_TOKENS` output tokens, and what the session has spent against the cap.
+- `confirmed` asks `Run it? [y/N]`. Only `y` runs the task. With no terminal to ask, the answer is no; `--yes` exists only for a scripted run you have already approved.
+- `main` reads `--max-cost` (default `MAX_COST`, $10) and `--yes`, and stops at once if `ANTHROPIC_API_KEY` is not set.
+- The `while True` loop reads tasks. `EOFError` and `KeyboardInterrupt` at the prompt end the program; `exit` and `quit` do too; an empty line is skipped.
+- Each task gets the estimate, the question and then a fresh `run_agent` with the metered call, so tasks do not share history. They do share the `Ledger`, so the cap covers the whole session.
 - The inner `try` catches three API errors, most specific first:
   - `anthropic.RateLimitError`: a 429 that was still failing after the retries.
   - `anthropic.APIStatusError`: any other HTTP error, printed with `e.status_code` and `e.message`. `RateLimitError` is a subclass of this one, which is why it must come first.
   - `anthropic.APIConnectionError`: no answer at all, after the retries. Timeouts are a subclass of it.
-- After any of them, the loop shows `you >` again.
+- `CostLimit` comes first: the gate stopped the task before a call that could pass the cap.
+- After any of them, the loop prints what the task and the session have cost and shows `you >` again.
 
 The retries live in section 1: `client = anthropic.Anthropic(max_retries=4)`. Besides 429, 5xx and connection errors, the SDK also retries 408 and 409 and follows the API's `x-should-retry` header when it is set. The trace does not show retries, because they all happen inside one `client.messages.create` call.
 
@@ -112,23 +121,23 @@ The traces differ in two ways that matter if you read them with a script. Go's `
 
 ## Try it
 
-Make the model call fail on purpose. Neither of these costs anything.
+Make the model call fail on purpose. Neither of these costs anything, because no request reaches a working API. The money gate still asks first, since the harness cannot know that; answer `y`.
 
 First, a network failure. Point the SDK at a port where nothing is listening:
 
 ```bash
 cd harness/python
-ANTHROPIC_BASE_URL=http://127.0.0.1:9 python harness.py
+ANTHROPIC_BASE_URL=http://127.0.0.1:9 ../../.venv-harness/bin/python harness.py
 ```
 
-Type `hi`. Nothing happens for about seven seconds while the SDK retries four times, then you see `Network error: could not reach the API.` and a new `you >` prompt. Type `exit`, then run `tail -2 trace.jsonl`: the session has a `session_start` and a `model_request` and nothing after them.
+Type `hi`, then `y`. Nothing happens for about seven seconds while the SDK retries four times, then you see `Network error: could not reach the API.` and a new `you >` prompt. Type `exit`, then run `tail -2 trace.jsonl`: the session has a `session_start` and a `model_request` and nothing after them.
 
-Second, a permanent error. Run `ANTHROPIC_API_KEY=bad python harness.py` and type `hi`. This time the answer is immediate, because a 401 is not retried: a line that starts `API error 401:` and names an `authentication_error`. In Go, the same experiments are `ANTHROPIC_BASE_URL=http://127.0.0.1:9 go run .`, which ends with `Error: Post "http://127.0.0.1:9/v1/messages": ... connection refused`, and `ANTHROPIC_API_KEY=bad go run .`.
+Second, a permanent error. Run `ANTHROPIC_API_KEY=bad ../../.venv-harness/bin/python harness.py` and type `hi`, then `y`. This time the answer is immediate, because a 401 is not retried: a line that starts `API error 401:` and names an `authentication_error`. In Go, the same experiments are `ANTHROPIC_BASE_URL=http://127.0.0.1:9 go run .`, which ends with `Error: Post "http://127.0.0.1:9/v1/messages": ... connection refused`, and `ANTHROPIC_API_KEY=bad go run .`.
 
 Then read a real trace with a script. After a normal session, total the tokens:
 
 ```bash
-python -c "import json; e = [json.loads(l) for l in open('trace.jsonl')]; print(sum(x.get('input_tokens', 0) for x in e), 'in,', sum(x.get('output_tokens', 0) for x in e), 'out')"
+../../.venv-harness/bin/python -c "import json; e = [json.loads(l) for l in open('trace.jsonl')]; print(sum(x.get('input_tokens', 0) for x in e), 'in,', sum(x.get('output_tokens', 0) for x in e), 'out')"
 ```
 
-This counts every session in the file. Delete `trace.jsonl` first if you want just one. Lesson 9 turns these numbers into a cost.
+This counts every session in the file. Delete `trace.jsonl` first if you want just one. Lesson 9 checks these numbers against the cost the money gate printed.

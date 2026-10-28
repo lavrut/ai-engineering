@@ -44,7 +44,7 @@ Here is the 10-step flow from lesson 1, with the code section that does each ste
 
 | Step | What happens | Section | Lessons |
 |---|---|---|---|
-| 1 | You type a task at the REPL in `main` | 9 | 1, 8 |
+| 1 | You type a task at the REPL in `main` and approve its estimate | 9 | 1, 8 |
 | 2 | `call_model` builds the request: system prompt, history, tool schemas | 6, 3 | 2, 3 |
 | 3 | The SDK client sends it, retrying if it has to | 1, 6 | 2, 8 |
 | 4 | The reply comes back: content blocks, `stop_reason`, `usage` | 6 | 2 |
@@ -67,18 +67,18 @@ This is the diagram from lesson 1 in replay mode: the code panel starts open. Pr
 
 Here is each file in full. Read it top to bottom once: you know every line now.
 
-<CodeTabs whole goNote="The Go file has the same nine sections with the same titles. The main differences, all covered in earlier lessons: tools are Tool structs registered in init(), and toolParams sends them in a fixed order (lesson 3). Each tool call runs on its own goroutine with a 30-second context deadline, and a panicking tool becomes an error result (lesson 6). Errors are returned as values and sorted out with errors.As in main (lesson 8). The trace's ts is in milliseconds, and its keys are sorted (lesson 8)." />
+<CodeTabs whole goNote="The Go file has the same nine sections with the same titles. The main differences, all covered in earlier lessons: tools are Tool structs registered in init(), and toolParams sends them in a fixed order (lesson 3). Each tool call runs on its own goroutine with a 30-second context deadline (watched only by tools that use ctx), and a panicking tool becomes an error result (lesson 6). Errors are returned as values and sorted out with errors.As in main (lesson 8). The trace's ts is in milliseconds, and its keys are sorted (lesson 8)." />
 
-The Python file is about 230 lines and has one runtime dependency, the `anthropic` SDK. The Go file is about 440 lines, mostly because Go spells out types, JSON decoding and error checks that Python leaves implicit. Two seams make both files testable: the agent loop takes the model call and the approver as arguments (`call=` and `approver=` in Python, `modelCaller` and `approver` in Go), so a test can pass fakes and run the real loop with no API key.
+The Python file is about 320 lines and has one runtime dependency, the `anthropic` SDK. The Go file is about 550 lines, mostly because Go spells out types, JSON decoding and error checks that Python leaves implicit. Two seams make both files testable: the agent loop takes the model call and the approver as arguments (`call=` and `approver=` in Python, `modelCaller` and `approver` in Go), so a test can pass fakes and run the real loop with no API key.
 
 ## Try it
 
 ### Run both harnesses
 
-You need `ANTHROPIC_API_KEY` set (lesson 2). Each harness uses its own `workspace` folder and writes its own `trace.jsonl` in the folder you run it from. For Python, use the virtual environment you made in lesson 1, which already has the requirements installed (on a fresh checkout, run `python3 -m venv .venv`, activate it, and `pip install -r requirements.txt` first):
+Both runs cost money: each task prints its estimate and asks `Run it? [y/N]` before the first call, and `--max-cost` (default $10) caps each session. You need `ANTHROPIC_API_KEY` set (lesson 2). Each harness uses its own `workspace` folder and writes its own `trace.jsonl` in the folder you run it from. For Python, use the `.venv-harness` virtual environment you made in lesson 1 (on a fresh checkout, run `python3 -m venv .venv-harness && .venv-harness/bin/pip install -r harness/python/requirements.txt` from the repo root first):
 
 ```bash
-cd harness/python && source .venv/bin/activate && python harness.py
+cd harness/python && ../../.venv-harness/bin/python harness.py
 ```
 
 The Go harness has its own workspace, which starts empty. Give it the same `notes.txt` before you run it:
@@ -89,29 +89,29 @@ mkdir -p workspace && echo "Buy milk. Call Sam." > workspace/notes.txt
 go run .
 ```
 
-Give each the same task, one that uses every step: `Read notes.txt and write todo.md with each item as a line starting "- [ ]".` You will usually see `-> read_file(...)`, then the `! The agent wants to run write_file(...)` prompt; type `y`, and `-> write_file(...)` follows, then the `agent >` answer. Then open `trace.jsonl` in each folder and match the lines to the steps in the table above. The two traces should show the same pattern of events. The model may take a slightly different path each time, and the timestamps and key order differ as lesson 8 described.
+Give each the same task, one that uses every step: `Read notes.txt and write todo.md with each item as a line starting "- [ ]".` Answer `y` to the estimate. You will usually see `-> read_file(...)`, then the `! The agent wants to run write_file(...)` prompt; type `y`, and `-> write_file(...)` follows, then the `agent >` answer. Then open `trace.jsonl` in each folder and match the lines to the steps in the table above. The two traces should show the same pattern of events. The model may take a slightly different path each time, and the timestamps and key order differ as lesson 8 described.
 
 ### Check changes without spending money
 
 Run the offline tests after every change. They drive the real loop, executor, sandbox and compaction with fake models, so they need no API key and cost nothing:
 
 ```bash
-cd harness/python && python -m pytest -q
+cd harness/python && ../../.venv-harness/bin/python -m pytest -q
 ```
 
 ```bash
 cd harness/go && go test ./...
 ```
 
-You should see `9 passed` for Python and `ok  mini-harness` for Go. Only run a real session once these pass.
+You should see `28 passed` for Python and `ok  mini-harness` for Go. Among them are the money gate's tests and a test of `call_model` against a fake API server on your own machine, so even the paid path is checked for free. Only run a real session once these pass.
 
 ### Exercises
 
-Work through these in either language, or both. Run the tests after each one.
+Work through these in either language, or both. Run the tests after each one. A step that runs the harness itself is a paid task, and the gate asks first.
 
 - [ ] **Add a `search_files` tool.** It takes a `query` and a `path`, and returns every line in the workspace files under `path` that contains `query`, as `file:line: text`. Pass `path` through the sandbox, cap the output at 20,000 characters as `read_file` does, and return `(no matches)` when nothing matches. Then run the harness and ask `Which files mention Sam?` You should see `-> search_files(...)` before the answer. In Go, register it in `init()` and add its name to the list in `toolParams`.
 - [ ] **Switch `write_file` to allowed-without-asking, then back.** In Python, delete `needs_approval=True` from its `@tool(...)` line; in Go, delete `NeedsApproval: true`. Ask for a write: no `Allow? [y/N]` prompt appears, and `grep permission trace.jsonl` finds no new line. Now run the tests. `test_denied_unknown_and_bad_args_are_errors` (Go: `TestExecutorOrderAndErrors`) fails, because a denied write now goes through. The tests guard the gate. Put the line back and check that they pass again.
-- [ ] **Print a token-cost readout for each session.** Add up `usage.input_tokens` and `usage.output_tokens` over every model call in a session, the summary call in `compact` included, and print the total with its cost after each answer. `claude-opus-5-5` costs $4 per million input tokens and $20 per million output tokens. For the sample trace in lesson 8 (9,454 in, 525 out) the readout should say about $0.0483.
+- [ ] **Check the cost readout against the trace.** After each task the money gate prints a line such as `[$0.0644 this task, $0.0644 this session]`. Delete `trace.jsonl`, run one task, and total its tokens with the one-liner from lesson 8. At $4 per million input tokens and $20 per million output tokens, the tokens should give the same dollars as the readout. For the sample trace in lesson 8 (13,156 in, 589 out) that is $0.0644. Then add the two token totals to the readout line yourself: keep them in the `Ledger` next to `spent`.
 
 <details>
 <summary>One way to write search_files (Python)</summary>
@@ -139,42 +139,6 @@ def search_files(query: str, path: str) -> str:
 ```
 
 `safe_path(path)` only checks the folder you search. A symlink inside it could still point outside the workspace, so the loop resolves each file and skips any that land outside. In Go, walk the folder `safePath` returned with `filepath.WalkDir`. The walk hands you absolute paths, and `safePath` rejects absolute paths, so turn each one back into a workspace-relative path first: `rel, _ := filepath.Rel(dir, p)`, then `safePath(filepath.Join(in.Path, rel))`. Skip any file where that returns an error; that is a link pointing out of the workspace.
-
-</details>
-
-<details>
-<summary>One way to write the cost readout (Python)</summary>
-
-In section 1, next to the other constants:
-
-```python
-PRICE_PER_MTOK = {"input": 4.00, "output": 20.00}  # claude-opus-5-5, dollars
-session_usage = {"input": 0, "output": 0}
-```
-
-In `call_model`, after the `model_response` emit, so every call counts, compaction included:
-
-```python
-    session_usage["input"] += response.usage.input_tokens
-    session_usage["output"] += response.usage.output_tokens
-```
-
-At the top of `run_agent`, start each session from zero:
-
-```python
-    session_usage.update(input=0, output=0)
-```
-
-Above `main`, a helper that formats the line:
-
-```python
-def cost_line() -> str:
-    i, o = session_usage["input"], session_usage["output"]
-    dollars = (i * PRICE_PER_MTOK["input"] + o * PRICE_PER_MTOK["output"]) / 1_000_000
-    return f"  [{i:,} in, {o:,} out · ${dollars:.4f}]"
-```
-
-In `main`, add `print(cost_line())` after the `try`/`except` block, at the same indent as `try`, so a session that ends in an error still shows what it spent. The offline tests pass fakes in place of `call_model`, so they do not touch the counter and keep passing. In Go, keep two package-level `int64` counters, add `resp.Usage.InputTokens` and `resp.Usage.OutputTokens` to them in `callModel`, reset them in `runAgent`, and print them in `main`. Only the loop calls the model, so the counters need no lock.
 
 </details>
 

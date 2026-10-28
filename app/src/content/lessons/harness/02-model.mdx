@@ -38,11 +38,13 @@ import Callout from '../../../components/Callout.astro';
 
 ## Concept
 
-You talk to Claude through an HTTP API. Every request is authenticated with an <Term t="API key" />, which you create in the Anthropic Console and keep out of your code. The SDK reads it from the `ANTHROPIC_API_KEY` environment variable:
+You talk to Claude through an HTTP API. Every request is authenticated with an <Term t="API key" />, which you create in the Anthropic Console and keep out of your code. The SDK reads it from the `ANTHROPIC_API_KEY` environment variable, and the harness reads it from nowhere else. Set it without typing the key into a command line, where your shell history would keep it:
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+read -rs ANTHROPIC_API_KEY && export ANTHROPIC_API_KEY
 ```
+
+Paste the key and press Enter. Nothing is echoed, and the variable lasts until you close that terminal. The harness never prints or logs the key.
 
 A request is a JSON body. The conversation goes in <Term t="messages" />, a list of turns. Each turn has a <Term t="role" /> and some content. The `user` role is anything your side sends; the `assistant` role is anything the model wrote. In this harness the turns alternate, starting with `user`.
 
@@ -74,6 +76,7 @@ Section 1 sets the constants every call uses.
 - `MODEL = "claude-opus-5-5"` names the model on every request.
 - `MAX_TOKENS = 16_000` is the default cap on one reply.
 - `SYSTEM_PROMPT` is the standing instruction. It tells the model where it is working and how to behave.
+- `PRICE_PER_MTOK = (4.00, 20.00)` is the model's price in dollars per million input and output tokens, the same figures as the LLMs track's price table. `MAX_COST = 10.00` is the default cap on what one REPL session may spend. The money gate in section 9 uses both, with `TYPICAL_TASK` and `CHARS_PER_TOKEN` for its estimates (lesson 8).
 - `client = anthropic.Anthropic(max_retries=4)` creates the API client. It reads the key from the environment and retries rate limits (HTTP 429), server errors and network failures up to four times.
 
 Section 6 makes the call itself. This is steps 2 to 4 of the flow: build the request, send it, get the reply.
@@ -93,7 +96,7 @@ Section 6 makes the call itself. This is steps 2 to 4 of the flow: build the req
 
 ## Try it
 
-Make one call without the harness, so you can see the raw response. Save this as `harness/python/one_call.py`:
+Make one call without the harness, so you can see the raw response. This call costs money, but very little: at most 200 output tokens, which is $0.004 at $20 per million, plus a few dozen input tokens. Save this as `harness/python/one_call.py`:
 
 ```python
 import anthropic
@@ -111,19 +114,19 @@ print("stop_reason:", response.stop_reason)
 print("usage:", response.usage.input_tokens, "in,", response.usage.output_tokens, "out")
 ```
 
-Run it from the virtual environment you made in lesson 1:
+Run it with the virtual environment you made in lesson 1:
 
 ```bash
 cd harness/python
-python one_call.py
+../../.venv-harness/bin/python one_call.py
 ```
 
 You should see one `text` block, `stop_reason: end_turn`, and two small token counts. Now set `max_tokens=5` and run it again: the sentence is cut short and `stop_reason` is `max_tokens`.
 
-Then run the harness once more and look at what it logged for each call:
+Then run the harness once more (a paid task: it prints the estimate and asks first, as in lesson 1) and look at what it logged for each call:
 
 ```bash
-python harness.py
+../../.venv-harness/bin/python harness.py
 grep model_response trace.jsonl
 ```
 

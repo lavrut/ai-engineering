@@ -274,3 +274,68 @@ func TestPanickingToolBecomesError(t *testing.T) {
 		t.Fatalf("run should continue after a panic: %q, %v", got, err)
 	}
 }
+
+func TestReadFileCapsOutput(t *testing.T) {
+	setup(t)
+	os.WriteFile(filepath.Join(workspace, "big.txt"), []byte(strings.Repeat("a", 25000)), 0o644)
+	out := decode(t, executeTools(context.Background(), []call{{"t1", "read_file", json.RawMessage(`{"path":"big.txt"}`)}}, yes))
+	if len(out[0].text()) != 20000 {
+		t.Fatalf("read_file returned %d bytes", len(out[0].text()))
+	}
+}
+
+func TestMissingPathIsAnError(t *testing.T) {
+	setup(t)
+	out := decode(t, executeTools(context.Background(), []call{
+		{"t1", "list_files", json.RawMessage(`{}`)},
+		{"t2", "read_file", json.RawMessage(`{"file":"a"}`)},
+	}, yes))
+	for i, r := range out {
+		if !r.IsError || r.text() != "path is required" {
+			t.Errorf("result %d: %+v", i, r)
+		}
+	}
+}
+
+func TestToolParamsCoversRegistry(t *testing.T) {
+	sent := map[string]bool{}
+	for _, p := range toolParams() {
+		sent[p.OfTool.Name] = true
+	}
+	for name := range registry {
+		if name != "boom" && !sent[name] { // boom: TestPanickingToolBecomesError's own tool
+			t.Errorf("%s is registered but toolParams never sends it: add it to the list in section 6", name)
+		}
+	}
+}
+
+func TestTraceWritten(t *testing.T) {
+	setup(t)
+	replies := []*anthropic.Message{reply(t, "tool_use", listCall, 100), reply(t, "end_turn", textBlock("done"), 100)}
+	fake := func(context.Context, anthropic.MessageNewParams) (*anthropic.Message, error) {
+		r := replies[0]
+		replies = replies[1:]
+		return r, nil
+	}
+	if _, err := runAgent(context.Background(), "hi", fake, yes); err != nil {
+		t.Fatal(err)
+	}
+	allowed := map[string]bool{"session_start": true, "model_request": true, "model_response": true,
+		"tool_result": true, "permission": true, "compact": true, "session_end": true}
+	seen := map[string]bool{}
+	for _, e := range events(t) {
+		name, _ := e["event"].(string)
+		if !allowed[name] {
+			t.Errorf("unknown event %q", name)
+		}
+		if _, ok := e["ts"].(float64); !ok {
+			t.Errorf("event without a numeric ts: %v", e)
+		}
+		seen[name] = true
+	}
+	for _, want := range []string{"session_start", "tool_result", "session_end"} {
+		if !seen[want] {
+			t.Errorf("no %s event", want)
+		}
+	}
+}

@@ -48,7 +48,7 @@ The second check is the <Term t="sandbox" />: a rule that every path a tool touc
 
 ## See it
 
-This session fixes a typo in `README.md`, which needs a write. Press **Step** three times: the model reads the file, gets the contents, then asks for `write_file`. Press **Step** once more and an "Approval needed" card shows the call's `path` and `content`. **Step** and **Run to end** are disabled until you choose. Press **Approve**, then **Step**: the result says `Wrote 100 characters to README.md` and the model confirms the fix.
+This session fixes a typo in `README.md`, which needs a write. Press **Step** three times: the model reads the file, gets the contents, then asks for `write_file`. Press **Step** once more and an "Approval needed" card shows the call's `path` and `content`. **Step** and **Run to end** are disabled until you choose. Press **Approve**: the result appears at once and says `Wrote 100 characters to README.md`. One more **Step** brings the model's reply confirming the fix.
 
 Now press **Reset**, step to the card again, and press **Deny**. The result turns red with an error tag and reads `The user denied this action.` One more **Step** shows the model's reply: it leaves the file alone and tells you where the typo is. Finally, switch the tool policy to **Allow everything** and press **Run to end**. No card appears and the write goes straight through.
 
@@ -112,12 +112,12 @@ See the sandbox refuse a path without calling the model:
 
 ```bash
 cd harness/python
-python -c "import harness; harness.safe_path('../secret.txt')"
+../../.venv-harness/bin/python -c "import harness; harness.safe_path('../secret.txt')"
 ```
 
 The last line of the output is `PermissionError: ../secret.txt is outside the workspace`. Try `'/etc/passwd'` and `'notes.txt'` as well; the last one prints nothing because it is allowed.
 
-Then deny a real write. Run `python harness.py` and ask `Create hello.txt containing hi.` When the prompt `Allow? [y/N]` appears, press Enter. You will still see a `-> write_file(...)` line, because the executor prints every call, but no file is created. The model's answer should say it did not write the file. Run the same task again and type `y`; this time `hello.txt` appears in `workspace/`. Check both decisions in the trace:
+Then deny a real write. Run `../../.venv-harness/bin/python harness.py` and ask `Create hello.txt containing hi.` This is a paid task, so the harness first prints its estimate and asks `Run it? [y/N]`; type `y` there. When the permission prompt `Allow? [y/N]` appears, press Enter. You will still see a `-> write_file(...)` line, because the executor prints every call, but no file is created. The model's answer should say it did not write the file. Run the same task again and type `y`; this time `hello.txt` appears in `workspace/`. Check both decisions in the trace:
 
 ```bash
 grep permission trace.jsonl

@@ -1,2 +1,2 @@
-anthropic>=1.0
+anthropic>=2.3  # tested with 2.3.0; the harness uses extra_headers, extra_body and tool_choice none
 pytest>=8

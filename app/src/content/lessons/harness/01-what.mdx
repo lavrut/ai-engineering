@@ -25,11 +25,11 @@ quiz:
   - question: After step 9, where does the loop go next?
     options:
       - Back to step 1, to ask the user for a new task
-      - Back to step 3, to send the updated history to the model
+      - Back to steps 2 and 3, to build and send the updated history
       - Straight to step 10, to show the answer
       - Back to step 6, to re-check permissions
     answer: 1
-    explanation: Step 9 checks the token budget and compacts if needed, then the harness sends a fresh request with the tool results appended. The loop only reaches step 10 when the router sees end_turn.
+    explanation: Step 9 checks the token budget and compacts if needed, then the context builder (step 2) makes a fresh request with the tool results appended and step 3 sends it. The loop only reaches step 10 when the router sees end_turn.
 ---
 import FlowDiagram from '../../../components/FlowDiagram.astro';
 import Callout from '../../../components/Callout.astro';
@@ -76,24 +76,30 @@ The harness is two files that do the same thing: `harness/python/harness.py` and
 | 9. Entry point | `main`, the REPL | 1, 10 |
 
 <Callout kind="note" title="Why two languages">
-  Python is the easiest to read. Go shows the same design with explicit types, goroutines and deadlines. Pick one to run; the lessons point out where the Go version differs.
+  Python is the easiest to read. Go shows the same design with explicit types, goroutines and a per-tool deadline (which only tools that watch their context obey). Pick one to run; the lessons point out where the Go version differs.
 </Callout>
 
 ## Try it
 
-You need an Anthropic API key (lesson 2 covers it). Set up the Python harness and give it one read-only task:
+This step calls the API, so it costs money. The harness prints an estimate and asks before it spends anything. You need an Anthropic API key; lesson 2 shows how to set it without typing it into your shell history. Set up the Python harness once, from the repo root, in its own virtual environment, then start it:
 
 ```bash
+python3 -m venv .venv-harness && .venv-harness/bin/pip install -r harness/python/requirements.txt
 cd harness/python
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-export ANTHROPIC_API_KEY=sk-ant-...
 mkdir -p workspace && echo "Buy milk. Call Sam." > workspace/notes.txt
-python harness.py
+../../.venv-harness/bin/python harness.py
 ```
 
-At the `you >` prompt, type `What files are in the workspace, and what does notes.txt say?`
+At the `you >` prompt, type `What files are in the workspace, and what does notes.txt say?` Before the first model call, the harness prints its estimate for the task and asks:
+
+```text
+Estimate: typical $0.10 a task (4 calls of ~4,000 input and ~400 output tokens); worst case $23.00 (MAX_TURNS 25 calls of 150,000 input and 16,000 output tokens, plus any compaction summaries), at $4.00 / $20.00 per million tokens.
+Spent $0.0000 this session; --max-cost stops it before $10.00.
+Run it? [y/N]
+```
+
+This is the harness's money gate. The typical figure assumes a short task like this one. The worst case is a task that uses all 25 turns with the full 150,000-token history and a full 16,000-token reply each time. Type `y` to run the task. Anything else skips it and spends nothing, and so does running the harness without a terminal to ask. While the task runs, the harness checks before every model call that what the session has spent, plus the most that call could cost, stays under `--max-cost`. That cap is $10 unless you start the harness with a lower one, such as `../../.venv-harness/bin/python harness.py --max-cost 1`. If the next call could pass it, the task stops before the call is made. After each task the harness prints what the task cost and what the session has spent so far.
 
 You should see lines such as `-> list_files({"path": "."})` and `-> read_file({"path": "notes.txt"})` as the harness runs each tool, then `agent >` with a short answer. Type `exit` to quit. A new `trace.jsonl` file in the same folder holds one line per event; you will read it in lesson 8.
 
-To run the Go version instead: `cd harness/go && go run .` (the workspace folder is `harness/go/workspace`).
+To run the Go version instead: `cd harness/go && go run .` (the workspace folder is `harness/go/workspace`). It prints the same estimate and asks the same way.
