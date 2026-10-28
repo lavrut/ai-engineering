@@ -22,14 +22,14 @@ quiz:
       - It trains W but skips the backward pass
     answer: 2
     explanation: A·B is a full 896 × 896 matrix, so it can be added to W, but its rank is at most 8. Training learns only A and B, 1.79% of W's size. The bet is that the change a task needs is small in this sense, which holds well enough for many tasks.
-  - question: Suppose your Colab run scores a little below Haiku's 19 of 20 with v2_rules on the same test tickets. What can you conclude?
+  - question: Suppose a LoRA run scores a little below Haiku's 19 of 20 with v2_rules on the same test tickets. What can you conclude?
     options:
       - Haiku is better, by the size of the gap
       - The LoRA model is nearly as good, so fine-tune instead
       - The LoRA run failed
       - Nothing about which is better; with 20 tickets the band is about ±22%, and 15 optimizer steps on 40 examples is a demonstration, not a tuned model
     answer: 3
-    explanation: A gap of a ticket or two on 20 is well inside ±22.4%. The training run is also tiny on purpose, so a weak score says little about what fine-tuning could reach with more data. What the run does show is the mechanics, end to end, graded by the same code as every other configuration.
+    explanation: A gap of a ticket or two on 20 is well inside ±22.4%, so it could be luck either way. The training run is also tiny on purpose, so a close score says little about what fine-tuning could reach with more data. The course's real run, in Try it, is not this case. It got 5 of 20, 70.0 points below Haiku's 95.0%, far outside the band, so that gap is evidence.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
 import LoraDiagram from '../../../components/llms/LoraDiagram.astro';
@@ -178,8 +178,8 @@ The first run downloads about 1 GB of model weights from Hugging Face. `predicti
 
 Here is what to look for, in order:
 
-- the `trainable params` line from `print_trainable_parameters()`, well under 1% of all params;
-- the training loss, logged once at step 10, and a summary with `train_loss` when training ends;
+- the `trainable params` line from `print_trainable_parameters()`, well under 1% of all params. The course's run printed `trainable params: 1,081,344 || all params: 495,114,112 || trainable%: 0.2184`;
+- the training loss, logged once at step 10, such as `{'loss': '0.5373', 'grad_norm': '1.157', 'learning_rate': '8e-05', 'epoch': '2'}`, and a summary with `train_loss` when training ends, such as `'train_runtime': '11.46'` and `'train_loss': '0.4209'`;
 - `wrote predictions.jsonl (20 lines)`;
 - `correct on all 20 test tickets: N/20 = P%`, counting every ticket;
 - a `WARNING: ... outputs were unparseable` line, if any answer was not valid JSON with allowed values;
@@ -194,3 +194,20 @@ Back on your machine, grade the saved file again, with no GPU:
 ```
 
 Use the path where you saved the file. It prints the same lines as the end of the Colab run. To see whether the rank matters, change `LORA_R` to 4 or 16 in your copy, rerun in Colab, and compare the two `correct on all 20` lines. Expect the difference to sit inside the band: 20 tickets cannot rank two small training runs.
+
+### The course's run
+
+The course ran `lora.py` on a free Colab T4 on 2026-10-28. Its `predictions.jsonl` is committed where the lab keeps saved responses, under the name `response_path` gives this configuration. The `/` in the model name makes `triage__Qwen` a folder:
+
+```bash
+.venv-llms/bin/python llms/finetune/lora.py --score "llms/data/responses/triage__Qwen/Qwen2.5-0.5B-Instruct+lora__lora__default.jsonl"
+```
+
+```text
+correct on all 20 test tickets: 5/20 = 25%
+over the 20 parsed outputs only: category 60%, priority 40%, both 25% (noise band +-22%)
+```
+
+It trained 1,081,344 of 495,114,112 numbers, 0.22%. That is 24 layers, each with 14,336 for `q_proj`, 14,336 for `o_proj` and 8,192 each for the narrower `k_proj` and `v_proj`. The 15 optimizer steps took about 11 seconds. Every answer parsed, and 5 of the 20 test tickets were fully right, 25%: category 60%, priority 40%, noise band ±22.4%.
+
+This gap is evidence. Haiku with `v2_rules` gets 19 of 20 (95.0%) on the same tickets, and 25% is 70.0 points lower, far outside ±22.4%. Fifteen steps on 40 examples with a 0.5B model lose to a good prompt on a frontier model. That is the Concept's point in numbers: fine-tuning is not worth it when prompting already clears your bar. It does not say what hundreds of examples, more steps or a larger model could reach.
