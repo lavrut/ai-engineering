@@ -8,11 +8,11 @@ minutes: 30
 quiz:
   - question: LangChain has an adapter that turns MCP servers straight into LangChain tools. Why does the desk not use it, even apart from the version conflict?
     options:
-      - The adapter is slower
       - An adapter-built tool calls the server directly, so the call skips the harness permission gate, the untrusted-read guard and the per-session lock that open_desk_tools puts in front of every call
+      - The adapter is slower
       - LangGraph cannot call MCP tools at all
       - The adapter needs an API key
-    answer: 1
+    answer: 0
     explanation: The gates live in run_tool, the function open_desk_tools hands back. A tool that reaches the server another way never passes them. Wrapping the gated tools as LangChain tools keeps every engine on the same checks, so lesson 10 compares frameworks, not safety layers.
   - question: In every recorded LangGraph run, the scripted person said no at LangGraph's interrupt. Which layer refused the label, and what did the harness guard do?
     options:

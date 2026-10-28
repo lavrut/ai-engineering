@@ -41,6 +41,8 @@ class Handler(BaseHTTPRequestHandler):
             first = self.rfile.peek(1)
         except OSError:
             first = b""
+        except Exception:                 # anything else (a ValueError on a closed file): not idle, so the base
+            first = b"?"                  # handler reads the request, answers or closes, and busy covers it
         if not first:                     # the client closed (or close dropped us) between requests
             self.close_connection = True
             return

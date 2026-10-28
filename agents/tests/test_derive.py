@@ -285,6 +285,15 @@ def test_excerpt_never_leaves_a_code_fence_open(text):
     assert not cut.rstrip("…").endswith("`") or cut.endswith("```"), cut   # no half fence marker left at the cut
 
 
+@pytest.mark.parametrize("cap", range(1, 10))
+def test_excerpt_that_is_a_block_keeps_small_caps(cap):
+    """Task 3 minor 3: when the excerpt is the fenced block itself, the closing branch still keeps to a cap under
+    5 (no room for "… ```"): it drops the block rather than run over or leave a fence open."""
+    for text in ("```" + "x" * 50, "```python\n" + "y = 2\n" * 20 + "```"):
+        cut = derive.excerpt(text, cap)
+        assert len(cut) <= cap and cut.count("```") % 2 == 0, (cap, cut)
+
+
 def test_excerpt_with_closed_fences_is_unchanged():
     text = "Run ```ls``` first. " + "word " * 60
     assert derive.excerpt(text, 120) == derive.re.sub(r"\s+", " ", text).strip()[:119].rstrip() + "…"

@@ -374,10 +374,20 @@ function newest(path: string): number {
   return readdirSync(path).reduce((m, f) => Math.max(m, newest(join(path, f))), st.mtimeMs);
 }
 
+/** Run a build step; a failure throws with the step's own stderr (and stdout), never only an exit status. */
+function runBuild(cmd: string, args: string[]): void {
+  try {
+    execFileSync(cmd, args, { cwd: APP, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  } catch (e) {
+    const { status, stderr, stdout } = e as { status?: number | null; stderr?: string; stdout?: string };
+    throw new Error(`page budget: ${cmd} ${args.join(' ')} failed (exit ${status ?? '?'}):\n${stderr || stdout || String(e)}`);
+  }
+}
+
 function ensureBuilt(): void {
   if (existsSync(PAGE) && statSync(PAGE).mtimeMs >= Math.max(...SOURCES.map(newest))) return;
   console.warn(`page budget: ${PAGE} is ${existsSync(PAGE) ? 'stale' : 'missing'}; running astro build`);
-  execFileSync(join(APP, 'node_modules', '.bin', 'astro'), ['build'], { cwd: APP, stdio: 'ignore' });
+  runBuild(join(APP, 'node_modules', '.bin', 'astro'), ['build']);
 }
 
 type Island = { component: string; bytes: number };
@@ -399,6 +409,13 @@ function shippedIslands(html: string): { lesson: string; islands: Island[] }[] {
 }
 
 describe('page budget', () => {
+  it('a failed build step shows its stderr, not only its exit status', () => {
+    // The message is built at run time, so it can only reach the error through the step's stderr (the command
+    // line, which execFileSync's own message repeats, holds no "the-build-broke").
+    const failing = ['-e', 'console.error(["the", "build", "broke"].join("-")); process.exit(3)'];
+    expect(() => runBuild(process.execPath, failing)).toThrow(/the-build-broke/);
+  });
+
   let lessons: { lesson: string; islands: Island[] }[] = [];
   const bytes = (l: { islands: Island[] }) => l.islands.filter((x) => AIDS.includes(x.component)).reduce((a, x) => a + x.bytes, 0);
 

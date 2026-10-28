@@ -39,7 +39,9 @@ def excerpt(text: Any, cap: int) -> str | None:
     before = head[: head.rfind(FENCE)].rstrip()
     if before:                            # the cut falls inside a fenced block: cut before its opening fence
         return before + "…"
-    return head[: cap - len(" " + FENCE) - 1].rstrip("` ") + "… " + FENCE   # the excerpt is the block: close it
+    # The excerpt is the block: close it, when the cap leaves room for its opening fence and "… ```"; else drop it.
+    kept = head[: max(cap - len("… " + FENCE), 0)].rstrip("` ")
+    return kept + ("… " + FENCE if kept.count(FENCE) % 2 else "…")
 
 
 def args_text(args: Any) -> str | None:

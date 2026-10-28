@@ -9,18 +9,18 @@ quiz:
   - question: What separates a workflow from an agent?
     options:
       - A workflow uses one model call and an agent uses several
-      - In a workflow, code decides the path and the model fills in each step. In an agent, the model decides which tool to call next and when to stop
-      - A workflow has no tools and an agent has tools
       - A workflow runs offline and an agent needs the network
-    answer: 1
+      - A workflow has no tools and an agent has tools
+      - In a workflow, code decides the path and the model fills in each step. In an agent, the model decides which tool to call next and when to stop
+    answer: 3
     explanation: Both kinds can make many calls and use tools. The difference is who chooses the next step. The chain in this track always makes the same two calls because its code says so; the single agent made 3 calls on t001 because the model chose to.
   - question: A ticket only ever needs "classify it, then write the reply". Which design fits best, and why?
     options:
-      - An agent with every tool, because it can handle anything
-      - A supervisor with four workers, because more checks are always better
       - A prompt chain, because the steps are known in advance, so code can fix them and check the category between them
+      - A supervisor with four workers, because more checks are always better
+      - An agent with every tool, because it can handle anything
       - Evaluator-optimizer, because every reply should be judged
-    answer: 2
+    answer: 0
     explanation: '"Building effective agents" advises the simplest solution that works. When the steps are known, a chain does them in a fixed order for a fixed number of calls, and its code gate catches a bad category before the second call pays for it.'
   - question: Why does the single agent's loop have a cap, MAX_TURNS = 8, when the chain needs none?
     options:

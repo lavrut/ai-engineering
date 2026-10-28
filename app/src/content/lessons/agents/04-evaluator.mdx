@@ -8,19 +8,19 @@ minutes: 20
 quiz:
   - question: With MAX_ROUNDS = 3, what is the most model calls one evaluator-optimizer run can make, and why is the cap there?
     options:
-      - 3, one per round
       - 6, the first draft, three judge calls and two revisions; the cap bounds the cost of a judge that never passes
+      - 3, one per round
       - 4, one draft and three judge calls
       - There is no maximum; it stops when the judge passes
-    answer: 1
+    answer: 0
     explanation: Each round is one judge call, and a revision follows every failed round except the last, whose draft is final either way. The Python run on t061 used all six. Without the cap, a judge that keeps failing would keep the loop, and the bill, running.
   - question: On t061 the Python judge failed the first draft, which said it could not confirm the export steps. The draft that passed told the customer to "open the Export option in the app, choose PDF, and select all notes". What is the lesson?
     options:
-      - The loop worked perfectly
       - The judge rewarded answering the question, and the writer met that by stating steps that no tool had confirmed. A loop optimizes toward its judge, not toward the truth
+      - The loop worked perfectly
       - The first draft broke the rules
       - The judge should have been skipped for t061
-    answer: 1
+    answer: 0
     explanation: The evaluator-optimizer pattern here has no tools, so nothing checked whether Lumen has that menu. The rubric's addresses_issue item pushed the writer from an honest "I can't confirm" to confident steps. Feedback improves a draft only on what the judge can actually check.
   - question: The judge here is claude-haiku-5-5, the same model as the writer, called through the same function. How does that differ from the LLMs track's judge?
     options:

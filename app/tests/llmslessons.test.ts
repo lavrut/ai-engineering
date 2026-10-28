@@ -49,8 +49,18 @@ const lessonsDir = join(here, '../src/content/lessons/llms');
 const src = (p: string) => readFileSync(join(repo, p), 'utf8');
 const git = (...args: string[]) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' });
 const read = (n: string) => readFileSync(join(lessonsDir, `${n}.mdx`), 'utf8');
-/** A lesson's body with runs of whitespace collapsed, so a pinned sentence may wrap. */
-const flat = (n: string) => matter(read(n)).content.replace(/\s+/g, ' ');
+/** A whole lesson file, frontmatter (the quiz) included, with runs of whitespace collapsed, so a pinned
+ *  sentence may wrap (P14). The quiz's own numbers are pinned again in 'the quizzes' at the end. */
+const flat = (n: string) => read(n).replace(/\s+/g, ' ');
+type Quiz = { question: string; options: string[]; answer: number; explanation: string }[];
+const quizOf = (n: string) => matter(read(n)).data.quiz as Quiz;
+/** Every question, option and explanation of a lesson's quiz, one string. */
+const quizText = (n: string) => quizOf(n).flatMap((q) => [q.question, ...q.options, q.explanation]).join(' | ').replace(/\s+/g, ' ');
+/** The numbers a quiz states that carry data, as the ML track counts them: decimals, thousands, and integers of
+ *  two or more digits that are not a year (2011-2026). */
+const quizNumbers = (n: string) =>
+  [...quizText(n).matchAll(/\d+(?:,\d{3})*(?:\.\d+)?/g)].map((m) => m[0])
+    .filter((x) => /[.,]/.test(x) || (x.length >= 2 && !(Number(x) >= 2011 && Number(x) <= 2026)));
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 const usd = (x: number, d = 2) => `$${x.toFixed(d)}`;
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
@@ -711,4 +721,125 @@ describe('lesson 11 (Inspect): the numbers it states', () => {
     expect([usd(estimate('judge', OPUS, 20)), usd(worst('judge', OPUS, 20))]).toEqual(['$0.47', '$0.91']);
     expect(l).toContain('The judged run adds 20 Opus grader calls, about $0.47 (worst case $0.91)');
   });
+});
+
+// P14: the quizzes state numbers too. Each lesson's quiz phrases are pinned here: the data's numbers recomputed
+// as the lesson tests above compute them, a made-up example's arithmetic redone, and a wrong option's number
+// written out as the wrong option it is. Every data number in a quiz must be in one of its lesson's phrases.
+describe('the quizzes: every number they state is pinned (P14)', () => {
+  const p1 = (x: number) => (x * 100).toFixed(1);
+  const devBoth = (prompt: string) => both(haiku(prompt), dev);
+  const band40 = noiseBand(40);
+  const count = (xs: Ticket[], pr: string) => xs.filter((t) => t.priority === pr).length;
+  const v1v2 = compare(gradesOn(haiku('v1_basic'), dev), gradesOn(haiku('v2_rules'), dev));
+  const v2v3 = compare(gradesOn(haiku('v2_rules'), dev), gradesOn(haiku('v3_examples'), dev));
+  const inputs = (p: string) => mean(linesOn(haiku(p), dev).map((x) => x.input_tokens));
+  const per1000 = (model: string, effort: string | null) => {
+    const lines = linesOn(`triage__${model}__v2_rules__${effort ?? 'default'}`, dev);
+    return (sum(lines.map((x) => callCost(model, x.input_tokens, x.output_tokens))) / 40) * 1000;
+  };
+  const outTokens = (effort: string) => Math.round(mean(linesOn(`triage__${SONNET}__v2_rules__${effort}`, dev).map((x) => x.output_tokens)));
+  const opusHigh = both(`triage__${OPUS}__v2_rules__high`, dev);
+  // lesson 3's made-up run: 40 lines, 2 API errors, 1 refusal, 30 of the other 37 right
+  const made = [
+    ...Array.from({ length: 2 }, (_, i) => ({ case_id: `e${i}`, category_ok: false, priority_ok: false, both_ok: false, outcome: 'error' as const })),
+    { case_id: 'r0', category_ok: false, priority_ok: false, both_ok: false, outcome: 'refusal' as const },
+    ...Array.from({ length: 37 }, (_, i) => ({ case_id: `o${i}`, category_ok: i < 30, priority_ok: i < 30, both_ok: i < 30, outcome: 'ok' as const })),
+  ];
+  const madeReport = report(made);
+  // lesson 6's made-up judge: labels 75% pass, a judge that always says pass
+  const labels75 = [true, true, true, false];
+  const always = labels75.map(() => true);
+  const flips = (() => {
+    const v = (order: 'before' | 'after') => judged(order).map((x) => verdicts(x));
+    const [b, a] = [v('before'), v('after')];
+    return D.labels.flatMap((r, i) => RUBRIC_IDS.filter((rid) => b[i][rid] !== a[i][rid]).map((rid) => `${r.id} ${rid}`));
+  })();
+  const loraR = Number(/^LORA_R = (\d+)/m.exec(src('llms/finetune/lora.py'))![1]);
+  const lora = loraParams(LORA_D, loraR);
+  const minimum = Number(/"--minimum", type=float, default=([\d.]+)/.exec(lab)![1]);
+  const failShare = /^MAX_ERROR_SHARE = ([\d.]+)/m.exec(src('llms/inspect/triage_inspect.py'))![1];
+  const inspectV2 = (JSON.parse(src('llms/data/inspect_summary.json')) as { runs: { id: string; rows: { metric: string; inspect: number }[] }[] })
+    .runs.find((r) => r.id === 'v2_rules')!.rows.find((r) => r.metric === 'priority')!.inspect;
+  const testHigh = count(test, 'high');
+  const v2Test = gradesOn(haiku('v2_rules'), test).filter((g) => g.both_ok).length;
+
+  const PINNED: Record<string, string[]> = {
+    '01-what': [],
+    // 16, 33 of 60, 10 and 6 are the lesson 2 story, pinned to git history in its tests; here they are tied to
+    // the body sentences those tests check
+    '02-dataset': ['all get the same 16 tickets wrong', 'a blind relabel matched only 33 of 60 priorities',
+      'the labelling guide later changed 10 of those 16 labels. The other 6 kept their labels',
+      `fitted to those ${test.length} tickets`, `The test split has ${testHigh} high-priority ticket`,
+      '100%, and that is good evidence' /* a wrong option */, 'can only score 0% or 100%', 'can only be 0% or 100%',
+      `from the ${dev.length}-ticket dev split`,
+      `The dev split has ${count(dev, 'high')} high, ${count(dev, 'normal')} normal, ${count(dev, 'low')} low and ${count(dev, 'urgent')} urgent tickets`],
+    '03-graders': ['A run of 40 tickets has 2 API errors and 1 refusal. The model got 30 of the others right',
+      `30 / 40 = ${p1(30 / 40)}%`, `30 / 39 = ${p1(30 / 39)}%`, `30 / 37 = ${p1(30 / 37)}%`,
+      `30 / ${madeReport.scored} = ${p1(madeReport.both)}%, because errors are left out and the refusal counts as wrong`,
+      `That leaves ${madeReport.scored} scored lines, 30 of them right`,
+      `The category accuracy is ${p1(report(gradesOn(haiku('v1_basic'), dev)).category)}%`],
+    '04-runner': [`Prompt B scores ${p1(devBoth('v2_rules'))}% on the ${dev.length} dev tickets and prompt A scores 90.0%`,
+      `The noise band is ±${p1(band40)}%`, `B is better by ${(devBoth('v2_rules') * 100 - 90).toFixed(1)} points`,
+      'because 97.5% is above 95%' /* a wrong option */, `a ${(devBoth('v2_rules') * 100 - 90).toFixed(1)}-point difference is inside the band`,
+      `With ${dev.length} tickets, a score can move by about 1/√${dev.length}, or ${p1(band40)} points`,
+      `v1_basic to v2_rules, at +${(v1v2.diff * 100).toFixed(1)} points, clears it`],
+    '05-judge': [`paying over ${callCost(OPUS, 1e6, 1e6) / callCost(HAIKU, 1e6, 1e6)} times as much per call`],
+    '06-judge-check': [`Your labels say ${agreement(always, labels75) * 100}% of replies pass`,
+      '75% agreement and kappa 0.75' /* a wrong option */, `${agreement(always, labels75) * 100}% agreement and kappa ${cohenKappa(always, labels75)}, because always saying pass`,
+      '100% agreement, because it never fails a good reply', '25% agreement and kappa below 0' /* wrong options */,
+      `so it agrees on ${agreement(always, labels75) * 100}%`, 'labels that are 75% pass, so chance agreement is also 75%',
+      `Kappa is (0.75 − 0.75) / (1 − 0.75) = ${cohenKappa(always, labels75)}`,
+      `the judge fails ${flips[0].split(' ')[0]} on ${flips[0].split(' ')[1]}`, `one flip in ${D.labels.length * RUBRIC_IDS.length} verdicts`,
+      `The label for ${flips[0].split(' ')[0]} is wrong` /* a wrong option */,
+      `matches all ${D.labels.length} labels`, `on those ${D.labels.length}`, `The ${D.labels.length} labels were used`, `on these ${D.labels.length} fits`],
+    '07-prompt': [`Prompt B scores ${((9 - 8) / 40 * 100).toFixed(1)} points higher than A on the 40 dev tickets. It fixed 9 tickets and broke 8`,
+      `a ${((9 - 8) / 40 * 100).toFixed(1)}-point gain is inside the noise band, and B changed ${9 + 8} tickets' outcomes`,
+      `changes what customers see on ${9 + 8} tickets`, `${((9 - 8) / 40 * 100).toFixed(1)} points on 40 tickets is well inside ±${p1(band40)}%`,
+      `On dev it scores +${(v2v3.diff * 100).toFixed(1)}, with no ticket fixed or broken`,
+      `cost about ${Math.round(inputs('v3_examples') - inputs('v2_rules'))} more input tokens on every call`,
+      `v2_rules scores ${p1(devBoth('v2_rules'))}% on dev`, `What does the ${p1(devBoth('v2_rules'))}% not tell you`],
+    '08-model': ['Your bar is 90% both right on dev',
+      `Haiku scores ${p1(devBoth('v2_rules'))}% at ${usd(per1000(HAIKU, null))} per 1,000 tickets; Opus at high effort scores ${p1(opusHigh)}% at ${usd(per1000(OPUS, 'high'))}`,
+      `The band is ±${p1(band40)}%`, `because it scores ${((devBoth('v2_rules') - opusHigh) * 100).toFixed(1)} points higher` /* a wrong option */,
+      `Haiku costs about ${Math.floor(per1000(OPUS, 'high') / per1000(HAIKU, null))} times less`,
+      `The ${((devBoth('v2_rules') - opusHigh) * 100).toFixed(1)}-point gap is one ticket on ${dev.length}, far inside ±${p1(band40)}%`,
+      `used about ${outTokens('high')} output tokens a call where low effort used about ${outTokens('low')}`,
+      `Here it bought ${((both(`triage__${SONNET}__v2_rules__high`, dev) - both(`triage__${SONNET}__v2_rules__low`, dev)) * 100).toFixed(1)} points`,
+      'the API returns a 400', 'return a 400 on current models'],
+    '09-lora': [`LoRA adds A (${LORA_D} × ${loraR}) and B (${loraR} × ${LORA_D}) beside a frozen ${LORA_D} × ${LORA_D} matrix W`,
+      `2 × ${LORA_D} × ${loraR} = ${commas(lora.trainable)} numbers, instead of all ${commas(lora.full)} in W`,
+      `A·B is a full ${LORA_D} × ${LORA_D} matrix`, `${((lora.trainable / lora.full) * 100).toFixed(2)}% of W's size`,
+      `Haiku's ${v2Test} of ${test.length} with v2_rules`, `with ${test.length} tickets the band is about ±${Math.round(noiseBand(20) * 100)}%`,
+      `and ${(40 / (4 * 2)) * 3} optimizer steps on ${dev.length} examples`, `on ${test.length} is well inside ±${p1(noiseBand(20))}%`],
+    '10-capstone': [`on ${dev.length} dev tickets. The baseline scores ${p1(devBoth('v2_rules'))}% and the candidate 90.0%`,
+      `With the default minimum of ${minimum}`, `a ${(devBoth('v2_rules') * 100 - 90).toFixed(1)}-point drop is inside the ±${p1(band40)}% band`,
+      'because 90.0% is below 95%' /* a wrong option */,
+      `90.0% clears ${minimum}, and ${p1(devBoth('v2_rules'))} − ${p1(band40)} = ${((devBoth('v2_rules') - band40) * 100).toFixed(1)}, so 90.0%`,
+      `scores on ${dev.length} tickets move by luck`, `A one-ticket drop is ${p1(1 / 40)} points, far inside ±${p1(band40)}%`],
+    '11-framework': [`fail_on_error=${failShare}`, `the same priority score as the lab, ${inspectV2} for v2_rules on all ${tickets.length} tickets`],
+  };
+
+  it('the made-up examples and the data agree with the quizzes\' right answers', () => {
+    expect(madeReport.scored).toBe(38);
+    const q3 = quizOf('03-graders')[0];
+    expect(q3.options[q3.answer]).toContain(`30 / ${madeReport.scored} = ${p1(madeReport.both)}%`);
+    const q6 = quizOf('06-judge-check')[0];
+    expect(q6.options[q6.answer]).toContain(`kappa ${cohenKappa(always, labels75)}`);
+    expect(flips).toEqual(['r029 no_false_promises']);
+    expect(lab).not.toMatch(/\btemperature\s*=/);   // "The lab sends none of them"
+    // the lesson 2 story's numbers, as the body states them (pinned to git history in lesson 2's tests)
+    const body = flat('02-dataset');
+    for (const phrase of ['16 dev tickets were wrong in all five', 'the priority on only 33 of 60',
+      'changed the labels on 10 of those 16 tickets. The other 6']) expect(body).toContain(phrase);
+  });
+
+  for (const l of Object.keys(PINNED)) {
+    it(`${l}: each stated phrase holds, and every number in the quiz is one of them`, () => {
+      const q = quizText(l);
+      for (const phrase of PINNED[l]) expect(q, l).toContain(phrase);
+      const covered = new Set(PINNED[l].flatMap((x) => x.match(/\d+(?:,\d{3})*(?:\.\d+)?/g) ?? []));
+      for (const n of quizNumbers(l)) expect(covered.has(n), `${l}: quiz number ${n} is not pinned`).toBe(true);
+    });
+  }
 });

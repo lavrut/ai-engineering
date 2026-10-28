@@ -7,13 +7,17 @@ import { describe, expect, it } from 'vitest';
 // A quiz whose right answer sits mostly in one position can be passed by always picking that
 // position. No track may have more than half of its correct answers at one option index.
 const lessons = join(dirname(fileURLToPath(import.meta.url)), '../src/content/lessons');
-// Tracks not yet rebalanced (found by this test in the ML fix wave, left for their own wave). Each is
-// asserted to still be unbalanced, so fixing one fails here until it is removed from the list.
-const NOT_YET_REBALANCED = new Set(['agents']);
+// Tracks not yet rebalanced. Every track is rebalanced now (ruling P13), so this list must stay empty: a test
+// below fails if a track is ever added back. A listed track is also asserted to still be unbalanced, so fixing one
+// fails here until it is removed from the list.
+const NOT_YET_REBALANCED = new Set<string>([]);
 const tracks = readdirSync(lessons, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
 
 describe('quiz answers are spread over the option positions', () => {
   it('finds the tracks', () => expect(tracks.length).toBeGreaterThan(0));
+  it('leaves no track waiting to be rebalanced (P13: NOT_YET_REBALANCED stays empty)', () => {
+    expect([...NOT_YET_REBALANCED]).toEqual([]);
+  });
   for (const track of tracks) {
     const pending = NOT_YET_REBALANCED.has(track);
     const name = pending ? 'still has more than 50% of its correct answers at one index (rebalance, then drop it from the list)'

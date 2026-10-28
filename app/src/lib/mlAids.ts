@@ -357,7 +357,7 @@ export function cellDetail(s: SplitMetrics, r: number, c: number) {
 // ── ModelVsLlm ──────────────────────────────────────────────────────────────
 /** What to run when reports/llm_compare.json is missing (compare_llm.py's own advice): record
  *  the paid answers once (prints the cost and asks first), then replay them into the report. */
-export const LLM_COMMANDS = ['python compare_llm.py record', 'python compare_llm.py compare'];
+export const LLM_COMMANDS = ['../../.venv-ml/bin/python compare_llm.py record', '../../.venv-ml/bin/python compare_llm.py compare']; // from ml/python, as lesson 6 runs them
 const MODEL_NAMES: Record<string, string> = { logreg: 'logistic regression', nb: 'naive Bayes' };
 
 export type LlmSide = {

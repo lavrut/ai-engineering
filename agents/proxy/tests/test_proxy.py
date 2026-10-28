@@ -207,6 +207,7 @@ def test_record_requires_confirm(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert code != 0
     assert "Estimated" in out and "Not confirmed" in out
+    assert "--yes" not in out                                    # R71: the decline never offers --yes
     assert upstream.calls == []
     assert not (tmp_path / "s").exists() or not any((tmp_path / "s").rglob("*.json"))
 
@@ -861,3 +862,21 @@ def test_log_write_does_not_take_the_server_lock(running, tmp_path):
         t.start()
         assert done.wait(2), "_log waited on srv.lock"
     assert "while the accounting lock is held" in log.read_text()
+
+
+def test_peek_error_other_than_oserror_is_not_idle(running, monkeypatch):
+    """Task 3 minor 2: anything but an OSError from peek (a ValueError on a closed file, say) does not escape the
+    handler: the connection is treated as not idle (busy while the base handler runs), never as a clean close."""
+    server, *_ = running("replay")
+    seen = []
+
+    class Broken:
+        def peek(self, n):
+            raise ValueError("peek of closed file")
+
+    monkeypatch.setattr(proxy_handler.BaseHTTPRequestHandler, "handle_one_request",
+                        lambda self: seen.append(self.busy))
+    h = proxy.Handler.__new__(proxy.Handler)
+    h.server, h.rfile, h.close_connection = server, Broken(), False
+    h.handle_one_request()
+    assert seen == [True] and h.busy is False

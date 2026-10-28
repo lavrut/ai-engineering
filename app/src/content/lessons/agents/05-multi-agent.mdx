@@ -10,9 +10,9 @@ quiz:
     options:
       - Whenever the model decides the ticket is clear
       - Only after the drafter has written a draft
-      - Only when the reviewer has passed the current draft, the label names this ticket and its triaged category, and a person then says yes
       - Never; only the research worker can write
-    answer: 2
+      - Only when the reviewer has passed the current draft, the label names this ticket and its triaged category, and a person then says yes
+    answer: 3
     explanation: Code rebuilds the supervisor's tool list every turn and adds label_ticket only while the review of the current draft has passed. A new draft or a new category clears that pass. The arguments must match the state, and because the session is untrusted from turn one, the guard still asks a person before the server writes.
   - question: The supervisor sends handoff(worker="billing", ...). What happens?
     options:

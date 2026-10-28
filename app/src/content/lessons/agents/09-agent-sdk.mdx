@@ -9,10 +9,10 @@ quiz:
   - question: The SDK desk runs the CLI in an empty temporary folder that is not a git repository. Why does that matter for a replayable run?
     options:
       - The CLI refuses to start inside a repository
-      - Inside a repository the CLI puts its git status (branch, changed files, recent commits) into every subagent's first message. That leaks the machine's state into the requests and changes the replay key with every commit
-      - An empty folder makes the CLI faster
       - The proxy only accepts requests from temporary folders
-    answer: 1
+      - An empty folder makes the CLI faster
+      - Inside a repository the CLI puts its git status (branch, changed files, recent commits) into every subagent's first message. That leaks the machine's state into the requests and changes the replay key with every commit
+    answer: 3
     explanation: Whatever the CLI reads from its surroundings ends up in the request, and the request is the key. An empty folder that is no repository holds nothing of the machine's, so the same ticket sends the same bytes on any machine and any day.
   - question: A PreToolUse hook throws an exception while checking a label_ticket call. What should happen, and why?
     options:

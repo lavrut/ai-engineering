@@ -21,7 +21,18 @@ const derived = (name: string): any => JSON.parse(src(`mcp/data/derived/${name}.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const jsonl = (p: string): any[] => src(p).trim().split('\n').map((l) => JSON.parse(l));
 const read = (n: string) => readFileSync(join(lessonsDir, `${n}.mdx`), 'utf8');
-const body = (n: string) => matter(read(n)).content;
+/** A whole lesson file, frontmatter (the quiz) included (P14). The quiz's own numbers are pinned again in
+ *  'the quizzes' at the end. */
+const body = (n: string) => read(n);
+type Quiz = { question: string; options: string[]; answer: number; explanation: string }[];
+/** Every question, option and explanation of a lesson's quiz, one string. */
+const quizText = (n: string) =>
+  (matter(read(n)).data.quiz as Quiz).flatMap((q) => [q.question, ...q.options, q.explanation]).join(' | ').replace(/\s+/g, ' ');
+/** The numbers a quiz states that carry data, as the ML track counts them: decimals, thousands, and integers of
+ *  two or more digits that are not a year (2011-2026). */
+const quizNumbers = (n: string) =>
+  [...quizText(n).matchAll(/\d+(?:,\d{3})*(?:\.\d+)?/g)].map((m) => m[0])
+    .filter((x) => /[.,]/.test(x) || (x.length >= 2 && !(Number(x) >= 2011 && Number(x) <= 2026)));
 const commas = (n: number) => n.toLocaleString('en-US');
 // A Python constant `NAME = 123` (underscores allowed) in a source file.
 const constant = (p: string, name: string): number => {
@@ -375,4 +386,62 @@ describe('lesson 11 (capstone): the numbers it states', () => {
     expect(e).toMatchObject({ model: 'claude-sonnet-5-5', calls: 4, typical: 0.0307, worst: 1.4988 });
     expect(l).toContain(`typical cost of \`$${e.typical.toFixed(4)}\` for ${e.calls} calls and a worst case of \`$${e.worst.toFixed(4)}\``);
   });
+});
+
+// P14: the quizzes state numbers too. Each lesson's quiz phrases are pinned here against the same sources as the
+// body (the research sheet, the source constants, the recordings); a wrong option's number is written out as the
+// wrong option it is. Every data number in a quiz must be in one of its lesson's phrases.
+describe('the quizzes: every number they state is pinned (P14)', () => {
+  const research = src(RESEARCH);
+  const [current, previous] = /Current revision is (\d{4}-\d{2}-\d{2}); previous (\d{4}-\d{2}-\d{2})/.exec(research)!.slice(1);
+  const [, maxLimit] = /MIN_LIMIT, MAX_LIMIT, DEFAULT_LIMIT = (\d+), (\d+), \d+/.exec(src(CORE))!.slice(1).map(Number);
+  const missingCode = /Resource-not-found is now (-\d+)/.exec(research)![1];
+  const auth = src('mcp/python/resource_auth.py');
+  const [readPort] = /READ_PORT, OPS_PORT = (\d+), \d+/.exec(auth)!.slice(1).map(Number);
+  const loopback = /return \[f"([\d.]+):\{port\}", f"localhost:\{port\}"\]/.exec(auth)![1];
+  const cap = constant(CORE, 'MAX_BODY_BYTES');
+  const ticketIds = new Set([...jsonl('llms/data/tickets.jsonl'), ...jsonl('mcp/data/injection.jsonl')].map((t) => t.id as string));
+  const capModel = jsonl('mcp/data/recordings/capstone-noguard.jsonl')[0].model as string;
+  const modelName = capModel.replace(/^claude-(\w)(\w+)-(\d+)-(\d+)$/, (_, a: string, b: string, x: string, y: string) => `Claude ${a.toUpperCase()}${b} ${x}.${y}`);
+  const injectionId = jsonl('mcp/data/injection.jsonl')[0].id as string;
+
+  const PINNED: Record<string, string[]> = {
+    '01-what': [`In the ${current} revision there is no initialize call`, `It used ${current}, because that is the current revision`,
+      `It used ${previous}, because hosts are always one revision behind` /* a wrong option: the previous revision */],
+    '02-first-server': ['search_tickets is called with limit 50' /* out of range on purpose */, `"limit must be 1 to ${maxLimit}"`,
+      'Nothing stops it, and 50 tickets come back' /* a wrong option */, `The 1 to ${maxLimit} rule is code in the tool`],
+    '03-resources-prompts': ['A client reads lumen://tickets/t999, which does not exist', 'says the ticket t999 is unknown',
+      'The nearest ticket, t099' /* a wrong option: no such ticket either */, `the same error code, ${missingCode}`],
+    '04-client': [], '05-agent': [],
+    '06-hosts': [`Assume the current revision, ${current}` /* a wrong option */],
+    '07-http': [`Both Lumen servers listen on ${loopback} only`, `a browser can never reach ${loopback}`, `send requests to ${loopback}`,
+      `Binding to ${loopback} keeps other machines out`, `with Host evil.invalid:${readPort} and Origin http://evil.invalid:${readPort}`,
+      'the request gets 403, even with a valid token', `the server really answers to, ${loopback} and localhost on its own port`,
+      `cap the request body at ${commas(cap)} bytes`],
+    '08-write-tools': [],
+    '09-auth': ['403, because the scope is wrong', '200, because the signature is valid', '400, because the request is malformed' /* wrong options */,
+      "401, because the token's audience names lumen-read", 'so the answer is 401 whatever scopes the token carries',
+      'A 403 is kept for a token that is for this server but lacks the scope', "The server's 401 carries a WWW-Authenticate header",
+      'The 401 points to the metadata'],
+    '10-apps': [],
+    '11-capstone': [`${modelName} read ticket ${injectionId}`],
+  };
+
+  it('the sources agree with the quizzes: no ticket t999 or t099, 401 for a wrong audience and 403 for a missing scope', () => {
+    expect(ticketIds.has('t999') || ticketIds.has('t099')).toBe(false);
+    expect(auth).toContain('So lumen-read\'s token at lumen-ops is 401, not 403.');
+    expect(auth).toContain("the SDK's 403 for a missing scope");
+    expect(auth).toContain('answers 401 with `WWW-Authenticate: ... resource_metadata="..."`');
+    expect(capModel).toBe('claude-haiku-5-5');
+    expect(body('03-resources-prompts')).toContain(`the code ${missingCode} (INVALID_PARAMS)`);
+  });
+
+  for (const l of LESSONS) {
+    it(`${l}: each stated phrase holds, and every number in the quiz is one of them`, () => {
+      const q = quizText(l);
+      for (const phrase of PINNED[l]) expect(q, l).toContain(phrase);
+      const covered = new Set(PINNED[l].flatMap((x) => x.match(/\d+(?:,\d{3})*(?:\.\d+)?/g) ?? []));
+      for (const n of quizNumbers(l)) expect(covered.has(n), `${l}: quiz number ${n} is not pinned`).toBe(true);
+    });
+  }
 });
