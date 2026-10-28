@@ -315,7 +315,8 @@ const deskDocs = (): { file: string; doc: Doc }[] =>
     .filter((d) => d.startsWith('desk-'))
     .flatMap((d) => readdirSync(join(tracesDir, d)).filter((f) => f.endsWith('.json')).map((f) => ({ file: `${d}/${f}`, doc: JSON.parse(readFileSync(join(tracesDir, d, f), 'utf8')) })));
 const contract = readFileSync(join(repo, 'agents/fixtures/contract.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
-const runPy = readFileSync(join(repo, 'agents/run.py'), 'utf8');
+// run.py is four files (run_sets.py holds the sets and the estimate); the pins read them as one text.
+const runPy = ['run', 'run_sets', 'run_engines', 'run_traces'].map((f) => readFileSync(join(repo, `agents/${f}.py`), 'utf8')).join('\n');
 const constant = (text: string, name: string) => Number(new RegExp(`^${name}\\s*=\\s*([\\d.]+)`, 'm').exec(text)?.[1]);
 const FAILED_ON_ADDRESSES = { addresses_issue: false, no_false_promises: true, tone: true };
 

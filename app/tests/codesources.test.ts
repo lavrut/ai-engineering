@@ -51,7 +51,7 @@ describe('code source registry', () => {
       [
         'harness', 'llms', 'llms-inspect', 'lora', 'ml-fetch', 'ml-llm', 'ml-mlflow', 'ml-mlops', 'ml-monitor', 'ml-serve', 'ml-train',
         'mcp-agent', 'mcp-app', 'mcp-auth', 'mcp-auth-server', 'mcp-client', 'mcp-ops', 'mcp-read', 'mcp-simulate',
-        'agents-proxy', 'agents-patterns', 'agents-supervisor', 'agents-langgraph', 'agents-sdk', 'agents-evals', 'agents-run-evals',
+        'agents-proxy', 'agents-proxy-cost', 'agents-proxy-handler', 'agents-proxy-server', 'agents-patterns', 'agents-supervisor', 'agents-langgraph', 'agents-sdk', 'agents-evals', 'agents-run-evals',
       ].sort(),
     );
     expect(CODE_SOURCES['ml-serve']).toMatchObject({ python: 'ml/serve/server.py', go: 'ml/go/main.go' });
@@ -179,7 +179,10 @@ describe('code source registry', () => {
   describe('agents sources', () => {
     const nums = (t: string | undefined) => listSections(t ?? '').map((x) => x.n);
     it.each([
-      ['agents-proxy', 'agents/proxy/proxy.py', [1, 2, 3, 4, 5, 6, 7], undefined],
+      ['agents-proxy', 'agents/proxy/proxy.py', [1, 2, 3, 4, 5], undefined],
+      ['agents-proxy-cost', 'agents/proxy/proxy_cost.py', [1], undefined],
+      ['agents-proxy-handler', 'agents/proxy/proxy_handler.py', [1, 2], undefined],
+      ['agents-proxy-server', 'agents/proxy/proxy_server.py', [1], undefined],
       ['agents-patterns', 'agents/desk/python/patterns.py', [1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6]],
       ['agents-supervisor', 'agents/desk/python/supervisor.py', [1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6]],
       ['agents-langgraph', 'agents/frameworks/langgraph_desk.py', [1, 2, 3, 4, 5, 6], undefined],

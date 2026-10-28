@@ -33,6 +33,9 @@ export type CodeSourceId =
   | 'mcp-agent'
   | 'mcp-simulate'
   | 'agents-proxy'
+  | 'agents-proxy-cost'
+  | 'agents-proxy-handler'
+  | 'agents-proxy-server'
   | 'agents-patterns'
   | 'agents-supervisor'
   | 'agents-langgraph'
@@ -75,8 +78,12 @@ export const CODE_SOURCES: Record<CodeSourceId, CodeSourceInfo> = {
   'mcp-agent': { python: 'mcp/python/agent.py' }, // the harness driving the servers (Python only)
   'mcp-simulate': { python: 'mcp/python/simulate.py' }, // the SIMULATED compromised model, sections 1-4 (Python only)
   // AI Agents track. The hand-built patterns and supervisor number sections 1-6 alike in Python and Go;
-  // the proxy, the two framework desks and the evals are Python only.
-  'agents-proxy': { python: 'agents/proxy/proxy.py' }, // the record/replay proxy, sections 1-7
+  // the proxy, the two framework desks and the evals are Python only. The proxy is four files, each numbering its
+  // own sections, so each is its own source.
+  'agents-proxy': { python: 'agents/proxy/proxy.py' }, // configuration, the key, the store, responses, command line: 1-5
+  'agents-proxy-cost': { python: 'agents/proxy/proxy_cost.py' }, // the worst case, usage, the ledger, the y/N: 1
+  'agents-proxy-handler': { python: 'agents/proxy/proxy_handler.py' }, // one request: the guard (1), replay and record (2)
+  'agents-proxy-server': { python: 'agents/proxy/proxy_server.py' }, // the server, make_server, serve: 1
   'agents-patterns': { python: 'agents/desk/python/patterns.py', go: 'agents/desk/go/patterns.go' }, // the five patterns, 1-6
   'agents-supervisor': { python: 'agents/desk/python/supervisor.py', go: 'agents/desk/go/supervisor.go' }, // single agent and supervisor, 1-6
   'agents-langgraph': { python: 'agents/frameworks/langgraph_desk.py' }, // the desk in LangGraph, 1-6

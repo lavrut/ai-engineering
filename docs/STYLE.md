@@ -85,7 +85,7 @@ A new aid goes in `app/src/components/`, with its logic in `app/src/lib/` and a 
 
 - **Reference harnesses:** `harness/python/harness.py` and `harness/go/main.go` keep the same numbered sections, marked `# ── N. Title` and `// ── N. Title`. Lessons quote code by section number, so renumbering a section means updating the lessons.
 - **LLMs lab:** `llms/python/triage_lab.py` and `llms/go/main.go` keep the same numbered sections 1–10; `llms/finetune/lora.py` (Python only) has sections 1–5; `llms/inspect/triage_inspect.py` (Python only) has sections 1–7. A `FlowDiagram` step links to one with `code.source`.
-- **AI Agents:** `agents/desk/python/patterns.py` and `supervisor.py` keep the same numbered sections 1–6 as `agents/desk/go/patterns.go` and `supervisor.go`. The Python-only files number their own: `agents/proxy/proxy.py` 1–7, `agents/frameworks/langgraph_desk.py` 1–6, `sdk_desk.py` 1–9, `agents/evals/scorers.py` 1–7 and `run_evals.py` 1–8 (the gate is 6).
+- **AI Agents:** `agents/desk/python/patterns.py` and `supervisor.py` keep the same numbered sections 1–6 as `agents/desk/go/patterns.go` and `supervisor.go`. The Python-only files number their own: the proxy's `agents/proxy/proxy.py` 1–5, `proxy_cost.py` 1, `proxy_handler.py` 1–2 and `proxy_server.py` 1, `agents/frameworks/langgraph_desk.py` 1–6, `sdk_desk.py` 1–9, `agents/evals/scorers.py` 1–7 and `run_evals.py` 1–8 (the gate is 6).
 - **Python:** standard library plus the official SDK, type hints, 4-space indent.
 - **Go:** `gofmt` formatting, standard library plus the official SDK.
 - **App:** TypeScript, 2-space indent, single quotes. Pure logic lives in `src/lib/` with tests; components stay thin.

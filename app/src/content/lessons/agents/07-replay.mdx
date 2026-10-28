@@ -149,9 +149,9 @@ Section 3 is the store.
 - `tmp = self.dir / f".{key}.{threading.get_ident()}.tmp"` and `os.replace(tmp, self.path(key))` write atomically, so a reader never sees half a recording.
 - `def closest_diff(store: Store, summary: dict) -> str:` builds the miss hint: it flattens the request and every recording and names the one with the fewest differing fields.
 
-Section 4 prices the calls.
+Section 1 of `proxy_cost.py` prices the calls.
 
-<CodeTabs source="agents-proxy" section={4} />
+<CodeTabs source="agents-proxy-cost" section={1} />
 
 - `CACHE_WRITE_MULTIPLIER = 1.25` and `CACHE_READ_MULTIPLIER = 0.10` are the published multipliers, in one named place.
 - `def ledger_cost(model: str | None, usage: dict) -> float | None:` prices one recorded call, each kind of input token at its own rate, and returns `None` rather than a guess when a field is missing.

@@ -47,8 +47,9 @@ const total = (doc: Doc, k: string) => doc.proxy_calls.reduce((a: number, c: Doc
 const models = (doc: Doc) => doc.trace.filter((r: Doc) => r.kind === 'model').length;
 const constant = (src: string, name: string) => Number(new RegExp(`^${name}\\s*=\\s*([\\d.]+)`, 'm').exec(src)?.[1]);
 
-const proxyPy = text('agents/proxy/proxy.py');
-const runPy = text('agents/run.py');
+// The proxy and run.py are four files each; the pins read each as one text.
+const proxyPy = ['proxy', 'proxy_cost', 'proxy_handler', 'proxy_server'].map((f) => text(`agents/proxy/${f}.py`)).join('\n');
+const runPy = ['run', 'run_sets', 'run_engines', 'run_traces'].map((f) => text(`agents/${f}.py`)).join('\n');
 const lgPy = text('agents/frameworks/langgraph_desk.py');
 const sdkPy = text('agents/frameworks/sdk_desk.py');
 const scorersPy = text('agents/evals/scorers.py');

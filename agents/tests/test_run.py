@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "agents"))
 
 import run  # noqa: E402
+import run_engines  # noqa: E402  (where go_run looks up go_binary and GO_TIMEOUT)
 import desk_core as core  # noqa: E402
 import proxy  # noqa: E402
 
@@ -470,8 +471,8 @@ def test_go_timeout_kills_the_process_group(monkeypatch, tmp_path):
     marker = tmp_path / "child.pid"
     script.write_text(f"#!/bin/sh\nsleep 300 &\necho $! > {marker}\nwait\n")
     script.chmod(0o755)
-    monkeypatch.setattr(run, "go_binary", lambda: script)
-    monkeypatch.setattr(run, "GO_TIMEOUT", 1)
+    monkeypatch.setattr(run_engines, "go_binary", lambda: script)
+    monkeypatch.setattr(run_engines, "GO_TIMEOUT", 1)
     with pytest.raises(RuntimeError, match="timed out"):
         run.go_run("single", T["t001"], approve="decline", elicit="accept", labels_path=tmp_path / "l.jsonl")
     pid = int(marker.read_text())

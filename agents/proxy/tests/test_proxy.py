@@ -13,6 +13,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import proxy  # noqa: E402
+import proxy_handler  # noqa: E402  (where a request looks up its key)
 
 SECRET = "sk-ant-test-SECRET-do-not-store"
 BODY = {"model": "claude-haiku-5-5", "max_tokens": 50, "messages": [{"role": "user", "content": "ping"}]}
@@ -647,7 +648,7 @@ def test_closed_run_drops_kept_alive_connections(tmp_path, monkeypatch):
 def test_internal_error_names_the_exception(running, monkeypatch):
     """R59: a 500 carries the real exception type and message, never just its type."""
     _, url, *_ = running("replay")
-    monkeypatch.setattr(proxy, "request_key", lambda *a: (_ for _ in ()).throw(RuntimeError("store exploded")))
+    monkeypatch.setattr(proxy_handler, "request_key", lambda *a: (_ for _ in ()).throw(RuntimeError("store exploded")))
     r = post(url, BODY)
     assert r.status_code == 500
     assert r.json()["error"]["message"] == "proxy: internal error (RuntimeError: store exploded)"
@@ -839,7 +840,7 @@ def test_idle_kept_alive_connection_is_not_busy(running):
 def test_internal_error_message_is_truncated(running, monkeypatch, tmp_path):
     log = tmp_path / "proxy.log"
     _, url, *_ = running("replay", log_file=log)
-    monkeypatch.setattr(proxy, "request_key", lambda *a: (_ for _ in ()).throw(RuntimeError("x" * 5000)))
+    monkeypatch.setattr(proxy_handler, "request_key", lambda *a: (_ for _ in ()).throw(RuntimeError("x" * 5000)))
     r = post(url, BODY)
     assert r.status_code == 500
     what = r.json()["error"]["message"].removeprefix("proxy: internal error (").removesuffix(")")

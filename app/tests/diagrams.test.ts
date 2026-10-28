@@ -179,7 +179,7 @@ describe('diagram data', () => {
       [
         'replay-proxy',
         replayProxy,
-        { 1: ['agents-proxy', 1], 2: ['agents-proxy', 2], 3: ['agents-proxy', 5], 4: ['agents-proxy', 6], 5: ['agents-proxy', 4], 6: ['agents-proxy', 6], 7: ['agents-proxy', 3] },
+        { 1: ['agents-proxy', 1], 2: ['agents-proxy', 2], 3: ['agents-proxy', 4], 4: ['agents-proxy-handler', 2], 5: ['agents-proxy-cost', 1], 6: ['agents-proxy-handler', 2], 7: ['agents-proxy', 3] },
       ],
     ];
 
