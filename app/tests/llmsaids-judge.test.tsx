@@ -435,14 +435,14 @@ describe('LabelingPage', () => {
     fireEvent.click(within(screen.getByRole('radiogroup', { name: /tone/ })).getByRole('radio', { name: 'Fail' }));
     expect(progress()).toBe('1 of 4 reviewed');
     expect(stored().r002.labels).toEqual(labels(true, false, true));
-    expect(screen.getByText(/changed from the draft/)).toBeTruthy();
+    expect(screen.getByText(/changed from the committed labels/)).toBeTruthy();
     // Confirm r003 as drafted.
     fireEvent.click(screen.getByRole('button', { name: 'Next reply' }));
     fireEvent.click(screen.getByRole('button', { name: /Confirm/ }));
     expect(progress()).toBe('2 of 4 reviewed');
     expect(stored().r003).toEqual({ fp: props.cases[2].fp, labels: props.cases[2].labels });
-    // Back to the draft forgets the review.
-    fireEvent.click(screen.getByRole('button', { name: /Back to the draft/ }));
+    // Back to the committed labels forgets the review.
+    fireEvent.click(screen.getByRole('button', { name: /Back to the committed labels/ }));
     expect(progress()).toBe('1 of 4 reviewed');
     expect(stored().r003).toBeUndefined();
   });
