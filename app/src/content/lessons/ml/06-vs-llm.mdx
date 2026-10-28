@@ -16,19 +16,19 @@ quiz:
     explanation: With 200 complaints, an accuracy can move by about 1/√200, 7.1 points, from which complaints happen to be in the sample. A smaller gap is not evidence. Claude may well be better; showing it would need more complaints, and the sample was kept at 200 to keep the recording cheap.
   - question: v1's median latency is 0.252 ms on the Python server and Claude's is 1,151.5 ms. Why does the lesson call this comparison not like for like?
     options:
-      - The two were measured on different complaints
       - v1's number is arithmetic on a local CPU with the model in memory; Claude's is a network round trip to a remote API, recorded with 8 calls in flight at once
+      - The two were measured on different complaints
       - Claude's number is an estimate, not a measurement
       - The Python server was measured in seconds
-    answer: 1
+    answer: 0
     explanation: The two numbers measure different things. One is local inference over localhost, the other includes the network, the API's queue and the recorder's own concurrency. The gap is real and large, but its exact size depends on your network and setup, so read it as orders of magnitude, not as a ratio to quote.
   - question: You must label 50,000 complaints a day, on a machine whose data may not leave your network, and the six categories have not changed in years. Which fits better?
     options:
       - The LLM, because it scored higher on the sample
-      - The trained model; it runs locally for free in well under a millisecond, the data never leaves the machine, and the stable categories mean labelled data and retraining are not a burden
       - Neither; classification needs a human
       - The LLM with thinking turned on, for accuracy
-    answer: 1
+      - The trained model; it runs locally for free in well under a millisecond, the data never leaves the machine, and the stable categories mean labelled data and retraining are not a burden
+    answer: 3
     explanation: Volume, latency, cost and privacy all favour a small local model, and its accuracy is not distinguishable from the LLM's on this sample. The LLM's strengths, needing no labelled data and adapting to new categories by editing a prompt, matter less when the categories are stable and labels already exist.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -141,7 +141,7 @@ Replay the comparison. It reads the saved answers and costs nothing:
 
 ```bash
 cd ml/python
-python compare_llm.py compare
+../../.venv-ml/bin/python compare_llm.py compare
 ```
 
 You should see:
@@ -178,7 +178,7 @@ print(f"v1 low confidence on {unsure['n']}: v1 right {unsure['v1']}, Claude righ
 ```
 
 ```bash
-python disagree.py
+../../.venv-ml/bin/python disagree.py
 ```
 
 You should see:
@@ -193,4 +193,4 @@ v1 low confidence on 72: v1 right 43, Claude right 56
 
 v1 is right on 162 complaints, 43 of them among the 72 it flagged. So on the 128 it was confident about, it is right 119 times, 93.0%. Send only the 72 flagged complaints to Claude and the combination gets 119 + 56 = 175 right, 87.5%, with 36% of the API calls. That is inside the band of both models, so treat it as an idea to test on more complaints, not a result.
 
-Everything above replays. A live run of all 200 complaints, `python compare_llm.py live`, would cost about $0.02 and ask before calling; nothing in the track needs it.
+Everything above replays. A live run of all 200 complaints, `../../.venv-ml/bin/python compare_llm.py live` from `ml/python`, would cost about $0.02 and ask before calling; nothing in the track needs it.

@@ -16,19 +16,19 @@ quiz:
     explanation: A source you depend on can change or disappear, and this one did. The narratives survive only in an archive. A fixed file with a recorded SHA-256 means anyone can retrain v1 and get the same numbers, whatever happens to the source next.
   - question: In 2024, the sample's explorer shows credit reporting at 46.7% of complaints. What should you conclude about the real 2024 complaint mix?
     options:
-      - Credit reporting was about 47% of real complaints
       - Nothing; the sample's class mix is muted by design (50 a month, at least 5 per category), and the real share in 2024 was 80.0%
+      - Credit reporting was about 47% of real complaints
       - Credit reporting was shrinking
       - The sample is broken and should be redrawn
-    answer: 1
+    answer: 0
     explanation: The floors keep every category big enough to learn and score, at the cost of hiding how the real mix moved. Use the sample for vocabulary and label changes, and the real shares in ml/data/README.md for what the class mix actually did.
   - question: Why train on 2019–2021 and test on 2022, instead of shuffling all four years and holding out a random quarter?
     options:
       - A random split always gives a higher score
-      - A deployed model only ever scores complaints written after its training data, and a time split asks that question; a random split lets training see complaints from the test year
       - Time splits need less data
       - scikit-learn does not support random splits
-    answer: 1
+      - A deployed model only ever scores complaints written after its training data, and a time split asks that question; a random split lets training see complaints from the test year
+    answer: 3
     explanation: The test should imitate how the model is used. A random split mixes 2022 complaints into training, so the test asks how well the model does on years it has already seen. On this sample a random split does not even score higher (0.763 to 0.803 against 0.808), so the reason is the question asked, not the number it gives.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -135,7 +135,7 @@ Section 5 draws the sample.
 - `pool = sorted(..., key=lambda r: int(r["id"]))` sorts before sampling, so the same rows and seed give the same sample whatever order the archive lists them in.
 
 <Callout kind="warning" title="Rebuilding the sample is optional">
-  `python ml/data/fetch_sample.py download --dir DIR` downloads about 711 MB from the CFPB, then `sample --dir DIR` rewrites `complaints.jsonl`. It is free, but nothing in the track needs it: the committed file is the data every lesson's numbers come from.
+  `.venv-ml/bin/python ml/data/fetch_sample.py download --dir DIR` downloads about 711 MB from the CFPB, then `sample --dir DIR` rewrites `complaints.jsonl`. It is free, but nothing in the track needs it: the committed file is the data every lesson's numbers come from.
 </Callout>
 
 ## Try it
@@ -161,7 +161,7 @@ print(text.count("XXXX"), "XXXX marks in", splits["train"][0]["id"])
 
 ```bash
 cd ml/python
-python splits.py
+../../.venv-ml/bin/python splits.py
 ```
 
 You should see:
@@ -202,7 +202,7 @@ for seed in (1, 2, 3):
 ```
 
 ```bash
-python random_split.py
+../../.venv-ml/bin/python random_split.py
 ```
 
 You should see, after a few seconds:

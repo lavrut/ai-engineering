@@ -305,6 +305,9 @@ def production_model() -> dict:
 def build_report(rows: list[dict], generated_by: str) -> dict:
     splits = train.split_by_time(rows)
     model = production_model()
+    if model["trained_on"]["to"] >= train.SPLITS["test"][0]:     # the reference must be unseen data
+        raise ValueError(f"{model['version']} trained on data up to {model['trained_on']['to']}, so the "
+                         f"2022 reference is in-sample for it; monitor a model trained before 2022")
     index = {t: i for i, t in enumerate(model["vocabulary"])}
     words = top_words(splits["train"], model)
     ref = featurize(splits["test"], words, model, index)
@@ -320,7 +323,7 @@ def build_report(rows: list[dict], generated_by: str) -> dict:
     return {"generated_by": generated_by,
             "settings": {"alert_at": ALERT_AT, "epsilon": EPSILON, "min_n": MIN_N,
                          "top_k": TOP_K, "model_version": model["version"],
-                         "reference": "2022 test split (v1 predictions and tokens); words chosen "
+                         "reference": f"2022 test split ({model['version']} predictions and tokens); words chosen "
                                       "from the training split, stop words excluded",
                          "stop_words": sorted(STOP_WORDS)},
             "null": {"reference": "2022 test split. leave-out, stratified like the sample: each "
@@ -349,7 +352,7 @@ def build_report(rows: list[dict], generated_by: str) -> dict:
             "months": monthly_drift(splits["stream"], model, nulls=nulls, **kw),
             "quarters": quarterly_drift(splits["stream"], model, nulls=nulls, **kw),
             "reference_training_in_sample": {
-                "note": "v1 scoring its own training rows (in-sample) as the reference; unseen "
+                "note": f"{model['version']} scoring its own training rows (in-sample) as the reference; unseen "
                         "months then look drifted. Shown to explain why it misleads.",
                 "months": in_sample},
             # The sample is stratified, so its class mix barely moves (README); production's did.

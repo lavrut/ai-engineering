@@ -114,6 +114,18 @@ def test_promote_unknown_version_fails(tmp_path, reg):
         mlops.promote("v1", "shipped", registry=reg, time=T0)
 
 
+def test_promote_never_leaves_no_production(tmp_path, reg):
+    """Moving the production version out of production would leave the servers nothing to load:
+    promote a replacement or roll back instead. The registry is unchanged after the refusal."""
+    mlops.register(fake_model(tmp_path, "v1"), registry=reg, time=T0)
+    mlops.promote("v1", "production", registry=reg, time=T0)
+    before = reg.read_bytes()
+    for stage in ("staging", "archived"):
+        with pytest.raises(ValueError, match="v1 is production"):
+            mlops.promote("v1", stage, registry=reg, time=T0)
+    assert reg.read_bytes() == before
+
+
 def test_register_twice_fails(tmp_path, reg):
     path = fake_model(tmp_path, "v1")
     mlops.register(path, registry=reg, time=T0)
@@ -251,3 +263,11 @@ def test_canonical_commands_reproduce_committed_files(tmp_path, monkeypatch, pin
         assert (tmp_path / rel).read_bytes() == (ML / rel).read_bytes(), rel
     assert sorted(p.name for p in (tmp_path / "runs").iterdir()) == \
         sorted(p.name for p in (ML / "runs").iterdir())
+
+
+def test_time_and_floor_only_where_they_act(tmp_path):
+    """--time is for the commands that write an event, --floor for the gate; elsewhere they are an error."""
+    for argv in (["runs", "--time", "2023-01-01T00:00:00Z"], ["compare", "a", "b", "--floor", "0.4"],
+                 ["experiments", "--floor", "0.4"], ["promote", "v1", "production", "--floor", "0.4"]):
+        with pytest.raises(SystemExit):
+            mlops.main(["--root", str(tmp_path), *argv])

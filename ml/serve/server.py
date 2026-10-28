@@ -2,7 +2,7 @@
 """
 server — the production model behind a small HTTP API (FastAPI).
 
-Contract (the Go server in Task 8 matches it exactly):
+Contract (the Go server, ml/go/main.go, matches it exactly):
 
     GET  /health   -> 200 {"status": "ok", "model_version": "v1"}
     POST /predict  {"text": "..."}
@@ -27,7 +27,8 @@ Request rules (Go matches these):
 - The body must be strict UTF-8 JSON: a BOM or UTF-16/32 is the malformed-body 400.
 - Strict JSON: NaN, Infinity and -Infinity (which Python's json accepts) are the malformed-body
   400 anywhere in the body; so is nesting too deep to parse (never a 5xx).
-- Content-Type is not checked (none, or text/plain, is fine). Extra fields are ignored.
+- Content-Type is not checked (none, or text/plain, is fine). Extra fields are ignored, and
+  never converted: an integer of any length in one is fine.
   Duplicate keys: the last value wins.
 - A lone surrogate escape ("\\ud800") counts as 1 code point and is a token separator in both
   servers (Go reads it as U+FFFD), so the reply is the same.
@@ -138,8 +139,10 @@ def read_text(body: bytes) -> str | None:
     """The "text" field, or None when the body is malformed. We parse by hand so that no
     framework default (the 422 reply) can leak into the contract."""
     try:
-        # strict UTF-8 first (no BOM, no UTF-16), then strict JSON: NaN and Infinity are not JSON
-        data = json.loads(body.decode("utf-8"), parse_constant=_not_json)
+        # strict UTF-8 first (no BOM, no UTF-16), then strict JSON: NaN and Infinity are not JSON.
+        # Integers are never converted (Go never converts a field it ignores, and Python refuses
+        # to convert one over 4,300 digits); 0 is not a str, so an integer "text" is still a 400.
+        data = json.loads(body.decode("utf-8"), parse_constant=_not_json, parse_int=lambda _: 0)
     except (ValueError, RecursionError):            # UnicodeDecodeError is a ValueError;
         return None                                 # very deep nesting must be a 400, not a 500
     text = data.get("text") if isinstance(data, dict) else None

@@ -234,6 +234,8 @@ def promote(version: str, stage: str, *, registry: str | Path = ML_DIR / "regist
     if data["versions"][version]["stage"] == stage:
         raise ValueError(f"{version} is already in {stage}")
     current = production_version(data)
+    if version == current:                          # the servers would have nothing to load
+        raise ValueError(f"{version} is production; promote a replacement or roll back instead")
     if stage == "production" and current:
         _move(data, current, "archived", "archive", time, f"replaced by {version}")
     _move(data, version, stage, "promote", time, note)
@@ -430,9 +432,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--to", dest="end", default=HOLDOUT[1])
     sub.add_parser("retrain", help="train v2, register, gate, promote if it passed").add_argument(
         "--replace", action="store_true", help="overwrite its run file if the contents changed")
-    for p in sub.choices.values():
-        p.add_argument("--time", help="event time (default: now; retrain: the data's date)")
-        p.add_argument("--floor", type=float, default=FLOOR)
+    for name in ("register", "promote", "rollback", "gate", "retrain"):     # the commands that write an event
+        sub.choices[name].add_argument("--time", help="event time (default: now; retrain: the data's date)")
+    for name in ("gate", "retrain"):
+        sub.choices[name].add_argument("--floor", type=float, default=FLOOR)
     args = ap.parse_args(sys.argv[1:] if argv is None else argv)
     root = args.root.resolve()
     reg, runs_dir = root / "registry.json", root / "runs"

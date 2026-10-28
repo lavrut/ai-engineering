@@ -8,27 +8,27 @@ minutes: 20
 quiz:
   - question: The majority baseline scores 43.3% accuracy on 2022 but only 0.101 macro-F1. Why are the two so different?
     options:
-      - Macro-F1 is always about a quarter of accuracy
       - Macro-F1 averages the six categories equally, and the baseline scores F1 0 on the five it never predicts
+      - Macro-F1 is always about a quarter of accuracy
       - The baseline was evaluated on the wrong split
       - Accuracy counts the band and F1 does not
-    answer: 1
+    answer: 0
     explanation: Accuracy counts complaints, so the 260 credit reporting complaints carry the baseline to 43.3%. Macro-F1 gives each category one sixth of the vote. Credit reporting's F1 is about 0.605 and the other five are 0, so the mean is 0.101. Macro shows the model is useless for five categories out of six.
   - question: On 2022, debt collection has precision 0.854 and recall 0.539. What does that mean?
     options:
       - The model finds most debt collection complaints, but many of its debt collection answers are wrong
-      - When the model says debt collection it is usually right, but it misses nearly half of the debt collection complaints
       - Debt collection is the model's best category
       - The test set has too few debt collection complaints to say anything
-    answer: 1
+      - When the model says debt collection it is usually right, but it misses nearly half of the debt collection complaints
+    answer: 3
     explanation: Precision is about the model's answers and recall about the true complaints. 41 of 76 debt collection complaints were found (recall 0.539), and 41 of the 48 debt collection answers were right (precision 0.854). The confusion matrix shows where the misses went; 31 were called credit reporting.
   - question: Logistic regression scores 90.2% on the training years and 80.8% on 2022, with a test band of ±4.1 points. What can you conclude?
     options:
       - Nothing; the difference is noise
-      - The drop of 9.3 points is larger than the band, so it is real; the model fits the complaints it learned from better than new ones, and 2022 is also a different year
       - The test set is mislabelled
+      - The drop of 9.3 points is larger than the band, so it is real; the model fits the complaints it learned from better than new ones, and 2022 is also a different year
       - The model should be trained on the test year too
-    answer: 1
+    answer: 2
     explanation: A gap bigger than the band is evidence. Part of it is overfitting and part is that a later year's complaints differ from the training years'. The time split cannot separate the two, but it measures their sum honestly, which is what deployment will see.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -142,7 +142,7 @@ print(" ", missed[0]["id"], missed[0]["narrative"][:160])
 
 ```bash
 cd ml/python
-python evaluate.py
+../../.venv-ml/bin/python evaluate.py
 ```
 
 You should see:

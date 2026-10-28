@@ -9,10 +9,10 @@ quiz:
   - question: Why does the tokenizer lowercase only the letters A–Z, instead of calling Python's str.lower()?
     options:
       - str.lower() is too slow for 3,600 complaints
-      - Python, Go and the browser must produce exactly the same tokens, and full Unicode case folding differs between languages (Python turns "İ" into two characters)
       - Complaints never contain non-English letters
+      - Python, Go and the browser must produce exactly the same tokens, and full Unicode case folding differs between languages (Python turns "İ" into two characters)
       - Uppercase letters carry no meaning
-    answer: 1
+    answer: 2
     explanation: One token that differs changes the vector, and so the scores. Rules that each language implements identically, with no library behaviour underneath, are the only way to guarantee the same answer everywhere. The cost is that a word like "café" becomes "caf", which an English-language complaint classifier can afford.
   - question: You compute the vocabulary and idf from all 3,600 complaints, then split by year and train on 2019–2021. What is wrong?
     options:
@@ -24,11 +24,11 @@ quiz:
     explanation: The vocabulary and idf are learned from data, so they are part of training. Fit on every year and the vocabulary grows from 5,539 to 7,273 words in Try it. Only 554 of the extra words are new; 1,180 were in a single training complaint and pass min_df = 2 only with help from later years. So leakage changes which training words survive, not just which new words arrive. Fit everything on train and only transform the rest.
   - question: In the training years, "escrow" has idf 4.353 and "the" has idf 1.135. Why?
     options:
-      - The word "escrow" is longer
       - The word "escrow" appears in 62 of the 1,800 training complaints and "the" in 1,573, and idf is larger for words that fewer complaints contain
+      - The word "escrow" is longer
       - The word "escrow" appears more times in total
       - idf is set by hand for important words
-    answer: 1
+    answer: 0
     explanation: idf = ln((1 + n) / (1 + df)) + 1 depends only on df, the number of training complaints containing the word. A word in almost every complaint says little about which category it is, so it is weighted down; a rarer word is weighted up.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -150,7 +150,7 @@ print(len(new), "distinct words in 2023-2024 are not in the vocabulary")
 
 ```bash
 cd ml/python
-python features.py
+../../.venv-ml/bin/python features.py
 ```
 
 You should see:
@@ -194,7 +194,7 @@ print(len(extra), "extra words:", len(extra & seen), "in one training complaint,
 ```
 
 ```bash
-python leak.py
+../../.venv-ml/bin/python leak.py
 ```
 
 You should see:
@@ -205,4 +205,4 @@ fit on all years:  7273 words, leakword in it
 1734 extra words: 1180 in one training complaint, 554 never in training
 ```
 
-Fitting on every year adds 1,734 words. Only 554 of them, `leakword` among them, never occur in the training years. The other 1,180 do occur there, each in a single training complaint, and pass `min_df = 2` only because later complaints use them too. The leak changed which training words the model keeps, not just which new words arrive. Unlike the test, `leak.py` does not reverse the rest of each later complaint, so the later years' real words count here. The full test runs with `python -m pytest tests/test_train.py -k leakage` and prints `1 passed`. All of this is local and free.
+Fitting on every year adds 1,734 words. Only 554 of them, `leakword` among them, never occur in the training years. The other 1,180 do occur there, each in a single training complaint, and pass `min_df = 2` only because later complaints use them too. The leak changed which training words the model keeps, not just which new words arrive. Unlike the test, `leak.py` does not reverse the rest of each later complaint, so the later years' real words count here. The full test runs with `../../.venv-ml/bin/python -m pytest tests/test_train.py -k leakage` (from `ml/python`) and prints `1 passed`. All of this is local and free.

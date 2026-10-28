@@ -9,18 +9,18 @@ quiz:
   - question: Before the first training step, every logistic regression weight is 0 and the loss is 1.7918. Where does that number come from?
     options:
       - It is a random starting value
-      - With all weights 0, every one of the six categories gets probability 1/6, and the loss is −ln(1/6) = ln 6 ≈ 1.7918
       - It is the penalty for C = 1
       - It is the share of credit reporting complaints
-    answer: 1
+      - With all weights 0, every one of the six categories gets probability 1/6, and the loss is −ln(1/6) = ln 6 ≈ 1.7918
+    answer: 3
     explanation: Log-loss is −ln of the probability given to the true category, averaged over the training rows. Equal weights give every category 1/6, whichever is true, so the average is ln 6. Training pushes it down by moving probability towards the right answers.
   - question: With C = 10, logistic regression scores 99.6% on the training years and 78.8% on 2022. With C = 1 it scores 90.2% and 80.8%. What does that show?
     options:
       - C = 10 is better, because its training score is higher
-      - A weaker penalty let the weights fit details of the training complaints that do not carry over to new ones
       - The test year is mislabelled
+      - A weaker penalty let the weights fit details of the training complaints that do not carry over to new ones
       - C has no effect; the difference is noise
-    answer: 1
+    answer: 2
     explanation: C is the inverse strength of the L2 penalty. Raise it and large weights cost almost nothing, so the model can nearly memorise its 1,800 complaints. The training score rises and the test score does not follow. That gap is overfitting.
   - question: Naive Bayes scores 0.774 test macro-F1 and logistic regression 0.769, with a noise band of ±0.041. What should you conclude?
     options:
@@ -138,7 +138,7 @@ for c in (0.1, 1.0, 10.0, 100.0):
 
 ```bash
 cd ml/python
-python sweep.py
+../../.venv-ml/bin/python sweep.py
 ```
 
 You should see, after a few seconds:
@@ -153,4 +153,4 @@ You should see, after a few seconds:
 
 As `C` grows, the training score climbs towards 100% and the test score peaks, then falls. A weaker penalty also takes more iterations, because the weights have further to travel. The test differences between `C = 1` and `C = 10` are inside the ±4.1-point band, so this sweep would not justify a change even if choosing on test were allowed.
 
-To train and export Naive Bayes instead, run `python train.py --model nb --version nb1`. It writes a new file, `ml/models/nb1.json`, in the same format as `v1.json`, and leaves `v1.json` and the reports alone. Git ignores `nb*.json` files in `ml/models/`, so you can keep it or delete it. Everything here runs on your CPU for free.
+To train and export Naive Bayes instead, run `../../.venv-ml/bin/python train.py --model nb --version nb1` from `ml/python`. It writes a new file, `ml/models/nb1.json`, in the same format as `v1.json`, and leaves `v1.json` and the reports alone. Git ignores `nb*.json` files in `ml/models/`, so you can keep it or delete it. Everything here runs on your CPU for free.

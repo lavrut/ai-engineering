@@ -236,6 +236,14 @@ describe('FeatureExplorer', () => {
     act(() => void vi.advanceTimersByTime(DEBOUNCE_MS));
   };
 
+  it('announces only the one-line prediction, not the token list and tables (M9)', () => {
+    const { container } = render(<FeatureExplorer {...p} />);
+    const live = container.querySelectorAll('[aria-live]');
+    expect(live).toHaveLength(1);
+    expect(live[0].textContent).toMatch(/^Predicted: /);
+    expect(live[0].querySelector('table, ul, ol')).toBeNull();
+  });
+
   it('shows the slice disclosure up front', () => {
     render(<FeatureExplorer {...p} />);
     expect(screen.getByRole('note').textContent).toContain(p.model.note);
