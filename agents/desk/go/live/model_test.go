@@ -36,7 +36,7 @@ func (f *fakeProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("content-type", "application/json")
 	if f.status != 0 {
 		w.WriteHeader(f.status)
-		_, _ = io.WriteString(w, `{"type":"error","error":{"type":"replay_miss","message":"no recording for abcd1234; record with: python agents/run.py --engine hand-go --desk single --tickets t001 --mode record"}}`)
+		_, _ = io.WriteString(w, `{"type":"error","error":{"type":"replay_miss","message":"no recording for abcd1234; record with: .venv-agents/bin/python agents/run.py --engine hand-go --desk single --tickets t001 --mode record"}}`)
 		return
 	}
 	n := len(f.bodies) - 1
@@ -124,7 +124,7 @@ func TestModelReplayMissNamesTheCommandAndNeverRetries(t *testing.T) {
 	if err == nil || !asProxyError(err, &pe) || pe.Status != 404 {
 		t.Fatalf("err %v: want a ProxyError 404", err)
 	}
-	if !strings.Contains(err.Error(), "replay miss") || !strings.Contains(err.Error(), "record with: python agents/run.py") {
+	if !strings.Contains(err.Error(), "replay miss") || !strings.Contains(err.Error(), "record with: .venv-agents/bin/python agents/run.py") {
 		t.Fatalf("err %q must say replay miss and carry the record command", err)
 	}
 	if len(fp.bodies) != 1 {

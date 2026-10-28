@@ -17,9 +17,9 @@ export const DESKS: Desk[] = ['single', 'supervisor'];
 export const DESK_LABEL: Record<Desk, string> = { single: 'Single agent', supervisor: 'Supervisor' };
 
 /** Rebuilds the derived files from the traces (free; after any recording). */
-export const AGENTS_DERIVE_COMMAND = 'python agents/derive.py';
+export const AGENTS_DERIVE_COMMAND = '.venv-agents/bin/python agents/derive.py';
 /** Rescores the traces into engine_scores.json (free; replays the judge). */
-export const AGENTS_SCORE_COMMAND = 'python agents/evals/run_evals.py';
+export const AGENTS_SCORE_COMMAND = '.venv-agents/bin/python agents/evals/run_evals.py';
 
 export const isEngine = (x: string): x is Engine => (ENGINES as string[]).includes(x);
 

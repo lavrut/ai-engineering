@@ -13,7 +13,7 @@ let cache: AgentsData | undefined;
 
 /** Fails loudly, naming the file and what writes it, when a file is missing or is not what the aids read. */
 function check<T>(name: string, value: unknown, keys: string[]): T {
-  const writer = name === 'engine_scores' ? 'python agents/evals/run_evals.py' : 'python agents/derive.py';
+  const writer = name === 'engine_scores' ? '.venv-agents/bin/python agents/evals/run_evals.py' : '.venv-agents/bin/python agents/derive.py';
   if (value === undefined) throw new Error(`agentsData: agents/data/derived/${name}.json is missing (${writer} writes it)`);
   if (typeof value !== 'object' || value === null) throw new Error(`agentsData: agents/data/derived/${name}.json is not a JSON object`);
   for (const k of keys) {

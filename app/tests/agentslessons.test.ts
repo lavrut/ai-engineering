@@ -5,7 +5,7 @@ import matter from 'gray-matter';
 import { describe, expect, it } from 'vitest';
 
 // The AI Agents track, lessons 1-6: every number a lesson states that the aid tests do not already pin is
-// pinned here against agents/data/derived/*.json (written by python agents/derive.py and
+// pinned here against agents/data/derived/*.json (written by .venv-agents/bin/python agents/derive.py and
 // agents/evals/run_evals.py, never by hand), and each lesson is checked for the aid it promises. When a
 // re-record changes a number, this test fails and names the lesson to update.
 const here = dirname(fileURLToPath(import.meta.url));

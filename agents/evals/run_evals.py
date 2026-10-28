@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """run_evals — score every engine's desk traces on the same 13 tickets, and pick one for the capstone.
 
-    python agents/evals/run_evals.py                   # score the traces, write agents/data/derived/engine_scores.json
-    python agents/evals/run_evals.py --check           # exit 1 if the committed file differs from the traces
-    python agents/evals/run_evals.py --judge-dry-run   # what recording the judge set would cost; calls nothing
-    python agents/evals/run_evals.py --record-judge    # paid: judge the traces' replies, recording set `judge`
-    python agents/evals/run_evals.py --record-judge --refresh   # paid: re-record every judge call
+    .venv-agents/bin/python agents/evals/run_evals.py                   # score the traces, write agents/data/derived/engine_scores.json
+    .venv-agents/bin/python agents/evals/run_evals.py --check           # exit 1 if the committed file differs from the traces
+    .venv-agents/bin/python agents/evals/run_evals.py --judge-dry-run   # what recording the judge set would cost; calls nothing
+    .venv-agents/bin/python agents/evals/run_evals.py --record-judge    # paid: judge the traces' replies, recording set `judge`
+    .venv-agents/bin/python agents/evals/run_evals.py --record-judge --refresh   # paid: re-record every judge call
 
 The judge set's estimate and recording (--judge-dry-run, --record-judge) live in judge_set.py beside this file.
 
@@ -84,7 +84,7 @@ DESKS = run.DESKS                                 # single, supervisor
 DESK_SETS = {e: run.SETS[f"desk-{e}"] for e in ENGINES}
 JUDGE_SET = "judge"
 JUDGE_MODEL = "claude-haiku-5-5"                  # the lab's judge is claude-opus-5-5; haiku here for cost (R21)
-JUDGE_RECORD = "python agents/evals/run_evals.py --record-judge"
+JUDGE_RECORD = ".venv-agents/bin/python agents/evals/run_evals.py --record-judge"
 DIGITS = 6                                        # rates and dollars are rounded, so the file is stable
 MIN_SUCCESS = 0.7
 
@@ -113,7 +113,7 @@ def load(traces_dir: Path, engine: str, desk: str, ticket_id: str) -> dict | Non
 def record_command(engine: str, desk: str, tickets: list[str] | None = None) -> str:
     """run.py's command for the desk, or for just the missing tickets."""
     which = ",".join(tickets) if tickets else "all"
-    return f"python agents/run.py --engine {engine} --desk {desk} --tickets {which} --mode record"
+    return f".venv-agents/bin/python agents/run.py --engine {engine} --desk {desk} --tickets {which} --mode record"
 
 
 # ── 3. The judge ────────────────────────────────────────────────────────────
@@ -371,7 +371,7 @@ def main(argv: list[str] | None = None, *, traces_dir: Path = TRACES_DIR, store_
         if out.is_file() and out.read_text(encoding="utf-8") == text:
             print(f"{out.name} matches the traces")
             return 0
-        print(f"{out.name} has drifted from the traces; regenerate with: python agents/evals/run_evals.py")
+        print(f"{out.name} has drifted from the traces; regenerate with: .venv-agents/bin/python agents/evals/run_evals.py")
         return 1
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8")

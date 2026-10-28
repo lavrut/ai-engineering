@@ -7,8 +7,8 @@ untrusted-read rule, and one registry the engines add themselves to. Keeping the
 lets the eval score three engines on equal terms.
 
 Run:
-    python agents/desk/python/desk_core.py --write    # regenerate agents/evals/tickets.jsonl
-    python agents/desk/python/desk_core.py --check    # fail if the committed file has drifted
+    .venv-agents/bin/python agents/desk/python/desk_core.py --write    # regenerate agents/evals/tickets.jsonl
+    .venv-agents/bin/python agents/desk/python/desk_core.py --check    # fail if the committed file has drifted
 """
 from __future__ import annotations
 

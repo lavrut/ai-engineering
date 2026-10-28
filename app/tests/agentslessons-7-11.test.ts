@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 // The AI Agents track, lessons 7-11: every number a lesson states is pinned here twice over. The lesson must
 // say it (the exact text), and the source must hold it: agents/data/derived/*.json (written by
-// python agents/derive.py and agents/evals/run_evals.py, never by hand), the committed traces, or the code and
+// .venv-agents/bin/python agents/derive.py and agents/evals/run_evals.py, never by hand), the committed traces, or the code and
 // docs the number comes from. When a re-record changes a number, this test fails and names the lesson to
 // update. The capstone gate's verdict is pinned verbatim.
 const here = dirname(fileURLToPath(import.meta.url));
@@ -175,7 +175,7 @@ describe('lesson 7 (record and replay): the numbers it states', () => {
 
   it('R73: the prune script and the hygiene test the lesson names exist and do what it says', () => {
     const prunePy = text('agents/prune.py');
-    expect(prunePy).toContain('python agents/prune.py --delete');
+    expect(prunePy).toContain('.venv-agents/bin/python agents/prune.py --delete');
     expect(prunePy).toContain('"skip": f"incomplete (');
     expect(prunePy).toContain('{total} to delete in all; dry run: nothing deleted');
     const hygiene = text('agents/tests/test_data_hygiene.py');
@@ -650,7 +650,7 @@ describe('lesson 11 (capstone): the verdict and the numbers it states', () => {
 
   it('the record commands it prints are the sets\' own (paid, with the approval note)', () => {
     for (const e of ENGINES) says('11-capstone', `.venv-agents/bin/python agents/run.py --set desk-${e} --mode record --max-cost 10`);
-    for (const e of ENGINES) expect(sets.sets[`desk-${e}`].record).toBe(`python agents/run.py --set desk-${e} --mode record --max-cost 10`);
+    for (const e of ENGINES) expect(sets.sets[`desk-${e}`].record).toBe(`.venv-agents/bin/python agents/run.py --set desk-${e} --mode record --max-cost 10`);
     says('11-capstone', '.venv-agents/bin/python agents/evals/run_evals.py --record-judge --max-cost 10');
     says('11-capstone', '**These commands call the Claude API and cost money.**');
     expect(proxyPy).toContain('answer = input("Make these paid calls? [y/N] ")');

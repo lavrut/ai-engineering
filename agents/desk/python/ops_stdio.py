@@ -9,7 +9,7 @@ about the learner-facing deployment, which stays HTTP-only (with OAuth) for ever
 it and changes nothing there (ruling R48).
 
 Run (by the Go engine, never by hand):
-    python agents/desk/python/ops_stdio.py --labels PATH
+    .venv-agents/bin/python agents/desk/python/ops_stdio.py --labels PATH
 """
 from __future__ import annotations
 

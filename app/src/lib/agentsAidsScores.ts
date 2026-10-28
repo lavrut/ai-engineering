@@ -123,7 +123,7 @@ function rowView(engine: Engine, desk: Desk, r: ScoreRowJson, min: number): Scor
     meanCost: usd(r.mean_cost_usd),
     p50: ms(r.p50_ms),
     costBasis: r.cost_basis,
-    command: r.status === 'complete' ? null : withRebuild(r.record ?? `python agents/run.py --set desk-${engine} --mode record --max-cost 10`, AGENTS_SCORE_COMMAND, AGENTS_DERIVE_COMMAND),
+    command: r.status === 'complete' ? null : withRebuild(r.record ?? `.venv-agents/bin/python agents/run.py --set desk-${engine} --mode record --max-cost 10`, AGENTS_SCORE_COMMAND, AGENTS_DERIVE_COMMAND),
     value: { success: r.success_rate, band: r.band },
   };
 }

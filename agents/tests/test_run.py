@@ -148,7 +148,7 @@ def test_dry_run_shape(name, capsys, dirs):
     assert "--max-calls" in out
     assert "prices $0.10 input / $0.50 output per million tokens" in out
     # R71: the printed record command never carries --yes, so a pasted command still asks y/N
-    assert f"  python agents/run.py --set {name} --mode record --max-cost 10\n" in out
+    assert f"  .venv-agents/bin/python agents/run.py --set {name} --mode record --max-cost 10\n" in out
     assert "--yes" not in out
     assert "Dry run: nothing was called." in out
     assert not dirs["store"].exists() and not dirs["traces"].exists()
@@ -215,14 +215,14 @@ def test_replay_miss_names_the_right_record_command(dirs, capsys):
     out = capsys.readouterr()
     text = out.out + out.err
     assert "replay miss" in text
-    assert "record with: python agents/run.py --engine hand --desk pattern:chain --tickets t001 --mode record" in text
+    assert "record with: .venv-agents/bin/python agents/run.py --engine hand --desk pattern:chain --tickets t001 --mode record" in text
     assert not (dirs["traces"] / "patterns" / "hand-chain-t001.json").exists()   # an incomplete run writes no trace
 
 
 def test_replay_miss_command_keeps_a_raised_max_calls(dirs, capsys):
     assert go(["--engine", "hand", "--desk", "single", "--tickets", "t007", "--max-calls", "14"], dirs) == 1
     text = "".join(capsys.readouterr())
-    assert "record with: python agents/run.py --engine hand --desk single --tickets t007 --mode record --max-calls 14" in text
+    assert "record with: .venv-agents/bin/python agents/run.py --engine hand --desk single --tickets t007 --mode record --max-calls 14" in text
 
 
 def _trace_files(d: Path) -> dict[str, str]:
@@ -533,7 +533,7 @@ def test_absorbed_replay_miss_is_incomplete(dirs, monkeypatch, capsys):
     monkeypatch.setitem(core.ENGINES, "hand", core.Engine(single=_absorbing(1), supervisor=_absorbing(1)))
     assert go(["--engine", "hand", "--desk", "single", "--tickets", "t001"], dirs) == 1
     out = capsys.readouterr().out
-    assert "replay miss; record with: python agents/run.py --engine hand --desk single --tickets t001 --mode record" in out
+    assert "replay miss; record with: .venv-agents/bin/python agents/run.py --engine hand --desk single --tickets t001 --mode record" in out
     assert not list((dirs["traces"] / "desk-hand").glob("*.json"))
 
 
@@ -610,7 +610,7 @@ def test_refresh_dry_run_says_every_call_is_paid(dirs, capsys):
     out = capsys.readouterr().out
     assert "every call is paid" in out and "every call is paid" not in plain
     assert "--tickets" in out.split("--refresh:")[1].splitlines()[0]     # refresh only the failed tickets
-    assert "  python agents/run.py --set desk-sdk --mode record --refresh --max-cost 10\n" in out and "--yes" not in out   # R71
+    assert "  .venv-agents/bin/python agents/run.py --set desk-sdk --mode record --refresh --max-cost 10\n" in out and "--yes" not in out   # R71
     # the estimate is unchanged: it already assumes every call is paid
     pick = lambda text: [l for l in text.splitlines() if "typical cost $" in l]   # noqa: E731
     assert pick(out) == pick(plain)

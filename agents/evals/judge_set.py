@@ -96,5 +96,5 @@ def record_judge(args: argparse.Namespace, traces_dir: Path, store_dir: Path, tr
     if cap_hit:
         print("Stopped by the cost cap; the judge set is incomplete. Recordings so far are saved.")
         return 3
-    print("Now rescore: python agents/evals/run_evals.py")
+    print("Now rescore: .venv-agents/bin/python agents/evals/run_evals.py")
     return 0

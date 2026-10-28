@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """run — one command runs any engine on any desk, through the record/replay proxy, and writes the traces.
 
-    python agents/run.py --engine hand|hand-go|langgraph|sdk --desk pattern:<name>|pattern:all|single|supervisor|all
-                         [--tickets all|<id>[,<id>...]] [--mode replay|record] [--refresh] [--dry-run] [--yes]
-                         [--max-cost N] [--max-calls N]
-    python agents/run.py --set patterns|patterns-go|desk-hand|desk-langgraph|desk-sdk [...]
+    .venv-agents/bin/python agents/run.py --engine hand|hand-go|langgraph|sdk --desk pattern:<name>|pattern:all|single|supervisor|all
+                                            [--tickets all|<id>[,<id>...]] [--mode replay|record] [--refresh] [--dry-run] [--yes]
+                                            [--max-cost N] [--max-calls N]
+    .venv-agents/bin/python agents/run.py --set patterns|patterns-go|desk-hand|desk-langgraph|desk-sdk [...]
 
 Replay (the default) is free: each ticket gets its own proxy run (R25) answering from
 agents/data/recordings/<set>/, and a request with no recording stops the run with the command that records it.
@@ -55,7 +55,7 @@ from lumen_core import LABELS_PATH  # noqa: E402  (mcp/data/labels.jsonl, git-ig
 # ── 1. One ticket, one proxy run ────────────────────────────────────────────
 def record_command(engine_name: str, desk: str, ticket_id: str, max_calls: int | None) -> str:
     """The command that records exactly this run (named in a replay miss)."""
-    cmd = f"python agents/run.py --engine {engine_name} --desk {desk} --tickets {ticket_id} --mode record"
+    cmd = f".venv-agents/bin/python agents/run.py --engine {engine_name} --desk {desk} --tickets {ticket_id} --mode record"
     return cmd + (f" --max-calls {max_calls}" if max_calls is not None else "")
 
 
@@ -226,10 +226,10 @@ def set_command(args: argparse.Namespace, spec: SetSpec, desks: tuple[str, ...],
     """The exact record command for what this invocation selected. R71: never with --yes, so a pasted command still
     asks y/N; --yes is for a scripted run after the user approved the estimate."""
     if args.set_name and tickets == spec.tickets:
-        cmd = f"python agents/run.py --set {spec.name}"
+        cmd = f".venv-agents/bin/python agents/run.py --set {spec.name}"
     else:
         desk = args.desk if not args.set_name else ("pattern:all" if desks[0].startswith("pattern:") else "all")
-        cmd = f"python agents/run.py --engine {spec.engine} --desk {desk} --tickets {','.join(tickets) if tickets != spec.tickets else 'all'}"
+        cmd = f".venv-agents/bin/python agents/run.py --engine {spec.engine} --desk {desk} --tickets {','.join(tickets) if tickets != spec.tickets else 'all'}"
     cmd += " --mode record" + (" --refresh" if args.refresh else "") + f" --max-cost {args.max_cost:g}"
     if args.max_calls is not None:
         cmd += f" --max-calls {args.max_calls}"

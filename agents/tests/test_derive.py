@@ -237,7 +237,7 @@ def test_sets_shape(world):
     assert doc["judge"]["recordings"] == 0 and doc["judge"]["missing"] == 2
     assert "missing" in doc["about"]
     assert "orphans" in doc["about"] and "distinct" in doc["about"]["recordings"]
-    assert doc["sets"]["desk-hand"]["replay"] == "python agents/run.py --set desk-hand"
+    assert doc["sets"]["desk-hand"]["replay"] == ".venv-agents/bin/python agents/run.py --set desk-hand"
 
 
 # ── excerpts ────────────────────────────────────────────────────────────────
@@ -303,7 +303,7 @@ def test_excerpt_with_closed_fences_is_unchanged():
 def test_missing_trace_is_recorded_false_with_command(world):
     docs = build(world)
     pat = docs["patterns.json"]["patterns"]["chain"]["t007"]["hand-go"]
-    assert pat == {"recorded": False, "command": "python agents/run.py --engine hand-go --desk pattern:chain "
+    assert pat == {"recorded": False, "command": ".venv-agents/bin/python agents/run.py --engine hand-go --desk pattern:chain "
                                                  "--tickets t007 --mode record --max-cost 10"}
     tr = docs["traces.json"]["runs"]["supervisor"]["sdk"]["t061"]
     assert tr["recorded"] is False and "--engine sdk --desk supervisor --tickets t061" in tr["command"]
@@ -317,7 +317,7 @@ def test_missing_trace_is_recorded_false_with_command(world):
 def test_empty_world_is_all_recorded_false(tmp_path):
     docs = derive.build(tmp_path / "none", tmp_path / "none", None)
     cell = docs["patterns.json"]["patterns"]["route"]["t001"]["hand"]
-    assert cell["recorded"] is False and cell["command"].startswith("python agents/run.py")
+    assert cell["recorded"] is False and cell["command"].startswith(".venv-agents/bin/python agents/run.py")
     assert docs["sets.json"]["sets"]["desk-sdk"]["runs"] == 0
     assert docs["sets.json"]["sets"]["desk-sdk"]["recorded_cost_usd"] is None
 

@@ -496,7 +496,7 @@ def test_no_traces_is_not_recorded_with_the_record_command(tmp_path):
         for desk in ("single", "supervisor"):
             row = out["scores"][engine][desk]
             assert row["status"] == "not recorded"
-            assert row["record"] == f"python agents/run.py --engine {engine} --desk {desk} --tickets all --mode record"
+            assert row["record"] == f".venv-agents/bin/python agents/run.py --engine {engine} --desk {desk} --tickets all --mode record"
             assert row["success_rate"] is None and row["complete"] == 0 and row["n"] == 13
 
 
