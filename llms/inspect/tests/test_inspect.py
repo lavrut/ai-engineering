@@ -409,3 +409,71 @@ def test_printed_command_verbatim_writes_to_repo_logs():
     finally:
         for f in new:
             f.unlink()
+
+
+# ── the live path: priced and gated ─────────────────────────────────────────
+# A model that is not replay/ pays real money. Inspect has no y/N, so the task refuses it unless the
+# learner has priced the run and set LUMEN_LIVE_OK=1. "paidfake" stands in for anthropic/: it counts calls.
+from inspect_ai.model import ModelAPI, ModelOutput, modelapi  # noqa: E402
+
+PAID_CALLS = []
+
+
+@modelapi(name="paidfake")
+class PaidFake(ModelAPI):
+    def __init__(self, model_name, base_url=None, api_key=None, config=GenerateConfig(), **model_args):
+        super().__init__(model_name, base_url, api_key, [], config)
+
+    async def generate(self, input, tools, tool_choice, config):
+        PAID_CALLS.append(config)
+        body = {"category": "billing", "priority": "high", "reply": "We are on it."}
+        if "Rubric:" in input[-1].text:
+            body = {rid: {"pass": True, "reason": "ok"} for rid in lab.RUBRIC_IDS}
+        return ModelOutput.from_content(model=self.model_name, content=json.dumps(body))
+
+
+@pytest.fixture
+def paid(monkeypatch):
+    monkeypatch.delenv(ti.LIVE_OK, raising=False)
+    PAID_CALLS.clear()
+    return PAID_CALLS
+
+
+def all_errors(log):
+    return str(log.error) + " ".join(str(s.error) for s in log.samples or [])
+
+
+def test_live_task_model_refused_without_approval(tmp_path, paid):
+    log = inspect_eval(ti.triage(variant="v1_basic", split="test"), model="paidfake/claude-haiku-5-5",
+                       log_dir=str(tmp_path), display="none", limit=3)[0]
+    assert paid == []                                    # nothing was called
+    assert log.status == "error"
+    assert ti.LIVE_OK in all_errors(log) and "summarize.py --estimate" in all_errors(log)
+
+
+def test_live_grader_refused_without_approval(tmp_path, paid):
+    log = inspect_eval(ti.triage_judged(), model="replay/claude-haiku-5-5", model_roles={"grader": "paidfake/claude-opus-5-5"},
+                       log_dir=str(tmp_path), display="none", limit=3)[0]
+    assert paid == [] and log.status == "error" and ti.LIVE_OK in all_errors(log)
+
+
+def test_live_model_runs_once_approved_and_sends_no_replay_header(tmp_path, paid, monkeypatch):
+    monkeypatch.setenv(ti.LIVE_OK, "1")
+    log = inspect_eval(ti.triage(variant="v1_basic", split="test"), model="paidfake/claude-haiku-5-5",
+                       log_dir=str(tmp_path), display="none", limit=2)[0]
+    assert log.status == "success" and len(paid) == 2
+    assert all(ti.REP_HEADER not in (c.extra_headers or {}) for c in paid)   # the test seam stays local
+
+
+def test_estimate_prices_the_live_runs_without_running_them(capsys, monkeypatch):
+    monkeypatch.setattr(summarize, "run_evals", lambda log_dir: pytest.fail("--estimate must not run an eval"))
+    assert summarize.main(["--estimate"]) == 0
+    out = capsys.readouterr().out
+    # 180 Haiku calls x (900 x $0.10 + 700 x $0.50) / 1M; the judge is 20 Opus calls x (1,400 x $4 + 900 x $20) / 1M
+    assert "v2_rules     triage  claude-haiku-5-5   180 calls  $0.0792  worst $0.1962" in out
+    assert "judge        judge   claude-opus-5-5     20 calls  $0.4720  worst $0.9120" in out
+    assert "Total for all four: $0.6128 (worst $1.2608)" in out
+    assert summarize.main(["--estimate", "--model", "anthropic/claude-sonnet-5-5"]) == 0
+    assert "claude-sonnet-5-5  180 calls  $1.5840" in capsys.readouterr().out
+    assert summarize.main(["--estimate", "--model", "anthropic/claude-nope"]) == 1
+    assert 'no price for model "claude-nope"' in capsys.readouterr().out

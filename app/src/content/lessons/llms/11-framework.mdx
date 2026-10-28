@@ -120,14 +120,14 @@ Section 6 holds the judge scorer.
 - `@metric def graded_mean()` averages only the graded samples. A plain `mean()` would count the skipped ones as fails, and the pass rates would drop below the lab's.
 - `@scorer(metrics={rid: [graded_mean()] for rid in RUBRIC_IDS})` gives one pass rate per criterion: `addresses_issue`, `tone` and `no_false_promises`.
 
-Section 7 sets `fail_on_error=0.5` on both tasks. A few saved error lines are left out of the score, as in the lab. An edited prompt makes most samples miss, so more than half error, and the eval fails loudly with the record hint. Inspect's default would stop on the first error, and `False` would hide a total miss behind a "success".
+Section 7 sets `fail_on_error=0.5` on both tasks. A few saved error lines are left out of the score, as in the lab. An edited prompt makes most samples miss, so more than half error, and the eval fails loudly with the record hint. Inspect's default would stop on the first error, and `False` would hide a total miss behind a "success". Loudly means on screen and in the log's status: `inspect eval` still exits 0 after a failed task, so a CI job should check with `summarize.py`, which exits 1 when a score stops matching.
 
 <Callout kind="go" title="No Go version">
   Inspect is a Python library, and there is no Go equivalent. The lab's Go version in `llms/go/main.go` is unchanged, and it remains the parity check: it gives the same scores from the same saved responses, which Inspect now matches too. So this lesson has no "How Go does it" section.
 </Callout>
 
 <Callout kind="warning" title="Replay is not the live path">
-  Everything here is free. The live path swaps `replay/` for `anthropic/` in `--model`, and Inspect then calls the API itself. That costs money, and Inspect has none of the lab's cost estimate, approval prompt or run-wide spend cap. Check the estimate from the lab first, as the next section shows.
+  Everything here is free. The live path swaps `replay/` for `anthropic/` in `--model`, and Inspect then calls the API itself. That costs money, and Inspect has none of the lab's cost estimate, approval prompt or run-wide spend cap. So `triage_inspect.py` refuses any model that is not `replay/`, as the task model or the grader, unless `LUMEN_LIVE_OK=1` is set. Price the run first, as the next section shows.
 </Callout>
 
 ## Try it
@@ -183,24 +183,26 @@ Add a few words to the end of the `v1_basic` text under `triage` in `~/lumen-ins
 .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model replay/claude-haiku-5-5 -T variant=v1_basic -M root=$HOME/lumen-inspect --log-dir llms/inspect/logs
 ```
 
-Every sample misses, so the eval stops with `ReplayMiss: no saved response for claude-haiku-5-5: unknown system prompt ... Record it: python triage_lab.py record ...`. It names the case and the lab's record command, and it never calls the API.
+The solver still sends the original `v1_basic` text, because it reads the prompts from `llms/data`; `-M root` only points the provider at the copy. The provider's prompt table no longer holds that text, so every sample misses, and the eval stops with `ReplayMiss: no saved response for claude-haiku-5-5: unknown system prompt ... Record it: python triage_lab.py record ...`. It names the case and the lab's record command, and it never calls the API. The command still exits 0, so read the screen or the log's status, not the exit code.
 
 ### The live path (costs money)
 
-Do not run this without checking the cost. The lab prints the estimate for the same run and asks first. From `llms/python`, answering `N` spends nothing:
+Any model that is not `replay/...`, as `--model` or as `--model-role grader=`, calls the API and costs money. Price the run before you run it. This is free and calls nothing:
 
 ```bash
-python triage_lab.py run --prompt v2_rules --split all --reps 3 --mode live
+.venv-inspect/bin/python llms/inspect/summarize.py --estimate
 ```
 
-It prints the estimate and the worst case, then `Make these paid calls? [y/N]`. If you accept the cost, the same run in Inspect is:
+It prints each of the four runs with its calls and dollars, from the lab's `PRICES` and typical tokens per call (`EST_TOKENS`), the same figures the lab's own estimate uses. The `v2_rules` run over 3 epochs is 60 tickets × 3 = 180 Haiku calls. At 900 input and 700 output tokens a call and $0.10 / $0.50 per million, that is 180 × $0.00044 = $0.0792, about $0.08 (worst case $0.20, if every reply uses all 2,000 `max_tokens`). The judged run adds 20 Opus grader calls, about $0.47 (worst case $0.91). Add `--model anthropic/<model>` or `--grader anthropic/<model>` to price another model.
+
+If you accept the cost, approve that one run by putting `LUMEN_LIVE_OK=1` in front of it. Without it the task refuses the paid model, and nothing is called:
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-.venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model anthropic/claude-haiku-5-5 -T variant=v2_rules --epochs 3 --log-dir llms/inspect/logs
+read -rs ANTHROPIC_API_KEY && export ANTHROPIC_API_KEY
+LUMEN_LIVE_OK=1 .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model anthropic/claude-haiku-5-5 -T variant=v2_rules --epochs 3 --log-dir llms/inspect/logs
 ```
 
-This calls the API and costs money. With stdin closed, the lab prints its figures: about $0.08 for the `v2_rules` run over 3 epochs (worst case $0.20). The judged run adds the Opus grader, about $0.47 (worst case $0.91). Inspect has no estimate and no `y/N` prompt. It does have `--cost-limit`, a dollar limit on each sample, and `--token-limit`, but neither is the lab's `--max-cost` cap on the whole run, so hold yourself to the number the lab printed.
+`read -rs` takes the key without echoing it, so it never lands in your shell history. The approval is yours, not a prompt: Inspect has no `y/N`. It does have `--cost-limit`, a dollar limit on each sample, and `--token-limit`, but neither is the lab's `--max-cost` cap on the whole run, so hold yourself to the number the estimate printed.
 
 <Callout kind="note" title="When to reach for a framework">
   A framework earns its place when you run many evals, share them with a team, or want logs and a viewer for free. The hand-built lab earns its place when you need to know exactly why a number is what it is. Here you used both: the lab as the check, Inspect as the tool.

@@ -86,7 +86,7 @@ cd llms/go && go test ./...
 `--mode record` (on `run` or `judge`) and the `record` command call the API and append to `llms/data/responses/`. Every paid run first prints the estimated cost, the worst case if every reply uses `max_tokens`, and the `--max-cost` cap (default $10), then asks for approval; nothing is called without a `y` or `--yes`. A run stops at the cap and keeps what finished; requests already recorded are skipped.
 
 ```sh
-export ANTHROPIC_API_KEY=sk-ant-...
+read -rs ANTHROPIC_API_KEY && export ANTHROPIC_API_KEY    # paste the key; it is not echoed or kept in shell history
 .venv-llms/bin/python llms/python/triage_lab.py run --prompt v2_rules --model claude-sonnet-5-5 --effort medium --mode record
 .venv-llms/bin/python llms/python/triage_lab.py record --plan all --max-cost 10    # the full recording plan
 ```
@@ -110,7 +110,15 @@ python3 -m venv .venv-inspect
 .venv-inspect/bin/python -m pytest llms/inspect/tests -q          # the parity tests
 ```
 
-`summarize.py` exits non-zero if an Inspect score stops matching the lab's. Logs go to `llms/inspect/logs/`; only the summary is committed. The live path (`--model anthropic/claude-haiku-5-5`) costs money: get the estimate first from `.venv-llms/bin/python llms/python/triage_lab.py run --prompt v2_rules --split all --reps 3 --mode live` and answer `N` to the prompt (it prints about $0.08, worst case $0.20; the judged run's Opus grader adds about $0.47, worst case $0.91).
+`summarize.py` exits non-zero if an Inspect score stops matching the lab's. Logs go to `llms/inspect/logs/`; only the summary is committed.
+
+**The live path costs money.** Any model that is not `replay/...`, as `--model` or as the grader role (`anthropic/claude-haiku-5-5`, say), calls the API and pays for it. Inspect has no estimate and no y/N prompt, so the task refuses a non-replay model unless `LUMEN_LIVE_OK=1` is set. Price the run first; this is free and calls nothing:
+
+```sh
+.venv-inspect/bin/python llms/inspect/summarize.py --estimate     # add --model / --grader anthropic/<model> to price another model
+```
+
+It prints calls × the lab's `PRICES` per run: the `v2_rules` run over 3 epochs is 180 Haiku calls, about $0.08 (worst case $0.20), and the judged run's Opus grader adds about $0.47 (worst case $0.91). If you accept the cost, run that one command with the approval in front (`LUMEN_LIVE_OK=1 .venv-inspect/bin/inspect eval ... --model anthropic/claude-haiku-5-5 ...`). There is no run-wide spend cap: Inspect's `--cost-limit` applies to each sample.
 
 ### LoRA on Colab
 
