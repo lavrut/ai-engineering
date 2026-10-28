@@ -596,7 +596,7 @@ describe('narrow-screen rules', () => {
   });
 
   it('makes a markdown table in a lesson scroll inside its own box', () => {
-    const shell = readFileSync(join(here, '../src/layouts/AppShell.astro'), 'utf8');
+    const shell = readFileSync(join(here, '../src/styles/global.css'), 'utf8'); // AppShell.astro's global styles
     expect(shell).toMatch(/\.prose > table \{[^}]*display: block;[^}]*overflow-x: auto;/);
   });
 });
