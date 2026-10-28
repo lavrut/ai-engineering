@@ -43,6 +43,7 @@ def v(rule, fld, ok, detail):
 ARABIC_THREE, NBSP, VTAB = chr(0x663), chr(0xA0), chr(0x0B)  # Unicode digit, no-break space, \v
 FRESH = v("freshness", None, True, "unknown: no git date")
 ID = [field("id", "integer", True)]
+KEY = [field("desk"), field("ticket")]
 
 
 def case(name, con, expect, rows=None, dataset=None, age_days=None):
@@ -130,6 +131,21 @@ def cases() -> list[dict]:
              [FRESH, v("required", "id", True, "present in 3 rows"), v("type", "id", True, "all values are integer"),
               v("unique", "id", False, "row 3: duplicate of row 1")],
              rows=[{"id": 1}, {"id": 2}, {"id": 1}]),
+        # ruling D8: `unique` lists one composite key; the tuple must be unique, and a row lacking a key field fails
+        case("composite-key-distinct", contract(KEY, {"unique": ["desk", "ticket"]}),
+             [FRESH, v("type", "desk", True, "all values are string"), v("type", "ticket", True, "all values are string"),
+              v("unique", "desk,ticket", True, "3 rows, no duplicates")],
+             rows=[{"desk": "a", "ticket": "t1"}, {"desk": "b", "ticket": "t1"}, {"desk": "a", "ticket": "t2"}]),
+        case("composite-key-duplicate", contract(KEY, {"unique": ["desk", "ticket"]}),
+             [FRESH, v("type", "desk", True, "all values are string"), v("type", "ticket", True, "all values are string"),
+              v("unique", "desk,ticket", False, "row 4: duplicate of row 1")],
+             rows=[{"desk": "a", "ticket": "t1"}, {"desk": "b", "ticket": "t1"}, {"desk": "a", "ticket": "t2"},
+                   {"desk": "a", "ticket": "t1"}]),
+        case("unique-row-missing-key-field", contract(KEY, {"unique": ["desk", "ticket"]}),
+             [FRESH, v("type", "desk", True, "all values are string"), v("type", "ticket", True, "all values are string"),
+              v("unique", "desk,ticket", False, "row 2: missing key field ticket (+2 more)")],
+             rows=[{"desk": "a", "ticket": "t1"}, {"desk": "b", "ticket": None}, {"ticket": "t2"},
+                   {"desk": "a", "ticket": "t1"}]),
         case("enum-not-covered", contract([field("kind", enum=["cat", "dog", "fish"])], {"enum_coverage": ["kind"]}),
              [v("enum", "kind", True, "all values in enum"),
               v("enum_coverage", "kind", False, 'missing values: "dog", "fish"'),

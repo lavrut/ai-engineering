@@ -20,7 +20,8 @@ A contract has exactly five sections:
     schema     fields: name, type, required, meaning, and enum or pattern where it applies
                (a pattern is a full match in the allow-list grammar of ruling D7, written in
                data/fixtures/README.md; \\d \\w \\s are ASCII; anything else is refused)
-    quality    row_count {min, max}, unique [fields], enum_coverage [fields]
+    quality    row_count {min, max}, unique [fields] (one composite key, its verdict field
+               the names joined by ","), enum_coverage [fields]
     servicing  freshness {max_age_days}
     consumers  name, version, reads
 """
@@ -584,18 +585,22 @@ def _quality_rules(quality: dict, fields: dict[str, dict], rows: list[dict]) -> 
             out.append(_verdict("row_count", None, False, f"{_plural(n)}, above max {hi}"))
         else:
             out.append(_verdict("row_count", None, True, f"{_plural(n)} ({bounds})"))
-    for name in quality.get("unique", []):
+    key_fields = quality.get("unique", [])
+    if key_fields:
+        # ruling D8: the listed fields are ONE composite key; a row lacking any of them fails
         first: dict[str, int] = {}
         fails = []
         for i, r in enumerate(rows, 1):
-            if not _present(r, name):
+            missing = [n for n in key_fields if not _present(r, n)]
+            if missing:
+                fails.append(f"row {i}: missing key field {missing[0]}")
                 continue
-            key = _show(r[name])
+            key = _show([r[n] for n in key_fields])
             if key in first:
                 fails.append(f"row {i}: duplicate of row {first[key]}")
             else:
                 first[key] = i
-        out.append(_verdict("unique", name, *_first(fails, f"{_plural(len(rows))}, no duplicates")))
+        out.append(_verdict("unique", ",".join(key_fields), *_first(fails, f"{_plural(len(rows))}, no duplicates")))
     for name in quality.get("enum_coverage", []):
         seen = {_show(r[name]) for r in rows if _present(r, name)}
         missing = [_show(e) for e in fields[name]["enum"] if _show(e) not in seen]

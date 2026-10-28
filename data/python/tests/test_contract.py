@@ -96,6 +96,17 @@ def test_unique_key():
     assert v("unique", "id", True, "2 rows, no duplicates") in C.validate(c, [{"id": 1}, {"id": 2}])
 
 
+def test_unique_is_one_composite_key():
+    """Ruling D8: the listed fields form one key; each field may repeat on its own."""
+    c = make([f("a"), f("b", "integer")], {"unique": ["a", "b"]})
+    out = C.validate(c, [{"a": "x", "b": 1}, {"a": "x", "b": 2}, {"a": "y", "b": 1}])
+    assert [x for x in out if x["rule"] == "unique"] == [v("unique", "a,b", True, "3 rows, no duplicates")]
+    out = C.validate(c, [{"a": "x", "b": 1}, {"a": "x"}, {"b": 1}, {"a": "x", "b": 1}])
+    assert v("unique", "a,b", False, "row 2: missing key field b (+2 more)") in out
+    out = C.validate(make([f("id", "integer")], {"unique": ["id"]}), [{"id": 1}, {}])
+    assert v("unique", "id", False, "row 2: missing key field id") in out
+
+
 def test_enum_coverage():
     c = make([f("s", enum=["a", "b", "c"])], {"enum_coverage": ["s"]})
     assert v("enum_coverage", "s", False, 'missing values: "b", "c"') in C.validate(c, [{"s": "a"}])

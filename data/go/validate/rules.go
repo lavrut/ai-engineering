@@ -233,14 +233,21 @@ func qualityVerdicts(c *Contract, rows []*Object) []Verdict {
 			out = append(out, verdict("row_count", nil, true, plural(len(rows))+" ("+strings.Join(bounds, ", ")+")"))
 		}
 	}
-	for _, name := range c.Unique {
+	if len(c.Unique) > 0 {
+		// ruling D8: the listed fields are ONE composite key; a row lacking any of them fails
 		seen := map[string]int{}
 		var fails []string
+	rowLoop:
 		for i, r := range rows {
-			if !present(r, name) {
-				continue
+			parts := make([]string, len(c.Unique))
+			for k, name := range c.Unique {
+				if !present(r, name) {
+					fails = append(fails, fmt.Sprintf("row %d: missing key field %s", i+1, name))
+					continue rowLoop
+				}
+				parts[k] = Show(r.Vals[name])
 			}
-			key := Show(r.Vals[name])
+			key := strings.Join(parts, "\x00")
 			if j, dup := seen[key]; dup {
 				fails = append(fails, fmt.Sprintf("row %d: duplicate of row %d", i+1, j))
 			} else {
@@ -248,6 +255,7 @@ func qualityVerdicts(c *Contract, rows []*Object) []Verdict {
 			}
 		}
 		ok, d := first(fails, plural(len(rows))+", no duplicates")
+		name := strings.Join(c.Unique, ",")
 		out = append(out, verdict("unique", &name, ok, d))
 	}
 	for _, name := range c.EnumCoverage {

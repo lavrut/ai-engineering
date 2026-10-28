@@ -6,6 +6,7 @@ test should be loosened in passing.
 """
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,7 @@ LIVE = [
     ("complaints.v1.yaml", "ml/data/complaints.jsonl"),
     ("agent-traces.v1.yaml", "agents/data/traces/desk-sdk/sdk-single-t001.json"),
 ]
+AS_OF = date(2026, 10, 28)  # pinned (ruling D10): these tests never read the real clock
 TRACE_FILES = sorted((ROOT / "agents" / "data" / "traces").glob("*/*.json"))
 
 
@@ -32,19 +34,19 @@ def failed(verdicts):
 
 @pytest.mark.parametrize("name,dataset", LIVE)
 def test_three_contracts_hold(name, dataset):
-    verdicts = Q.run(CONTRACTS / name, ROOT / dataset)
+    verdicts = Q.run(CONTRACTS / name, ROOT / dataset, as_of=AS_OF)
     assert verdicts and not failed(verdicts), failed(verdicts)
 
 
 def test_every_trace_file_holds():
     assert len(TRACE_FILES) > 100  # six sets of recorded runs
     for path in TRACE_FILES:
-        bad = failed(Q.run(CONTRACTS / "agent-traces.v1.yaml", path))
+        bad = failed(Q.run(CONTRACTS / "agent-traces.v1.yaml", path, as_of=AS_OF))
         assert not bad, (path.name, bad)
 
 
 def test_row_counts_are_the_live_ones():
-    rc = {name: next(x for x in Q.run(CONTRACTS / name, ROOT / ds) if x["rule"] == "row_count")["detail"]
+    rc = {name: next(x for x in Q.run(CONTRACTS / name, ROOT / ds, as_of=AS_OF) if x["rule"] == "row_count")["detail"]
           for name, ds in LIVE}
     assert rc == {"tickets.v1.yaml": "60 rows (min 60, max 60)",
                   "complaints.v1.yaml": "3600 rows (min 3600, max 3600)",

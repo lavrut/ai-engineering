@@ -35,7 +35,7 @@ schema:
     - name: tags
       type: array
       required: true
-      meaning: free-form labels (strings), often empty
+      meaning: free-form labels, often empty (the contract checks the array, not its items)
     - name: split
       type: string
       required: true

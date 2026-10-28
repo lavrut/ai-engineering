@@ -73,7 +73,7 @@
     "type": "string"
    },
    {
-    "meaning": "free-form labels (strings), often empty",
+    "meaning": "free-form labels, often empty (the contract checks the array, not its items)",
     "name": "tags",
     "required": true,
     "type": "array"

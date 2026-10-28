@@ -1,7 +1,8 @@
 {
+ "as_of": "2026-10-28",
  "datasets": {
   "agent-traces/desk-hand": {
-   "age_days": 0.7,
+   "age_days": 0.0,
    "contract": "agent-traces.v1",
    "files": 26,
    "ok": true,
@@ -68,7 +69,7 @@
      "rule": "extra_field"
     },
     {
-     "detail": "26 files: 0.7 days old (max 365)",
+     "detail": "26 files: 0 days old (max 365)",
      "field": null,
      "ok": true,
      "rule": "freshness"
@@ -166,7 +167,7 @@
    ]
   },
   "agent-traces/desk-hand-go": {
-   "age_days": 0.7,
+   "age_days": 0.0,
    "contract": "agent-traces.v1",
    "files": 26,
    "ok": true,
@@ -233,7 +234,7 @@
      "rule": "extra_field"
     },
     {
-     "detail": "26 files: 0.7 days old (max 365)",
+     "detail": "26 files: 0 days old (max 365)",
      "field": null,
      "ok": true,
      "rule": "freshness"
@@ -331,7 +332,7 @@
    ]
   },
   "agent-traces/desk-langgraph": {
-   "age_days": 0.7,
+   "age_days": 0.0,
    "contract": "agent-traces.v1",
    "files": 26,
    "ok": true,
@@ -398,7 +399,7 @@
      "rule": "extra_field"
     },
     {
-     "detail": "26 files: 0.7 days old (max 365)",
+     "detail": "26 files: 0 days old (max 365)",
      "field": null,
      "ok": true,
      "rule": "freshness"
@@ -496,7 +497,7 @@
    ]
   },
   "agent-traces/desk-sdk": {
-   "age_days": 0.7,
+   "age_days": 0.0,
    "contract": "agent-traces.v1",
    "files": 26,
    "ok": true,
@@ -563,7 +564,7 @@
      "rule": "extra_field"
     },
     {
-     "detail": "26 files: 0.7 days old (max 365)",
+     "detail": "26 files: 0 days old (max 365)",
      "field": null,
      "ok": true,
      "rule": "freshness"
@@ -661,7 +662,7 @@
    ]
   },
   "agent-traces/patterns": {
-   "age_days": 0.7,
+   "age_days": 0.0,
    "contract": "agent-traces.v1",
    "files": 15,
    "ok": true,
@@ -728,7 +729,7 @@
      "rule": "extra_field"
     },
     {
-     "detail": "15 files: 0.7 days old (max 365)",
+     "detail": "15 files: 0 days old (max 365)",
      "field": null,
      "ok": true,
      "rule": "freshness"
@@ -826,7 +827,7 @@
    ]
   },
   "agent-traces/patterns-go": {
-   "age_days": 0.7,
+   "age_days": 0.0,
    "contract": "agent-traces.v1",
    "files": 15,
    "ok": true,
@@ -893,7 +894,7 @@
      "rule": "extra_field"
     },
     {
-     "detail": "15 files: 0.7 days old (max 365)",
+     "detail": "15 files: 0 days old (max 365)",
      "field": null,
      "ok": true,
      "rule": "freshness"
@@ -991,7 +992,7 @@
    ]
   },
   "complaints": {
-   "age_days": 2.7,
+   "age_days": 1.8,
    "contract": "complaints.v1",
    "ok": true,
    "path": "ml/data/complaints.jsonl",
@@ -1009,7 +1010,7 @@
      "rule": "enum_coverage"
     },
     {
-     "detail": "2.7 days old (max 365)",
+     "detail": "1.8 days old (max 365)",
      "field": null,
      "ok": true,
      "rule": "freshness"
@@ -1101,7 +1102,7 @@
    ]
   },
   "tickets": {
-   "age_days": 2.9,
+   "age_days": 2.0,
    "contract": "tickets.v1",
    "ok": true,
    "path": "llms/data/tickets.jsonl",
@@ -1137,7 +1138,7 @@
      "rule": "enum_coverage"
     },
     {
-     "detail": "2.9 days old (max 365)",
+     "detail": "2 days old (max 365)",
      "field": null,
      "ok": true,
      "rule": "freshness"
@@ -1234,6 +1235,5 @@
     }
    ]
   }
- },
- "generated": "fb7b38e"
+ }
 }
