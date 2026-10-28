@@ -580,7 +580,8 @@ def _register(c: TestClient, redirects: list[str], **headers: str):
 
 
 @pytest.mark.parametrize("redirect", ["http://127.0.0.1:33418/callback", "http://127.0.0.1/cb",
-                                      "http://localhost:6274/oauth/callback", "http://LOCALHOST:1/a/b/c?x=1"])
+                                      "http://localhost:6274/oauth/callback", "http://LOCALHOST:1/a/b/c?x=1",
+                                      "http://[::1]:33418/callback", "http://[::1]/cb"])
 def test_as_registers_loopback_http_redirects(redirect):
     """P5: any port and any path, as long as the scheme is http and the host is 127.0.0.1 or localhost."""
     with _as() as c:
@@ -598,6 +599,12 @@ def test_as_registers_loopback_http_redirects(redirect):
     ["http://localhost.evil.example/cb"],        # a host that only starts with "localhost"
     ["http://127.0.0.1.nip.io/cb"],
     ["http://user@127.0.0.1/cb"],                # userinfo: refused rather than parsed
+    ["http://[::2]/cb"],                         # IPv6, but not the loopback address (P12)
+    ["http://[::1]@evil.example/cb"],            # "[::1]" as userinfo; the host is evil.example
+    ["https://[::1]:33418/callback"],            # https on IPv6 loopback
+    ["http://[0:0:0:0:0:0:0:2]/cb"],
+    ["http://127.0.0.1:33418/callback#frag"],    # a fragment: RFC 6749 section 3.1.2 forbids it
+    ["http://localhost/cb#"],                    # even an empty one
     ["http://127.0.0.1:33418/callback", "https://evil.example/cb"],  # one bad entry spoils the list
 ])
 def test_as_refuses_non_loopback_redirects(redirects):
@@ -620,13 +627,15 @@ def test_as_cors_is_loopback_only(path):
         good = c.options(path, headers={"Origin": "http://localhost:6274", **pre})
         bad = c.options(path, headers={"Origin": "https://evil.example", **pre})
         meta = c.get("/.well-known/oauth-authorization-server", headers={"Origin": "http://127.0.0.1:6274"})
+        v6 = c.options(path, headers={"Origin": "http://[::1]:6274", **pre})  # IPv6 loopback (P12)
     assert good.status_code == 200 and good.headers["access-control-allow-origin"] == "http://localhost:6274"
     assert bad.status_code == 403 and "access-control-allow-origin" not in bad.headers
     assert meta.headers["access-control-allow-origin"] == "http://127.0.0.1:6274"
+    assert v6.status_code == 200 and v6.headers["access-control-allow-origin"] == "http://[::1]:6274"
 
 
 @pytest.mark.parametrize("origin", ["https://evil.example", "http://evil.example", "https://localhost:6274",
-                                    "http://192.168.1.5:8080", "null"])
+                                    "http://192.168.1.5:8080", "null", "http://[::2]:6274", "https://[::1]:6274"])
 def test_as_refuses_requests_from_other_origins(origin):
     """P5: a browser request carrying a non-loopback Origin is refused server-side (403), even a `no-cors` one
     whose response the page could not read, so it registers nothing and redeems nothing."""

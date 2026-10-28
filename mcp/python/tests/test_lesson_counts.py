@@ -1,5 +1,5 @@
 """The MCP lessons tell the learner how many tests a pytest command passes ("We got `8 passed`"). This
-runs each such command from the lessons with --collect-only and checks the count, so adding or removing a
+runs each such command from the lessons and reads the passed count from pytest's summary line, so adding or removing a
 test cannot leave a lesson saying the wrong number again (review finding I2). app/tests/mcplessons.test.ts
 pins the rest of each lesson's numbers."""
 from __future__ import annotations
@@ -34,9 +34,13 @@ def test_the_lessons_state_three_counts():
 
 
 @pytest.mark.parametrize(("lesson", "args", "stated"), claims())
-def test_lesson_pytest_count_matches_a_real_collection(lesson, args, stated):
-    run = subprocess.run([sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider",
-                          *[a for a in shlex.split(args) if a != "-q"]], cwd=ROOT, capture_output=True, text=True, timeout=300)
+def test_lesson_pytest_command_passes_the_stated_count(lesson, args, stated):
+    """Runs the lesson's own command and reads pytest's summary line: exactly `stated` passed, and nothing
+    failed, errored or was skipped (a skip would let the learner see a different count)."""
+    run = subprocess.run([sys.executable, "-m", "pytest", "-p", "no:cacheprovider", *shlex.split(args)],
+                         cwd=ROOT, capture_output=True, text=True, timeout=300)
     assert run.returncode == 0, run.stdout + run.stderr
-    collected = [line for line in run.stdout.splitlines() if "::" in line]
-    assert len(collected) == stated, f"{lesson} says {stated} passed; `pytest {args}` collects {len(collected)}"
+    summary = run.stdout.strip().splitlines()[-1]
+    counts = {word: int(n) for n, word in re.findall(r"(\d+) (\w+)", summary)}
+    assert counts.get("passed") == stated, f"{lesson} says {stated} passed; `pytest {args}` printed: {summary}"
+    assert not set(counts) - {"passed", "deselected"}, f"{lesson}: `pytest {args}` printed: {summary}"

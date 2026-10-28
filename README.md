@@ -152,7 +152,7 @@ The scientific stack is pinned to exact versions (`scikit-learn==1.8.0`, `numpy=
 .venv-ml/bin/python ml/python/mlops.py compare logreg-C1-2019-2021 logreg-C3-2019-2021
 ```
 
-Commands that write (`experiments`, `register`, `promote`, `rollback`, `gate`, `retrain`) take `--root DIR`. Try them on a copy so the committed files stay as they are:
+Commands that write (`experiments`, `register`, `promote`, `rollback`, `gate`, `retrain`) take `--root DIR`. Try them on a copy so the committed files stay as they are. `experiments` refuses to overwrite a run that is already there, so delete the copy's `runs/` first (`rm -r "$ML/runs"`), as lesson 7 does:
 
 ```sh
 ML="$(mktemp -d)/ml" && cp -R ml "$ML"
@@ -189,11 +189,10 @@ go -C ml/go run . drift           # the same table, recomputed in Go (thresholds
 `with_mlflow.py` logs v1's run to MLflow, registers it with a `production` alias, and checks both tools recorded the same numbers and model hash. Install MLflow in a throwaway virtual environment; it was tested on 3.17.2:
 
 ```sh
-cd ml/python
 python3 -m venv /tmp/mlflow-venv
-/tmp/mlflow-venv/bin/pip install -r requirements.txt "mlflow==3.17.2"
-/tmp/mlflow-venv/bin/python with_mlflow.py                       # temp folder, deleted at the end
-/tmp/mlflow-venv/bin/python with_mlflow.py --workdir mlflow-demo # keep it; then run the printed `mlflow ui` command
+/tmp/mlflow-venv/bin/pip install -r ml/python/requirements.txt "mlflow==3.17.2"
+(cd ml/python && /tmp/mlflow-venv/bin/python with_mlflow.py)                       # temp folder, deleted at the end
+(cd ml/python && /tmp/mlflow-venv/bin/python with_mlflow.py --workdir mlflow-demo)  # keep it; then run the printed `mlflow ui` command
 ```
 
 ### The Claude comparison
@@ -242,7 +241,7 @@ The first command runs once and exits. The other three are long-running servers:
 cd mcp/go && go run ./opsserver -labels ~/.lumen/live-labels.jsonl       # lumen-ops (Go) on 127.0.0.1:8766, needs tickets:write
 ```
 
-The authorization server is for tests only: it approves every request at once for one fixed user. So it registers only redirect URIs on `http://127.0.0.1` or `http://localhost` (any port) and refuses browser requests from any other origin, which keeps a web page from collecting a token from it; run it only on 127.0.0.1 and only while learning. Servers on other ports: start the AS with `--read-port` / `--ops-port` to match. On its first start it writes a random signing key to `mcp/data/dev-signing.key` (mode 0600, git-ignored, never commit it). Both HTTP servers read that key and refuse to start without it; `LUMEN_SIGNING_KEY_FILE` moves it. Swap any server for its twin: `(cd mcp/go && go run ./readserver -http)`, or `.venv-mcp/bin/python mcp/python/ops_server.py --labels PATH`.
+The authorization server is for tests only: it approves every request at once for one fixed user. So it registers only redirect URIs on `http://127.0.0.1`, `http://localhost` or `http://[::1]` (any port, no fragment) and refuses browser requests from any other origin, which keeps a web page from collecting a token from it; run it only on 127.0.0.1 and only while learning. Servers on other ports: start the AS with `--read-port` / `--ops-port` to match. On its first start it writes a random signing key to `mcp/data/dev-signing.key` (mode 0600, git-ignored, never commit it). Both HTTP servers read that key and refuse to start without it; `LUMEN_SIGNING_KEY_FILE` moves it. Swap any server for its twin: `(cd mcp/go && go run ./readserver -http)`, or `.venv-mcp/bin/python mcp/python/ops_server.py --labels PATH`.
 
 ### Clients and auth
 

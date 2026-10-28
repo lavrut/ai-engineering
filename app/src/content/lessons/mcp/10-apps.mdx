@@ -92,7 +92,13 @@ Run these from the repo root. Everything here is free and runs in memory.
 
 ### Find the App as a host does
 
-Save this as `/tmp/try_app.py`, outside the repo, so nothing is left behind in it. It lists the tool, follows its link, and reads the page:
+Save this as `~/.lumen/try_app.py`, in your own folder `~/.lumen`, outside the repo, so nothing is left behind in it and no other user can plant a file of that name first, as they could in `/tmp`. Make the folder once:
+
+```bash
+mkdir -m 700 -p ~/.lumen
+```
+
+The script lists the tool, follows its link, and reads the page:
 
 ```python
 """Find the labelling App the way a host does: from the tool's _meta, then read it. Run it from the repo root."""
@@ -122,7 +128,7 @@ asyncio.run(main())
 ```
 
 ```bash
-.venv-mcp/bin/python /tmp/try_app.py
+.venv-mcp/bin/python ~/.lumen/try_app.py
 ```
 
 You should see `tool: label_ticket -> App: ui://lumen/label.html`, `mime type: text/html;profile=mcp-app`, the four empty CSP lists, and `html: 7225 bytes; starts <!doctype html>`.

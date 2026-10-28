@@ -63,6 +63,11 @@ describe('the MCP lessons as a set', () => {
     expect(src('README.md')).toContain('python3 -m venv .venv-mcp && .venv-mcp/bin/pip install -r mcp/requirements.txt');
   });
 
+  it('keep the learner\'s files in ~/.lumen, never at a fixed name in /tmp that another user could plant first', () => {
+    for (const l of LESSONS) expect(body(l), l).not.toMatch(/\/tmp\//);
+    for (const l of ['08-write-tools', '10-apps']) expect(body(l), l).toContain('mkdir -m 700 -p ~/.lumen');
+  });
+
   it('spread the quiz answers over all four positions (M12): no position is right more than 9 times of 33', () => {
     const counts = [0, 0, 0, 0];
     for (const l of LESSONS) {
@@ -292,10 +297,11 @@ describe('lesson 9 (auth): the numbers it states', () => {
   });
 
   it('states the loopback-only rule of the test AS and why (P5)', () => {
-    expect(l).toContain('redirect URI whose scheme is `http` and whose host is `127.0.0.1` or `localhost`');
+    expect(l).toContain('redirect URI whose scheme is `http` and whose host is `127.0.0.1`, `localhost` or `[::1]`');
+    expect(l).toContain('no `#` fragment');
     expect(l).not.toContain('CORS `*`');
     const as = src('mcp/python/auth_server.py');
-    expect(as).toContain('LOOPBACK_HOSTS = ("127.0.0.1", "localhost")');
+    expect(as).toContain('LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")');
     expect(as).toContain('RegistrationError("invalid_redirect_uri"');
   });
 });

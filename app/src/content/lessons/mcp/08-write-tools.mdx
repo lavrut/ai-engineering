@@ -127,7 +127,13 @@ Run these from the repo root. Everything here is free and runs in memory, with n
 
 ### Confirm and decline
 
-Save this as `/tmp/try_confirm.py`, outside the repo, so nothing is left behind in it. It labels ticket `t001` twice, once answering yes and once answering no, then prints the rows:
+Save this as `~/.lumen/try_confirm.py`, in your own folder `~/.lumen`, outside the repo, so nothing is left behind in it and no other user can plant a file of that name first, as they could in `/tmp`. Make the folder once:
+
+```bash
+mkdir -m 700 -p ~/.lumen
+```
+
+The script labels ticket `t001` twice, once answering yes and once answering no, then prints the rows:
 
 ```python
 """Label a ticket through lumen-ops in memory: once answering yes, once answering no. Run it from the repo root."""
@@ -169,7 +175,7 @@ asyncio.run(main())
 ```
 
 ```bash
-.venv-mcp/bin/python /tmp/try_confirm.py
+.venv-mcp/bin/python ~/.lumen/try_confirm.py
 ```
 
 You should see the question twice, then `result: {'ticket_id': 't001', 'label': 'billing', 'written': True}` for the yes and `result: label not written: the user declined` for the no. Then one row only, with `'source': 'agent'`, `'client_id': 'anonymous'` (no token in memory), `'model': None`, `'confirmed': True`, and `eligible for eval: False`.

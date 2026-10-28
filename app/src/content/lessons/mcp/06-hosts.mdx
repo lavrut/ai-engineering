@@ -171,14 +171,14 @@ Then ask the host to find the duplicate-charge ticket. It will ask your permissi
 
 ### Which protocol version did the host use? (optional)
 
-The server answers either era, so the answer depends on the host. You can see which one it sent by recording what arrives on the server's stdin. In the config above, replace the command with `bash` and these arguments, so `tee` copies the host's messages to a file before the server reads them:
+The server answers either era, so the answer depends on the host. You can see which one it sent by recording what arrives on the server's stdin. In the config above, replace the command with `bash` and these arguments, so `tee` copies the host's messages to a file in `~/.lumen` (make it first with `mkdir -m 700 -p ~/.lumen`) before the server reads them:
 
 ```json
 {
   "mcpServers": {
     "lumen-read": {
       "command": "bash",
-      "args": ["-c", "tee /tmp/lumen-in.log | /ABS/PATH/.venv-mcp/bin/python /ABS/PATH/mcp/python/read_server.py"]
+      "args": ["-c", "tee ~/.lumen/lumen-in.log | /ABS/PATH/.venv-mcp/bin/python /ABS/PATH/mcp/python/read_server.py"]
     }
   }
 }
@@ -187,7 +187,7 @@ The server answers either era, so the answer depends on the host. You can see wh
 Use the host, then look at the first methods in the log:
 
 ```bash
-grep -o '"method":"[^"]*"' /tmp/lumen-in.log | head -3
+grep -o '"method":"[^"]*"' ~/.lumen/lumen-in.log | head -3
 ```
 
 If the first is `initialize`, the host used the old handshake. If it is `server/discover` or a request whose `_meta` carries `io.modelcontextprotocol/protocolVersion`, it used the new revision. Whatever you see is the answer. We cannot tell you in advance, and the research sheet could not confirm it.
@@ -195,8 +195,8 @@ If the first is `initialize`, the host used the old handshake. If it is `server/
 You can check the method on a host you control, the Inspector, without any account. This needs Node 22.19 or later and the network. Run it once per era and compare:
 
 ```bash
-npx -y @modelcontextprotocol/inspector@2.12.0 --cli --protocol-era modern bash -c 'tee /tmp/lumen-in.log | .venv-mcp/bin/python mcp/python/read_server.py' --method tools/list
-grep -o '"method":"[^"]*"' /tmp/lumen-in.log | head -3
+npx -y @modelcontextprotocol/inspector@2.12.0 --cli --protocol-era modern bash -c 'tee ~/.lumen/lumen-in.log | .venv-mcp/bin/python mcp/python/read_server.py' --method tools/list
+grep -o '"method":"[^"]*"' ~/.lumen/lumen-in.log | head -3
 ```
 
 In modern mode we saw `server/discover`, `subscriptions/listen` and `tools/list`. Change `modern` to `legacy` and run both lines again (`tee` replaces the old log). In legacy mode we saw `initialize`, `notifications/initialized` and `tools/list`. Both eras list the same three tools.

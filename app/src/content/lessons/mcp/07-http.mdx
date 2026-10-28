@@ -160,8 +160,9 @@ We got `401`.
 Make a file of 131,073 spaces, one byte over the cap, and send it:
 
 ```bash
-head -c 131073 /dev/zero | tr '\0' ' ' > /tmp/lumen-big.json
-curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8765/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' --data-binary @/tmp/lumen-big.json
+mkdir -m 700 -p ~/.lumen
+head -c 131073 /dev/zero | tr '\0' ' ' > ~/.lumen/lumen-big.json
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8765/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' --data-binary @~/.lumen/lumen-big.json
 ```
 
 We got `401`: Python's SDK checks the token before the size. Its body-cap test sends a valid token, and gets 413 at the same size.
@@ -185,7 +186,7 @@ We got `403`.
 Stop both servers with Ctrl-C and remove the file:
 
 ```bash
-rm -f /tmp/lumen-big.json
+rm -f ~/.lumen/lumen-big.json
 ```
 
 Lesson 9 gets a token that this server accepts.

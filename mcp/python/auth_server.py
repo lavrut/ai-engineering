@@ -4,9 +4,9 @@
     It AUTO-APPROVES every authorization request with no login page and one fixed test subject
     (TEST_SUBJECT = "user-1").
     Because it auto-approves, it must never hand a code to anything but this machine (P5): a
-    registered redirect URI must be http on 127.0.0.1 or localhost (any port, any path), and a
-    browser request from any other Origin is refused (403), with CORS answered for loopback origins
-    only. Without that, any web page could register its own https redirect and obtain a write token.
+    registered redirect URI must be http on 127.0.0.1, localhost or [::1] (any port, any path, no
+    fragment), and a browser request from any other Origin is refused (403), with CORS answered for
+    loopback origins only. Without that, any web page could register its own https redirect and obtain a write token.
 
 The signing key: on first start it writes 32 random bytes (hex) to mcp/data/dev-signing.key, mode
 0600 and git-ignored (or to $LUMEN_SIGNING_KEY_FILE), and reuses that file afterwards. The resource
@@ -70,8 +70,8 @@ CODE_TTL = 300
 REFRESH_TTL = 24 * 3600
 MAX_TOKEN_REQUEST = 16 * 1024  # bytes: a /token form is a few hundred
 CLI_REDIRECT = "http://127.0.0.1:33418/callback"  # redirect URIs match exactly, port included
-LOOPBACK_HOSTS = ("127.0.0.1", "localhost")  # the only hosts a code may be sent to, and the only browser origins
-LOOPBACK_ORIGIN = re.compile(r"http://(127\.0\.0\.1|localhost)(:[0-9]{1,5})?")  # matched whole, case-sensitive
+LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")  # the only hosts a code may go to, and the only browser origins
+LOOPBACK_ORIGIN = re.compile(r"http://(127\.0\.0\.1|localhost|\[::1\])(:[0-9]{1,5})?")  # matched whole, case-sensitive
 
 # The pre-registered public client (R4 primary): no secret, so PKCE is what protects the code.
 LUMEN_CLI = OAuthClientInformationFull(
@@ -83,13 +83,15 @@ LUMEN_CLI = OAuthClientInformationFull(
 
 
 def loopback_http(uri: str) -> bool:
-    """True for an http URI on 127.0.0.1 or localhost (any port, any path), with no userinfo (P5)."""
+    """True for an http URI on 127.0.0.1, localhost or [::1] (any port, any path), with no userinfo and no
+    fragment (P5, P12; RFC 6749 section 3.1.2 forbids a fragment in a redirect URI)."""
     try:
         u = urlsplit(uri)
         u.port  # raises ValueError on a malformed port
     except ValueError:
         return False
-    return u.scheme == "http" and u.hostname in LOOPBACK_HOSTS and u.username is None and u.password is None
+    return (u.scheme == "http" and u.hostname in LOOPBACK_HOSTS and u.username is None and u.password is None
+            and "#" not in uri)
 
 
 # ── 2. Signing key and tokens ───────────────────────────────────────────────
@@ -147,7 +149,8 @@ class TestOnlyProvider:
         bad = [str(u) for u in client_info.redirect_uris or [] if not loopback_http(str(u))]
         if bad or not client_info.redirect_uris:
             raise RegistrationError("invalid_redirect_uri",
-                                    "redirect_uris must be http on 127.0.0.1 or localhost (test AS)")
+                                    "redirect_uris must be http on 127.0.0.1, localhost or [::1], "
+                                    "with no fragment (test AS)")
         self.clients[client_info.client_id] = client_info
 
     async def authorize(self, client: OAuthClientInformationFull, params: AuthorizationParams) -> str:
@@ -210,7 +213,7 @@ class TestOnlyProvider:
 
 # ── 4. The app ──────────────────────────────────────────────────────────────
 def _loopback_origins_only(app):
-    """ASGI wrapper (P5): a request carrying an Origin that is not http on 127.0.0.1 or localhost gets 403
+    """ASGI wrapper (P5): a request carrying an Origin that is not http on 127.0.0.1, localhost or [::1] gets 403
     before any handler runs, CORS preflights included, so it registers and redeems nothing. A request with
     no Origin (the CLI, a test) passes."""
     async def gated(scope, receive, send):
