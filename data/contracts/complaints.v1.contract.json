@@ -1,0 +1,77 @@
+{
+ "consumers": [
+  {
+   "name": "mcp-read-server",
+   "reads": "the classify tool's model, trained on ml/data/complaints.jsonl, via mcp/core/python/lumen_core/classify.py",
+   "version": "1"
+  }
+ ],
+ "info": {
+  "description": "Public consumer complaints, one per line, with the product the classifier learns to predict.",
+  "id": "complaints.v1",
+  "owner": "ml",
+  "status": "active",
+  "version": "1"
+ },
+ "quality": {
+  "enum_coverage": [
+   "product"
+  ],
+  "row_count": {
+   "max": 3600,
+   "min": 3600
+  },
+  "unique": [
+   "id"
+  ]
+ },
+ "schema": {
+  "fields": [
+   {
+    "meaning": "the complaint number from the public source, kept as text",
+    "name": "id",
+    "pattern": "^\\d+$",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "meaning": "the day the complaint was received, YYYY-MM-DD",
+    "name": "date",
+    "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "enum": [
+     "Checking or savings account",
+     "Credit card",
+     "Credit reporting or other personal consumer reports",
+     "Debt collection",
+     "Money transfer, virtual currency, or money service",
+     "Mortgage"
+    ],
+    "meaning": "the label the classifier learns; a seventh value would be a class the model has never seen",
+    "name": "product",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "meaning": "the product as the source wrote it, before mapping to the six labels",
+    "name": "product_raw",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "meaning": "the complainant's own words, with personal details masked as XXXX",
+    "name": "narrative",
+    "required": true,
+    "type": "string"
+   }
+  ]
+ },
+ "servicing": {
+  "freshness": {
+   "max_age_days": 365
+  }
+ }
+}

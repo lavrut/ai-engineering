@@ -1,0 +1,75 @@
+{
+ "consumers": [
+  {
+   "name": "agents-eval",
+   "reads": "agents/data/traces/<set>/*.json via agents/evals/run_evals.py",
+   "version": "1"
+  }
+ ],
+ "info": {
+  "description": "One recorded agent run per file, as the agents track's eval scores it.",
+  "id": "agent-traces.v1",
+  "owner": "agents",
+  "status": "active",
+  "version": "1"
+ },
+ "quality": {
+  "row_count": {
+   "max": 1,
+   "min": 1
+  }
+ },
+ "schema": {
+  "fields": [
+   {
+    "enum": [
+     "hand",
+     "hand-go",
+     "langgraph",
+     "sdk"
+    ],
+    "meaning": "the agent implementation that ran",
+    "name": "engine",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "meaning": "the desk layout (one agent, a supervisor, or a named workflow pattern)",
+    "name": "desk",
+    "pattern": "^(single|supervisor|pattern:[a-z_]+)$",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "meaning": "the ticket the run handled, by its tickets.v1 id",
+    "name": "ticket",
+    "pattern": "^t\\d{3}$",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "meaning": "the run's steps, in order",
+    "name": "trace",
+    "required": true,
+    "type": "array"
+   },
+   {
+    "meaning": "the model calls the recording proxy saw",
+    "name": "proxy_calls",
+    "required": true,
+    "type": "array"
+   },
+   {
+    "meaning": "errors the run hit; empty on a clean run",
+    "name": "errors",
+    "required": true,
+    "type": "array"
+   }
+  ]
+ },
+ "servicing": {
+  "freshness": {
+   "max_age_days": 365
+  }
+ }
+}

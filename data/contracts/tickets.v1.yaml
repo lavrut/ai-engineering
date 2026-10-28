@@ -1,0 +1,63 @@
+# tickets.v1 — the 60 Lumen support tickets the LLMs track wrote, as the MCP read
+# server and the agents eval read them. Validate:
+#     .venv-data/bin/python data/python/contract.py data/contracts/tickets.v1.yaml llms/data/tickets.jsonl
+
+# ── 1. info ─────────────────────────────────────────────────────────────────
+info:
+  id: tickets.v1
+  version: 1
+  status: active
+  owner: llms
+  description: Lumen support tickets, one per line, with a gold category and priority and a dev/test split.
+
+# ── 2. schema ───────────────────────────────────────────────────────────────
+schema:
+  fields:
+    - name: id
+      type: string
+      required: true
+      pattern: '^t\d{3}$'
+      meaning: the ticket's stable key, t001 to t060; consumers look tickets up by it
+    - name: text
+      type: string
+      required: true
+      meaning: the customer's message, verbatim
+    - name: category
+      type: string
+      required: true
+      enum: [billing, bug, account, feature_request, how_to, outage]
+      meaning: the gold label a classifier is scored against
+    - name: priority
+      type: string
+      required: true
+      enum: [low, normal, high, urgent]
+      meaning: the gold urgency of the ticket
+    - name: tags
+      type: array
+      required: true
+      meaning: free-form labels (strings), often empty
+    - name: split
+      type: string
+      required: true
+      enum: [dev, test]
+      meaning: dev tickets tune prompts, test tickets score them; never mixed
+
+# ── 3. quality ──────────────────────────────────────────────────────────────
+quality:
+  row_count: {min: 60, max: 60}
+  unique: [id]
+  enum_coverage: [category, priority]
+
+# ── 4. servicing ────────────────────────────────────────────────────────────
+servicing:
+  freshness:
+    max_age_days: 365
+
+# ── 5. consumers ────────────────────────────────────────────────────────────
+consumers:
+  - name: mcp-read-server
+    version: 1
+    reads: llms/data/tickets.jsonl via mcp/core/python/lumen_core/tickets.py
+  - name: agents-eval
+    version: 1
+    reads: llms/data/tickets.jsonl via agents/desk/python/desk_core.py

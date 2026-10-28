@@ -1,0 +1,59 @@
+# agent-traces.v1 — one recorded agent run: which engine and desk handled which ticket,
+# the steps it took and the model calls it made. Each trace file is one JSON object, so
+# each file is a one-row dataset (ruling D3). Validate one:
+#     .venv-data/bin/python data/python/contract.py data/contracts/agent-traces.v1.yaml agents/data/traces/desk-sdk/sdk-single-t001.json
+# quality.py runs it over every file under agents/data/traces/*/.
+
+# ── 1. info ─────────────────────────────────────────────────────────────────
+info:
+  id: agent-traces.v1
+  version: 1
+  status: active
+  owner: agents
+  description: One recorded agent run per file, as the agents track's eval scores it.
+
+# ── 2. schema ───────────────────────────────────────────────────────────────
+schema:
+  fields:
+    - name: engine
+      type: string
+      required: true
+      enum: [hand, hand-go, langgraph, sdk]
+      meaning: the agent implementation that ran
+    - name: desk
+      type: string
+      required: true
+      pattern: '^(single|supervisor|pattern:[a-z_]+)$'
+      meaning: the desk layout (one agent, a supervisor, or a named workflow pattern)
+    - name: ticket
+      type: string
+      required: true
+      pattern: '^t\d{3}$'
+      meaning: the ticket the run handled, by its tickets.v1 id
+    - name: trace
+      type: array
+      required: true
+      meaning: the run's steps, in order
+    - name: proxy_calls
+      type: array
+      required: true
+      meaning: the model calls the recording proxy saw
+    - name: errors
+      type: array
+      required: true
+      meaning: errors the run hit; empty on a clean run
+
+# ── 3. quality ──────────────────────────────────────────────────────────────
+quality:
+  row_count: {min: 1, max: 1}
+
+# ── 4. servicing ────────────────────────────────────────────────────────────
+servicing:
+  freshness:
+    max_age_days: 365
+
+# ── 5. consumers ────────────────────────────────────────────────────────────
+consumers:
+  - name: agents-eval
+    version: 1
+    reads: agents/data/traces/<set>/*.json via agents/evals/run_evals.py
