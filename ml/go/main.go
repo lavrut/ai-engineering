@@ -383,7 +383,8 @@ func main() {
 		fs.Parse(os.Args[2:])
 		addr := fmt.Sprintf("127.0.0.1:%d", *port)
 		log.Printf("serving %s on http://%s", m.Version, addr)
-		srv := &http.Server{Addr: addr, Handler: newHandler(m), ReadHeaderTimeout: 10 * time.Second}
+		srv := &http.Server{Addr: addr, Handler: newHandler(m), ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second}
 		log.Fatal(srv.ListenAndServe())
 	case "predict": // scoring only: no length limit, as in train.score
 		out, _ := json.MarshalIndent(m.score(strings.Join(os.Args[2:], " ")), "", "  ")

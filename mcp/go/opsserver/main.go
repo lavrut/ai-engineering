@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 )
 
 // ── 6. Entry point ──────────────────────────────────────────────────────────
@@ -22,5 +23,6 @@ func main() {
 		log.Fatalf("opsserver: %v", err) // no key file: never fall back to a default key
 	}
 	log.Printf("lumen-ops listening on http://%s/mcp", addr)
-	log.Fatal(http.ListenAndServe(addr, h))
+	srv := &http.Server{Addr: addr, Handler: h, ReadHeaderTimeout: 10 * time.Second} // a slow client cannot hold a connection open
+	log.Fatal(srv.ListenAndServe())
 }

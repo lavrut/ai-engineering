@@ -9,10 +9,10 @@ quiz:
   - question: A run of 40 tickets has 2 API errors and 1 refusal. The model got 30 of the others right. What does accuracy() report?
     options:
       - 30 / 40 = 75.0%
-      - 30 / 38 = 78.9%, because errors are left out and the refusal counts as wrong
-      - 30 / 37 = 81.1%, because errors and refusals are both left out
       - 30 / 39 = 76.9%, because only the refusal is left out
-    answer: 1
+      - 30 / 37 = 81.1%, because errors and refusals are both left out
+      - 30 / 38 = 78.9%, because errors are left out and the refusal counts as wrong
+    answer: 3
     explanation: An error means no answer came back, so it says nothing about the model and is left out of the count. A refusal is an answer, just not a usable one; a customer would get nothing, so it counts as wrong. That leaves 38 scored lines, 30 of them right.
   - question: Why does the lab ask for structured output instead of reading the category out of free text?
     options:
@@ -24,11 +24,11 @@ quiz:
     explanation: Without a schema, the model might answer "Billing", "billing issue" or a sentence, and an equality check would mark a right answer wrong. With the enum, the category is always one of the six exact strings, so comparing it with the label grades meaning, not formatting.
   - question: The category accuracy is 92.5%. What does the confusion matrix add?
     options:
-      - Nothing; it is the same number in a table
       - Which mistakes the model makes, for example account tickets answered as how_to, so you know which definition to fix
+      - Nothing; it is the same number in a table
       - The cost of each mistake
       - The noise band of the accuracy
-    answer: 1
+    answer: 0
     explanation: Accuracy says how many answers were wrong; the matrix says which way. Off-diagonal cells name the confusion and list its tickets. Here every v1_basic category mistake lands in how_to, at exactly the boundaries the labelling guide's tie-breakers settle.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -150,7 +150,7 @@ for change in ({"stop_reason": "refusal", "output": None}, {"error": "overloaded
 
 ```bash
 cd llms/python
-python graders_demo.py
+../../.venv-llms/bin/python graders_demo.py
 ```
 
 You should see the matrix from the Concept, then:

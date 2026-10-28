@@ -146,7 +146,7 @@ func (t *Tools) MarkUntrusted() { t.untrusted.Store(true) }
 // Untrusted reports the flag.
 func (t *Tools) Untrusted() bool { return t.untrusted.Load() }
 
-// approve is mcp/python/agent.py's make_approver with guard on: a write after untrusted text needs a yes.
+// approve is mcp/python/agent_host.py's make_approver with guard on: a write after untrusted text needs a yes.
 func (t *Tools) approve(name string, args map[string]any) bool {
 	if !t.untrusted.Load() { // needs_human(tool, read_untrusted, guard=True)
 		return true
@@ -193,7 +193,7 @@ func (t *Tools) run(name string, args map[string]any) (string, bool) {
 	return resultText(res, structured), false
 }
 
-// taints is mcp/python/agent.py's rule: fails closed.
+// taints is mcp/python/agent_host.py's rule: fails closed.
 func taints(name string, structured any) bool {
 	return slices.Contains(untrustedTools, name) || structured == nil || carriesUntrusted(structured)
 }
@@ -219,7 +219,7 @@ func carriesUntrusted(v any) bool {
 	return false
 }
 
-// resultText is agent.py's result_text: structured content as Python-style JSON, else the text blocks.
+// resultText is agent_host.py's result_text: structured content as Python-style JSON, else the text blocks.
 func resultText(res *mcp.CallToolResult, structured any) string {
 	if structured != nil && !res.IsError {
 		return patterns.PyJSON(structured)

@@ -9,18 +9,18 @@ quiz:
   - question: You add one sentence to the v2_rules prompt and run the eval in replay mode. What happens?
     options:
       - The old saved answers are used, since the ticket did not change
-      - Replay stops with ReplayMiss, because the prompt text is part of the cache key and no answer is saved for the new text
       - Replay calls the API for the missing answers and saves them
+      - Replay stops with ReplayMiss, because the prompt text is part of the cache key and no answer is saved for the new text
       - The score drops to 0% for every ticket
-    answer: 1
+    answer: 2
     explanation: The cache key is a hash of everything that shapes the answer, including the full prompt text. New text gives new keys, so stale answers can never be graded as if they came from the new prompt. Replay never falls back to a paid call; you record the new answers on purpose.
   - question: Prompt B scores 97.5% on the 40 dev tickets and prompt A scores 90.0%. The noise band is ±15.8%. What can you conclude?
     options:
       - B is better by 7.5 points
-      - Nothing yet; a 7.5-point difference is inside the band, so luck alone could produce it
-      - A is better, because the band favours the lower score
       - B is better, because 97.5% is above 95%
-    answer: 1
+      - A is better, because the band favours the lower score
+      - Nothing yet; a 7.5-point difference is inside the band, so luck alone could produce it
+    answer: 3
     explanation: With 40 tickets, a score can move by about 1/√40, or 15.8 points, from which tickets happen to be in the set and from the model's randomness. A difference smaller than that is not evidence. More tickets shrink the band; v1_basic to v2_rules, at +27.5 points, clears it.
   - question: The run's spending passes --max-cost while other calls are still in flight. What does the Python runner do?
     options:
@@ -60,7 +60,7 @@ The repeat number is in the key so that one prompt can be recorded several times
 
 ### Latest line wins
 
-A response file is append-only, one JSON line per call. If a call fails, its line is saved with an `error`, and recording it again appends a second line with the same key. Replay reads the file from the end, so the latest line for a key wins. The lab never edits a file in place. The committed files were pruned once, by hand, after the re-record: superseded and failed lines were removed, as `llms/data/README.md` records.
+A response file is append-only, one JSON line per call. If a call fails, its line is saved with an `error`, and recording it again appends a second line with the same key. Replay reads the file from the end, so the latest line for a key wins. The lab never edits a file in place. The committed files were pruned once, by hand, after the re-record: superseded and failed triage lines were removed, as `llms/data/README.md` records. The judge files were not pruned, so `judge__claude-opus-5-5__after__default.jsonl` still holds 3 errored lines, each superseded by a later good one.
 
 ### The runner
 
@@ -72,7 +72,7 @@ Cost is tokens times price, so you can work it out before you spend anything. Th
 
 It also prints a worst case, assuming every reply uses all of `MAX_TOKENS = 2000` output tokens: $0.0436 for the same 40. Then it asks before calling. A cap, `--max-cost`, $10 by default, is checked against the real spend from each response's `usage`.
 
-The estimate is deliberately rough. Haiku's recorded `v2_rules` calls averaged about 1,546 input and 215 output tokens, so the real input was larger and the output smaller than guessed. The full recording plan was estimated at $4.06 and cost $1.59. The re-recording after the labelling guide was estimated at $2.69 and cost $1.47.
+The estimate is deliberately rough. Haiku's 180 recorded `v2_rules` calls (60 tickets, 3 repeats) averaged about 1,546 input and 215 output tokens, so the real input was larger and the output smaller than guessed. The full recording plan was estimated at $4.06 and cost $1.59. The re-recording after the labelling guide was estimated at $2.69 and cost $1.47.
 
 ### Noise
 
@@ -108,7 +108,7 @@ Section 4 is the model call with saved responses.
 - `already_recorded(path, key)` returns the latest line for a key if that line has no error. Record mode uses it to resume.
 - In `call_model`, the replay branch reads the file with `reversed(load_jsonl(path))`, so the latest line for the key wins, and raises `ReplayMiss` if there is none.
 - `if mode == "record"` checks `already_recorded` first and returns the saved line marked `"skipped": True`. The runner counts a skipped line as free.
-- `anthropic.Anthropic(max_retries=4)` is created only here, after replay has returned, so replay never needs a key. The SDK retries rate limits and overloads up to 4 times.
+- `import anthropic` and `anthropic.Anthropic(max_retries=4)` come only here, after replay has returned, so replay needs neither a key nor the SDK. The SDK retries rate limits and overloads up to 4 times.
 - `line` is the saved record: `key`, `config`, `case_id`, `output`, `stop_reason`, both token counts, `latency_ms` and `error`.
 - `if response.stop_reason not in ("refusal", "max_tokens")` reads the JSON only from a normal finish. Bad JSON and `APIError` become an `error` string instead of an exception, so the line is saved and the run carries on.
 - `triage(...)` builds the request: the prompt version as `system`, the ticket as the user message, the schema in `output_config`, and `effort` only when you pass one. It sends no `temperature`.
@@ -147,7 +147,7 @@ Replay the three noise repeats together:
 
 ```bash
 cd llms/python
-python triage_lab.py run --prompt v2_rules --reps 3
+../../.venv-llms/bin/python triage_lab.py run --prompt v2_rules --reps 3
 ```
 
 You should see:
@@ -185,7 +185,7 @@ except L.ReplayMiss as e:
 ```
 
 ```bash
-python noise.py
+../../.venv-llms/bin/python noise.py
 ```
 
 You should see:
@@ -196,7 +196,7 @@ rep 1  both 97.5%  wrong ['t034']
 rep 2  both 95.0%  wrong ['t018', 't034']
 band for one run of 40: +/-15.8%
 5d1983c4d25c 053094d77cfe
-ReplayMiss: no saved response for triage / claude-haiku-5-5 / v2_rules / case t001 (rep 0). Record it: python triage_lab.py record ...
+ReplayMiss: no saved response for triage / claude-haiku-5-5 / v2_rules / case t001 (rep 0). Record it: ../../.venv-llms/bin/python triage_lab.py record ...
 ```
 
 Two words added to the prompt give a different key, and replay refuses to grade old answers against it. The change is only in memory, so `prompts.json` is untouched.
@@ -204,7 +204,7 @@ Two words added to the prompt give a different key, and replay refuses to grade 
 Last, compare the two prompts that tie:
 
 ```bash
-python triage_lab.py compare --prompt v2_rules --vs v3_examples
+../../.venv-llms/bin/python triage_lab.py compare --prompt v2_rules --vs v3_examples
 ```
 
 It prints `diff +0.0%   band +/-15.8%` and `within the noise: not evidence of a difference`.

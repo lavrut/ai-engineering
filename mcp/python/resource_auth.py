@@ -78,7 +78,7 @@ def load_signing_key(path: Path | None = None) -> bytes:
     only on a loopback lab. Production uses an asymmetric key (RS256/ES256) that the AS publishes
     as a JWKS, so resource servers hold no secret at all. The Go twin is auth.LoadSigningKey."""
     path = path or key_file()
-    fix = f"start the test AS first (python mcp/python/auth_server.py), or set {KEY_FILE_ENV}"
+    fix = f"start the test AS first (.venv-mcp/bin/python mcp/python/auth_server.py), or set {KEY_FILE_ENV}"
     try:
         mode = path.stat().st_mode
         text = path.read_text(encoding="ascii").strip()

@@ -81,9 +81,9 @@ Section 5 of `lumen-read` builds the HTTP app.
 - `return LocalOnly(app, port)` wraps it in the course's own check, from `resource_auth.py`. It runs first on `/mcp`, for every method, and answers 403 unless `Host` is in `local_hosts` and `Origin` is absent or in `local_origins`, both built from the port.
 - In section 6, `uvicorn.run(app, host="127.0.0.1", port=args.port)` binds the loopback address only, and `build_http_app(port=args.port)` builds the lists for that port.
 
-Section 2 of the client is where `--url` goes.
+Section 1 of the client's `client_connect.py` is where `--url` goes.
 
-<CodeTabs source="mcp-client" section={2} />
+<CodeTabs source="mcp-client-connect" section={1} />
 
 - `HttpTarget(url, headers)` is a URL plus the headers every request carries. `http_target(url, token)` is the one place the HTTP path is built. With a token it adds `Authorization: Bearer ...`, and the URL stays exactly as given.
 - `if isinstance(target, str) and target.startswith(("http://", "https://"))` sends a URL down the HTTP path. Anything else, such as `StdioServerParameters` or an in-process server in a test, goes to `Client(target, ...)`.
@@ -100,6 +100,8 @@ The Go tab of section 5 is short, because the checks live in `mcp/go/auth/auth.g
 - Then the bearer token check, which is lesson 9.
 
 `mcp.StreamableHTTPOptions{Stateless: true, MaxRequestBodyBytes: core.MaxBodyBytes}` sets the cap a second time inside the SDK.
+
+The two clients differ on redirects. Python's SDK follows a redirect within the endpoint's own origin. Go's client follows none at all (`noRedirects`), so a 3xx fails the call. Either way the token never goes to another server.
 
 ## Try it
 
@@ -158,8 +160,9 @@ We got `401`.
 Make a file of 131,073 spaces, one byte over the cap, and send it:
 
 ```bash
-head -c 131073 /dev/zero | tr '\0' ' ' > /tmp/lumen-big.json
-curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8765/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' --data-binary @/tmp/lumen-big.json
+mkdir -m 700 -p ~/.lumen
+head -c 131073 /dev/zero | tr '\0' ' ' > ~/.lumen/lumen-big.json
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8765/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' --data-binary @"$HOME/.lumen/lumen-big.json"
 ```
 
 We got `401`: Python's SDK checks the token before the size. Its body-cap test sends a valid token, and gets 413 at the same size.
@@ -183,7 +186,7 @@ We got `403`.
 Stop both servers with Ctrl-C and remove the file:
 
 ```bash
-rm -f /tmp/lumen-big.json
+rm -f ~/.lumen/lumen-big.json
 ```
 
 Lesson 9 gets a token that this server accepts.

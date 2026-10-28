@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import derive  # noqa: E402
 
 DERIVED = derive.DERIVED_DIR
-NAMES = ("messages", "tool_budget", "elicitation", "app_snapshot", "injection")
+NAMES = ("messages", "tool_budget", "elicitation", "app_snapshot", "injection", "lesson_numbers")
 
 
 @pytest.fixture(scope="module")
@@ -26,6 +26,18 @@ def test_derive_writes_all_files(tmp_path):
     assert sorted(p.stem for p in out.glob("*.json")) == sorted(NAMES)
     for p in out.glob("*.json"):
         json.loads(p.read_text(encoding="utf-8"))
+
+
+def test_lesson_numbers_come_from_the_real_client_and_estimate(built):
+    """The figures lessons 2, 4, 5, 9 and 11 quote, as derive.py computes them (mcplessons.test.ts pins
+    the prose against this file)."""
+    n = built["lesson_numbers"]
+    assert n["search_charged_twice"]["ids"] == ["t001", "t007"]
+    assert n["search_charged_twice"]["md5"] == "b0a7e0fab66d59fd1c32497fbabb1392"  # Python and Go print these bytes
+    assert n["search_charged_twice_1"] == [{"id": "t001", "category": "billing"}]
+    assert n["classify"]["scores"] == 6 and n["classify"]["model_version"] == "v1"
+    assert n["estimates"]["lesson5"]["first"] == 832
+    assert set(n["estimates"]) == {"lesson5", "capstone-noguard-sonnet-5-5"}
 
 
 def test_messages_have_2026_07_28(built):

@@ -4,24 +4,24 @@
 // literal from agents/data/derived/*.json (python agents/derive.py; engine_scores.json from
 // python agents/evals/run_evals.py). With 13 tickets no engine clears the gate (ruling R66): the
 // verdict is pinned as it is.
-import { afterEach, describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/preact';
 import { loadAgentsData } from '../src/lib/agentsData';
 import {
   AGENTS_DERIVE_COMMAND,
   AGENTS_SCORE_COMMAND,
   GATE_MIN_SUCCESS,
-  agentTraceProps,
   bars,
   costCompareProps,
   engineScorecardProps,
-  patternStepperProps,
   ticketView,
   type CostCompareJson,
   type EngineScoresJson,
 } from '../src/lib/agentsAids';
-import { escapeHTML } from 'astro/runtime/server/escape.js';
-import { serializeProps } from 'astro/runtime/server/serialize.js';
 import CostCompare from '../src/components/agents/CostCompare';
 import EngineScorecard from '../src/components/agents/EngineScorecard';
 
@@ -341,46 +341,111 @@ describe('recording sets (lesson 7)', () => {
   it('keeps each set as derived: runs, model calls, recordings, orphans and cost', () => {
     const s = data.sets.sets;
     expect(Object.keys(s)).toEqual(['desk-hand', 'desk-hand-go', 'desk-langgraph', 'desk-sdk', 'patterns', 'patterns-go']);
-    expect(s['desk-hand']).toMatchObject({ runs: 26, expected_runs: 26, model_calls: 183, recordings: 183, orphans: 0, recorded_cost_usd: 0.0457416, complete: true });
-    expect(s.patterns).toMatchObject({ runs: 15, model_calls: 60, recordings: 57, orphans: 0, recorded_cost_usd: 0.0134697, distinct_recorded_cost_usd: 0.0130335 });
+    expect(s['desk-hand']).toMatchObject({ runs: 26, expected_runs: 26, model_calls: 183, recordings: 183, missing: 0, orphans: 0, recorded_cost_usd: 0.0457416, complete: true });
+    expect(s.patterns).toMatchObject({ runs: 15, model_calls: 60, recordings: 57, missing: 0, orphans: 0, recorded_cost_usd: 0.0134697, distinct_recorded_cost_usd: 0.0130335 });
+    // every recording a trace references is in the store: none missing (a missing one is reported, not counted)
+    expect(Object.values(s).map((x) => x.missing)).toEqual([0, 0, 0, 0, 0, 0]);
     expect(s['desk-sdk'].replay).toBe('python agents/run.py --set desk-sdk');
     expect(s['desk-sdk'].record).toBe('python agents/run.py --set desk-sdk --mode record --max-cost 10');
   });
 });
 
 // ── Page budget (spec §6: new props under about 200 KB) ─────────────────────
-// Measured as shipped: Astro writes each island's props into the page with serializeProps (every value
-// wrapped as [0, value]) and escapeHTML (every quote as &quot;), so a page carries 1.7-2.4 times the raw
-// JSON. The course is one page (src/pages/index.astro renders every lesson), so the track's lessons all
-// ship together: the budget holds for their sum, and each lesson's share is named in the message.
-describe('page budget', () => {
-  // What the lessons are expected to pass: lessons 2-4 their patterns, 5/8/9 their engines, 6, 10 and 11
-  // (lesson 11 shows the gate and the table; lesson 10 has the drill-down).
-  const lessons: [string, object][] = [
-    ['lesson 2 PatternStepper', patternStepperProps(data.patterns, { patterns: ['chain', 'route'] })],
-    ['lesson 3 PatternStepper', patternStepperProps(data.patterns, { patterns: ['parallel', 'orchestrate'] })],
-    ['lesson 4 PatternStepper', patternStepperProps(data.patterns, { patterns: ['evaluate_optimize'] })],
-    ['lesson 5 AgentTrace', agentTraceProps(data.traces, { engines: ['hand', 'hand-go'] })],
-    ['lesson 6 CostCompare', costCompareProps(data.costCompare)],
-    ['lesson 8 AgentTrace', agentTraceProps(data.traces, { engines: ['langgraph'] })],
-    ['lesson 9 AgentTrace', agentTraceProps(data.traces, { engines: ['sdk'] })],
-    ['lesson 10 EngineScorecard', engineScorecardProps(data.engineScores)],
-    ['lesson 11 EngineScorecard', engineScorecardProps(data.engineScores, { drillDown: false })],
-  ];
-  const shipped = (props: object) => escapeHTML(serializeProps(props)).length;
+// Measured from what ships: the built page, dist/index.html. Each island's props are the `props="…"` attribute
+// on its <astro-island> (Astro's serialised, HTML-escaped JSON); this sums the agents aids' props bytes per agents
+// lesson (PatternStepper, AgentTrace, CostCompare, EngineScorecard: the props this track added; the quizzes and
+// the shared FlowDiagram are every track's and are not part of this budget). The
+// course is one page (src/pages/index.astro renders every lesson, each in a <section data-view="…">), so the
+// track's lessons all ship together: the budget holds for their sum, and each lesson's share is in the message.
+// `npm test` keeps itself honest on a fresh checkout: when dist/index.html is missing, or older than any file
+// under src/, agents/data/derived/ or astro.config.mjs, the setup runs `astro build` first (about 5 s).
+const APP = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const PAGE = join(APP, 'dist', 'index.html');
+const SOURCES = [join(APP, 'src'), resolve(APP, '../agents/data/derived'), join(APP, 'astro.config.mjs')];
+const AIDS = ['PatternStepper', 'AgentTrace', 'CostCompare', 'EngineScorecard'];
+const AGENTS_VIEWS = [
+  'agents-workflows', 'agents-chain-route', 'agents-parallel', 'agents-evaluator', 'agents-multi-agent', 'agents-more-agents',
+  'agents-replay', 'agents-langgraph', 'agents-agent-sdk', 'agents-evals', 'agents-capstone',
+];
 
-  it('keeps the props the agents lessons ship, as Astro writes them, under 200 KB', () => {
-    const sizes = lessons.map(([name, props]) => [name, shipped(props)] as const);
+function newest(path: string): number {
+  const st = statSync(path);
+  if (!st.isDirectory()) return st.mtimeMs;
+  return readdirSync(path).reduce((m, f) => Math.max(m, newest(join(path, f))), st.mtimeMs);
+}
+
+/** Run a build step; a failure throws with the step's own stderr (and stdout), never only an exit status. */
+function runBuild(cmd: string, args: string[]): void {
+  try {
+    execFileSync(cmd, args, { cwd: APP, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  } catch (e) {
+    const { status, stderr, stdout } = e as { status?: number | null; stderr?: string; stdout?: string };
+    throw new Error(`page budget: ${cmd} ${args.join(' ')} failed (exit ${status ?? '?'}):\n${stderr || stdout || String(e)}`);
+  }
+}
+
+function ensureBuilt(): void {
+  if (existsSync(PAGE) && statSync(PAGE).mtimeMs >= Math.max(...SOURCES.map(newest))) return;
+  console.warn(`page budget: ${PAGE} is ${existsSync(PAGE) ? 'stale' : 'missing'}; running astro build`);
+  runBuild(join(APP, 'node_modules', '.bin', 'astro'), ['build']);
+}
+
+type Island = { component: string; bytes: number };
+
+/** Every agents lesson's islands, in page order: lesson n is the n-th agents view. */
+function shippedIslands(html: string): { lesson: string; islands: Island[] }[] {
+  const views = html.split(/(?=<section data-view=")/).slice(1);
+  return views
+    .map((chunk) => ({ view: /^<section data-view="([^"]+)"/.exec(chunk)![1], chunk }))
+    .filter(({ view }) => view.startsWith('agents-'))
+    .map(({ view, chunk }, i) => {
+      const islands = [...chunk.matchAll(/<astro-island\b((?:[^>"]|"[^"]*")*)>/g)].map(([, attrs]) => {
+        const component = /component-url="[^"]*\/([A-Za-z]+)\.[^"/]*\.js"/.exec(attrs)?.[1] ?? '?';
+        const props = /\sprops="([^"]*)"/.exec(attrs)?.[1] ?? '';
+        return { component, bytes: Buffer.byteLength(props, 'utf8') };
+      });
+      return { lesson: `lesson ${i + 1} (${view})`, islands };
+    });
+}
+
+describe('page budget', () => {
+  it('a failed build step shows its stderr, not only its exit status', () => {
+    // The message is built at run time, so it can only reach the error through the step's stderr (the command
+    // line, which execFileSync's own message repeats, holds no "the-build-broke").
+    const failing = ['-e', 'console.error(["the", "build", "broke"].join("-")); process.exit(3)'];
+    expect(() => runBuild(process.execPath, failing)).toThrow(/the-build-broke/);
+  });
+
+  let lessons: { lesson: string; islands: Island[] }[] = [];
+  const bytes = (l: { islands: Island[] }) => l.islands.filter((x) => AIDS.includes(x.component)).reduce((a, x) => a + x.bytes, 0);
+
+  beforeAll(() => {
+    ensureBuilt();
+    lessons = shippedIslands(readFileSync(PAGE, 'utf8'));
+  }, 180_000);
+
+  it('finds every agents lesson and its aids in the built page', () => {
+    expect(lessons.map((l) => l.lesson.replace(/^lesson \d+ \((.*)\)$/, '$1'))).toEqual(AGENTS_VIEWS);
+    expect(lessons.map((l) => l.islands.map((x) => x.component).join('+'))).toEqual([
+      'FlowDiagram', 'PatternStepper', 'PatternStepper', 'PatternStepper', 'AgentTrace', 'CostCompare', 'FlowDiagram',
+      'AgentTrace', 'AgentTrace', 'EngineScorecard', 'EngineScorecard',
+    ].map((aid) => `${aid}+Quiz+Quiz`));
+    expect(lessons.flatMap((l) => l.islands).filter((x) => AIDS.includes(x.component)).every((x) => x.bytes > 1000)).toBe(true);
+  });
+
+  it('keeps the props the agents aids ship, as the built page carries them, under 200 KB', () => {
+    const sizes = lessons.map((l) => [l.lesson, bytes(l)] as const).filter(([, n]) => n > 0);
     const total = sizes.reduce((a, [, n]) => a + n, 0);
     const [heaviest, most] = sizes.reduce((a, b) => (b[1] > a[1] ? b : a));
     const shares = sizes.map(([name, n]) => `${name} ${n}`).join(', ');
-    expect(total, `agents lessons ship ${total} bytes of props (heaviest: ${heaviest}, ${most} bytes): ${shares}`).toBeLessThan(200_000);
+    expect(total, `the agents aids ship ${total} bytes of props (heaviest: ${heaviest}, ${most} bytes): ${shares}`).toBeLessThan(200_000);
   });
 
   it('lets a lesson turn the drill-down off, which drops the per-ticket rows', () => {
     const off = engineScorecardProps(data.engineScores, { drillDown: false });
     expect(off.tickets).toEqual({});
     expect(off.rows).toHaveLength(8);
-    expect(shipped(off)).toBeLessThan(shipped(engineScorecardProps(data.engineScores)) / 2);
+    const [evals, capstone] = [lessons[9], lessons[10]].map(bytes);   // lesson 10 drills down, lesson 11 does not
+    expect(capstone).toBeLessThan(evals / 2);
   });
 });

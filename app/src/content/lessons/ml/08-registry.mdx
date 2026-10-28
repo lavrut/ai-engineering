@@ -9,18 +9,18 @@ quiz:
   - question: Why does the registry store each version's SHA-256 next to its path?
     options:
       - To make the file smaller
-      - So a server can check at startup that the file on disk is exactly the one that was registered, and refuse to start if it was swapped or edited
       - Git needs it to track the file
       - It is the version's name
-    answer: 1
+      - So a server can check at startup that the file on disk is exactly the one that was registered, and refuse to start if it was swapped or edited
+    answer: 3
     explanation: A path says where a file is, not what is in it. The hash pins the contents. Both servers recompute it before loading production, so a changed file stops the server instead of serving numbers nobody registered.
   - question: "`write_json_atomic` writes a temporary file, flushes it to disk, then calls `os.replace`. What does that protect against?"
     options:
       - Two people promoting at the same moment
-      - A crash or power cut halfway through a write leaving a half-written registry.json that no server can read
       - A wrong version being promoted
+      - A crash or power cut halfway through a write leaving a half-written registry.json that no server can read
       - The file growing too large
-    answer: 1
+    answer: 2
     explanation: "`os.replace` swaps the new file in with one rename, which is atomic on one filesystem: a reader sees the whole old file or the whole new one, never half. It does not stop two writers racing; each would read, change and replace, and the later write would win."
   - question: v1 is production. You promote v2, then run `rollback` twice. What is production afterwards?
     options:
@@ -104,7 +104,7 @@ Section 2 of `ml/python/mlops.py` is the registry.
 - `production_version(data)` returns the one version whose stage is `production`, or `None`.
 - `_move(data, version, stage, action, time, note)` is the only code that changes a stage. It appends the event first, then sets the stage. Every move goes through it, so none can skip the history.
 - `register(model_path, ...)` reads the version name from the file itself (`model["version"]`), refuses a name that is already registered, and records the path relative to the registry, the file's `sha256_file` hash and its metrics. The new version enters staging.
-- `promote(version, stage, ...)` checks the stage name and the version, refuses a move to the stage it is already in, and when the target is production archives the current production version first.
+- `promote(version, stage, ...)` checks the stage name and the version, refuses a move to the stage it is already in, refuses to move the production version anywhere else (that would leave the servers nothing to load: promote a replacement or roll back instead), and when the target is production archives the current production version first.
 - `rollback(...)` finds the previous production version in `history` and makes two moves. With no production version, or none before it, it raises a `ValueError` with a clear message instead of guessing.
 - `write_json_atomic(registry, data)` ends every command. It is defined above section 1: `tempfile.mkstemp` in the same folder, `f.flush()` and `os.fsync`, `os.replace`, then `os.fsync` on the folder.
 
@@ -130,8 +130,8 @@ cd ml/python
 ML="$(mktemp -d)/ml"
 cp -R .. "$ML"
 rm "$ML/registry.json"
-python mlops.py --root "$ML" register models/v1.json
-python mlops.py --root "$ML" rollback
+../../.venv-ml/bin/python mlops.py --root "$ML" register models/v1.json
+../../.venv-ml/bin/python mlops.py --root "$ML" rollback
 ```
 
 You should see `registered v1`, then a traceback ending in:
@@ -143,9 +143,9 @@ ValueError: no production version to roll back from
 Promote v1, register v2 and try again:
 
 ```bash
-python mlops.py --root "$ML" promote v1 production
-python mlops.py --root "$ML" register models/v2.json
-python mlops.py --root "$ML" rollback
+../../.venv-ml/bin/python mlops.py --root "$ML" promote v1 production
+../../.venv-ml/bin/python mlops.py --root "$ML" register models/v2.json
+../../.venv-ml/bin/python mlops.py --root "$ML" rollback
 ```
 
 ```text
@@ -157,9 +157,9 @@ ValueError: no previous production version before v1
 Now promote v2, ask the Go server which model it would load from the copy, and roll back. `predict` scores one text from the command line without starting the server; `ML_ROOT` points it at the copy:
 
 ```bash
-python mlops.py --root "$ML" promote v2 production
+../../.venv-ml/bin/python mlops.py --root "$ML" promote v2 production
 ML_ROOT="$ML" go -C ../go run . predict "my mortgage payment was misapplied"
-python mlops.py --root "$ML" rollback
+../../.venv-ml/bin/python mlops.py --root "$ML" rollback
 ML_ROOT="$ML" go -C ../go run . predict "my mortgage payment was misapplied"
 ```
 

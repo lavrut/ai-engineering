@@ -4,16 +4,20 @@ mini_harness — a complete, teaching-sized AI agent harness.
 
 The model only ever returns text or a request to call a tool. Everything
 else — the loop, the tools, permissions, context limits, logging — is the
-harness. This file is all of it, in about 230 lines.
+harness. This file is all of it, in about 300 lines.
 
-Run:
-    pip install anthropic
-    export ANTHROPIC_API_KEY=sk-ant-...
-    python harness.py
+Run (from the repo root; the key setup is in lesson 2):
+    python3 -m venv .venv-harness && .venv-harness/bin/pip install -r harness/python/requirements.txt
+    cd harness/python && ../../.venv-harness/bin/python harness.py
+Every task costs money: the REPL prints an estimate and asks y/N first (section 9).
 """
 from __future__ import annotations
 
+import argparse
 import json
+import math
+import os
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -30,6 +34,10 @@ CONTEXT_BUDGET = 150_000     # input tokens before we roll over to a summary
 USE_FALLBACKS = True         # retry on a fallback model if a safety classifier declines
 WORKSPACE = Path("./workspace").resolve()
 TRACE_FILE = Path("trace.jsonl")
+PRICE_PER_MTOK = (4.00, 20.00)  # MODEL's dollars per million input / output tokens (PRICES in llms/python/triage_lab.py)
+MAX_COST = 10.00                # default --max-cost: the most one REPL session may spend, in dollars
+TYPICAL_TASK = (4, 4_000, 400)  # for the estimate: model calls, input tokens and output tokens per call
+CHARS_PER_TOKEN = 3             # sizes a request before it is sent; low, so the guess runs high
 
 SYSTEM_PROMPT = f"""You are a careful coding assistant working inside {WORKSPACE}.
 Look at files before you change them. Keep your final answer short."""
@@ -110,7 +118,10 @@ def write_file(path: str, content: str) -> str:
 # ── 4. Permission gate ──────────────────────────────────────────────────────
 def approve(name: str, args: dict) -> bool:
     print(f"\n  ! The agent wants to run {name}({json.dumps(args)[:200]})")
-    decision = input("    Allow? [y/N] ").strip().lower() == "y"
+    try:
+        decision = input("    Allow? [y/N] ").strip().lower() == "y"
+    except EOFError:  # no more input: treat it as no
+        decision = False
     emit("permission", tool=name, allowed=decision)
     return decision
 
@@ -208,27 +219,104 @@ def run_agent(task: str, call: Callable[..., Any] = call_model,
 
 
 # ── 9. Entry point: a tiny REPL ─────────────────────────────────────────────
-def main() -> None:
+def dollars(input_tokens: int, output_tokens: int) -> float:
+    return (input_tokens * PRICE_PER_MTOK[0] + output_tokens * PRICE_PER_MTOK[1]) / 1_000_000
+
+
+class CostLimit(Exception):
+    """The next model call could take the session past --max-cost, so it was not made."""
+
+
+@dataclass
+class Ledger:
+    cap: float = MAX_COST
+    spent: float = 0.0
+
+
+def metered(call: Callable[..., Any], ledger: Ledger) -> Callable[..., Any]:
+    """The money gate on every model call: stop if spent + this call's worst case would pass the cap."""
+    def gated(messages: list[dict], **overrides: Any) -> Any:
+        sent = json.dumps([SYSTEM_PROMPT, [t.schema() for t in REGISTRY.values()], messages],
+                          default=lambda o: getattr(o, "__dict__", str(o)))
+        worst = dollars(len(sent) // CHARS_PER_TOKEN, overrides.get("max_tokens", MAX_TOKENS))
+        if ledger.spent + worst > ledger.cap:
+            raise CostLimit(f"spent ${ledger.spent:.4f}; the next call could cost up to ${worst:.4f}, "
+                            f"over --max-cost {ledger.cap:.2f}")
+        response = call(messages, **overrides)
+        ledger.spent += dollars(response.usage.input_tokens, response.usage.output_tokens)
+        return response
+    return gated
+
+
+def estimate_lines(ledger: Ledger) -> list[str]:
+    calls, tokens_in, tokens_out = TYPICAL_TASK
+    typical, worst = calls * dollars(tokens_in, tokens_out), MAX_TURNS * dollars(CONTEXT_BUDGET, MAX_TOKENS)
+    return [f"Estimate: typical ${typical:.2f} a task ({calls} calls of ~{tokens_in:,} input and ~{tokens_out:,} "
+            f"output tokens); worst case ${worst:.2f} if every call stays at CONTEXT_BUDGET (MAX_TURNS {MAX_TURNS} calls of {CONTEXT_BUDGET:,} input "
+            f"and {MAX_TOKENS:,} output tokens, plus any compaction summaries), at ${PRICE_PER_MTOK[0]:.2f} / "
+            f"${PRICE_PER_MTOK[1]:.2f} per million tokens; the hard stop is --max-cost ${ledger.cap:.2f}.",
+            f"Spent ${ledger.spent:.4f} this session; each call is checked against the cap first, "
+            f"so the session stops at about ${ledger.cap:.2f}."]
+
+
+def confirmed(yes: bool) -> bool:
+    """y on a terminal, or --yes for a scripted run you approved. Anything else is no."""
+    if yes:
+        return True
+    if not sys.stdin.isatty():
+        print("Not run: no terminal to ask. Nothing was spent.")
+        return False
+    try:
+        answer = input("Run it? [y/N] ")
+    except EOFError:
+        answer = ""
+    if answer.strip().lower() == "y":
+        return True
+    print("Not run. Nothing was spent.")
+    return False
+
+
+def main(argv: list[str] | None = None, call: Callable[..., Any] = call_model) -> int:
+    ap = argparse.ArgumentParser(description="mini-harness: a REPL that calls the Claude API (paid).")
+    ap.add_argument("--max-cost", type=float, default=MAX_COST, help="dollars this session may spend")
+    ap.add_argument("--yes", action="store_true", help="scripted runs only: approve every task without asking")
+    args = ap.parse_args(argv)
+    if not math.isfinite(args.max_cost) or args.max_cost <= 0:  # nan would make every "over the cap?" test false
+        print("--max-cost must be a finite number above 0. Nothing was called.")
+        return 2
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        print("Set ANTHROPIC_API_KEY first (lesson 2). Nothing was called.")
+        return 1
     WORKSPACE.mkdir(exist_ok=True)
+    ledger = Ledger(cap=args.max_cost)
     print(f"mini-harness · {MODEL} · workspace {WORKSPACE}\nType a task, or 'exit'.")
     while True:
         try:
             task = input("\nyou > ").strip()
         except (EOFError, KeyboardInterrupt):
-            break
+            return 0
         if task in {"exit", "quit"}:
-            break
+            return 0
         if not task:
             continue
+        print("\n".join(estimate_lines(ledger)))
+        if not confirmed(args.yes):
+            continue
+        before = ledger.spent
         try:
-            print("\nagent >", run_agent(task))
+            print("\nagent >", run_agent(task, call=metered(call, ledger)))
+        except CostLimit as e:
+            print(f"Stopped: {e}")
         except anthropic.RateLimitError:
             print("Rate limited even after retries. Wait a minute and try again.")
         except anthropic.APIStatusError as e:
             print(f"API error {e.status_code}: {e.message}")
         except anthropic.APIConnectionError:
             print("Network error: could not reach the API.")
+        except Exception as e:  # anything else: report it and keep the REPL, as Go's main does
+            print(f"Error: {e}")
+        print(f"  [${ledger.spent - before:.4f} this task, ${ledger.spent:.4f} this session]")
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

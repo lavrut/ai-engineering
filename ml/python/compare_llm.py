@@ -10,12 +10,13 @@ Run:
     python compare_llm.py sample                 # pick (or check) the 200 complaints: free
     python compare_llm.py compare                # replay saved answers, write reports/llm_compare.json: free
     export ANTHROPIC_API_KEY=sk-ant-...          # only to record or run live
-    python compare_llm.py record                 # prints the estimate, asks first (or add --yes)
+    python compare_llm.py record                 # prints the estimate, asks first (answer y; --yes is for scripted runs after you approved)
     python compare_llm.py live --limit 5         # calls, prints, saves nothing
 """
 from __future__ import annotations
 
 import argparse
+import math
 import hashlib
 import json
 import random
@@ -317,7 +318,7 @@ def _confirm(n_calls: int, cap: float, yes: bool) -> bool:
         except EOFError:
             pass
     if answer.strip().lower() not in ("y", "yes"):
-        print("Not confirmed. Nothing was called. Add --yes to approve.")
+        print("Not confirmed. Nothing was called. Run it in a terminal and answer y.")
         return False
     return True
 
@@ -327,12 +328,23 @@ def _write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 
 
+def cost_arg(text: str) -> float:
+    """argparse type for --max-cost: a finite number above 0 (nan would make every cap test false)."""
+    try:
+        value = float(text)
+    except ValueError:
+        value = float("nan")
+    if not math.isfinite(value) or value <= 0:
+        raise argparse.ArgumentTypeError("must be a finite number above 0")
+    return value
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["sample", "compare", "record", "live"])
     ap.add_argument("--ml-dir", type=Path, default=ML_DIR, help="folder holding data/, models/ and reports/")
     ap.add_argument("--limit", type=int, default=None, help="record/live: only the first N sampled complaints")
-    ap.add_argument("--max-cost", type=float, default=DEFAULT_MAX_COST, help="stop a paid run after this many dollars")
+    ap.add_argument("--max-cost", type=cost_arg, default=DEFAULT_MAX_COST, help="stop a paid run after this many dollars")
     ap.add_argument("--yes", action="store_true", help="approve the printed estimate without asking")
     args = ap.parse_args(argv)
     ml = args.ml_dir

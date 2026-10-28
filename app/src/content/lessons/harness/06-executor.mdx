@@ -129,9 +129,9 @@ print([r["tool_use_id"] for r in results])
 
 ```bash
 cd harness/python
-python timing_demo.py
+../../.venv-harness/bin/python timing_demo.py
 ```
 
 You should see three `-> wait(...)` lines, a time a little over 1200 ms, and `['t0', 't1', 't2']`. Now change `max_workers=8` to `max_workers=1` in `harness.py` and run it again: about 2000 ms, the same ids in the same order. Change it back afterwards.
 
-Then watch a real recovery. Make sure `workspace/config.yaml` does not exist, run `python harness.py`, and ask `Read config.yaml and tell me the port.` The model should get an error result, then look around or tell you the file is missing. `grep tool_result trace.jsonl` shows the failed call with `"is_error": true`.
+Then watch a real recovery. Make sure `workspace/config.yaml` does not exist, run `../../.venv-harness/bin/python harness.py` (a paid task: it prints the estimate and asks first), and ask `Read config.yaml and tell me the port.` The model should get an error result, then look around or tell you the file is missing. `grep tool_result trace.jsonl` shows the failed call with `"is_error": true`.

@@ -37,7 +37,7 @@ const button = (name: string | RegExp) => screen.getByRole('button', { name });
 afterEach(() => cleanup());
 
 // ── ModelVsLlm ──────────────────────────────────────────────────────────────
-// Literals from ml/reports/llm_compare.json (python compare_llm.py compare, replaying the 200
+// Literals from ml/reports/llm_compare.json (../../.venv-ml/bin/python compare_llm.py compare, replaying the 200
 // answers recorded in Task 11) and ml/reports/latency.json (python bench.py --write-reports).
 describe('model vs LLM data', () => {
   const p = modelVsLlmProps(data);
@@ -86,7 +86,8 @@ describe('model vs LLM data', () => {
     const empty = modelVsLlmProps({ ...data, llmCompare: null });
     expect(empty.compare).toBeNull();
     expect(empty.commands).toEqual(LLM_COMMANDS);
-    expect(LLM_COMMANDS).toEqual(['python compare_llm.py record', 'python compare_llm.py compare']);
+    // From ml/python, in .venv-ml, as lesson 6 runs them (P1): never a bare python.
+    expect(LLM_COMMANDS).toEqual(['../../.venv-ml/bin/python compare_llm.py record', '../../.venv-ml/bin/python compare_llm.py compare']);
   });
 });
 
@@ -137,8 +138,8 @@ describe('ModelVsLlm', () => {
   it('says "No recorded run yet" and how to record one when the report is missing', () => {
     const { container } = render(<ModelVsLlm {...modelVsLlmProps({ ...data, llmCompare: null })} />);
     expect(container.textContent).toContain('No recorded run yet');
-    expect(container.textContent).toContain('python compare_llm.py record');
-    expect(container.textContent).toContain('python compare_llm.py compare');
+    expect(container.textContent).toContain('../../.venv-ml/bin/python compare_llm.py record');
+    expect(container.textContent).toContain('../../.venv-ml/bin/python compare_llm.py compare');
     expect(screen.queryByRole('table', { name: /Side by side/ })).toBeNull();
     // The local servers' latency is still real data.
     expect(screen.getByRole('table', { name: /Latency/ }).textContent).toContain('0.120 ms');
@@ -546,8 +547,9 @@ describe('ops props and imports', () => {
 
   it('the ops islands never import mlData.ts at run time', () => {
     const src = (p: string) => readFileSync(join(here, '../src', p), 'utf8');
-    const imports = (text: string) => [...text.matchAll(/^import\s+(type\s+)?[^;]*?from\s+'([^']+)'/gms)].map((m) => ({ type: !!m[1], from: m[2] }));
-    for (const f of ['ModelVsLlm', 'RunTable', 'RegistryTimeline', 'DriftChart'].map((n) => `components/ml/${n}.tsx`)) {
+    const imports = (text: string) => [...text.matchAll(/^import\s+(type\s+)?[^;]*?from\s+['"]([^'"]+)['"]/gms)].map((m) => ({ type: !!m[1], from: m[2] }));
+    const islands = ['ModelVsLlm', 'RunTable', 'RegistryTimeline', 'DriftChart', 'DriftSignalChart', 'DriftClassShares'].map((n) => `components/ml/${n}.tsx`);
+    for (const f of [...islands, 'components/ml/driftChartCss.ts', 'lib/mlAidsOps.ts', 'lib/mlAidsDrift.ts']) {
       for (const i of imports(src(f))) {
         if (/mlData|llmsKey|llmsData/.test(i.from)) expect(i.type, `${f} imports ${i.from}`).toBe(true);
       }

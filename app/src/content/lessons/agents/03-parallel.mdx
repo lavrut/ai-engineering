@@ -9,10 +9,10 @@ quiz:
   - question: In the recorded parallel runs, lookup-2 and lookup-3 always made the same search. Why, and what does it teach?
     options:
       - The proxy merged them to save money
-      - Both got the same prompt, the same ticket and the same single tool, so they sent the same request and got the same answer. Parallel sections pay only when each does a different job
-      - The model ran out of ideas after the first search
       - Python's thread pool ran the same job twice by mistake
-    answer: 1
+      - The model ran out of ideas after the first search
+      - Both got the same prompt, the same ticket and the same single tool, so they sent the same request and got the same answer. Parallel sections pay only when each does a different job
+    answer: 3
     explanation: The two slots differ only in their agent name, which is not part of the request. Identical requests give identical answers, so the third lookup bought nothing. In the recording set this shows up as 60 model calls served by 57 recordings.
   - question: The orchestrator planned "verify the charges in the billing system" for t001. What did the worker do, and why could it not do more?
     options:

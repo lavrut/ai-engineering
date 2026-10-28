@@ -1,0 +1,46 @@
+{
+  "search_charged_twice": {
+    "arguments": {
+      "query": "charged twice",
+      "limit": 2
+    },
+    "ids": [
+      "t001",
+      "t007"
+    ],
+    "md5": "b0a7e0fab66d59fd1c32497fbabb1392"
+  },
+  "search_charged_twice_1": [
+    {
+      "id": "t001",
+      "category": "billing"
+    }
+  ],
+  "classify": {
+    "arguments": {
+      "text": "I was charged twice for my subscription"
+    },
+    "label": "Credit reporting or other personal consumer reports",
+    "low_confidence": true,
+    "scores": 6,
+    "model_version": "v1"
+  },
+  "estimates": {
+    "lesson5": {
+      "model": "claude-haiku-5-5",
+      "first": 832,
+      "calls": 3,
+      "typical": 0.001,
+      "max_calls": 10,
+      "worst": 0.0748
+    },
+    "capstone-noguard-sonnet-5-5": {
+      "model": "claude-sonnet-5-5",
+      "first": 941,
+      "calls": 4,
+      "typical": 0.0307,
+      "max_calls": 10,
+      "worst": 1.4988
+    }
+  }
+}

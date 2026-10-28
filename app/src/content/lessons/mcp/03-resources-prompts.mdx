@@ -24,11 +24,11 @@ quiz:
     explanation: Whatever a prompt returns becomes part of the user's side of the conversation. If a customer's words were pasted into it, they would look like the user's own instructions. Fetching them with a tool keeps them in a field the server labels as untrusted.
   - question: A client reads lumen://tickets/t999, which does not exist. What does lumen-read return?
     options:
-      - An empty resource with no contents
       - A JSON-RPC error whose message says the ticket t999 is unknown
+      - An empty resource with no contents
       - A tool result with isError true
       - The nearest ticket, t099
-    answer: 1
+    answer: 0
     explanation: A missing resource is a protocol error, not a tool result, because nothing was called as a tool. Python and Go return the same message, which is what the shared contract compares. Both also send the same error code, -32602, which is the spec's code for this.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';

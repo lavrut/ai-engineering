@@ -7,15 +7,16 @@ the model reads a ticket and returns a category, a priority and a reply draft.
 The lab is everything around that call — the dataset, the prompts, saved
 responses, graders, an LLM judge, a runner and a report. This file is all of it.
 
-Run:
-    pip install anthropic
+Run (in the venv: from the repo root, python3 -m venv .venv-llms, then
+.venv-llms/bin/pip install -r llms/python/requirements.txt and source .venv-llms/bin/activate):
+    cd llms/python
     python triage_lab.py run                       # replay saved responses: free, no API key
     python triage_lab.py compare --prompt v1_basic --vs v2_rules
     python triage_lab.py judge --prompt v2_rules   # judge the saved replies
     python triage_lab.py agreement                 # judge vs. the human labels
     python triage_lab.py gate --prompt v3_examples --baseline v2_rules
 
-    export ANTHROPIC_API_KEY=sk-ant-...            # only needed to record or run live
+    read -rs ANTHROPIC_API_KEY && export ANTHROPIC_API_KEY   # only to record or run live; paste the key, unechoed
     python triage_lab.py record --plan all --max-cost 8   # prints the estimate, asks first
     python triage_lab.py run --mode live --model claude-sonnet-5-5 --effort high
 Add --data llms/data/fixtures to use the tiny test data instead.
@@ -32,7 +33,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-import anthropic
+# The anthropic SDK is imported inside call_model, only when a paid mode needs it, so replay,
+# the graders and llms/finetune/lora.py work without it installed.
 
 # ── 1. Configuration ────────────────────────────────────────────────────────
 TASK_MODEL = "claude-haiku-5-5"    # the model that does the triage
@@ -40,6 +42,8 @@ JUDGE_MODEL = "claude-opus-5-5"    # the model that grades the replies
 MODE = "replay"                    # the CLI's default --mode: replay (saved responses) | record | live
 
 # Dollars per million tokens: (input, output). Used to estimate cost before any paid run.
+# Checked 2026-10-28 against https://platform.claude.com/docs/en/about-claude/pricing (base input and
+# output; Haiku 5.5 at prompts up to 100,000 tokens). Recorded costs in llms/data use these figures.
 PRICES: dict[str, tuple[float, float]] = {
     "claude-haiku-5-5": (0.10, 0.50),
     "claude-sonnet-5-5": (2.00, 10.00),
@@ -165,7 +169,7 @@ def call_model(params: dict, *, key, config, case_id, mode="replay", client=None
                     return line
         raise ReplayMiss(
             f"no saved response for {config['kind']} / {config['model']} / {config['prompt_version']} "
-            f"/ case {case_id} (rep {config['rep']}). Record it: python triage_lab.py record ...")
+            f"/ case {case_id} (rep {config['rep']}). Record it: ../../.venv-llms/bin/python triage_lab.py record ...")
     if mode not in ("record", "live"):
         raise ValueError(f"unknown mode {mode!r}")
 
@@ -173,6 +177,7 @@ def call_model(params: dict, *, key, config, case_id, mode="replay", client=None
         saved = already_recorded(path, key)
         if saved:                                  # resume: never pay twice for the same request
             return {**saved, "skipped": True}      # "skipped" is not saved; the runner counts it as free
+    import anthropic                                         # only a paid call needs the SDK
     client = client or anthropic.Anthropic(max_retries=4)   # created only when a paid mode needs it
     line = {"key": key, "config": config, "case_id": case_id, "output": None, "stop_reason": None,
             "input_tokens": 0, "output_tokens": 0, "latency_ms": 0, "error": None}
@@ -603,7 +608,7 @@ def _confirm(rows: list[dict], yes: bool, cap: float | None) -> bool:
         except EOFError:
             pass
     if answer.strip().lower() not in ("y", "yes"):
-        print("Not confirmed. Nothing was called. Add --yes to approve.")
+        print("Not confirmed. Nothing was called. Run it in a terminal and answer y.")
         return False
     return True
 
@@ -804,6 +809,16 @@ def cmd_record(args, client) -> int:
     return 0
 
 
+def cost_arg(text: str) -> float:
+    try:
+        value = float(text)
+    except ValueError:
+        value = float("nan")
+    if not math.isfinite(value) or value <= 0:
+        raise argparse.ArgumentTypeError("must be a finite number above 0")
+    return value
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="triage_lab.py", description="Evaluate LLM support-ticket triage.")
     parser.add_argument("--data", default=DATA_DIR, help="data root (default: llms/data)")
@@ -814,7 +829,7 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--effort", default=None, help="low | medium | high ...; omit to send none")
     common.add_argument("--workers", type=int, default=8)
     paid = argparse.ArgumentParser(add_help=False)
-    paid.add_argument("--max-cost", type=float, default=10.0,
+    paid.add_argument("--max-cost", type=cost_arg, default=10.0,
                       help="stop when the real spend passes this many dollars (default 10, the spec's cap)")
     paid.add_argument("--yes", action="store_true", help="approve the printed estimate without asking")
     sub = parser.add_subparsers(dest="command", required=True)

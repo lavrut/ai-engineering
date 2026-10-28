@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -121,6 +123,38 @@ func TestScoreMatchesFixture(t *testing.T) {
 		worst = math.Max(worst, checkPrediction(t, c, m.score(c.Input)))
 	}
 	t.Logf("max |score diff| vs predictions.json: %.3g", worst)
+}
+
+// Lesson 9 states how close Go's scores are to Python's on the valid fixture texts (1 to 20,000
+// characters): bit-for-bit identical on 13 of 28, and at most 5.6e-17 apart on the rest.
+func TestParityAsLesson9States(t *testing.T) {
+	m := model(t)
+	valid, identical, worst := 0, 0, 0.0
+	for _, c := range predictionCases(t) {
+		if n := utf8.RuneCountInString(c.Input); n < 1 || n > maxChars {
+			continue
+		}
+		valid++
+		got, same := m.score(c.Input), true
+		for k, want := range c.Expected.Scores {
+			if got.Scores[k] != want {
+				same = false
+			}
+			worst = math.Max(worst, math.Abs(got.Scores[k]-want))
+		}
+		if same {
+			identical++
+		}
+	}
+	stated := fmt.Sprintf("On the %d valid texts in `ml/data/fixtures/predictions.json`, both servers give the same label and the same `low_confidence` every time. Their scores are bit-for-bit identical on %d texts and differ by at most %s × 10⁻¹⁷ on the rest",
+		valid, identical, strconv.FormatFloat(worst*1e17, 'f', 1, 64))
+	lesson, err := os.ReadFile(filepath.Join("..", "..", "app", "src", "content", "lessons", "ml", "09-serving.mdx"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if valid != 28 || identical != 13 || !strings.Contains(strings.Join(strings.Fields(string(lesson)), " "), stated) {
+		t.Errorf("lesson 9 should say: %s", stated)
+	}
 }
 
 func TestPSIMatchesFixture(t *testing.T) {
@@ -280,6 +314,7 @@ func TestContract(t *testing.T) {
 	}
 	emoji := "\U0001F600"
 	deep := []byte(`{"text":"hi","x":` + strings.Repeat("[", 20000) + strings.Repeat("]", 20000) + `}`)
+	longInt := strings.Repeat("1", 5000) // past Python's 4,300-digit int limit: never converted
 	cases := []struct {
 		name        string
 		body        []byte
@@ -321,6 +356,10 @@ func TestContract(t *testing.T) {
 		{"text/plain", base, "text/plain", 200, ""},
 		{"extra fields ignored", []byte(`{"text":"hi","x":1,"y":[1,{"z":null}]}`), "", 200, ""},
 		{"huge number in an extra field", []byte(`{"text":"hi","x":1e400}`), "", 200, ""},
+		{"5000-digit integer in an extra field", []byte(`{"text":"hi","x":` + longInt + `}`), "", 200, ""},
+		{"negative 5000-digit integer in an extra field", []byte(`{"text":"hi","x":-` + longInt + `}`), "", 200, ""},
+		{"5000-digit integer nested in an extra field", []byte(`{"text":"hi","x":[0,{"y":` + longInt + `}]}`), "", 200, ""},
+		{"text is a 5000-digit integer", []byte(`{"text":` + longInt + `}`), "", 400, malformed},
 		{"escaped key", []byte(`{"text":"mortgage"}`), "", 200, ""},
 		{"duplicate keys: last (empty) wins", []byte(`{"text":"first","text":""}`), "", 400, lengthBody},
 		{"duplicate keys: last (valid) wins", []byte(`{"text":"","text":"mortgage"}`), "", 200, ""},

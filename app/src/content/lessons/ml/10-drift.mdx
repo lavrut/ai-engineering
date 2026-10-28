@@ -16,19 +16,19 @@ quiz:
     explanation: A model's behaviour on the data it was fitted to is not its behaviour on new data. Comparing new months with in-sample predictions measures that gap, not a change in the world. Unseen data from the year before deployment is the fair reference.
   - question: The calibrated monitor alerted in 3 of 24 months, twice on the predicted-category mix (January and June 2024) and once on words (November 2024). With no drift at all, at most 1.2 alerts per signal are expected on average. What should you conclude?
     options:
-      - The mix of complaints changed in 2024
       - It is within what chance gives; nothing here is evidence of drift
+      - The mix of complaints changed in 2024
       - Retrain immediately
       - The threshold is wrong and should be lowered
-    answer: 1
+    answer: 0
     explanation: Each threshold is crossed by at most 5% of no-drift months, so 24 months give at most 1.2 alerts per signal on average. Two or more on one signal still happens up to 34% of the time with no drift, so two predictions alerts and one words alert are what noise alone can produce.
   - question: In the real CFPB data, credit reporting grew from 72.4% of these complaints in 2022 to 80.0% in 2024. Why can the monitor not see that in this course's sample?
     options:
       - PSI cannot measure class shares
-      - The sample is stratified, with at least 5 complaints per category each month, so its class mix barely moves (43.3% to 46.7%)
       - v1 cannot predict credit reporting
       - The shift happened after 2024
-    answer: 1
+      - The sample is stratified, with at least 5 complaints per category each month, so its class mix barely moves (43.3% to 46.7%)
+    answer: 3
     explanation: Stratifying made every category learnable and every month comparable, but it fixed most of the class mix by design. A production monitor would see the real stream; this sample mutes exactly that shift, which lesson 2 warned about.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -143,7 +143,7 @@ Section 4 scores each period.
 
 ## How Go does it
 
-`go -C ml/go run . drift` prints the same table as `python monitor.py`, character for character. It gets there partly by recomputing and partly by reading.
+`go -C ml/go run . drift` prints the same table as `.venv-ml/bin/python ml/python/monitor.py`, character for character. It gets there partly by recomputing and partly by reading.
 
 - **Recomputed:** Go loads the production model, picks the top words from the training split, scores and counts the 2022 reference and every stream period itself, and computes PSI and the shifted words with its own code. Its `proportions` adds epsilon after dividing, and its sums use the same `pySum` compensation as the server, so the numbers agree with Python's: to 10⁻¹² on the fixed PSI cases in the tests, and to 10⁻⁹ across the whole report.
 - **Read, not recomputed:** the alert thresholds. They come from 5,000 draws of NumPy's random generator, and Go cannot reproduce NumPy's stream of random numbers. So Go reads the thresholds, settings and stop words from `drift.json` and checks it was made for the same model version and the same period sizes. It refuses to run otherwise rather than alert against the wrong line.
@@ -154,7 +154,7 @@ Run the monitor in both languages and compare. Neither writes anything; it takes
 
 ```bash
 cd ml/python
-python monitor.py
+../../.venv-ml/bin/python monitor.py
 ```
 
 You should see two tables. The monthly one starts:
@@ -177,7 +177,7 @@ and three rows have `YES` under `calib`:
 Now check that Go agrees:
 
 ```bash
-diff <(python monitor.py) <(go -C ../go run . drift) && echo identical
+diff <(../../.venv-ml/bin/python monitor.py) <(go -C ../go run . drift) && echo identical
 ```
 
 You should see `identical`.
@@ -200,7 +200,7 @@ for unit, key in (("month", "months"), ("quarter", "quarters")):
 ```
 
 ```bash
-python alerts.py
+../../.venv-ml/bin/python alerts.py
 ```
 
 You should see:

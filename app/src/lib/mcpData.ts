@@ -15,7 +15,7 @@ export function loadMcpData(): McpData {
     const raw = import.meta.glob('../../../mcp/data/derived/*.json', { import: 'default', eager: true }) as Record<string, unknown>;
     const get = <T>(name: string): T => {
       const key = Object.keys(raw).find((k) => k.endsWith(`/derived/${name}.json`));
-      if (!key) throw new Error(`mcpData: mcp/data/derived/${name}.json is missing (python mcp/python/derive.py writes it)`);
+      if (!key) throw new Error(`mcpData: mcp/data/derived/${name}.json is missing (.venv-mcp/bin/python mcp/python/derive.py writes it)`);
       return raw[key] as T;
     };
     cache = {

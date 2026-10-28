@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "agents"))
 
 import run  # noqa: E402
+import run_engines  # noqa: E402  (where go_run looks up go_binary and GO_TIMEOUT)
 import desk_core as core  # noqa: E402
 import proxy  # noqa: E402
 
@@ -470,8 +471,8 @@ def test_go_timeout_kills_the_process_group(monkeypatch, tmp_path):
     marker = tmp_path / "child.pid"
     script.write_text(f"#!/bin/sh\nsleep 300 &\necho $! > {marker}\nwait\n")
     script.chmod(0o755)
-    monkeypatch.setattr(run, "go_binary", lambda: script)
-    monkeypatch.setattr(run, "GO_TIMEOUT", 1)
+    monkeypatch.setattr(run_engines, "go_binary", lambda: script)
+    monkeypatch.setattr(run_engines, "GO_TIMEOUT", 1)
     with pytest.raises(RuntimeError, match="timed out"):
         run.go_run("single", T["t001"], approve="decline", elicit="accept", labels_path=tmp_path / "l.jsonl")
     pid = int(marker.read_text())
@@ -647,3 +648,19 @@ def test_failed_refresh_keeps_the_old_recordings_and_trace(dirs, monkeypatch, ca
     assert {p.name: p.read_text() for p in store.glob("*.json")} == before
     assert trace.read_text() == old_trace
     assert go(argv, dirs) == 0                                      # and it still replays
+
+
+def test_patching_the_facade_reaches_the_parts(monkeypatch):
+    """M3: run.py re-exports its parts' names. Patching one on `run` patches it in every part that holds it,
+    so the code sees the patch wherever it looks the name up; undoing the patch restores them all."""
+    import run_sets
+    import run_traces
+    was = run_sets.MODEL
+    monkeypatch.setattr(run, "MODEL", "claude-patched")
+    assert (run.MODEL, run_sets.MODEL, run_traces.MODEL) == ("claude-patched",) * 3
+    sentinel = object()
+    monkeypatch.setattr(run, "preflight", sentinel)
+    assert run_engines.preflight is sentinel
+    monkeypatch.undo()
+    assert (run.MODEL, run_sets.MODEL, run_traces.MODEL) == (was,) * 3
+    assert run_engines.preflight is run.preflight is not sentinel

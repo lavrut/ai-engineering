@@ -324,6 +324,25 @@ def test_token_sources_and_warning_match_in_both_clients(go_client, http_url, mo
         assert py.stderr == go.stderr == want, (py_args, py.stderr, go.stderr)
 
 
+PLAIN_HTTP_WARNING = ("client: warning: the token goes over plain http to a host that is not this machine, "
+                      "so anyone on the network path can read it; use https\n")
+
+
+@pytest.mark.parametrize("url", ["http://lumen.invalid:8765/mcp", "http://192.0.2.1.invalid/mcp"])
+def test_both_clients_warn_before_sending_a_token_over_plain_http_off_this_machine(go_client, url, tmp_path):
+    """M7: a token to a non-loopback http URL gets one warning line, the same in both clients, before any
+    request (the .invalid hosts never resolve, so nothing is sent). Loopback and https get none."""
+    env = clean_env(LUMEN_TOKEN="t0ken")
+    py, go = run_py("--url", url, "tools", env=env), run_go(go_client, "-url", url, "tools", env=env)
+    assert py.returncode != 0 and go.returncode != 0
+    assert py.stderr.startswith(PLAIN_HTTP_WARNING) and go.stderr.startswith(PLAIN_HTTP_WARNING), (py.stderr, go.stderr)
+    for quiet in ("http://127.0.0.1:1/mcp", "http://localhost:1/mcp", "https://lumen.invalid/mcp"):
+        py, go = run_py("--url", quiet, "tools", env=env), run_go(go_client, "-url", quiet, "tools", env=env)
+        assert "plain http" not in py.stderr and "plain http" not in go.stderr, quiet
+    no_token = run_py("--url", url, "tools")
+    assert "plain http" not in no_token.stderr  # no token, nothing to warn about
+
+
 REFUSED_401 = "client: the server refused the request: HTTP 401 Unauthorized\n"
 REFUSED_403 = "client: the server refused the request: HTTP 403 Forbidden\n"
 
@@ -423,3 +442,19 @@ def test_usage_errors_match_in_both_clients(go_client, command, message):
     go = subprocess.run([str(go_client), "-stdio", *command], capture_output=True, text=True, env=env, cwd=ROOT)
     for r in (py, go):
         assert r.returncode == 1 and r.stdout == "" and r.stderr.strip() == message
+
+
+def test_patching_the_facade_reaches_the_parts(monkeypatch):
+    """M3: client.py re-exports client_connect's and client_calls' names. Patching one on `client` sets it in
+    every part that holds it (connect looks deny up in client_connect); undoing the patch restores them."""
+    import client_calls
+    import client_connect
+
+    async def fake(message: str) -> bool:
+        return True
+
+    real = lumen_client.deny
+    monkeypatch.setattr(lumen_client, "deny", fake)
+    assert lumen_client.deny is client_connect.deny is client_calls.deny is fake
+    monkeypatch.undo()
+    assert lumen_client.deny is client_connect.deny is client_calls.deny is real

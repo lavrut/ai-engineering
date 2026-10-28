@@ -74,7 +74,7 @@ export type Features = {
   unknown: string[];
 };
 
-// ── Tokenizer (train.py section 3; rules R12) ─────────────────────────────────
+// ── Tokenizer (train.py section 3) ───────────────────────────────────────────
 /** Split text into tokens exactly as train.tokenize and Go's tokenize do:
  *  1. lowercase A-Z only (no Unicode case folding);
  *  2. a token is a maximal run of [a-z0-9'] (every other character, any non-ASCII one too, separates);
@@ -188,7 +188,7 @@ export const LOW_CONFIDENCE = 0.5;
 
 
 // ── The explorer's model ────────────────────────────────────────────────────
-export const COEF_SLICE_SIZE = 1200; // ~150 KB as a prop at 4 s.f.; labels match v1 on 98.7% of 2022-2024 complaints
+export const COEF_SLICE_SIZE = 1200; // ~150 KB as a prop at 4 s.f.; label agreement with v1 is measured by buildExplorer (pinned in mllessons.test.ts)
 
 /** The explorer's model from a full one, exact: the full vocabulary and idf, and the class weights
  *  of the `size` words with the largest |weight| in any class (ties by vocabulary order). Pass the

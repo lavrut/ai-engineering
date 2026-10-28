@@ -853,3 +853,13 @@ func TestCLIErrorsAreOneLine(t *testing.T) {
 		}
 	}
 }
+
+func TestMaxCostMustBeFiniteAndPositive(t *testing.T) {
+	for _, bad := range []string{"nan", "inf", "0", "-1"} {
+		var out, errOut bytes.Buffer
+		code := cli([]string{"run", "--data", fixtures, "--max-cost=" + bad}, nil, &out, &errOut)
+		if code != 2 || !strings.Contains(errOut.String(), "--max-cost must be a finite number above 0") {
+			t.Fatalf("%s: code %d\n%s", bad, code, errOut.String())
+		}
+	}
+}

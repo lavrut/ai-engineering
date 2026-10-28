@@ -8,6 +8,9 @@ Run (from anywhere, in the venv):
 
 Exit codes: 0 written, 1 a row did not match the lab, 2 inspect-ai is not installed.
 The lab numbers are computed here from the lab's replay functions, never typed in. No API calls.
+
+Price a live run first (free, runs nothing): --estimate [--model anthropic/<model>] [--grader anthropic/<model>]
+prints each run's calls and dollars from the lab's PRICES and EST_TOKENS, the same figures the lab's estimate uses.
 """
 from __future__ import annotations
 
@@ -133,11 +136,38 @@ def build_summary(log_dir, logs: dict | None = None) -> dict:
             "runs": runs, "framework_gives": FRAMEWORK_GIVES, "we_still_own": WE_STILL_OWN}
 
 
+def estimate_lines(model: str = lab.TASK_MODEL, grader: str = lab.JUDGE_MODEL) -> list[str]:
+    """The four runs as live runs: calls = tickets x epochs, dollars from the lab's PRICES (ValueError if unpriced)."""
+    model, grader = model.removeprefix("anthropic/"), grader.removeprefix("anthropic/")
+    tickets = lab.load_tickets()
+    n_test = len(lab.split(tickets, "test"))
+    rows = [(rid, lab._row("triage", model, variant, None, len(tickets) * epochs))
+            for rid, _, variant, epochs in TRIAGE_RUNS]
+    rows += [("judge", lab._row("triage", model, "v2_rules", None, n_test)),
+             ("judge", lab._row("judge", grader, "after", None, n_test))]
+    out = ["Live estimate from the lab's PRICES and EST_TOKENS (nothing is called):"]
+    out += [f"  {rid:<12} {r['kind']:<7} {r['model']:<18} {r['calls']:>3} calls  ${r['cost']:.4f}  worst ${r['worst']:.4f}"
+            for rid, r in rows]
+    out.append(f"Total for all four: ${sum(r['cost'] for _, r in rows):.4f} (worst ${sum(r['worst'] for _, r in rows):.4f}).")
+    out.append("If you accept the cost of one run, put LUMEN_LIVE_OK=1 in front of its inspect eval command.")
+    return out
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     ap.add_argument("--log-dir", type=Path, default=DEFAULT_LOG_DIR)
+    ap.add_argument("--estimate", action="store_true", help="print what the runs would cost live, run nothing")
+    ap.add_argument("--model", default=lab.TASK_MODEL, help="with --estimate: the live task model")
+    ap.add_argument("--grader", default=lab.JUDGE_MODEL, help="with --estimate: the live grader model")
     args = ap.parse_args(argv)
+    if args.estimate:
+        try:
+            print("\n".join(estimate_lines(args.model, args.grader)))
+        except ValueError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        return 0
     args.log_dir.mkdir(parents=True, exist_ok=True)
     summary = build_summary(args.log_dir)
     bad = [(r["id"], row["metric"]) for r in summary["runs"] for row in r["rows"] if not row["match"]]

@@ -31,15 +31,15 @@ export const mcpArchitecture: Diagram = {
       n: 1,
       highlight: ['model', 'e-model-agent', 'agent'],
       caption:
-        'The model never talks to a server. It asks for a tool by name. The agent turns each MCP tool into a harness tool, so the harness’s permission gate and executor treat it like any other. In the code: section 4.',
-      code: { file: 'python', section: 4, source: 'mcp-agent' },
+        'The model never talks to a server. It asks for a tool by name. The agent turns each MCP tool into a harness tool, so the harness’s permission gate and executor treat it like any other. In the code: section 3.',
+      code: { file: 'python', section: 3, source: 'mcp-agent-host' },
     },
     {
       n: 2,
       highlight: ['agent', 'e-agent-client', 'client'],
       caption:
-        'The agent reaches a server through an MCP client: it connects (stdio, or Streamable HTTP with a bearer token), then discovers the tools and calls them. In the code: section 2.',
-      code: { file: 'python', section: 2, source: 'mcp-client' },
+        'The agent reaches a server through an MCP client: it connects (stdio, or Streamable HTTP with a bearer token), then discovers the tools and calls them. In the code: section 1.',
+      code: { file: 'python', section: 1, source: 'mcp-client-connect' },
     },
     {
       n: 3,

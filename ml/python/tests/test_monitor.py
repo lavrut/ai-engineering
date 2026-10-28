@@ -156,3 +156,13 @@ def test_run_without_flag_writes_nothing(tmp_path, monkeypatch):
     monkeypatch.setitem(monitor.PATHS, "reports", tmp_path)
     monitor.main([])
     assert list(tmp_path.iterdir()) == []
+
+
+def test_refuses_a_model_trained_on_the_reference_year(monkeypatch):
+    """After a learner promotes v2 (trained on 2019-2022) in a copy, the 2022 reference would be
+    in-sample for it: exactly the false-alarm setup lesson 10 warns about. The monitor refuses."""
+    v2 = json.loads((ML / "models" / "v2.json").read_text("utf-8"))
+    monkeypatch.setattr(monitor, "production_model", lambda: v2)
+    rows = train.load_complaints(train.PATHS["complaints"])
+    with pytest.raises(ValueError, match="v2 trained on data up to 2022-12-31"):
+        monitor.build_report(rows, "test")

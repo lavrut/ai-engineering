@@ -9,26 +9,26 @@ quiz:
   - question: Six months from now, someone asks which data and code produced v1. Which fields of its run record answer that?
     options:
       - "`params` and `metrics`"
-      - "`data_version`, `git_commit` with `git_dirty`, and `model.sha256`"
       - "`time` and `run_id`"
+      - "`data_version`, `git_commit` with `git_dirty`, and `model.sha256`"
       - Only the model file itself, because it holds everything
-    answer: 1
+    answer: 2
     explanation: The data version is the hash of the complaints file, the commit names the code, `git_dirty` false says the code and data matched that commit, and the model hash ties the record to one exact file. Params and metrics say what was set and what came out, not where it came from.
   - question: "`git_dirty` is true on a run you just logged. What does it tell you, and what should you do?"
     options:
       - The run failed; rerun it
-      - The model is worse than the last one
       - The code or data in `ml/python` or `ml/data` differed from the recorded commit, so the commit does not fully describe the run; commit the code, run again, then commit the run
+      - The model is worse than the last one
       - Git is not installed
-    answer: 2
+    answer: 1
     explanation: A dirty run names a commit that is not the code that ran, so nobody can rebuild it from the record. The habit that keeps records honest is commit the code, then run, then commit the artefacts.
   - question: logreg C = 1 and C = 3 score 0.769 and 0.767 macro-F1 on the 2022 test year (n = 600, band ±0.041). The run diff shows C = 3 is 6.4 points higher on the training year. What does the record support?
     options:
-      - Switch to C = 3, because the training score is much higher
       - Keep C = 1; the test scores are tied inside the band, and the larger train–test gap at C = 3 is a sign of overfitting
+      - Switch to C = 3, because the training score is much higher
       - Switch to C = 3, because 0.767 is close enough
       - Nothing; training scores cannot be compared
-    answer: 1
+    answer: 0
     explanation: The test difference, 0.002, is far inside ±0.041, so the test year cannot separate them. The training score is not evidence of a better model; a higher training score with a flat test score is what overfitting looks like.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -106,7 +106,7 @@ Sorting by accuracy or macro-F1 puts Naive Bayes first, by less than the noise b
 - `log_run(...)` puts the record together. `sha256_file(model_path)` hashes the model file; `keep_path=False` keeps the hash and drops the path, for a model that is thrown away.
 - `if target.exists() and not replace and ... != dump_json(run)` refuses to overwrite a record whose contents would change. Rewriting an identical record is allowed, which is what makes a rebuild safe.
 - `write_json_atomic(target, run)` writes the file all at once or not at all; lesson 8 shows how.
-- `list_runs()` reads every record and sorts by time, then id. `python mlops.py runs` prints it.
+- `list_runs()` reads every record and sorts by time, then id. `../../.venv-ml/bin/python mlops.py runs` prints it.
 - `compare_runs(a, b)` returns only what differs: params as `[a, b]`, numeric metrics as `[a, b, b − a]`. `_flatten` turns nested metrics into names like `test.per_class_f1.Mortgage` first.
 
 `ml/python/with_mlflow.py` does the same with MLflow. Section 1 points MLflow at a folder; section 2 logs one run.
@@ -129,7 +129,7 @@ List the runs and diff two. Both commands only read `ml/runs/`:
 
 ```bash
 cd ml/python
-python mlops.py runs
+../../.venv-ml/bin/python mlops.py runs
 ```
 
 You should see:
@@ -144,7 +144,7 @@ logreg-C1-2019-2022       2023-07-01T00:00:00Z  holdout      0.764     0.813
 ```
 
 ```bash
-python mlops.py compare logreg-C1-2019-2021 logreg-C3-2019-2021
+../../.venv-ml/bin/python mlops.py compare logreg-C1-2019-2021 logreg-C3-2019-2021
 ```
 
 The output starts:
@@ -175,7 +175,7 @@ Now prove the records reproduce. Rebuild the experiment set in a copy of `ml/`, 
 ML="$(mktemp -d)/ml"
 cp -R .. "$ML"
 rm -r "$ML/runs"
-python mlops.py --root "$ML" experiments
+../../.venv-ml/bin/python mlops.py --root "$ML" experiments
 diff -r ../runs "$ML/runs"
 ```
 
@@ -189,7 +189,7 @@ You should see four `logged` lines, then a diff with two kinds of difference. `O
 
 Every param, metric and model hash is the same to the last digit. Only the code's commit differs, because you are on a later one. If you see `"git_dirty": true` in the copy, you have uncommitted changes in `ml/python` or `ml/data`.
 
-To run the MLflow version, install MLflow in a throwaway virtual environment, so it stays out of your main Python. The environment takes about 670 MB once installed; it is free, and nothing calls a paid API:
+To run the MLflow version, install MLflow in a throwaway virtual environment, so it stays out of your main Python. The environment takes several hundred megabytes once installed; it is free, and nothing calls a paid API:
 
 ```bash
 python3 -m venv /tmp/mlflow-venv

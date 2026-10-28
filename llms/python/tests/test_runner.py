@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import anthropic
 import pytest
 
 import triage_lab as lab
@@ -166,7 +167,7 @@ def empty_root(root):
 def no_api(monkeypatch):
     def boom(*a, **k):
         raise AssertionError("the API must not be called")
-    monkeypatch.setattr(lab.anthropic, "Anthropic", boom)
+    monkeypatch.setattr(anthropic, "Anthropic", boom)
 
 
 def response_files(root):
@@ -316,7 +317,7 @@ def test_editing_mode_never_makes_unconfirmed_calls(root, monkeypatch, capsys, m
     lab = edited_lab(mode)
     monkeypatch.setattr(sys, "stdin", SimpleNamespace(isatty=lambda: False))
     client = FakeClient()
-    monkeypatch.setattr(lab.anthropic, "Anthropic", lambda **k: client)   # a call without a client is counted too
+    monkeypatch.setattr(anthropic, "Anthropic", lambda **k: client)   # a call without a client is counted too
     data = ["--data", str(root)]
     for argv in (["run"], ["run", "--mode", "replay"],
                  ["compare", "--prompt", "v1_basic", "--vs", "v2_rules"],
@@ -334,7 +335,7 @@ def test_editing_mode_never_makes_unconfirmed_calls(root, monkeypatch, capsys, m
 def test_library_calls_default_to_replay(root, monkeypatch, mode):
     lab = edited_lab(mode)
     client = FakeClient()
-    monkeypatch.setattr(lab.anthropic, "Anthropic", lambda **k: client)
+    monkeypatch.setattr(anthropic, "Anthropic", lambda **k: client)
     prompts = lab.load_prompts(root / "prompts.json")
     ticket = lab.load_tickets(root / "tickets.jsonl")[0]
     lab.triage(ticket, "v2_rules", client=client, root=root, prompts=prompts)
@@ -386,3 +387,31 @@ def test_cli_every_error_line_is_caught(root, capsys, tmp_path):
 def test_cli_zero_workers_runs_one_at_a_time(capsys):
     assert lab.main(["run", "--workers", "0", "--data", str(FIXTURES)]) == 0
     assert "accuracy" in capsys.readouterr().out
+
+
+def test_a_failed_call_stops_the_runner():
+    """A call that raises (not an API error, which call_model saves) stops new calls, as Go's run does:
+    pool.map cancels the jobs that have not started, so at most the calls already in flight finish."""
+    called = []
+
+    def fn(case, rep):
+        called.append(case)
+        if case == 0:
+            raise OSError("disk full")
+        return {"config": {"model": "claude-haiku-5-5"}, "input_tokens": 1, "output_tokens": 1}
+
+    with pytest.raises(OSError, match="disk full"):
+        lab.run(list(range(20)), fn, workers=1)
+    assert called == [0]
+    called.clear()
+    with pytest.raises(OSError, match="disk full"):
+        lab.run(list(range(40)), fn, workers=4)
+    assert len(called) < 40
+
+
+@pytest.mark.parametrize("bad", ["nan", "inf", "0", "-1", "abc"])
+def test_max_cost_must_be_finite_and_positive(bad, capsys):
+    with pytest.raises(SystemExit) as e:
+        lab.build_parser().parse_args(["run", "--max-cost", bad])
+    assert e.value.code == 2
+    assert "must be a finite number above 0" in capsys.readouterr().err

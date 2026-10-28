@@ -28,11 +28,11 @@ They read the same key file. Without it, they refuse to start and say to start t
 
 ```sh
 .venv-mcp/bin/python mcp/python/read_server.py --http          # lumen-read  :8765, scope tickets:read
-cd mcp/go && go run ./opsserver -labels /tmp/lumen-live-labels.jsonl   # lumen-ops :8766 (Go), scope tickets:write
+cd mcp/go && go run ./opsserver -labels ~/.lumen/live-labels.jsonl   # lumen-ops :8766 (Go), scope tickets:write
 ```
 
 You can swap either server for its twin:
-- Python lumen-ops: `.venv-mcp/bin/python mcp/python/ops_server.py --labels /tmp/lumen-live-labels.jsonl`.
+- Python lumen-ops: `.venv-mcp/bin/python mcp/python/ops_server.py --labels ~/.lumen/live-labels.jsonl`.
 - Go lumen-read: `cd mcp/go && go run ./readserver -http`.
 
 ## 3. Run the flow
@@ -63,7 +63,7 @@ A confirmed write on lumen-ops:
 ```sh
 .venv-mcp/bin/python mcp/python/auth_live_check.py --url http://127.0.0.1:8766/mcp --yes \
     label_ticket '{"id": "t001", "label": "billing"}'
-cat /tmp/lumen-live-labels.jsonl
+cat ~/.lumen/live-labels.jsonl
 ```
 
 Expected:
@@ -120,7 +120,7 @@ client: the server refused the request: HTTP 401 Unauthorized
 Stop the three processes, then:
 
 ```sh
-rm -f ~/.lumen/read.tok /tmp/lumen-live-labels.jsonl
+rm -f ~/.lumen/read.tok ~/.lumen/live-labels.jsonl
 ```
 
 Keep `mcp/data/dev-signing.key` for the next run, or delete it to rotate the key. Deleting it invalidates every token issued so far.

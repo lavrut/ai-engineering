@@ -8,27 +8,27 @@ minutes: 25
 quiz:
   - question: The registry says production is v1 with hash a804df41…, but the file on disk hashes differently. What do both servers do?
     options:
+      - Refuse to start, with an error naming both hashes
       - Serve the file anyway and log a warning
       - Fall back to the majority class
-      - Refuse to start, with an error naming both hashes
       - Re-register the file under a new hash
-    answer: 2
+    answer: 0
     explanation: A server that starts with a file nobody registered would serve numbers nobody evaluated. Failing at startup is loud and cheap; a quietly wrong model is neither.
   - question: A client sends 20,000 copies of "é". That is 40,000 bytes of UTF-8. What does the server reply?
     options:
       - 400, because the text is over 20,000 bytes
-      - 200, because the limit counts code points, not bytes, and this is exactly 20,000
       - 400, because "é" is not ASCII
       - 413, because the body is too large
-    answer: 1
+      - 200, because the limit counts code points, not bytes, and this is exactly 20,000
+    answer: 3
     explanation: The contract counts characters as Python's len does, in code points. Go counts runes with utf8.RuneCountInString to match. The body, about 40 KB, is well under the 131,072-byte cap. Since the tokenizer only keeps ASCII letters and digits, no known word remains, so the reply is the majority class with low_confidence true.
   - question: The recorded medians are 0.252 ms for the Python server and 0.120 ms for the Go server. What can you say from them?
     options:
       - Go answers in 0.120 ms on any machine
-      - On the one machine measured, with sequential requests over localhost, Go took about half as long per request; the absolute numbers will differ elsewhere
       - Python is too slow to use in production
+      - On the one machine measured, with sequential requests over localhost, Go took about half as long per request; the absolute numbers will differ elsewhere
       - The Go server is more accurate
-    answer: 1
+    answer: 2
     explanation: The report says so itself. Only the ratio between two servers measured side by side on the same machine is meaningful. Both are far below a millisecond, which for most uses makes either one fast enough.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -71,7 +71,7 @@ And the rules that are easy to get wrong:
 - **Characters are code points.** 20,000 means Python's `len`, not bytes. "é" is one character and two bytes.
 - **The byte cap comes first.** 131,072 bytes (128 KiB) fits 20,000 characters written as six-byte `\uXXXX` escapes, plus room for the rest. The server stops reading once a body passes it; it does not trust the `Content-Length` header.
 - **Content-Type is not checked.** No header, or `text/plain`, works.
-- **Extra fields are ignored.** `{"text": "...", "lang": "en"}` is fine.
+- **Extra fields are ignored.** `{"text": "...", "lang": "en"}` is fine, and so is an integer of any length in one: neither server converts a field it does not read.
 - **Duplicate keys: the last one wins.** `{"text": 5, "text": "credit card"}` is a valid request.
 - **Field names are exact.** `{"TEXT": "..."}` has no `text` field.
 - **Text of only spaces is valid.** It has no known word, so the reply is the majority class with `low_confidence: true`, as in lesson 1.
@@ -104,7 +104,7 @@ The server only answers requests. The monitor (lesson 10) reads what it labels, 
 
 ## The code
 
-`ml/serve/server.py` has five numbered sections; `ml/go/main.go` numbers its own seven. Section 1 in both holds the limits and the two error bodies.
+`ml/serve/server.py` has five numbered sections; the Go server numbers its own seven, sections 1 to 5 and 7 in `ml/go/main.go` and section 6 (the drift monitor) in `ml/go/drift.go`. Section 1 in both holds the limits and the two error bodies.
 
 <CodeTabs source="ml-serve" section={1} goSection={1} />
 
@@ -129,7 +129,8 @@ Section 3 reads the request body by hand, so no framework default leaks into the
 
 - `read_body(request)` reads the stream in chunks and raises `TooLarge` as soon as it passes `MAX_BODY` bytes, whatever the `Content-Length` header claims.
 - `body.decode("utf-8")` is strict: invalid UTF-8, UTF-16 or a byte-order mark raises, and the request is malformed.
-- `json.loads(..., parse_constant=_not_json)` rejects `NaN`, `Infinity` and `-Infinity`, which Python's `json` accepts by default but JSON does not allow.
+- `json.loads(..., parse_constant=_not_json, ...)` rejects `NaN`, `Infinity` and `-Infinity`, which Python's `json` accepts by default but JSON does not allow.
+- `parse_int=lambda _: 0` never converts an integer. Python refuses to convert one longer than 4,300 digits, and Go never converts a field it ignores, so without it a long number in an extra field would be a 400 in Python and a 200 in Go. `0` is not a string, so an integer `text` is still the malformed-body 400.
 - `except (ValueError, RecursionError)` turns very deep nesting into the malformed-body 400 instead of a 500.
 - `data.get("text") if isinstance(data, dict) else None` and `isinstance(text, str)` reject arrays, numbers and missing fields alike.
 
@@ -160,7 +161,7 @@ Go reaches the same contract with different tools, and a few Go defaults would b
 Run both servers on your machine; nothing here costs money. From the repository root, in two terminals:
 
 ```bash
-uvicorn server:app --app-dir ml/serve --port 8000
+.venv-ml/bin/uvicorn server:app --app-dir ml/serve --port 8000
 ```
 
 ```bash
@@ -186,7 +187,7 @@ Now test the contract. Send each of these to both ports by changing `8000` to `8
 curl -s -w ' %{http_code}\n' localhost:8000/predict -d '{"TEXT": "my mortgage"}'
 curl -s -w ' %{http_code}\n' localhost:8000/predict -d '{"text": "a", "x": NaN}'
 curl -s -w ' %{http_code}\n' localhost:8000/predict -d '{"text": ""}'
-python3 -c 'print("{\"text\": \"" + "é" * 20001 + "\"}")' | curl -s -w ' %{http_code}\n' localhost:8000/predict --data-binary @-
+.venv-ml/bin/python -c 'print("{\"text\": \"" + "é" * 20001 + "\"}")' | curl -s -w ' %{http_code}\n' localhost:8000/predict --data-binary @-
 ```
 
 You should see the body error twice, then the length error twice, each with ` 400`:

@@ -1,5 +1,5 @@
 ---
-// Static table view of the sample JSONL trace the harness writes through emit().
+// Static table view of a hand-written sample trace, in the format the harness writes through emit().
 import { parseTrace } from '../lib/trace';
 import raw from '../data/sample-trace.jsonl?raw';
 
@@ -37,7 +37,7 @@ const rows = events.map((e) => ({
 
 <div class="trace-wrap" role="region" aria-label="Sample trace" tabindex="0">
   <table class="trace">
-    <caption>One sample session, as written by the harness (trace.jsonl)</caption>
+    <caption>A hand-written sample session, in the harness's trace.jsonl format</caption>
     <thead>
       <tr><th scope="col">Time</th><th scope="col">Event</th><th scope="col">Fields</th><th scope="col">What it tells you</th></tr>
     </thead>

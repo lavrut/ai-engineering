@@ -33,7 +33,22 @@ def test_denied_unknown_and_bad_args_are_errors(ws):
     assert all(r["is_error"] for r in out)
     assert out[0]["content"] == "The user denied this action."
     assert out[1]["content"] == "Unknown tool: nope"
+    assert out[2]["content"].startswith("TypeError:")
+    assert out[3]["content"].startswith("PermissionError:")
     assert not (harness.WORKSPACE / "x").exists()
+
+
+def test_safe_path_follows_symlinks(ws, tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("SECRET")
+    (ws / "link").symlink_to(outside / "secret.txt")
+    (ws / "dirlink").symlink_to(outside)
+    out = harness.execute_tools([block("read_file", {"path": "link"}, "t1"),
+                                 block("write_file", {"path": "dirlink/new.txt", "content": "x"}, "t2")],
+                                approver=lambda *_: True)
+    assert all(r["is_error"] and r["content"].startswith("PermissionError:") for r in out)
+    assert not (outside / "new.txt").exists()
 
 
 def test_read_file_caps_output(ws):

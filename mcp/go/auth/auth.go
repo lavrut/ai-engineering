@@ -73,7 +73,7 @@ func KeyFile() string {
 // JWKS, so resource servers hold no secret. The Python twin is resource_auth.load_signing_key.
 func LoadSigningKey() ([]byte, error) {
 	path := KeyFile()
-	fix := "start the test AS first (python mcp/python/auth_server.py), or set " + KeyFileEnv
+	fix := "start the test AS first (.venv-mcp/bin/python mcp/python/auth_server.py), or set " + KeyFileEnv
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, fmt.Errorf("signing key file %s not found or unreadable: %s", path, fix)

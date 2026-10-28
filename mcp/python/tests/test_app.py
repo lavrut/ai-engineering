@@ -65,6 +65,10 @@ def test_app_html_accessibility_and_protocol():
         assert f'value="{cat}"' in HTML
     assert re.search(r'<label[^>]+for="category"', HTML) and 'id="category"' in HTML
     assert re.search(r'aria-live="polite"', HTML) and 'role="status"' in HTML
+    # M14: the status prefix ("Done:", "Error:", "Working:") is text in the live region, not CSS ::before
+    # content, which screen readers do not reliably announce.
+    assert "::before" not in HTML and 'content: "' not in HTML
+    assert 'var PREFIX = { ok: "Done: ", error: "Error: ", wait: "Working: " };' in HTML
     assert ">Confirm<" in HTML and ">Cancel<" in HTML
     assert "prefers-color-scheme: dark" in HTML
     for method in ("ui/initialize", "ui/notifications/initialized", "ui/notifications/tool-input",

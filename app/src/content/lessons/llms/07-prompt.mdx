@@ -9,10 +9,10 @@ quiz:
   - question: Prompt B scores 2.5 points higher than A on the 40 dev tickets. It fixed 9 tickets and broke 8. What should you do before choosing B?
     options:
       - Choose B, since it scores higher
-      - Read the 8 broken tickets; a 2.5-point gain is inside the noise band, and B changed 17 tickets' outcomes, so it is a different prompt, not a slightly better one
-      - Choose A, since it broke fewer tickets
       - Run B on the test split to settle it
-    answer: 1
+      - Choose A, since it broke fewer tickets
+      - Read the 8 broken tickets; a 2.5-point gain is inside the noise band, and B changed 17 tickets' outcomes, so it is a different prompt, not a slightly better one
+    answer: 3
     explanation: The net score hides the churn. A change that fixes 9 and breaks 8 moves almost nothing on average but changes what customers see on 17 tickets. The broken list tells you what B gets wrong that A got right, and 2.5 points on 40 tickets is well inside ±15.8%. Running on test to decide would spend the test split.
   - question: v3_examples adds three worked examples to v2_rules. On dev it scores +0.0, with no ticket fixed or broken. What is the right reading?
     options:
@@ -24,11 +24,11 @@ quiz:
     explanation: The rules in v2_rules already decide these tickets, and the examples did not change a single answer. A result of "no difference" is worth knowing, because the examples cost about 237 more input tokens on every call. Adding examples until the score moves is tuning toward noise.
   - question: v2_rules scores 97.5% on dev against labels written from the labelling guide, and v2_rules states the guide's rules. What does the 97.5% not tell you?
     options:
-      - Whether the model follows the guide
       - How well it would match labels from someone who did not use the guide, or on tickets unlike these, because the prompt contains the same rules that made the answer key
+      - Whether the model follows the guide
       - The category accuracy
       - Whether v1_basic was worse
-    answer: 1
+    answer: 0
     explanation: A prompt that states the answer key's rules is graded against labels made by those rules. If the guide is your real policy, that is exactly what you want the model to do. But the score then measures "follows the guide on these tickets", not general triage skill. That is the circularity caveat in llms/data/README.md.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -76,7 +76,7 @@ That is not cheating if the guide is your real policy: you want the model to fol
 
 `v2_rules` to `v3_examples` on dev is +0.0. Both score 97.5%, and no ticket is fixed or broken: the two versions get the same tickets right. Even a one-ticket gain, 2.5 points, would have been far inside the band.
 
-That is a null result, and it is worth as much as a win. The examples are not free. `v3_examples` sends about 1,780 input tokens a call where `v2_rules` sends about 1,543, so every ticket costs about 13% more, and it bought no accuracy here. Keep `v2_rules`.
+That is a null result, and it is worth as much as a win. The examples are not free. On the 40 dev tickets (rep 0), `v3_examples` sends about 1,780 input tokens a call where `v2_rules` sends about 1,543, so every ticket costs about 13% more, and it bought no accuracy here. Keep `v2_rules`.
 
 Worked examples help most when a rule is hard to put in words, or the output format keeps going wrong. Here the rules already decide these tickets. Do not keep adding examples until the score moves: on 40 tickets, a move you go looking for is likely to be noise.
 
@@ -134,7 +134,7 @@ Compare the first two versions on dev, from the saved responses:
 
 ```bash
 cd llms/python
-python triage_lab.py compare --prompt v1_basic --vs v2_rules
+../../.venv-llms/bin/python triage_lab.py compare --prompt v1_basic --vs v2_rules
 ```
 
 ```text
@@ -147,7 +147,7 @@ v1_basic -> v2_rules on the dev split
 Now report the chosen version once on test:
 
 ```bash
-python triage_lab.py run --prompt v2_rules --split test
+../../.venv-llms/bin/python triage_lab.py run --prompt v2_rules --split test
 ```
 
 ```text
@@ -177,10 +177,10 @@ print("added v4_reply to", path)
 
 ```bash
 cp -r ../data ~/lumen-prompts
-python new_version.py ~/lumen-prompts
-python triage_lab.py --data ~/lumen-prompts run --prompt v4_reply
+../../.venv-llms/bin/python new_version.py ~/lumen-prompts
+../../.venv-llms/bin/python triage_lab.py --data ~/lumen-prompts run --prompt v4_reply
 ```
 
 Replay stops with `error: no saved response for triage / claude-haiku-5-5 / v4_reply / case t001 (rep 0)`. A new version is new text, so it has new keys and no answers yet. `v2_rules` in the same copy still replays, because its text did not change.
 
-Getting answers costs money, and nothing later in the track needs them. If you want them, adding `--mode record` to that command prints the estimate and asks first: 40 Haiku calls, `$0.02`, worst case `$0.04`. Then `python triage_lab.py --data ~/lumen-prompts compare --prompt v2_rules --vs v4_reply` shows whether category and priority held. Judging the new replies on dev would add 40 Opus calls, estimated at `$0.94`, worst case `$1.82`. Compare those verdicts with your own reading of a few replies before you trust them. One more caveat: the idea for `v4_reply` came from reading the judge's reasons on the six test failures, so the test split has already shaped this change. After you tune the reply on dev, a clean final check of reply quality needs fresh tickets; otherwise read any test reply score as optimistic.
+Getting answers costs money, and nothing later in the track needs them. If you want them, adding `--mode record` to that command prints the estimate and asks first: 40 Haiku calls, `$0.02`, worst case `$0.04`. Then `../../.venv-llms/bin/python triage_lab.py --data ~/lumen-prompts compare --prompt v2_rules --vs v4_reply` shows whether category and priority held. Judging the new replies on dev would add 40 Opus calls, estimated at `$0.94`, worst case `$1.82`. Compare those verdicts with your own reading of a few replies before you trust them. One more caveat: the idea for `v4_reply` came from reading the judge's reasons on the six test failures, so the test split has already shaped this change. After you tune the reply on dev, a clean final check of reply quality needs fresh tickets; otherwise read any test reply score as optimistic.

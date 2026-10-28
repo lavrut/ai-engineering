@@ -10,17 +10,17 @@ quiz:
     options:
       - Nothing; the lines are short, so the key would barely change
       - The proxy would store the reader's working directory in the repo
-      - Every request would get a new key on another machine or another day, so no recording would ever replay outside the run that made it
       - The API would refuse the request
-    answer: 2
+      - Every request would get a new key on another machine or another day, so no recording would ever replay outside the run that made it
+    answer: 3
     explanation: The key is a hash of the whole request, so any byte that changes changes the key. Those lines differ per machine and per day, so an unmasked recording would miss everywhere but where and when it was made. The mask is narrow on purpose, so that a real change to a request still misses loudly.
   - question: Replaying the Agent SDK supervisor on t001 spends $0.0000, yet the scorecard lists that run at $0.00327. Which is right?
     options:
       - The replay; a replayed run is free, so its cost is zero
-      - Both, for different questions. The replay paid nothing, but the scorecard asks what the run's model calls cost, and that comes from the usage stored with each recording, the same on every replay
-      - The scorecard is out of date and must be rebuilt
       - Neither; the cost is the Agent SDK's own estimate
-    answer: 1
+      - The scorecard is out of date and must be rebuilt
+      - Both, for different questions. The replay paid nothing, but the scorecard asks what the run's model calls cost, and that comes from the usage stored with each recording, the same on every replay
+    answer: 3
     explanation: A store hit is free and takes about a millisecond, but the work it stands for was not. Each recording keeps the recorded call's tokens and time, the proxy adds them to a per-run ledger, and every trace carries that ledger. So every engine is costed from its recordings, whether the run replayed or paid.
   - question: You re-record one ticket with --refresh, and the run stops at its call cap halfway through. What is in the store afterwards?
     options:
@@ -149,9 +149,9 @@ Section 3 is the store.
 - `tmp = self.dir / f".{key}.{threading.get_ident()}.tmp"` and `os.replace(tmp, self.path(key))` write atomically, so a reader never sees half a recording.
 - `def closest_diff(store: Store, summary: dict) -> str:` builds the miss hint: it flattens the request and every recording and names the one with the fewest differing fields.
 
-Section 4 prices the calls.
+Section 1 of `proxy_cost.py` prices the calls.
 
-<CodeTabs source="agents-proxy" section={4} />
+<CodeTabs source="agents-proxy-cost" section={1} />
 
 - `CACHE_WRITE_MULTIPLIER = 1.25` and `CACHE_READ_MULTIPLIER = 0.10` are the published multipliers, in one named place.
 - `def ledger_cost(model: str | None, usage: dict) -> float | None:` prices one recorded call, each kind of input token at its own rate, and returns `None` rather than a guess when a field is missing.
@@ -211,7 +211,7 @@ curl -s -i http://127.0.0.1:8790/v1/messages -H 'content-type: application/json'
   -d '{"model": "claude-haiku-5-5", "max_tokens": 100, "messages": [{"role": "user", "content": "Hello"}]}'
 ```
 
-You should see `HTTP/1.1 404 Not Found`, an `x-replay-hint` header, and the body `{"type": "error", "error": {"type": "replay_miss", "message": "no recording for 3c84397c; record with: python agents/proxy/proxy.py --mode record --set desk-hand"}}`. The proxy's terminal logs the same `MISS`. Nothing was sent anywhere. Stop the proxy with Ctrl-C.
+You should see `HTTP/1.1 404 Not Found`, an `x-replay-hint` header, and the body `{"type": "error", "error": {"type": "replay_miss", "message": "no recording for 3c84397c; record with: .venv-agents/bin/python agents/proxy/proxy.py --mode record --set desk-hand"}}`. The proxy's terminal logs the same `MISS`. Nothing was sent anywhere. Stop the proxy with Ctrl-C.
 
 See what recording that one ticket again would cost, without calling anything:
 

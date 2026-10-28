@@ -8,12 +8,13 @@ What the confirmation proves: only that the retry came from the same caller, for
 arguments, within five minutes, on a state this server issued and has not seen answered before.
 Whether a human or a script said "yes" is the client's claim; `confirmed=True` records the claim.
 
-HTTP only by design (a write server is not a subprocess any host can spawn), and always as an OAuth
+In this track, served over HTTP only (a write server is not a subprocess any host can spawn; the AI
+Agents track spawns build_ops_server() privately over stdio for its Go desk), and always as an OAuth
 resource server (scope tickets:write, audience http://127.0.0.1:<port>/mcp, 8766 by default; see resource_auth.py).
 The label row's client_id is the verified token's client_id. Tests use the in-memory server from
 build_ops_server(), which has no HTTP and so no bearer check.
 
-Run:  python mcp/python/ops_server.py [--port 8766] [--labels PATH]
+Run:  .venv-mcp/bin/python mcp/python/ops_server.py [--port 8766] [--labels PATH]
 """
 from __future__ import annotations
 

@@ -9,10 +9,10 @@ quiz:
   - question: The best desk, the Go supervisor, succeeded on 84.6% of 13 tickets. The gate needs success minus the noise band to reach 70%. Why does it fail, and what is the honest report?
     options:
       - It passes; 84.6% is above 70%
-      - It fails because 84.6% minus the 27.7-point band is 56.9%. The honest report is that no desk clears the gate on 13 tickets, which is a statement about how much 13 tickets can show, not a reason to lower the bar
-      - It fails because the Go desk is not a framework
       - It fails, so the gate should drop to 50% until a desk passes
-    answer: 1
+      - It fails because the Go desk is not a framework
+      - It fails because 84.6% minus the 27.7-point band is 56.9%. The honest report is that no desk clears the gate on 13 tickets, which is a statement about how much 13 tickets can show, not a reason to lower the bar
+    answer: 3
     explanation: The gate trusts a score only down to its noise band, the LLMs track's method. On 13 tickets the band is so wide that even 12 of 13 would fail. Lowering the bar after seeing the result would make the gate say whatever we wanted.
   - question: If the Go supervisor's 84.6% held on more tickets, about how many would it take to clear the gate?
     options:

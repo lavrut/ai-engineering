@@ -11,7 +11,7 @@ Inspect model API that answers from the lab's saved responses in llms/data/respo
 so the run is free and identical every time. It never falls back to a paid call;
 a request with no saved answer raises an error naming the lab's record command.
 In live mode you pass `--model anthropic/<model>` instead and Inspect calls the
-API itself. Live mode is documented in the lesson, not run here.
+API itself (paid, gated by LUMEN_LIVE_OK below). Live mode is documented in the lesson, not run here.
 
 Run (from the repo root, in the venv):
     .venv-inspect/bin/pip install -r llms/inspect/requirements.txt
@@ -25,16 +25,19 @@ Run (from the repo root, in the venv):
     # the judged run: the Opus grader replays too (rep-0 replies on the test split)
     .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage_judged --model replay/claude-haiku-5-5 --model-role grader=replay/claude-opus-5-5 --log-dir llms/inspect/logs
 
-Live (a paid run): swap `replay/` for `anthropic/` in --model. This costs money.
-Check the lab's estimate for the same run first (from llms/python):
-    python triage_lab.py run --prompt v2_rules --split all --reps 3 --mode live
-With stdin closed (< /dev/null) it prints the estimate (about $0.08, worst case $0.20) and declines; interactively it asks "Make these paid calls? [y/N]"; answering N spends nothing.
-The judged run adds the Opus grader: about $0.47, worst case $0.91.
-The spend cap defaults to --max-cost 10 (dollars).
+Live (a paid run): swap `replay/` for `anthropic/` in --model or the grader role. This costs money, and
+Inspect has no y/N prompt, so the task refuses any non-replay model unless LUMEN_LIVE_OK=1 is set.
+Price the run first (free, calls nothing):
+    .venv-inspect/bin/python llms/inspect/summarize.py --estimate
+It prints each run's calls and dollars from the lab's PRICES: the v2_rules run over 3 epochs is about $0.08
+(worst case $0.20); the judged run adds the Opus grader, about $0.47 (worst case $0.91). If you accept that:
+    LUMEN_LIVE_OK=1 .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model anthropic/claude-haiku-5-5 -T variant=v2_rules --epochs 3 --log-dir llms/inspect/logs
+There is no run-wide spend cap: Inspect's --cost-limit applies to each sample.
 """
 from __future__ import annotations
 
 import json
+import os
 import sys
 import warnings
 from pathlib import Path
@@ -84,6 +87,7 @@ from triage_lab import (  # noqa: F401  (later sections use the rest)
 # ── 1. Configuration ────────────────────────────────────────────────────────
 INSPECT_VERSION = "0.3.285"        # the version this lesson was written and checked against
 REP_HEADER = "x-replay-rep"        # the solver sends the epoch here, so each epoch replays its own rep
+LIVE_OK = "LUMEN_LIVE_OK"          # set to 1 to approve a paid (non-replay) model, after pricing the run
 
 if inspect_ai.__version__ != INSPECT_VERSION:
     warnings.warn(f"this lesson was written for inspect-ai {INSPECT_VERSION}, you have "
@@ -115,7 +119,7 @@ def saved_line(kind, model, prompt_version, effort, key, root) -> dict:
             if line["key"] == key:
                 return line
     raise ReplayMiss(f"no saved response for {kind} / {model} / {prompt_version}. "
-                     f"Record it: python triage_lab.py record ...")
+                     f"Record it: ../../.venv-llms/bin/python triage_lab.py record ...")
 
 
 REPLY_MARK = "\n\nReply:\n"
@@ -128,7 +132,7 @@ def parse_judge_message(text: str, rubric: str) -> tuple[str, str, str]:
     rubric_part = "\n\nRubric:\n" + rubric
     # Contrived edge: a "before"-order reply that itself ends with this rubric suffix would parse as "after".
     if not text.startswith("Ticket:\n"):
-        raise ReplayMiss(f"unrecognised judge message {text[:40]!r}. Record it: python triage_lab.py record ...")
+        raise ReplayMiss(f"unrecognised judge message {text[:40]!r}. Record it: ../../.venv-llms/bin/python triage_lab.py record ...")
     body = text[len("Ticket:\n"):]
     if body.endswith(rubric_part):                    # after: ticket, reply, rubric
         order, body = "after", body[: -len(rubric_part)]
@@ -138,9 +142,9 @@ def parse_judge_message(text: str, rubric: str) -> tuple[str, str, str]:
         ticket, _, reply = body.partition(rubric_part + REPLY_MARK)
         sep = REPLY_MARK
     else:
-        raise ReplayMiss(f"unrecognised judge message {text[:40]!r}. Record it: python triage_lab.py record ...")
+        raise ReplayMiss(f"unrecognised judge message {text[:40]!r}. Record it: ../../.venv-llms/bin/python triage_lab.py record ...")
     if not sep:
-        raise ReplayMiss(f"judge message has no reply {text[:40]!r}. Record it: python triage_lab.py record ...")
+        raise ReplayMiss(f"judge message has no reply {text[:40]!r}. Record it: ../../.venv-llms/bin/python triage_lab.py record ...")
     return ticket, reply, order
 
 
@@ -180,7 +184,7 @@ class ReplayAPI(ModelAPI):
             line = saved_line("judge", self.model_name, order, None, key, self.root)
         else:
             raise ReplayMiss(f"no saved response for {self.model_name}: unknown system prompt "
-                             f"{system[:60]!r}. Record it: python triage_lab.py record ...")
+                             f"{system[:60]!r}. Record it: ../../.venv-llms/bin/python triage_lab.py record ...")
         return self._output(line)
 
     def _output(self, line: dict) -> ModelOutput:
@@ -195,6 +199,19 @@ class ReplayAPI(ModelAPI):
         return out
 
 
+def replay_or_approved(model, flag: str = "--model") -> bool:
+    """True for the replay model (free). Any other model, anthropic/ included, pays real money and Inspect
+    has no y/N prompt, so it runs only once the learner has priced it and set LUMEN_LIVE_OK=1 (then False)."""
+    if str(model).startswith("replay/"):
+        return True
+    if os.environ.get(LIVE_OK) == "1":
+        return False
+    raise PermissionError(
+        f"{model} is not the replay model: this run makes paid API calls. Price it first (free): "
+        f".venv-inspect/bin/python llms/inspect/summarize.py --estimate {flag} {model.name}; "
+        f"if you accept the cost, run again with {LIVE_OK}=1 in front of the command")
+
+
 # ── 4. Solver ───────────────────────────────────────────────────────────────
 @solver
 def triage_solver(variant: str) -> Solver:
@@ -205,8 +222,9 @@ def triage_solver(variant: str) -> Solver:
 
     async def solve(state: TaskState, generate: Generate) -> TaskState:
         state.messages.insert(0, system)
-        return await generate(state, extra_headers={REP_HEADER: str(state.epoch - 1)}, response_schema=schema,
-                              max_tokens=MAX_TOKENS)
+        # the rep header is the replay provider's test seam: a paid model never sees it
+        headers = {REP_HEADER: str(state.epoch - 1)} if replay_or_approved(get_model()) else None
+        return await generate(state, extra_headers=headers, response_schema=schema, max_tokens=MAX_TOKENS)
 
     return solve
 
@@ -278,6 +296,7 @@ def rubric_judge():
         if not reply:        # no triage reply to judge: the lab skips these tickets
             return Score(value=none, metadata={"graded": False, "verdicts": dict.fromkeys(RUBRIC_IDS), "reasons": {}})
         grader = get_model(role="grader")
+        replay_or_approved(grader, "--grader")   # a paid grader runs only after LUMEN_LIVE_OK=1; price it as the grader
         out = await grader.generate([ChatMessageSystem(content=_judge_system(prompts)),
                                      ChatMessageUser(content=judge_message(state.input_text, reply, rubric))],
                                     config=GenerateConfig(response_schema=schema, max_tokens=MAX_TOKENS))

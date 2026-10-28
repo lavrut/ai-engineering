@@ -4,12 +4,12 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
 {
   "harness/02-model.mdx #1": {
     "go": {
-      "lines": 19,
-      "sha256": "a86aa98d1c0d62e10d42fe12b9f03b1619853f5a69c8bbef467f16ffb922e626",
+      "lines": 27,
+      "sha256": "075b6089d28ae83f0ebbddebd9257b1dd9cb84e15c26040564241f6d57c26af3",
     },
     "python": {
-      "lines": 13,
-      "sha256": "171853dcd56d3f0c453a9c6d86992d51735143fbf32ff5bd6d4ecc36d1c31700",
+      "lines": 17,
+      "sha256": "767a54df1262f328f4c2a3c34c5feed8e52ef4b6e49acb94314359fe75fdc031",
     },
   },
   "harness/02-model.mdx #2": {
@@ -24,8 +24,8 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
   },
   "harness/03-tools.mdx #1": {
     "go": {
-      "lines": 158,
-      "sha256": "d0326e57ffaf2d467f50ee2919d0825727722394e5f74eaeec7d5d5b40c47e7f",
+      "lines": 161,
+      "sha256": "17e8b84b806666b09e148cd8359ce0f4f86ddf70c6e780ff30102858959a5f29",
     },
     "python": {
       "lines": 61,
@@ -45,11 +45,11 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
   "harness/05-permissions.mdx #1": {
     "go": {
       "lines": 11,
-      "sha256": "a030077ae27fee0e65ee8ca0a650c8f5c9bcb1deb584ccc0f21c6beda8fa89c5",
+      "sha256": "07a2986fd4c1e4b316ae2e1f73b8857995dc3832eee2e28e1c7ff42707cddd9e",
     },
     "python": {
-      "lines": 6,
-      "sha256": "bc9a638e22c740b1267bce9c25f77dc4dab75badc77df4a954b952131b60097d",
+      "lines": 9,
+      "sha256": "c16068526572b14f40c1e543f2dbba02b151662eceb4df3b59476c7e8a85e6df",
     },
   },
   "harness/06-executor.mdx #1": {
@@ -84,32 +84,32 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
   },
   "harness/08-reliability.mdx #2": {
     "go": {
-      "lines": 31,
-      "sha256": "bef521bd482719af81f3768ced4cf5115befcdcb6c6e5eb4d3c31df9c6ae6fec",
+      "lines": 140,
+      "sha256": "f94a5168a71f41a0ba862601a78285e04b24816f7fe83bfc519b52fd4c39a363",
     },
     "python": {
-      "lines": 25,
-      "sha256": "c56e5e89044dab4287709cc39a48aadcf17aa8e7e94552db4ca0b7e262427835",
+      "lines": 102,
+      "sha256": "fe4aca83a91d934fd32fa6ba421cb80f579c9844054bfe50e199f6ff69dbebbd",
     },
   },
   "harness/09-capstone.mdx #1": {
     "go": {
-      "lines": 437,
-      "sha256": "ee59c051f319fcf897f5603b77346ed72a4bb186c48c58209cc2c372f383a05b",
+      "lines": 560,
+      "sha256": "b062e292d0600e10cdbf78613f94d812aee2caf921204882da79afc73ae33339",
     },
     "python": {
-      "lines": 235,
-      "sha256": "be66bd457c29913b49f21f6e5a7342360883dccf19ffed4594584e3b2c7ede67",
+      "lines": 323,
+      "sha256": "5213ceb2a25c8c6b9069b63dacbad99ebb7caa68da6da864e5777573c97c4599",
     },
   },
   "llms/01-what.mdx #1": {
     "go": {
-      "lines": 27,
-      "sha256": "f932afe77be81947dda4b0cf55a9c462ed5d3ff29f0768cc42375745d63e81c9",
+      "lines": 28,
+      "sha256": "770d011da52ea59ff4697ffa1b4a1c53cfebce285cf2772d4f0e89098fae7a13",
     },
     "python": {
-      "lines": 18,
-      "sha256": "82e5437bfbd91545c81e2d000b808c1540e41f25b415aaf89e7ab4971f8b60fc",
+      "lines": 20,
+      "sha256": "9326ef44558b5fc071e7db5cb885710fe024ca6fc30436a212c5ebf991f76fb4",
     },
   },
   "llms/02-dataset.mdx #1": {
@@ -145,11 +145,11 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
   "llms/04-runner.mdx #1": {
     "go": {
       "lines": 288,
-      "sha256": "c3451ee6bfb809f8ab370fa85f94a8e9ab22641d24a766e79ca5b6442d186849",
+      "sha256": "20e204f301461fd81b05e07acd5b4c12ef2d3dc30327d957a27ad9ac5867fc93",
     },
     "python": {
-      "lines": 105,
-      "sha256": "2083c355cb22d5375f73530f399415e77e18b69908f565e713d477e51b11471f",
+      "lines": 106,
+      "sha256": "6d1658aeef1ba01bb9e96f38dbaed5eddd0d148342a418b17cf4c258f0a21e0c",
     },
   },
   "llms/04-runner.mdx #2": {
@@ -204,12 +204,12 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
   },
   "llms/08-model.mdx #1": {
     "go": {
-      "lines": 27,
-      "sha256": "f932afe77be81947dda4b0cf55a9c462ed5d3ff29f0768cc42375745d63e81c9",
+      "lines": 28,
+      "sha256": "770d011da52ea59ff4697ffa1b4a1c53cfebce285cf2772d4f0e89098fae7a13",
     },
     "python": {
-      "lines": 18,
-      "sha256": "82e5437bfbd91545c81e2d000b808c1540e41f25b415aaf89e7ab4971f8b60fc",
+      "lines": 20,
+      "sha256": "9326ef44558b5fc071e7db5cb885710fe024ca6fc30436a212c5ebf991f76fb4",
     },
   },
   "llms/08-model.mdx #2": {
@@ -253,8 +253,8 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
   "llms/09-lora.mdx #5": {
     "go": null,
     "python": {
-      "lines": 56,
-      "sha256": "cd5d28de7bae02e47edaf2539ee2eef3de3fcf31e54a21143a63e864543ccf5b",
+      "lines": 59,
+      "sha256": "f7646198568581aa75e97d48993458503f95184c7c303b800202d71772a81cb4",
     },
   },
   "llms/10-capstone.mdx #1": {
@@ -269,19 +269,19 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
   },
   "llms/10-capstone.mdx #2": {
     "go": {
-      "lines": 1407,
-      "sha256": "b2523ff5846d7c1a4ab5a83349928f61f4caecb1d93d1d847f6c99f8a40c678b",
+      "lines": 1411,
+      "sha256": "74b8b8f5da7b6e3c46b2b34fd356e3a80d73f7a9bbbbc284cda7e48919d32314",
     },
     "python": {
-      "lines": 861,
-      "sha256": "4372ed418f503ab1952c5bbfe073a6294716151853830b5804937e161b0a7324",
+      "lines": 876,
+      "sha256": "9cb44d5f03f82930ebe721165eeb60d14ba977663c72c8a08d1b6b65b51bcf52",
     },
   },
   "llms/11-framework.mdx #1": {
     "go": null,
     "python": {
-      "lines": 93,
-      "sha256": "6f03eb1ba0c087d8b13f6db37ecd31c5a8418934463350fec04ad49dc3bc66ff",
+      "lines": 106,
+      "sha256": "c92d71259a24380e7a3cedb7880a1de0c1014ed1646eaae15bb13ea951ca8e9a",
     },
   },
   "llms/11-framework.mdx #2": {
@@ -294,8 +294,8 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
   "llms/11-framework.mdx #3": {
     "go": null,
     "python": {
-      "lines": 51,
-      "sha256": "abee1a7fbe7c66feca618a5b5d124ac2518483d50e133ce6cc0a44713ea3dfd4",
+      "lines": 52,
+      "sha256": "af28da4575a1a31de9a32baaccc74811adf11ee85a11dd013e0e83aa9b7c87c2",
     },
   },
 }

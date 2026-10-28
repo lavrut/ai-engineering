@@ -50,8 +50,8 @@ describe('code source registry', () => {
     expect([...ids].sort()).toEqual(
       [
         'harness', 'llms', 'llms-inspect', 'lora', 'ml-fetch', 'ml-llm', 'ml-mlflow', 'ml-mlops', 'ml-monitor', 'ml-serve', 'ml-train',
-        'mcp-agent', 'mcp-app', 'mcp-auth', 'mcp-auth-server', 'mcp-client', 'mcp-ops', 'mcp-read', 'mcp-simulate',
-        'agents-proxy', 'agents-patterns', 'agents-supervisor', 'agents-langgraph', 'agents-sdk', 'agents-evals', 'agents-run-evals',
+        'mcp-agent', 'mcp-agent-config', 'mcp-agent-host', 'mcp-agent-model', 'mcp-app', 'mcp-auth', 'mcp-auth-server', 'mcp-client', 'mcp-client-calls', 'mcp-client-connect', 'mcp-ops', 'mcp-read', 'mcp-simulate',
+        'agents-proxy', 'agents-proxy-cost', 'agents-proxy-handler', 'agents-proxy-server', 'agents-patterns', 'agents-supervisor', 'agents-langgraph', 'agents-sdk', 'agents-evals', 'agents-run-evals', 'agents-judge-set',
       ].sort(),
     );
     expect(CODE_SOURCES['ml-serve']).toMatchObject({ python: 'ml/serve/server.py', go: 'ml/go/main.go' });
@@ -110,11 +110,16 @@ describe('code source registry', () => {
     it.each([
       ['mcp-read', [1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6]],
       ['mcp-ops', [1, 2, 3, 4, 5, 6, 7], [1, 2, 3, 4, 5, 6]],
-      ['mcp-client', [1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6]],
+      ['mcp-client', [1, 2, 3], [1, 2, 3]],
+      ['mcp-client-connect', [1], [1]],
+      ['mcp-client-calls', [1, 2], [1, 2]],
       ['mcp-auth', [1, 2, 3], [1, 2, 3]],
       ['mcp-auth-server', [1, 2, 3, 4, 5], undefined],
       ['mcp-app', [1, 2, 3, 4, 5, 6, 7], undefined],
-      ['mcp-agent', [1, 2, 3, 4, 5, 6, 7, 8, 9], undefined],
+      ['mcp-agent', [1, 2], undefined],
+      ['mcp-agent-config', [1], undefined],
+      ['mcp-agent-host', [1, 2, 3, 4], undefined],
+      ['mcp-agent-model', [1, 2], undefined],
       ['mcp-simulate', [1, 2, 3, 4], undefined],
     ] as const)('%s lists its numbered sections', (id, py, go) => {
       const t = sourceTexts(id);
@@ -179,13 +184,17 @@ describe('code source registry', () => {
   describe('agents sources', () => {
     const nums = (t: string | undefined) => listSections(t ?? '').map((x) => x.n);
     it.each([
-      ['agents-proxy', 'agents/proxy/proxy.py', [1, 2, 3, 4, 5, 6, 7], undefined],
+      ['agents-proxy', 'agents/proxy/proxy.py', [1, 2, 3, 4, 5], undefined],
+      ['agents-proxy-cost', 'agents/proxy/proxy_cost.py', [1], undefined],
+      ['agents-proxy-handler', 'agents/proxy/proxy_handler.py', [1, 2], undefined],
+      ['agents-proxy-server', 'agents/proxy/proxy_server.py', [1], undefined],
       ['agents-patterns', 'agents/desk/python/patterns.py', [1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6]],
       ['agents-supervisor', 'agents/desk/python/supervisor.py', [1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6]],
       ['agents-langgraph', 'agents/frameworks/langgraph_desk.py', [1, 2, 3, 4, 5, 6], undefined],
       ['agents-sdk', 'agents/frameworks/sdk_desk.py', [1, 2, 3, 4, 5, 6, 7, 8, 9], undefined],
       ['agents-evals', 'agents/evals/scorers.py', [1, 2, 3, 4, 5, 6, 7], undefined],
-      ['agents-run-evals', 'agents/evals/run_evals.py', [1, 2, 3, 4, 5, 6, 7, 8], undefined],
+      ['agents-run-evals', 'agents/evals/run_evals.py', [1, 2, 3, 4, 5, 6, 7], undefined],
+      ['agents-judge-set', 'agents/evals/judge_set.py', [1], undefined],
     ] as const)('%s lists its numbered sections', (id, py, sections, go) => {
       expect(CODE_SOURCES[id].python).toBe(py);
       const t = sourceTexts(id);

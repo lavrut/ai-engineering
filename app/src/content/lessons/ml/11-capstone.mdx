@@ -9,10 +9,10 @@ quiz:
   - question: On the 300 complaints of 2023 H1, v2 scores 0.764 macro-F1 and v1 0.759. The band is ±0.058. Why does the gate keep v1?
     options:
       - v2 has a category below the floor
-      - The gain, +0.005, is far inside the band, so the holdout cannot tell the two apart; replacing production needs evidence, not a higher number
       - v2 was trained on less data
+      - The gain, +0.005, is far inside the band, so the holdout cannot tell the two apart; replacing production needs evidence, not a higher number
       - The gate always keeps the current version
-    answer: 1
+    answer: 2
     explanation: Both were scored on the same 300 complaints, and they differ by about one complaint's worth of accuracy (244 right against 243). A difference that size is what you would expect from two equally good models.
   - question: Why does the gate also require every category's F1 to be at least 0.5?
     options:
@@ -24,11 +24,11 @@ quiz:
     explanation: Macro-F1 is a mean over six categories. A candidate that gains a little on five and fails the sixth could still raise it. The floor makes a broken category a reason to stop on its own.
   - question: Retraining on 2019–2022 did not measurably beat v1. What is the right next step?
     options:
+      - Keep v1, record the decision, and if a real improvement matters, get far more labelled complaints to measure it, since a 0.005 gain needs tens of thousands to detect
       - Promote v2 anyway, because newer data must be better
       - Lower the band so v2 passes
-      - Keep v1, record the decision, and if a real improvement matters, get far more labelled complaints to measure it, since a 0.005 gain needs tens of thousands to detect
       - Delete v2
-    answer: 2
+    answer: 0
     explanation: The gate did its job. Changing the rule to get the answer you wanted turns the gate into decoration. v2 stays registered in staging, its run and the gate's reasons are recorded, and the honest finding is that more of the same data did not help measurably.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -119,7 +119,7 @@ Section 4 is the retrain.
 - `if result["passed"]: promote(...)` is the only place a retrain can change production.
 
 <Callout kind="note" title="A failing gate exits non-zero">
-  `python mlops.py retrain` and `gate` exit with code 1 when the gate fails, like the eval gate in the LLMs track. A scheduled job or a CI step can stop on that without reading the output.
+  `../../.venv-ml/bin/python mlops.py retrain` and `gate` exit with code 1 when the gate fails, like the eval gate in the LLMs track. A scheduled job or a CI step can stop on that without reading the output.
 </Callout>
 
 ## Try it
@@ -131,10 +131,10 @@ cd ml/python
 ML="$(mktemp -d)/ml"
 cp -R .. "$ML"
 rm -r "$ML/runs" "$ML/registry.json" "$ML/models/v2.json"
-python mlops.py --root "$ML" experiments
-python mlops.py --root "$ML" register models/v1.json --run logreg-C1-2019-2021 --time 2023-01-01T00:00:00Z
-python mlops.py --root "$ML" promote v1 production --time 2023-01-01T00:00:00Z
-python mlops.py --root "$ML" retrain; echo "exit code $?"
+../../.venv-ml/bin/python mlops.py --root "$ML" experiments
+../../.venv-ml/bin/python mlops.py --root "$ML" register models/v1.json --run logreg-C1-2019-2021 --time 2023-01-01T00:00:00Z
+../../.venv-ml/bin/python mlops.py --root "$ML" promote v1 production --time 2023-01-01T00:00:00Z
+../../.venv-ml/bin/python mlops.py --root "$ML" retrain; echo "exit code $?"
 ```
 
 After four `logged` lines, `registered v1` and `v1 -> production`, the retrain prints the gate's decision:
@@ -157,14 +157,14 @@ You should see `identical`. Same data, same settings, same decision.
 Now overrule the gate and see what the Go server would load from the copy:
 
 ```bash
-python mlops.py --root "$ML" promote v2 production
+../../.venv-ml/bin/python mlops.py --root "$ML" promote v2 production
 ML_ROOT="$ML" go -C ../go run . predict "my mortgage payment was misapplied"
 ```
 
 You should see `v2 -> production`, and the prediction ends with `"model_version": "v2"`. Suppose v2 then misbehaves in production. Roll back:
 
 ```bash
-python mlops.py --root "$ML" rollback
+../../.venv-ml/bin/python mlops.py --root "$ML" rollback
 ML_ROOT="$ML" go -C ../go run . predict "my mortgage payment was misapplied"
 ```
 

@@ -26,8 +26,8 @@ describe('parseTrace', () => {
 
   it('has the shapes the brief asks for', () => {
     const names = parseTrace(sample).map((e) => e.event);
-    expect(names.filter((n) => n === 'model_request')).toHaveLength(3);
-    expect(names.filter((n) => n === 'model_response')).toHaveLength(3);
+    expect(names.filter((n) => n === 'model_request')).toHaveLength(4);
+    expect(names.filter((n) => n === 'model_response')).toHaveLength(4);
     expect(names.filter((n) => n === 'permission')).toHaveLength(1);
     expect(names.filter((n) => n === 'tool_result')).toHaveLength(4);
     expect(parseTrace(sample).filter((e) => e.is_error === true)).toHaveLength(1);

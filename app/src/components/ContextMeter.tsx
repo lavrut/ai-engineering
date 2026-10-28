@@ -96,13 +96,16 @@ export default function ContextMeter() {
         <span>Compactions: {state.compactions}</span>
         <span class="cm-turns">Turns since last compaction: {state.history.length}</span>
       </p>
+      <p class="visually-hidden" aria-live="polite">
+        {`Total ${fmt(used)} tokens; compactions ${state.compactions}; turns since last compaction ${state.history.length}.`}
+      </p>
       <p class="cm-sizes">
         Turn sizes: short reply {fmt(TURN_SIZES.short)}, large file read {fmt(TURN_SIZES.file)}, several tool calls{' '}
         {fmt(TURN_SIZES.tools)}.
       </p>
 
       {state.compactions > 0 && (
-        <div class="cm-explain" role="status">
+        <div class="cm-explain">
           <p class="cm-explain-title">Compacted: history folded into a summary</p>
           <p>
             The total went over the {fmt(BUDGET)} budget. The harness asked the model for a summary (about{' '}

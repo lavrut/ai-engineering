@@ -29,7 +29,7 @@ quiz:
       - MAX_TURNS, which ends the loop after 25 model calls with a stop message
       - Nothing; it runs until you press Ctrl-C
     answer: 2
-    explanation: The for loop runs at most MAX_TURNS times, one model call per pass. When it runs out, the harness logs session_end with stop_reason "max_turns" and returns a stop message, so a stuck model costs at most 25 calls.
+    explanation: The for loop runs at most MAX_TURNS times, one model call per pass. When it runs out, the harness logs session_end with stop_reason "max_turns" and returns a stop message, so a stuck model costs at most 25 loop calls, plus any compaction summaries (lesson 7). The money gate can stop it sooner, since --max-cost is checked before every call.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
 import LoopSimulator from '../../../components/LoopSimulator.tsx';
@@ -106,15 +106,15 @@ print(harness.run_agent("Keep looking.", call=fake_model))
 
 ```bash
 cd harness/python
-python loop_demo.py
+../../.venv-harness/bin/python loop_demo.py
 ```
 
 The fake always asks for `list_files`, so it never finishes. You should see three calls whose role lists grow by two each time (`['user']`, then `['user', 'assistant', 'user']`, then five items), a `-> list_files({"path": "."})` line after each, and finally `[stopped: reached MAX_TURNS without finishing]`. Change the fake to return `stop_reason="end_turn"` with a text block on its third call, and the loop returns that text instead.
 
-Then watch the real loop handle two calls in one turn:
+Then watch the real loop handle two calls in one turn. This is a paid task: the harness prints the estimate and asks first.
 
 ```bash
-python harness.py
+../../.venv-harness/bin/python harness.py
 ```
 
 Ask `Read notes.txt and list the workspace, both at once.` You will usually see two `->` lines before a single `agent >` answer. Afterwards, `grep session_end trace.jsonl` shows how many turns the session took and the `stop_reason` that ended it.

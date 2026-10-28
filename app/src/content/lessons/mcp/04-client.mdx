@@ -8,11 +8,11 @@ minutes: 25
 quiz:
   - question: The client passes an elicitation callback when it connects, even to lumen-read, which never asks a question. What does passing the callback do?
     options:
-      - It makes the connection slower
       - It declares in the client's capabilities that it can answer a confirmation question, which is the only reason a server like lumen-ops will ask one
+      - It makes the connection slower
       - It lets the client write tickets
       - It turns on logging
-    answer: 1
+    answer: 0
     explanation: Capabilities travel on every request in this revision. A server that needs a person to confirm a write will only ask a client that said it can answer. With no callback the capability is absent, and the server has to refuse or find another way.
   - question: The Python client and the Go client print byte-identical JSON for tools. The two SDKs describe schemas differently. What makes the output match?
     options:
@@ -25,10 +25,10 @@ quiz:
   - question: A call to lumen-ops returns an InputRequiredResult holding a confirmation question. What does the client do next?
     options:
       - Treats it as an error and stops
-      - Asks its answerer, then sends the same call again with the answer attached
-      - Waits for the server to send a request of its own
       - Answers yes automatically, because the client is trusted
-    answer: 1
+      - Waits for the server to send a request of its own
+      - Asks its answerer, then sends the same call again with the answer attached
+    answer: 3
     explanation: A server cannot send the client a request in this revision, so the question comes back as the reply to the call. The client supplies an answer through its callback and retries the same call. The answer is only the client's claim, which is why a write needs more than a yes over the wire.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -50,7 +50,7 @@ A server waits to be asked. The program that asks is the client. In the last two
 | `read URI` | Reads a resource |
 | `prompt NAME JSON` | Gets a prompt |
 
-This lesson uses stdio: the client starts `read_server.py` as a child process with `--stdio`. A second way to connect, over HTTP, is lesson 7. Everything after the connection is the same, which is the point of a protocol.
+This lesson uses stdio: given `--stdio`, the client starts `read_server.py` as a child process. A second way to connect, over HTTP, is lesson 7. Everything after the connection is the same, which is the point of a protocol.
 
 ### Discovery
 
@@ -79,34 +79,34 @@ The diagram showed one command turning into a connection, a discovery, a call an
 
 ## The code
 
-Section 2 connects.
+Section 1 of `client_connect.py` connects.
 
-<CodeTabs source="mcp-client" section={2} />
+<CodeTabs source="mcp-client-connect" section={1} />
 
 - The HTTP lines in this section are covered in lesson 7.
 - `callback = elicitation_callback(answer or deny)` is built first. Passing it to `Client(..., elicitation_callback=callback)` is what declares the elicitation capability.
 
-Section 3 discovers.
+Section 2 of `client.py` discovers.
 
-<CodeTabs source="mcp-client" section={3} />
+<CodeTabs source="mcp-client" section={2} />
 
 - `normalise_schema(schema, defs)` keeps only `type`, `properties`, `required`, `items` and `additionalProperties`. Everything else, such as `title`, `default` and `$defs`, is SDK decoration.
 - `if "$ref" in schema: return normalise_schema(defs[...], defs)` follows a reference, so a nested type prints in full.
 - `sorted(value)` on `required` and `sorted(t.name for t in tools.tools)` keep the output in a fixed order. Python and Go must print the same bytes.
 - `async def discover(client)` calls four list methods and reads `client.server_info`, `client.protocol_version` and `client.instructions` for the rest.
 
-Section 4 calls.
+Section 1 of `client_calls.py` calls.
 
-<CodeTabs source="mcp-client" section={4} />
+<CodeTabs source="mcp-client-calls" section={1} />
 
 - `result = await client.call_tool(name, arguments)` is the whole call. The SDK builds the request with the right `_meta`.
 - `if result.is_error:` takes the first text block as the message, or `<no text>` when there is none.
 - `return {"structured": result.structured_content}` is the success shape.
 - `except MCPError as e: return {"error": str(e)}` in `read` and `prompt` is where a protocol error becomes a message.
 
-Section 5 answers input-required rounds.
+Section 2 of `client_calls.py` answers input-required rounds.
 
-<CodeTabs source="mcp-client" section={5} />
+<CodeTabs source="mcp-client-calls" section={2} />
 
 - `async def deny(message) -> bool` is the default answer. A client with no way to ask declines.
 - `ask_terminal(...)` writes the question to stderr, so stdout stays clean JSON, and reads one line. Only `y` or `yes` accepts. If stdin is closed it declines, because nobody can answer.
@@ -115,7 +115,7 @@ Section 5 answers input-required rounds.
 
 ## How Go does it
 
-The Go tab has the same six sections, in the same order. It exists to prove that a second client, on the other SDK, reads the same servers the same way. Three differences are worth knowing.
+The client is three files: `client.py` (configuration, discovery and the entry point), `client_connect.py` and `client_calls.py`. The Go client in `mcp/go/client` has the same three files, `main.go`, `connect.go` and `calls.go`, with the same sections in the same order. It exists to prove that a second client, on the other SDK, reads the same servers the same way. Three differences are worth knowing.
 
 - Flags go before the command: `go run ./client -stdio discover`. Go's `flag` package stops at the first argument that is not a flag.
 - Go decodes every JSON number as a `float64`, so `1` and `1.0` look alike. The Python client has `canon`, which prints an integral float as an integer, so the two match.

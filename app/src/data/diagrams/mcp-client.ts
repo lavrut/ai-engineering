@@ -1,8 +1,8 @@
 import type { Diagram } from '../../lib/diagram';
 
 // Layout (default node 150x56). Row 1: the command, connecting, discovering, calling, the JSON
-// printed. The answerer sits under "Call a tool". Code links point at mcp/python/client.py and
-// mcp/go/client/main.go (same section numbers); each caption ends with its section.
+// printed. The answerer sits under "Call a tool". Code links point at mcp/python/client.py, client_connect.py
+// and client_calls.py (each step's `source` names the file) and mcp/go/client/main.go; each caption ends with its section.
 export const mcpClient: Diagram = {
   id: 'mcp-client',
   title: 'What the Lumen client does',
@@ -35,29 +35,29 @@ export const mcpClient: Diagram = {
       n: 2,
       highlight: ['connect', 'e-connect-discover', 'discover'],
       caption:
-        'The client connects: over stdio it starts the process and exchanges messages on its input and output. The HTTP path through this section is lesson 7. In the code: section 2.',
-      code: { file: 'python', section: 2, source: 'mcp-client' },
+        'The client connects: over stdio it starts the process and exchanges messages on its input and output. The HTTP path through this section is lesson 7. In the code: section 1.',
+      code: { file: 'python', section: 1, source: 'mcp-client-connect' },
     },
     {
       n: 3,
       highlight: ['discover', 'e-discover-call', 'call'],
       caption:
-        'Discovery lists the tools, resources, resource templates and prompts, sorted by name. Schemas are cut down to their shape so the Python and Go clients print the same bytes. In the code: section 3.',
-      code: { file: 'python', section: 3, source: 'mcp-client' },
+        'Discovery lists the tools, resources, resource templates and prompts, sorted by name. Schemas are cut down to their shape so the Python and Go clients print the same bytes. In the code: section 2.',
+      code: { file: 'python', section: 2, source: 'mcp-client' },
     },
     {
       n: 4,
       highlight: ['call', 'e-call-output', 'output'],
       caption:
-        'A call prints one JSON shape: {"structured": ...} on success, {"error": text} when the tool reports an error. Resources and prompts print their own shapes. In the code: section 4.',
-      code: { file: 'python', section: 4, source: 'mcp-client' },
+        'A call prints one JSON shape: {"structured": ...} on success, {"error": text} when the tool reports an error. Resources and prompts print their own shapes. In the code: section 1.',
+      code: { file: 'python', section: 1, source: 'mcp-client-calls' },
     },
     {
       n: 5,
       highlight: ['call', 'e-call-answer', 'answer'],
       caption:
-        'A server that needs a confirmation answers with input_required instead of a result. The client asks its answerer, and retries with the answer. The answer is the client’s own claim: the server cannot tell a person from --yes. In the code: section 5.',
-      code: { file: 'python', section: 5, source: 'mcp-client' },
+        'A server that needs a confirmation answers with input_required instead of a result. The client asks its answerer, and retries with the answer. The answer is the client’s own claim: the server cannot tell a person from --yes. In the code: section 2.',
+      code: { file: 'python', section: 2, source: 'mcp-client-calls' },
     },
   ],
 };

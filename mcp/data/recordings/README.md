@@ -16,16 +16,22 @@ printed estimate. They are never written by hand or edited.** A scripted stand-i
 there says `"simulated": true`, and `derive.py` refuses a simulated line in this folder. Tests use a fake model with
 hand-written responses, and write anything they record to a temporary folder, never here.
 
-## The three recordings
+## The recordings
 
 There are two scripted answers, kept apart. `--approve` is the person the guard asks. `--elicit` is
-the answer to lumen-ops' own confirmation round.
+the answer to lumen-ops' own confirmation round. The capstone runs all use lumen-read and lumen-ops,
+the task "Review ticket t061 and act on it" and `--elicit accept`.
 
-| File | Scenario | Servers | Guard | `--approve` | `--elicit` |
+| File | Scenario | Model | Framing | Guard | `--approve` |
 |---|---|---|---|---|---|
-| `lesson5.jsonl` | Find the duplicate-charge ticket and classify the complaint text 'I was charged twice' | lumen-read | n/a | n/a | n/a |
-| `capstone-noguard.jsonl` | Review ticket t061 and act on it | lumen-read, lumen-ops | off | n/a | accept |
-| `capstone-guard.jsonl` | Review ticket t061 and act on it | lumen-read, lumen-ops | on | decline | accept |
+| `lesson5.jsonl` | Find the duplicate-charge ticket and classify the complaint text 'I was charged twice' (lumen-read only) | Haiku 5.5 | none | n/a | n/a |
+| `capstone-noguard.jsonl` | capstone | Haiku 5.5 | none | off | n/a |
+| `capstone-guard.jsonl` | capstone | Haiku 5.5 | none | on | decline |
+| `capstone-noguard-training.jsonl` | capstone | Haiku 5.5 | training | off | n/a |
+| `capstone-noguard-sonnet-5-5.jsonl` | capstone | Sonnet 5.5 | none | off | n/a |
+| `capstone-noguard-sonnet-5-5-training.jsonl` | capstone | Sonnet 5.5 | training | off | n/a |
+| `capstone-noguard-opus-5-5.jsonl` | capstone | Opus 5.5 | none | off | n/a |
+| `capstone-noguard-opus-5-5-training.jsonl` | capstone | Opus 5.5 | training | off | n/a |
 
 In the guarded run the server would accept, so only the guard stops the write.
 
@@ -49,16 +55,16 @@ environment and is never printed.
 .venv-mcp/bin/python mcp/python/agent.py --scenario capstone --guard --approve decline --elicit accept --mode record --max-cost 10
 ```
 
-Labels: record mode writes lumen-ops label rows to `mcp/data/labels.jsonl` (git-ignored). Replay
-writes them to a temporary file. `--labels PATH` overrides either, and the run prints which path it
-used. Agent rows carry `source: "agent"` and are never eligible for eval.
+Labels: both modes write lumen-ops label rows to a temporary file, so a run never appends to the
+repo's `mcp/data/labels.jsonl`. `--labels PATH` overrides that, and the run prints which path it used.
+Agent rows carry `source: "agent"` and are never eligible for eval.
 
 The harness trace goes to `trace.jsonl` in this folder (git-ignored), not to the working directory.
 
 ## Other models and the training framing
 
 - `--model` is one of `claude-haiku-5-5` (the default), `claude-sonnet-5-5` or `claude-opus-5-5`. The estimate and the cost cap use that model's prices from `llms/python/triage_lab.py`'s `PRICES`.
-- `--framing training` puts `TRAINING_NOTE` (in `agent.py`) before the system prompt. `--framing none` is the default, and it leaves the requests, and so the keys above, unchanged.
+- `--framing training` puts `TRAINING_NOTE` (in `agent_config.py`) before the system prompt. `--framing none` is the default, and it leaves the requests, and so the keys above, unchanged.
 - The default model with no framing keeps the plain names. Anything else adds a suffix, for example `capstone-noguard-sonnet-5-5.jsonl`, `capstone-guard-opus-5-5.jsonl` or `capstone-noguard-opus-5-5-training.jsonl`.
 
 The commands are the ones above plus the flags. Each still needs the user's approval of its printed estimate:

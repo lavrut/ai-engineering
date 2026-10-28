@@ -10,7 +10,8 @@
 // arguments, within five minutes, on a state this server signed and has not seen answered before.
 // Whether a human or a script said "yes" is the client's claim; confirmed=true records the claim.
 //
-// HTTP only by design (a write server is not a subprocess any host can spawn), and always as an OAuth
+// In this track, served over HTTP only (a write server is not a subprocess any host can spawn; the AI
+// Agents track spawns the Python build_ops_server() privately over stdio), and always as an OAuth
 // resource server (scope tickets:write, audience http://127.0.0.1:8766/mcp; see mcp/go/auth). The
 // label row's client_id is the verified token's client_id. Tests use the in-memory transport
 // against NewOpsServer, which has no HTTP and so no bearer check.

@@ -210,6 +210,8 @@ export type SetJson = {
   complete: boolean;
   model_calls: number;
   recordings: number;
+  /** referenced by a trace but not in the store: reported, never counted in recordings */
+  missing: number;
   orphans: number;
   recorded_cost_usd: number | null;
   distinct_recorded_cost_usd: number | null;

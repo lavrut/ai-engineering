@@ -108,7 +108,7 @@ Go has no decorators, so the registration is spelled out. Each tool is a `Tool` 
 
 `Run` takes a `context.Context` and the raw JSON input as `json.RawMessage`. Each tool decodes that JSON into a small struct such as `struct{ Path string }`, and returns `(string, error)`. The context carries the 30-second timeout from the executor. A wrong field type in the model's input fails at decode time and goes back to the model as an error result.
 
-`Param()` turns a `Tool` into the SDK's `anthropic.ToolUnionParam`. The SDK writes `"type": "object"` into the schema for you; this version does not set `additionalProperties`. One more difference: `toolParams()` in section 6 lists the tool names in a fixed order. A new Go tool needs its name added there as well as a `register` call.
+`Param()` turns a `Tool` into the SDK's `anthropic.ToolUnionParam`. The SDK writes `"type": "object"` into the schema for you; this version does not set `additionalProperties`. One more difference: `toolParams()` in section 6 lists the tool names in a fixed order. A new Go tool needs its name added there as well as a `register` call; the test `TestToolParamsCoversRegistry` fails until it is.
 
 ## Try it
 
@@ -126,9 +126,9 @@ Print the schemas the model will now see:
 
 ```bash
 cd harness/python
-python -c "import json, harness; print(json.dumps([t.schema() for t in harness.REGISTRY.values()], indent=2))"
+../../.venv-harness/bin/python -c "import json, harness; print(json.dumps([t.schema() for t in harness.REGISTRY.values()], indent=2))"
 ```
 
-You should see four entries, the last one `count_words`, and no function code anywhere in the output. Then run `python harness.py` and ask `How many words are in notes.txt?`. You should see `-> count_words({"path": "notes.txt"})` before the answer.
+You should see four entries, the last one `count_words`, and no function code anywhere in the output. Then run `../../.venv-harness/bin/python harness.py` (a paid task: it prints the estimate and asks first) and ask `How many words are in notes.txt?`. You should see `-> count_words({"path": "notes.txt"})` before the answer.
 
 For a second exercise, change the description to something vague such as `"Does a thing."` and ask the same question. The model may skip the tool and read the file instead. The description is how the model decides.

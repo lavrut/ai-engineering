@@ -1,6 +1,7 @@
 import type { Diagram } from '../../lib/diagram';
 
-// The record/replay proxy every engine talks to (agents/proxy/proxy.py, Python only).
+// The record/replay proxy every engine talks to (agents/proxy/: proxy.py, proxy_cost.py, proxy_handler.py and
+// proxy_server.py, Python only).
 // Layout: row 1 runs engine -> proxy -> the record-mode gate -> api.anthropic.com; the store sits
 // under the proxy. Replay is the store loop on the left; recording runs right through the gate and
 // comes back down into the store. Each caption ends with the section it links to (the test pins the
@@ -45,29 +46,29 @@ export const replayProxy: Diagram = {
       n: 3,
       highlight: ['store', 'e-store-proxy', 'proxy', 'e-proxy-engine', 'engine'],
       caption:
-        'Replay is the default. A key that is in the store is answered from disk: free, offline and the same bytes every time, streamed replies included. In the code: section 5.',
-      code: { file: 'python', section: 5, source: 'agents-proxy' },
+        'Replay is the default. A key that is in the store is answered from disk: free, offline and the same bytes every time, streamed replies included. In the code: section 4.',
+      code: { file: 'python', section: 4, source: 'agents-proxy' },
     },
     {
       n: 4,
       highlight: ['proxy', 'e-proxy-engine', 'engine'],
       caption:
-        'A key that is not in the store gets a 404 replay_miss that names the command to record it. A replay miss is never forwarded to the API. In the code: section 6.',
-      code: { file: 'python', section: 6, source: 'agents-proxy' },
+        'A key that is not in the store gets a 404 replay_miss that names the command to record it. A replay miss is never forwarded to the API. In the code: section 2.',
+      code: { file: 'python', section: 2, source: 'agents-proxy-handler' },
     },
     {
       n: 5,
       highlight: ['proxy', 'e-proxy-gate', 'gate'],
       caption:
-        'Record mode is the only way out. It prints a cost estimate first and asks y/N; input that is not a terminal counts as no, and nothing is called. In the code: section 4.',
-      code: { file: 'python', section: 4, source: 'agents-proxy' },
+        'Record mode is the only way out. It prints a cost estimate first and asks y/N; input that is not a terminal counts as no, and nothing is called. In the code: section 1.',
+      code: { file: 'python', section: 1, source: 'agents-proxy-cost' },
     },
     {
       n: 6,
       highlight: ['gate', 'e-gate-api', 'api'],
       caption:
-        'Before every paid call the proxy checks the cap: it refuses when what it spent plus the worst case would pass --max-cost (10 dollars by default). The API key comes from the environment only and is never logged or stored. In the code: section 6.',
-      code: { file: 'python', section: 6, source: 'agents-proxy' },
+        'Before every paid call the proxy checks the cap: it refuses when what it spent plus the worst case would pass --max-cost (10 dollars by default). The API key comes from the environment only and is never logged or stored. In the code: section 2.',
+      code: { file: 'python', section: 2, source: 'agents-proxy-handler' },
     },
     {
       n: 7,

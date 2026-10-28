@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  announce,
   createSimulator,
   estimateTokens,
   runFakeTool,
@@ -218,5 +219,13 @@ describe("validateTranscript", () => {
   it("flags a result message that mixes in text", () => {
     const bad = [good[0], good[1], { role: "user" as const, content: [res("1"), res("2"), { type: "text" as const, text: "hm" }] }];
     expect(validateTranscript(bad).length).toBeGreaterThan(0);
+  });
+});
+
+describe("announce", () => {
+  it("names a reply with neither text nor tool calls", () => {
+    const state = { messages: [{ role: "user" as const, content: "t" }, { role: "assistant" as const, content: [] }],
+      workspace: {}, pending: null, done: true, stopReason: "end_turn" as const, turn: 1, tokens: 0 };
+    expect(announce(state)).toBe("Turn 1: the assistant replies with no text; stop_reason end_turn. Done.");
   });
 });

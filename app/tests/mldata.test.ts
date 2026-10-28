@@ -28,7 +28,7 @@ const PREDICTIONS: {
   cases: { name: string; input: string; expected: { label: string; scores: Record<string, number>; low_confidence: boolean } }[];
 } = readJson('data/fixtures/predictions.json');
 
-describe('tokenize (rules R12, the same as train.tokenize and Go)', () => {
+describe('tokenize (the same rules as train.tokenize and Go)', () => {
   it.each(TOKENIZE.map((c) => [c.name, c] as const))('%s', (_name, c) => {
     expect(tokenize(c.input, V1.tokenizer)).toEqual(c.tokens);
   });

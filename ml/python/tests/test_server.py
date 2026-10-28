@@ -161,6 +161,25 @@ def test_content_type_and_extras_and_duplicates(client):
     assert dup.status_code == 200
 
 
+# An integer longer than Python's 4,300-digit conversion limit in a field we ignore: Go never
+# converts an ignored field, so Python must not either (a long integer in "text" stays a 400).
+LONG_INT = b"1" * 5000
+
+
+@pytest.mark.parametrize("body, status", [
+    (b'{"text":"hi","x":' + LONG_INT + b"}", 200),
+    (b'{"text":"hi","x":-' + LONG_INT + b"}", 200),
+    (b'{"text":"hi","x":[0,{"y":' + LONG_INT + b"}]}", 200),
+    (b'{"text":' + LONG_INT + b"}", 400),
+    (b'{"text":5}', 400),
+])
+def test_long_integers_are_never_converted(client, body, status):
+    r = post(client, body)
+    assert r.status_code == status
+    if status == 400:
+        assert r.json() == BODY_ERROR
+
+
 def test_four_byte_emoji_boundary(client):
     def body(n):
         return json.dumps({"text": "\U0001F600" * n}, ensure_ascii=False).encode("utf-8")
@@ -187,7 +206,7 @@ def test_startup_version_mismatch(root):
         server.load_production(root)
 
 
-# ── strict JSON (fix round of Task 8, R24) ──────────────────────────────────
+# ── strict JSON ──────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("body", [
     b'{"text":"hi","x":NaN}', b'{"text":"hi","x":Infinity}', b'{"text":"hi","x":-Infinity}',
     b'{"text":NaN}',

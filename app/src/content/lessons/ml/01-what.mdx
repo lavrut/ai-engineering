@@ -8,27 +8,27 @@ minutes: 15
 quiz:
   - question: You copy v1.json to a server that has no Python and no scikit-learn. What else does the server need to label complaints?
     options:
+      - Code that applies the same tokenizer rules and the scoring formula, softmax(coef · x + intercept), to the numbers in the file
       - Nothing; the JSON file runs on its own
       - A copy of the 1,800 training complaints, to retrain on start
-      - Code that applies the same tokenizer rules and the scoring formula, softmax(coef · x + intercept), to the numbers in the file
       - An API key, because the weights are checked online
-    answer: 2
+    answer: 0
     explanation: The file holds the numbers training learned, plus the tokenizer's settings, but numbers do nothing on their own. Any language that splits text by the same rules and does the same arithmetic gets the same label. That is how the Go server in lesson 9 scores the same file.
   - question: A complaint contains only words that are not in the model's vocabulary. What does score() return?
     options:
       - An error, because the vector is empty
-      - The training majority class, flagged low_confidence, with scores equal to softmax of the intercepts
       - A random category
       - The category whose name appears in the text
-    answer: 1
+      - The training majority class, flagged low_confidence, with scores equal to softmax of the intercepts
+    answer: 3
     explanation: Unknown words are skipped, so every feature is 0 and each category's score is just its intercept. score() then returns majority_class, credit reporting, and sets low_confidence to true, so a caller knows the answer rests on no evidence.
   - question: Why does the export set `created` to the last complaint date the model saw (2021-12-31) instead of the time you ran it?
     options:
       - The clock on a laptop is unreliable
-      - So the same data and settings give a byte-identical file, and so the same SHA-256, every time
       - Because JSON cannot store a time of day
+      - So the same data and settings give a byte-identical file, and so the same SHA-256, every time
       - So the model expires at the end of 2021
-    answer: 1
+    answer: 2
     explanation: Training here is deterministic, with seed 7 and the same solver steps. With no clock in the file, retraining from the same sample reproduces v1.json byte for byte. Lesson 7's run tracker records that hash, so an identical hash means an identical model.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -76,7 +76,7 @@ Every step is arithmetic on the file's contents. So any language can do it: the 
 
 On 600 complaints from 2022, a year it never saw, v1 is right 80.8% of the time, with a <Term t="noise band" /> of ±4.1 points (1/√600). Always answering the most common category, credit reporting, scores 43.3% on the same 600. Lesson 5 shows where the other 19.2% go.
 
-Training takes about 2 seconds on a laptop CPU (`time python train.py` on the machine this course was built on). Scoring one complaint takes well under a millisecond. Nothing costs money.
+Training takes a few seconds on a laptop CPU (`time ../../.venv-ml/bin/python train.py` from `ml/python`). Scoring one complaint takes well under a millisecond. Nothing costs money.
 
 ### The plan
 
@@ -129,12 +129,12 @@ Section 6 writes the file and scores text from it.
 
 ## Try it
 
-Install the dependencies (scikit-learn, NumPy, SciPy and the server packages), then train. Everything here is free and runs offline.
+From the repo root, create the track's virtual environment, `.venv-ml/`, and install the dependencies into it (scikit-learn, NumPy, SciPy and the server packages), as the README does; never install them into your base Python. Then train. Everything here is free and runs offline. Every later lesson runs its commands with `.venv-ml/bin/python` (`../../.venv-ml/bin/python` from inside `ml/python`).
 
 ```bash
+python3 -m venv .venv-ml && .venv-ml/bin/pip install -r ml/python/requirements.txt
 cd ml/python
-pip install -r requirements.txt
-python train.py
+../../.venv-ml/bin/python train.py
 ```
 
 You should see:
@@ -171,7 +171,7 @@ print(train.score(model, "Zorblax quux!")["label"], train.score(model, "Zorblax 
 ```
 
 ```bash
-python peek.py
+../../.venv-ml/bin/python peek.py
 ```
 
 You should see:

@@ -4,10 +4,10 @@ import { plural, type InjectionJson, type InjectionRecording, type Json } from '
 
 // ── InjectionLab ────────────────────────────────────────────────────────────
 /** What to run when injection.json has no recordings (the file's own record commands win when present). */
-export const DERIVE_COMMAND = 'python mcp/python/derive.py';
+export const DERIVE_COMMAND = '.venv-mcp/bin/python mcp/python/derive.py';
 export const INJECTION_COMMANDS = [
-  'python mcp/python/agent.py --scenario capstone --elicit accept --mode record --max-cost 10',
-  'python mcp/python/agent.py --scenario capstone --guard --approve decline --elicit accept --mode record --max-cost 10',
+  '.venv-mcp/bin/python mcp/python/agent.py --scenario capstone --elicit accept --mode record --max-cost 10',
+  '.venv-mcp/bin/python mcp/python/agent.py --scenario capstone --guard --approve decline --elicit accept --mode record --max-cost 10',
   DERIVE_COMMAND,
 ];
 

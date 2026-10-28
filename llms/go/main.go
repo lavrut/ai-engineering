@@ -14,7 +14,7 @@
 //	go run . agreement                  # judge vs. the human labels
 //	go run . gate --prompt v3_examples --baseline v2_rules
 //
-//	export ANTHROPIC_API_KEY=sk-ant-... # only needed to record or run live
+//	read -rs ANTHROPIC_API_KEY && export ANTHROPIC_API_KEY # only to record or run live; paste the key, unechoed
 //	go run . run --mode live --model claude-sonnet-5-5 --effort high
 //
 // Add --data ../data/fixtures to use the tiny test data instead.
@@ -56,6 +56,7 @@ const (
 var defaultMode = "replay" // the CLI's default --mode: replay (saved responses) | record | live
 
 // Dollars per million tokens: {input, output}. Used to estimate cost before any paid run.
+// Checked 2026-10-28 against https://platform.claude.com/docs/en/about-claude/pricing (same as triage_lab.py).
 var prices = map[string][2]float64{
 	"claude-haiku-5-5":  {0.10, 0.50},
 	"claude-sonnet-5-5": {2.00, 10.00},
@@ -336,7 +337,7 @@ func callModel(ctx context.Context, params anthropic.MessageNewParams, key strin
 			return line, err
 		}
 		return Line{}, &ReplayMiss{fmt.Sprintf("no saved response for %s / %s / %s / case %s (rep %d). "+
-			"Record it: python triage_lab.py record ...", cfg.Kind, cfg.Model, cfg.PromptVersion, caseID, cfg.Rep)}
+			"Record it: ../../.venv-llms/bin/python triage_lab.py record ...", cfg.Kind, cfg.Model, cfg.PromptVersion, caseID, cfg.Rep)}
 	case "record":
 		saved, ok, err := latestLine(path, key)
 		if err != nil {
@@ -1008,7 +1009,7 @@ func confirm(w io.Writer, rows []costRow, yes bool, limit float64) bool {
 		answer = readAnswer()
 	}
 	if a := strings.ToLower(strings.TrimSpace(answer)); a != "y" && a != "yes" {
-		fmt.Fprintln(w, "Not confirmed. Nothing was called. Add --yes to approve.")
+		fmt.Fprintln(w, "Not confirmed. Nothing was called. Run it in a terminal and answer y.")
 		return false
 	}
 	return true
@@ -1371,6 +1372,9 @@ func cli(args []string, caller modelCaller, stdout, stderr io.Writer) int {
 	}
 	if err == nil && command == "judge" {
 		err = oneOf("order", o.order, "before", "after")
+	}
+	if err == nil && (command == "run" || command == "judge") && (math.IsNaN(o.maxCost) || math.IsInf(o.maxCost, 0) || o.maxCost <= 0) {
+		err = fmt.Errorf("--max-cost must be a finite number above 0")
 	}
 	if err == nil && sub.NArg() > 0 {
 		err = fmt.Errorf("unrecognized arguments: %s", strings.Join(sub.Args(), " "))

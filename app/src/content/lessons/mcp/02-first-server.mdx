@@ -17,10 +17,10 @@ quiz:
   - question: Every tool in lumen-read carries readOnlyHint true. What does that tell a host?
     options:
       - That the server cannot write, because the SDK blocks writes
-      - That the server says the tool does not change anything, which is a claim a host may use, for example to skip asking, but cannot check
-      - That the tool needs no arguments
       - That the result is cached
-    answer: 1
+      - That the tool needs no arguments
+      - That the server says the tool does not change anything, which is a claim a host may use, for example to skip asking, but cannot check
+    answer: 3
     explanation: An annotation is a statement by the server. The spec says to treat annotations as untrusted unless the server is trusted. Here the claim is true because no tool in the server writes anything. Lesson 8 returns to why a hint is not a guard.
   - question: Why does each tool return the result twice, as structured content and as a text block holding the same JSON?
     options:

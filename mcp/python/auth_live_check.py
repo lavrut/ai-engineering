@@ -6,7 +6,7 @@ whose `code`, `state` and `iss` this script hands back to the SDK client. Steps 
 mcp/python/AUTH_LIVE_CHECK.md. It never prints a token. With --save-token, the access token is
 written to a new file (mode 0600, never overwriting, e.g. ~/.lumen/read.tok) for the clients' --token-file / -token-file.
 
-Run:  python mcp/python/auth_live_check.py --url http://127.0.0.1:8765/mcp [--dcr] [--yes]
+Run:  .venv-mcp/bin/python mcp/python/auth_live_check.py --url http://127.0.0.1:8765/mcp [--dcr] [--yes]
           [--save-token PATH] TOOL JSON_ARGS
 """
 from __future__ import annotations

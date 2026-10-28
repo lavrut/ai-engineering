@@ -1,9 +1,10 @@
 // mini-harness — the same agent harness as harness.py, written in Go.
 //
-// Run:
+// Run (the key setup is in lesson 2):
 //
-//	export ANTHROPIC_API_KEY=sk-ant-...
-//	go run .
+//	cd harness/go && go run .
+//
+// Every task costs money: the REPL prints an estimate and asks y/N first (section 9).
 package main
 
 import (
@@ -11,8 +12,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -31,7 +34,15 @@ const (
 	contextBudget = 150000 // input tokens before we roll over to a summary
 	useFallbacks  = true   // retry on a fallback model if a safety classifier declines
 	toolTimeout   = 30 * time.Second
+	maxCost       = 10.00 // default --max-cost: the most one REPL session may spend, in dollars
+	typicalCalls  = 4     // for the estimate: model calls in a typical task,
+	typicalIn     = 4000  // input tokens per call
+	typicalOut    = 400   // and output tokens per call
+	charsPerToken = 3     // sizes a request before it is sent; low, so the guess runs high
 )
+
+// pricePerMTok is the model's dollars per million input / output tokens (PRICES in llms/python/triage_lab.py).
+var pricePerMTok = [2]float64{4.00, 20.00}
 
 var maxTurns = 25 // hard stop for a runaway loop (a var so tests can lower it)
 
@@ -87,6 +98,9 @@ func register(t Tool) { registry[t.Name] = t }
 
 // safePath is the sandbox rule: tools may only touch files inside workspace.
 func safePath(rel string) (string, error) {
+	if rel == "" { // a missing "path" field decodes as ""; Python raises TypeError for it
+		return "", errors.New("path is required")
+	}
 	if filepath.IsAbs(rel) { // Join would quietly re-root "/etc/passwd" inside the workspace
 		return "", fmt.Errorf("%s is outside the workspace", rel)
 	}
@@ -227,7 +241,7 @@ func approve(name, args string) bool {
 		args = args[:200]
 	}
 	fmt.Printf("\n  ! The agent wants to run %s(%s)\n    Allow? [y/N] ", name, args)
-	line, _ := stdin.ReadString('\n')
+	line, _ := stdin.ReadString('\n') // end of input reads as "", which is no
 	ok := strings.TrimSpace(strings.ToLower(line)) == "y"
 	emit("permission", map[string]any{"tool": name, "allowed": ok})
 	return ok
@@ -404,25 +418,131 @@ func runAgent(ctx context.Context, task string, model modelCaller, ok approver) 
 }
 
 // ── 9. Entry point: a tiny REPL ─────────────────────────────────────────────
-func main() {
-	os.MkdirAll(workspace, 0o755)
+func dollars(in, out int64) float64 {
+	return (float64(in)*pricePerMTok[0] + float64(out)*pricePerMTok[1]) / 1e6
+}
+
+// costLimit: the next model call could take the session past --max-cost, so it was not made.
+type costLimit struct{ spent, worst, cap float64 }
+
+func (e *costLimit) Error() string {
+	return fmt.Sprintf("spent $%.4f; the next call could cost up to $%.4f, over --max-cost %.2f", e.spent, e.worst, e.cap)
+}
+
+type ledger struct{ cap, spent float64 }
+
+// metered is the money gate on every model call: stop if spent + this call's worst case would pass the cap.
+func metered(call modelCaller, l *ledger) modelCaller {
+	return func(ctx context.Context, p anthropic.MessageNewParams) (*anthropic.Message, error) {
+		sent, _ := json.Marshal([]any{systemPrompt, toolParams(), p.Messages})
+		out := p.MaxTokens
+		if out == 0 {
+			out = maxTokens
+		}
+		worst := dollars(int64(len(sent)/charsPerToken), out)
+		if l.spent+worst > l.cap {
+			return nil, &costLimit{l.spent, worst, l.cap}
+		}
+		resp, err := call(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+		l.spent += dollars(resp.Usage.InputTokens, resp.Usage.OutputTokens)
+		return resp, nil
+	}
+}
+
+// commas writes 150000 as 150,000, like Python's {:,}.
+func commas(n int) string {
+	s := fmt.Sprint(n)
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return s
+}
+
+func estimateLines(l *ledger) []string {
+	typical := typicalCalls * dollars(typicalIn, typicalOut)
+	worst := float64(maxTurns) * dollars(contextBudget, maxTokens)
+	return []string{
+		fmt.Sprintf("Estimate: typical $%.2f a task (%d calls of ~%s input and ~%s output tokens); worst case $%.2f "+
+			"if every call stays at CONTEXT_BUDGET (MAX_TURNS %d calls of %s input and %s output tokens, plus any compaction summaries), at $%.2f / $%.2f "+
+			"per million tokens; the hard stop is --max-cost $%.2f.", typical, typicalCalls, commas(typicalIn), commas(typicalOut), worst, maxTurns,
+			commas(contextBudget), commas(maxTokens), pricePerMTok[0], pricePerMTok[1], l.cap),
+		fmt.Sprintf("Spent $%.4f this session; each call is checked against the cap first, "+
+			"so the session stops at about $%.2f.", l.spent, l.cap),
+	}
+}
+
+// isTerminal reports whether standard input is a terminal (a var so tests can swap it).
+var isTerminal = func() bool {
+	fi, err := os.Stdin.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+}
+
+// confirmed: y on a terminal, or --yes for a scripted run you approved. Anything else is no.
+func confirmed(yes bool) bool {
+	if yes {
+		return true
+	}
+	if !isTerminal() {
+		fmt.Println("Not run: no terminal to ask. Nothing was spent.")
+		return false
+	}
+	fmt.Print("Run it? [y/N] ")
+	line, _ := stdin.ReadString('\n')
+	if strings.TrimSpace(strings.ToLower(line)) == "y" {
+		return true
+	}
+	fmt.Println("Not run. Nothing was spent.")
+	return false
+}
+
+func repl(args []string, call modelCaller) int {
+	fs := flag.NewFlagSet("mini-harness", flag.ContinueOnError)
+	budget := fs.Float64("max-cost", maxCost, "dollars this session may spend")
+	yes := fs.Bool("yes", false, "scripted runs only: approve every task without asking")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if math.IsNaN(*budget) || math.IsInf(*budget, 0) || *budget <= 0 { // nan would make every "over the cap?" test false
+		fmt.Println("--max-cost must be a finite number above 0. Nothing was called.")
+		return 2
+	}
+	if os.Getenv("ANTHROPIC_API_KEY") == "" {
+		fmt.Println("Set ANTHROPIC_API_KEY first (lesson 2). Nothing was called.")
+		return 1
+	}
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		fmt.Println("Error:", err)
+		return 1
+	}
+	l := &ledger{cap: *budget}
 	fmt.Printf("mini-harness · %s · workspace %s\nType a task, or 'exit'.\n", model, workspace)
 	for {
 		fmt.Print("\nyou > ")
 		line, err := stdin.ReadString('\n')
 		if err != nil {
-			return
+			return 0
 		}
 		task := strings.TrimSpace(line)
 		if task == "exit" || task == "quit" {
-			return
+			return 0
 		}
 		if task == "" {
 			continue
 		}
-		answer, err := runAgent(context.Background(), task, callModel, approve)
+		fmt.Println(strings.Join(estimateLines(l), "\n"))
+		if !confirmed(*yes) {
+			continue
+		}
+		before := l.spent
+		answer, err := runAgent(context.Background(), task, metered(call, l), approve)
 		var apiErr *anthropic.Error
+		var limit *costLimit
 		switch {
+		case errors.As(err, &limit):
+			fmt.Println("Stopped:", limit)
 		case errors.As(err, &apiErr) && apiErr.StatusCode == 429:
 			fmt.Println("Rate limited even after retries. Wait a minute and try again.")
 		case errors.As(err, &apiErr):
@@ -432,5 +552,8 @@ func main() {
 		default:
 			fmt.Println("\nagent >", answer)
 		}
+		fmt.Printf("  [$%.4f this task, $%.4f this session]\n", l.spent-before, l.spent)
 	}
 }
+
+func main() { os.Exit(repl(os.Args[1:], callModel)) }

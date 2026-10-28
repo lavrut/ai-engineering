@@ -8,19 +8,19 @@ minutes: 25
 quiz:
   - question: The chain's classifier answers "refund" instead of one of the lab's six categories. What happens, and why is that the point of the gate?
     options:
-      - The writer gets "refund" and writes a reply for it
       - The code raises an error before the writer is called, so a bad first step never pays for a second call
+      - The writer gets "refund" and writes a reply for it
       - The model is asked again until it gives a valid category
       - The chain falls back to the router
-    answer: 1
+    answer: 0
     explanation: The gate is `if category not in CATEGORIES`, checked in code between the two calls. A bad step fails loudly and early, and the second call is never made. The contract file has a case for exactly this.
   - question: On t061, a how-to question, the Python router chose "other" and the Go router chose "bug". What does that show?
     options:
       - The Go version has a bug
       - The router is random and cannot be used
-      - The closed set only guarantees a valid route, not the right one. When a ticket fits no route well, two near-identical requests can land on different routes
       - Go uses a different model
-    answer: 2
+      - The closed set only guarantees a valid route, not the right one. When a ticket fits no route well, two near-identical requests can land on different routes
+    answer: 3
     explanation: Both used claude-haiku-5-5 with the same prompt text, but Go's request bytes differ slightly, so they are separate recordings with separate answers. "How do I export to PDF" fits none of billing, bug or account well. Code can check that an answer is one of four; it cannot check that it is the best of four.
   - question: Why did routing t001 cost less than a third of chaining it, when both make two calls?
     options:
