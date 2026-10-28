@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import matter from 'gray-matter';
@@ -11,6 +11,7 @@ import {
   callCost,
   cohenKappa,
   compare,
+  grade,
   gradeRun,
   noiseBand,
   positionFlips,
@@ -679,6 +680,32 @@ describe('lesson 8 (choosing a model): the numbers it states', () => {
   });
 });
 
+// The course's LoRA run: llms/finetune/lora.py on a free Colab T4 on 2026-10-28. Its predictions.jsonl is
+// committed at the path triage_lab.response_path gives the configuration (the '/' in the model name makes a
+// folder); llms/python/tests/test_lora_predictions.py re-scores it too. The training lines are not in any file:
+// they are quoted here as Colab printed them on 2026-10-28.
+const LORA_FILE = 'llms/data/responses/triage__Qwen/Qwen2.5-0.5B-Instruct+lora__lora__default.jsonl';
+const LORA_COLAB_2026_10_28 = {
+  params: 'trainable params: 1,081,344 || all params: 495,114,112 || trainable%: 0.2184',
+  loss: "{'loss': '0.5373', 'grad_norm': '1.157', 'learning_rate': '8e-05', 'epoch': '2'}",
+  summary: "{'train_runtime': '11.46', 'train_samples_per_second': '10.47', 'train_steps_per_second': '1.309', 'train_loss': '0.4209', 'epoch': '3'}",
+};
+const QWEN_LAYERS = 24; // Qwen2.5-0.5B-Instruct's config.json: num_hidden_layers
+const QWEN_KV = 128; // k_proj and v_proj output size: 2 key-value heads of 64
+const loraLines = jsonl<Line>(src(LORA_FILE));
+const loraGrades = loraLines.map((x) => grade(byId.get(x.case_id)!, x));
+const loraReport = report(loraGrades);
+const loraRight = loraGrades.filter((g) => g.both_ok).length;
+/** Python's f'{x:.0%}', for the exact shares here. */
+const pct0 = (x: number) => `${Math.round(x * 100)}%`;
+/** The two lines `lora.py --score` prints, recomputed with the app's graders. */
+const loraScoreLines = () => [
+  `correct on all ${test.length} test tickets: ${loraRight}/${test.length} = ${pct0(loraRight / test.length)}`,
+  `over the ${loraReport.scored} parsed outputs only: category ${pct0(loraReport.category)}, priority ${pct0(loraReport.priority)}, ` +
+    `both ${pct0(loraReport.both)} (noise band +-${pct0(loraReport.band)})`,
+];
+const venvPython = join(repo, '.venv-llms/bin/python');
+
 describe('lesson 9 (LoRA): the numbers it states', () => {
   const l = flat('09-lora');
   const lora = src('llms/finetune/lora.py');
@@ -712,6 +739,68 @@ describe('lesson 9 (LoRA): the numbers it states', () => {
     const n = [...src('llms/finetune/test_format.py').matchAll(/^def test_/gm)].length;
     expect(n).toBe(9);
     expect(read('09-lora')).toContain(`\`\`\`text\n${n} passed\n\`\`\``);
+  });
+  it('the committed run: 20 lines, one per test ticket, all with the lora config; the lesson names its path', () => {
+    expect(loraLines.map((x) => x.case_id).sort()).toEqual(test.map((t) => t.id).sort());
+    for (const x of loraLines) {
+      expect(x.config).toEqual({ kind: 'triage', model: 'Qwen/Qwen2.5-0.5B-Instruct+lora', effort: null, prompt_version: 'lora', rep: 0 });
+      expect(runName(x.config)).toBe(LORA_FILE.replace(/^llms\/data\/responses\//, '').replace(/\.jsonl$/, ''));
+    }
+    expect(lora).toContain('MODEL_NAME = BASE_MODEL + "+lora"');
+    expect(read('09-lora')).toContain(`\`\`\`bash\n.venv-llms/bin/python llms/finetune/lora.py --score "${LORA_FILE}"\n\`\`\``);
+    expect(l).toContain('The course ran `lora.py` on a free Colab T4 on 2026-10-28');
+    expect(src('llms/data/README.md')).toContain(`\`${LORA_FILE.replace('llms/data/', '')}\` is the only LoRA result`);
+    expect(src('llms/data/README.md')).toContain('on a free Colab T4 GPU on 2026-10-28');
+  });
+  it('the score block: 5/20 = 25%; category 60%, priority 40%, both 25%, band +-22%, as the app grades it', () => {
+    expect(loraScoreLines()).toEqual([
+      'correct on all 20 test tickets: 5/20 = 25%',
+      'over the 20 parsed outputs only: category 60%, priority 40%, both 25% (noise band +-22%)',
+    ]);
+    expect(read('09-lora')).toContain(`\`\`\`text\n${loraScoreLines().join('\n')}\n\`\`\``);
+  });
+  it.skipIf(!existsSync(venvPython))('the score block is what lora.py --score prints (the real scorer, in .venv-llms)', () => {
+    const out = execFileSync(venvPython, ['llms/finetune/lora.py', '--score', LORA_FILE],
+      { cwd: repo, encoding: 'utf8', env: { PATH: '/usr/bin:/bin' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    expect(out.trim().split('\n')).toEqual(loraScoreLines());
+  });
+  it('trainable: 24 layers × (14,336 + 14,336 + 8,192 + 8,192) = 1,081,344 of 495,114,112 (0.22%), as Colab printed', () => {
+    const r = Number(/^LORA_R = (\d+)/m.exec(lora)![1]);
+    const qo = loraParams(LORA_D, r).trainable;
+    const kv = r * (LORA_D + QWEN_KV);
+    const total = QWEN_LAYERS * (2 * qo + 2 * kv);
+    expect([qo, kv, total]).toEqual([14336, 8192, 1081344]);
+    const all = Number(/all params: ([\d,]+)/.exec(LORA_COLAB_2026_10_28.params)![1].replace(/,/g, ''));
+    expect(LORA_COLAB_2026_10_28.params).toBe(
+      `trainable params: ${commas(total)} || all params: ${commas(all)} || trainable%: ${((total / all) * 100).toFixed(4)}`);
+    expect(l).toContain(`\`${LORA_COLAB_2026_10_28.params}\``);
+    expect(l).toContain(`In this model \`k_proj\` and \`v_proj\` are ${LORA_D} × ${QWEN_KV}`);
+    expect(l).toContain(`It trained ${commas(total)} of ${commas(all)} numbers, ${((total / all) * 100).toFixed(2)}%. That is ${QWEN_LAYERS} layers, ` +
+      `each with ${commas(qo)} for \`q_proj\`, ${commas(qo)} for \`o_proj\` and ${commas(kv)} each for the narrower \`k_proj\` and \`v_proj\``);
+  });
+  it('training: loss at step 10 (epoch 2), 15 steps in about 11 seconds, train_loss 0.4209, as Colab printed', () => {
+    const s = LORA_COLAB_2026_10_28.summary;
+    const runtime = Number(/'train_runtime': '([\d.]+)'/.exec(s)![1]);
+    const perSec = Number(/'train_steps_per_second': '([\d.]+)'/.exec(s)![1]);
+    expect(Math.round(runtime * perSec)).toBe((40 / (4 * 2)) * 3);   // 15 steps
+    expect(LORA_COLAB_2026_10_28.loss).toContain(`'epoch': '${10 / (40 / (4 * 2))}'`);   // step 10 ends epoch 2
+    expect(l).toContain(`logged once at step 10, such as \`${LORA_COLAB_2026_10_28.loss}\``);
+    expect(s).toContain("'train_runtime': '11.46'");
+    expect(s).toContain("'train_loss': '0.4209'");
+    expect(l).toContain("such as `'train_runtime': '11.46'` and `'train_loss': '0.4209'`");
+    expect(l).toContain(`The ${(40 / (4 * 2)) * 3} optimizer steps took about ${Math.round(runtime)} seconds`);
+  });
+  it('results: 5 of 20 (25%), category 60%, priority 40%, ±22.4%; 70.0 points below Haiku\'s 95.0%, far outside the band', () => {
+    expect(loraReport.scored).toBe(test.length);   // "Every answer parsed"
+    expect(l).toContain(`Every answer parsed, and ${loraRight} of the ${test.length} test tickets were fully right, ${pct0(loraReport.both)}: ` +
+      `category ${pct0(loraReport.category)}, priority ${pct0(loraReport.priority)}, noise band ±${pct(loraReport.band)}`);
+    const v2 = gradesOn(haiku('v2_rules'), test);
+    const v2Both = report(v2).both;
+    const gap = (v2Both - loraReport.both) * 100;
+    expect(gap > noiseBand(20) * 100).toBe(true);
+    expect(l).toContain(`Haiku with \`v2_rules\` gets ${v2.filter((g) => g.both_ok).length} of ${test.length} (${pct(v2Both)}) on the same tickets, ` +
+      `and ${pct0(loraReport.both)} is ${gap.toFixed(1)} points lower, far outside ±${pct(noiseBand(20))}`);
+    expect(l).toContain(`Fifteen steps on ${dev.length} examples with a 0.5B model lose to a good prompt on a frontier model`);
   });
 });
 
@@ -857,7 +946,8 @@ describe('the quizzes: every number they state is pinned (P14)', () => {
       `2 × ${LORA_D} × ${loraR} = ${commas(lora.trainable)} numbers, instead of all ${commas(lora.full)} in W`,
       `A·B is a full ${LORA_D} × ${LORA_D} matrix`, `${((lora.trainable / lora.full) * 100).toFixed(2)}% of W's size`,
       `Haiku's ${v2Test} of ${test.length} with v2_rules`, `with ${test.length} tickets the band is about ±${Math.round(noiseBand(20) * 100)}%`,
-      `and ${(40 / (4 * 2)) * 3} optimizer steps on ${dev.length} examples`, `on ${test.length} is well inside ±${p1(noiseBand(20))}%`],
+      `and ${(40 / (4 * 2)) * 3} optimizer steps on ${dev.length} examples`, `on ${test.length} is well inside ±${p1(noiseBand(20))}%`,
+      `It got ${loraRight} of ${test.length}, ${((report(gradesOn(haiku('v2_rules'), test)).both - loraReport.both) * 100).toFixed(1)} points below Haiku's ${p1(report(gradesOn(haiku('v2_rules'), test)).both)}%, far outside the band`],
     '10-capstone': [`on ${dev.length} dev tickets. The baseline scores ${p1(devBoth('v2_rules'))}% and the candidate 90.0%`,
       `With the default minimum of ${minimum}`, `a ${(devBoth('v2_rules') * 100 - 90).toFixed(1)}-point drop is inside the ±${p1(band40)}% band`,
       'because 90.0% is below 95%' /* a wrong option */,
