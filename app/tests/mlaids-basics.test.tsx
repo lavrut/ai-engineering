@@ -44,6 +44,8 @@ const MONEY = 'Money transfer, virtual currency, or money service';
 const CHECKING = 'Checking or savings account';
 const size = (v: unknown) => JSON.stringify(v).length;
 const click = (name: string | RegExp) => fireEvent.click(screen.getByRole('button', { name }));
+// mlAids.ts re-exports these modules; the islands import mlAids only.
+const ML_LIB = ['mlAids.ts', 'mlAidsShared.ts', 'mlAidsBasics.ts', 'mlAidsOps.ts', 'mlAidsDrift.ts'];
 
 afterEach(() => {
   cleanup();
@@ -510,12 +512,23 @@ describe('props and imports', () => {
 
   it('mlAids.ts and the islands never import mlData.ts or llmsKey.ts at run time', () => {
     const src = (p: string) => readFileSync(join(here, '../src', p), 'utf8');
-    const imports = (text: string) => [...text.matchAll(/^import\s+(type\s+)?[^;]*?from\s+'([^']+)'/gms)].map((m) => ({ type: !!m[1], from: m[2] }));
-    for (const f of ['lib/mlAids.ts', ...['ComplaintExplorer', 'FeatureExplorer', 'TrainingStepper', 'MetricsView'].map((n) => `components/ml/${n}.tsx`)]) {
+    const imports = (text: string) => [...text.matchAll(/^import\s+(type\s+)?[^;]*?from\s+['"]([^'"]+)['"]/gms)].map((m) => ({ type: !!m[1], from: m[2] }));
+    const lib = ML_LIB.map((f) => `lib/${f}`);
+    for (const f of [...lib, ...['ComplaintExplorer', 'FeatureExplorer', 'TrainingStepper', 'MetricsView'].map((n) => `components/ml/${n}.tsx`)]) {
       for (const i of imports(src(f))) {
         if (/mlData|llmsKey|llmsData/.test(i.from)) expect(i.type, `${f} imports ${i.from}`).toBe(true);
       }
       expect(src(f)).not.toMatch(/import\.meta|\brequire\(|import\(/);
     }
+  });
+});
+
+// The aid logic, one module per aid group, re-exported by mlAids.ts (as mcpAids.ts and agentsAids.ts do).
+describe('ml aid modules', () => {
+  it('are split per aid group, each under 400 lines, and mlAids.ts only re-exports them', () => {
+    const read = (f: string) => readFileSync(join(here, '../src/lib', f), 'utf8');
+    for (const f of ML_LIB) expect(read(f).split('\n').length, f).toBeLessThan(400);
+    expect(read('mlAids.ts').match(/^export \* from '\.\/mlAids\w+';$/gm)).toHaveLength(4);
+    expect(read('mlAids.ts').replace(/^\/\/.*$/gm, '').replace(/^export \* from .*$/gm, '').trim()).toBe('');
   });
 });

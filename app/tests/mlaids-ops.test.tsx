@@ -547,8 +547,9 @@ describe('ops props and imports', () => {
 
   it('the ops islands never import mlData.ts at run time', () => {
     const src = (p: string) => readFileSync(join(here, '../src', p), 'utf8');
-    const imports = (text: string) => [...text.matchAll(/^import\s+(type\s+)?[^;]*?from\s+'([^']+)'/gms)].map((m) => ({ type: !!m[1], from: m[2] }));
-    for (const f of ['ModelVsLlm', 'RunTable', 'RegistryTimeline', 'DriftChart'].map((n) => `components/ml/${n}.tsx`)) {
+    const imports = (text: string) => [...text.matchAll(/^import\s+(type\s+)?[^;]*?from\s+['"]([^'"]+)['"]/gms)].map((m) => ({ type: !!m[1], from: m[2] }));
+    const islands = ['ModelVsLlm', 'RunTable', 'RegistryTimeline', 'DriftChart', 'DriftSignalChart', 'DriftClassShares'].map((n) => `components/ml/${n}.tsx`);
+    for (const f of [...islands, 'components/ml/driftChartCss.ts', 'lib/mlAidsOps.ts', 'lib/mlAidsDrift.ts']) {
       for (const i of imports(src(f))) {
         if (/mlData|llmsKey|llmsData/.test(i.from)) expect(i.type, `${f} imports ${i.from}`).toBe(true);
       }
