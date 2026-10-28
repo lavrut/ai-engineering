@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/preact';
 import ContextMeter from '../src/components/ContextMeter';
+import { addTurn, initialMeter, total, type TurnKind } from '../src/lib/compaction';
 
 afterEach(cleanup);
 
@@ -36,7 +37,18 @@ describe('ContextMeter', () => {
   it('Auto-run 20 turns adds twenty turns', () => {
     const { container } = render(<ContextMeter />);
     click('Auto-run 20 turns');
-    expect(container.querySelector('.cm-turns')?.textContent).toContain('Turns since last compaction');
-    expect(screen.getByText(/Compactions: [1-9]/)).toBeTruthy();
+    const kinds: TurnKind[] = Array.from({ length: 20 }, (_, i) => (['short', 'file', 'tools'] as const)[i % 3]);
+    const end = kinds.reduce((s, k) => addTurn(s, k).state, initialMeter());
+    expect(end.compactions).toBeGreaterThan(0);
+    expect(container.querySelector('.cm-turns')?.textContent).toBe(`Turns since last compaction: ${end.history.length}`);
+    expect(screen.getByText(`Compactions: ${end.compactions}`)).toBeTruthy();
+    expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe(
+      `Total ${total(end).toLocaleString('en-US')} tokens; compactions ${end.compactions}; turns since last compaction ${end.history.length}.`,
+    );
+  });
+
+  it('keeps one live line mounted from the start', () => {
+    const { container } = render(<ContextMeter />);
+    expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe('Total 1,900 tokens; compactions 0; turns since last compaction 0.');
   });
 });

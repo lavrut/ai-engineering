@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useId, useState } from 'preact/hooks';
 import {
   codeKey,
   DEFAULT_NODE_H,
@@ -91,8 +91,9 @@ export default function FlowDiagram({ diagram, codePython, codeGo, mode }: Props
   const code = key === undefined ? undefined : (codeLang === 'go' ? codeGo : codePython)[key];
   // The Go file may number its own sections (goSection); the label shows the one on screen.
   const section = codeLang === 'go' ? (step.code?.goSection ?? step.code?.section) : step.code?.section;
-  const codeId = `${diagram.id}-code`;
-  const arrow = `${diagram.id}-arrow`;
+  const uid = useId(); // the course is one page, and a diagram can appear twice on it
+  const codeId = `${diagram.id}-${uid}-code`;
+  const arrow = `${diagram.id}-${uid}-arrow`;
 
   return (
     <figure class="flowdiagram" onKeyDown={onKeyDown}>

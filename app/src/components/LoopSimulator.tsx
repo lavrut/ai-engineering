@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'preact/hooks';
 import { scenarios } from '../data/scenarios';
-import { createSimulator, type ApiMessage, type Policy, type SimState, type ToolResult, type ToolUse } from '../lib/simulator';
+import { announce, callLabel, createSimulator, type ApiMessage, type Policy, type SimState, type ToolResult, type ToolUse } from '../lib/simulator';
 
 type ScenarioId = keyof typeof scenarios;
 type Props = {
@@ -158,9 +158,12 @@ export default function LoopSimulator({ scenario: initialScenario, showPolicy = 
           </div>
           <div>
             <dt>Status</dt>
-            <dd aria-live="polite">{status}</dd>
+            <dd>{status}</dd>
           </div>
         </dl>
+        <p class="visually-hidden" aria-live="polite">
+          {announce(state)}
+        </p>
 
         <div class="ls-panel">
           <p class="ls-panel-title">Conversation</p>
@@ -248,12 +251,6 @@ function Message({
       )}
     </div>
   );
-}
-
-/** `read_file(path="README.md")`, with long argument values shortened. */
-export function callLabel(call: ToolUse): string {
-  const args = Object.entries(call.input).map(([k, v]) => `${k}=${JSON.stringify(v.length > 22 ? `${v.slice(0, 18)}…` : v)}`);
-  return `${call.name}(${args.join(', ')})`;
 }
 
 /** One block per JSON line, indented with padding so wrapped lines hang under their own start. */

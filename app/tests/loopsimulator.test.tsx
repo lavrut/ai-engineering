@@ -52,8 +52,31 @@ describe('LoopSimulator', () => {
     click('Approve');
     click('Run to end');
     expect(card()).toBeNull();
-    expect(container.querySelector('.ls-conversation')?.textContent).toContain('Wrote ');
+    expect(container.querySelector('.ls-conversation')?.textContent).toContain('Wrote 100 characters to README.md');
     expect(strip()).toContain('end_turn');
+  });
+
+  it('announces each step in one live line (I5), not just "running"', () => {
+    const { click } = setup('parallel-read', false);
+    const live = () => document.querySelectorAll('[aria-live="polite"]');
+    expect(live()).toHaveLength(1);
+    expect(live()[0].textContent).toBe('Ready. Press Step to send the task.');
+    click('Step');
+    expect(live()[0].textContent).toBe(
+      'Turn 1: the assistant says "I\'ll read both files at once." and asks for read_file(path="notes.md"), read_file(path="todo.md"); stop_reason tool_use.',
+    );
+    click('Step');
+    expect(live()[0].textContent).toMatch(/^Tool results: toolu_01 ok: # Notes .*; toolu_02 ok: # Todo /);
+    click('Step');
+    expect(live()[0].textContent).toMatch(/^Turn 2: the assistant says "Kickoff is Monday.*"; stop_reason end_turn\. Done\.$/);
+  });
+
+  it('announces the approval card and an error result', () => {
+    const { click } = setup();
+    click('Run to end');
+    expect(document.querySelector('[aria-live="polite"]')?.textContent).toMatch(/^Approval needed: the model wants to run write_file\(path="README\.md", content=/);
+    click('Deny');
+    expect(document.querySelector('[aria-live="polite"]')?.textContent).toMatch(/^Tool results: toolu_\w+ error: The user denied this action\.\.?$/);
   });
 
   it('Reset returns to one message and no card', () => {
