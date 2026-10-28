@@ -87,10 +87,10 @@ export default function AgreementView({ recorded, rubric, cases }: AgreementProp
 
   const source =
     mine === 0
-      ? `Human labels: the drafted labels in reply_labels.jsonl (written by Claude, pending your review).`
+      ? `Human labels: the committed labels in reply_labels.jsonl (drafted by Claude, reviewed by a person on 2026-10-28).`
       : mine === n
         ? `Human labels: your labels from this browser for all ${n} replies.`
-        : `Human labels: your labels from this browser for ${replies(mine)}; the drafted labels in reply_labels.jsonl for the other ${n - mine}.`;
+        : `Human labels: your labels from this browser for ${replies(mine)}; the committed labels in reply_labels.jsonl for the other ${n - mine}.`;
 
   return (
     <section class="av" aria-label="Judge agreement">

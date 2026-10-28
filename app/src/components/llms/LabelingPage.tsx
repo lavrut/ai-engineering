@@ -89,7 +89,7 @@ export default function LabelingPage({ rubric, cases }: LabelingProps) {
         <span style={{ width: `${(reviewed / total) * 100}%` }} />
       </div>
       <p class="lp-intro">
-        Claude drafted these labels; they are pending your review. Read the ticket and the reply, then set each criterion:
+        Claude drafted these labels and a person reviewed them on 2026-10-28. Review them again: read the ticket and the reply, then set each criterion:
         changing a label or pressing Confirm marks the reply reviewed. Your labels stay in this browser.
       </p>
       {!saving && (
