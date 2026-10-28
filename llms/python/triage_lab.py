@@ -42,6 +42,8 @@ JUDGE_MODEL = "claude-opus-5-5"    # the model that grades the replies
 MODE = "replay"                    # the CLI's default --mode: replay (saved responses) | record | live
 
 # Dollars per million tokens: (input, output). Used to estimate cost before any paid run.
+# Checked 2026-10-28 against https://platform.claude.com/docs/en/about-claude/pricing (base input and
+# output; Haiku 5.5 at prompts up to 100,000 tokens). Recorded costs in llms/data use these figures.
 PRICES: dict[str, tuple[float, float]] = {
     "claude-haiku-5-5": (0.10, 0.50),
     "claude-sonnet-5-5": (2.00, 10.00),

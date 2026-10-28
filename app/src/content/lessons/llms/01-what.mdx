@@ -8,27 +8,27 @@ minutes: 12
 quiz:
   - question: You change the triage prompt and try it on three tickets you remember. All three look better. What do you know?
     options:
-      - The new prompt is better, since every example improved
       - Very little; three hand-picked tickets cannot show what the change fixed and broke across the whole set
+      - The new prompt is better, since every example improved
       - The new prompt is better on category but not on priority
       - The new prompt is worse, because the old one was tested first
-    answer: 1
+    answer: 0
     explanation: A prompt change usually fixes some cases and breaks others. Three tickets you chose yourself cannot show that trade. An eval runs every ticket in a fixed set, grades each answer the same way, and reports the share right, so you can see both what improved and what broke.
   - question: Why can a code grader check the category, while the reply draft needs an LLM judge?
     options:
       - Code graders only work on short strings
-      - The category has one right answer to compare against; a reply has many acceptable wordings
       - The judge is cheaper than code
+      - The category has one right answer to compare against; a reply has many acceptable wordings
       - The reply is not saved, so code cannot read it
-    answer: 1
+    answer: 2
     explanation: Each ticket's label says exactly which category is right, so an equality check grades it, free and the same every time. A good reply can be written a hundred ways. Whether it addresses the issue or has the right tone needs a reader, so a stronger model grades it against a rubric.
   - question: You run python triage_lab.py run twice, with no API key set. Why are the two reports identical?
     options:
       - The model is deterministic at temperature 0
-      - The default mode is replay, which reads saved responses from disk instead of calling the model
-      - The lab caches the final report, not the responses
       - The second run reuses the first run's process
-    answer: 1
+      - The lab caches the final report, not the responses
+      - The default mode is replay, which reads saved responses from disk instead of calling the model
+    answer: 3
     explanation: MODE, the default for --mode, is "replay". Every model call is looked up by its key in a saved-response file, so no request is sent, nothing is billed and the same answers come back each time. A live call to the model can give a different answer on each run.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -89,12 +89,12 @@ The lab is one file per language: `llms/python/triage_lab.py` and `llms/go/main.
 
 ## Try it
 
-Run the eval on the 40 `dev` tickets with the shortest prompt, `v1_basic`. Replay reads saved responses, so no API key is needed and nothing is billed. The lab imports the SDK at the top, so install the requirements once:
+Run the eval on the 40 `dev` tickets with the shortest prompt, `v1_basic`. Replay reads saved responses, so no API key is needed and nothing is billed. First make the track's virtual environment, once, from the repo root, so nothing is installed into your base Python (`.venv-llms/` is git-ignored). The SDK is in the requirements, though replay never imports it: the lab loads it only for a paid call. Every later lesson runs from `llms/python` with this venv's Python, `../../.venv-llms/bin/python`:
 
 ```bash
+python3 -m venv .venv-llms && .venv-llms/bin/pip install -r llms/python/requirements.txt
 cd llms/python
-pip install -r requirements.txt
-python triage_lab.py run --prompt v1_basic
+../../.venv-llms/bin/python triage_lab.py run --prompt v1_basic
 ```
 
 You should see:
@@ -110,7 +110,7 @@ v1_basic / claude-haiku-5-5 / effort default / dev split / 1 rep / replay
 `both` is the share of tickets with category and priority both right. Now try the prompt that states the labelling rules, `v2_rules`:
 
 ```bash
-python triage_lab.py run --prompt v2_rules
+../../.venv-llms/bin/python triage_lab.py run --prompt v2_rules
 ```
 
 `both` rises to `97.5%`. Lesson 2 explains why much of that jump is less impressive than it looks. Then run the Go version from `llms/go` with `go run . run --prompt v1_basic`. The first `go run` may download the SDK modules, which is free but needs a network connection. It reads the same files and prints the same four numbers.

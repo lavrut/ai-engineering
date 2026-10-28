@@ -56,6 +56,7 @@ const (
 var defaultMode = "replay" // the CLI's default --mode: replay (saved responses) | record | live
 
 // Dollars per million tokens: {input, output}. Used to estimate cost before any paid run.
+// Checked 2026-10-28 against https://platform.claude.com/docs/en/about-claude/pricing (same as triage_lab.py).
 var prices = map[string][2]float64{
 	"claude-haiku-5-5":  {0.10, 0.50},
 	"claude-sonnet-5-5": {2.00, 10.00},

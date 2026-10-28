@@ -16,19 +16,19 @@ quiz:
     explanation: The judge matches every pass label and misses every fail, so it agrees on 75%. But a rater who always says pass would agree that often with any labels that are 75% pass, so chance agreement is also 75%. Kappa is (0.75 − 0.75) / (1 − 0.75) = 0. The judge has shown no skill at telling good replies from bad ones.
   - question: With the rubric before the reply, the judge fails r029 on no_false_promises; with it after, it passes. What does this flip tell you?
     options:
-      - The "after" order is correct, because it matches the label
       - The verdict on that reply depends on layout, so it is a borderline case; one flip in 90 verdicts is small, but many flips would mean the judge reacts to layout instead of the reply
+      - The "after" order is correct, because it matches the label
       - The judge is broken and cannot be used
       - The label for r029 is wrong
-    answer: 1
+    answer: 0
     explanation: Nothing about the reply changed, so the flip shows that position tipped a close call ("retry later today" can be read as a suggestion or a promise). It does not say which verdict is right. Count flips across all verdicts; a few mark borderline cases, many mean the prompt layout is steering the judge.
   - question: Agreement on tone is low. You rewrite the judge prompt until it matches all 30 labels, then report its agreement on those 30. What went wrong?
     options:
       - Nothing; the judge now agrees with the labels
-      - The 30 labels were used to tune the judge, so agreement on them is now optimistic; measure on labels you did not tune on
       - Judge prompts should never be changed
+      - The 30 labels were used to tune the judge, so agreement on them is now optimistic; measure on labels you did not tune on
       - Tone cannot be judged by a model
-    answer: 1
+    answer: 2
     explanation: This is the dev and test problem from lesson 2 again. Every change you keep because it raised agreement on these 30 fits the judge to them. To know how it does on replies it has not seen, label a fresh set and measure there once.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -142,7 +142,7 @@ Print the agreement table from the replayed verdicts. No API call is made:
 
 ```bash
 cd llms/python
-python triage_lab.py agreement
+../../.venv-llms/bin/python triage_lab.py agreement
 ```
 
 ```text
@@ -174,7 +174,7 @@ for rid in L.RUBRIC_IDS:
 ```
 
 ```bash
-python kappa_demo.py
+../../.venv-llms/bin/python kappa_demo.py
 ```
 
 ```text
@@ -191,7 +191,7 @@ Last, make the labels yours. Go through all 30 replies below. Read the ticket an
 
 <LabelingPage />
 
-When all 30 are reviewed, press **Copy JSONL**, paste the text over `llms/data/reply_labels.jsonl`, and run `python triage_lab.py agreement` again. The judge's verdicts are saved, so this costs nothing; only the human side changed. Then commit the file, and update the note in `llms/data/README.md` that says the labels are pending review:
+When all 30 are reviewed, press **Copy JSONL**, paste the text over `llms/data/reply_labels.jsonl`, and run `../../.venv-llms/bin/python triage_lab.py agreement` again. The judge's verdicts are saved, so this costs nothing; only the human side changed. Then commit the file, and update the note in `llms/data/README.md` that says the labels are pending review:
 
 ```bash
 git add llms/data/reply_labels.jsonl llms/data/README.md

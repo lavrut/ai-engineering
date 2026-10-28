@@ -17,10 +17,10 @@ quiz:
   - question: Sonnet at high effort used about 229 output tokens a call where low effort used about 117, yet each reply is two or three sentences. Where did the extra tokens go?
     options:
       - Into longer replies the grader ignored
-      - Into thinking, which the model does before it answers and which is billed as output tokens even though the lab never shows it
-      - Into the input, because high effort resends the prompt
       - Nowhere; output_tokens counts are estimates
-    answer: 1
+      - Into the input, because high effort resends the prompt
+      - Into thinking, which the model does before it answers and which is billed as output tokens even though the lab never shows it
+    answer: 3
     explanation: Effort sets how much the model thinks before it answers. That thinking is counted in usage.output_tokens and billed at the output price, so higher effort costs more even when the visible answer is the same length. Here it bought 2.5 points, inside the noise.
   - question: You try temperature=0 to make the triage answers more consistent, and the API returns a 400. What is the right reading?
     options:
@@ -152,11 +152,11 @@ Score every recorded configuration on dev with `v2_rules`, from the saved respon
 
 ```bash
 cd llms/python
-python triage_lab.py run --prompt v2_rules
-python triage_lab.py run --prompt v2_rules --model claude-sonnet-5-5 --effort low
-python triage_lab.py run --prompt v2_rules --model claude-sonnet-5-5 --effort high
-python triage_lab.py run --prompt v2_rules --model claude-opus-5-5 --effort low
-python triage_lab.py run --prompt v2_rules --model claude-opus-5-5 --effort high
+../../.venv-llms/bin/python triage_lab.py run --prompt v2_rules
+../../.venv-llms/bin/python triage_lab.py run --prompt v2_rules --model claude-sonnet-5-5 --effort low
+../../.venv-llms/bin/python triage_lab.py run --prompt v2_rules --model claude-sonnet-5-5 --effort high
+../../.venv-llms/bin/python triage_lab.py run --prompt v2_rules --model claude-opus-5-5 --effort low
+../../.venv-llms/bin/python triage_lab.py run --prompt v2_rules --model claude-opus-5-5 --effort high
 ```
 
 The `both accuracy` lines read 97.5%, 85.0%, 87.5%, 95.0% and 95.0%, each with `noise band +/-15.8%`.
@@ -179,7 +179,7 @@ for model, effort in configs:
 ```
 
 ```bash
-python cost_table.py
+../../.venv-llms/bin/python cost_table.py
 ```
 
 ```text
@@ -195,7 +195,7 @@ Change `"v2_rules"` to `"v1_basic"` and run it again to see the other prompt.
 Now ask for a configuration that was never recorded, Sonnet at `medium`:
 
 ```bash
-python triage_lab.py run --model claude-sonnet-5-5 --effort medium
+../../.venv-llms/bin/python triage_lab.py run --model claude-sonnet-5-5 --effort medium
 ```
 
 Replay stops with `error: no saved response for triage / claude-sonnet-5-5 / v2_rules / case t001 (rep 0). Record it: python triage_lab.py record ...`. The effort is part of the key, so `medium` has no answers yet.

@@ -387,3 +387,23 @@ def test_cli_every_error_line_is_caught(root, capsys, tmp_path):
 def test_cli_zero_workers_runs_one_at_a_time(capsys):
     assert lab.main(["run", "--workers", "0", "--data", str(FIXTURES)]) == 0
     assert "accuracy" in capsys.readouterr().out
+
+
+def test_a_failed_call_stops_the_runner():
+    """A call that raises (not an API error, which call_model saves) stops new calls, as Go's run does:
+    pool.map cancels the jobs that have not started, so at most the calls already in flight finish."""
+    called = []
+
+    def fn(case, rep):
+        called.append(case)
+        if case == 0:
+            raise OSError("disk full")
+        return {"config": {"model": "claude-haiku-5-5"}, "input_tokens": 1, "output_tokens": 1}
+
+    with pytest.raises(OSError, match="disk full"):
+        lab.run(list(range(20)), fn, workers=1)
+    assert called == [0]
+    called.clear()
+    with pytest.raises(OSError, match="disk full"):
+        lab.run(list(range(40)), fn, workers=4)
+    assert len(called) < 40

@@ -8,27 +8,27 @@ minutes: 16
 quiz:
   - question: Why does the lab grade the reply draft with a second model instead of comparing it with a stored "right" reply?
     options:
-      - String comparison is too slow for long replies
       - A reply has no single right wording, so equality would fail good replies; a judge can check qualities such as tone against a rubric
+      - String comparison is too slow for long replies
       - The stored reply would cost tokens to read
       - Structured output cannot return a reply
-    answer: 1
+    answer: 0
     explanation: The category has one right answer, so code compares it with the label. Two good replies to the same ticket can share no sentence at all. What makes a reply good is a set of qualities (does it address the issue, is the tone right, does it promise too much), and checking those needs a reader. The judge is that reader, guided by the rubric.
   - question: The judge is Opus and the task model is Haiku. Why not use Haiku for both and save money?
     options:
       - Haiku cannot return structured output
-      - A judge no stronger than the task model is more likely to miss the same mistakes the task model makes, and judging runs only on the eval set, so a stronger model is affordable
       - Opus is faster
+      - A judge no stronger than the task model is more likely to miss the same mistakes the task model makes, and judging runs only on the eval set, so a stronger model is affordable
       - The rubric is too long for Haiku's context window
-    answer: 1
+    answer: 2
     explanation: The judge is there to catch what the task model gets wrong. A model of the same strength tends to share its blind spots. Triage runs on every incoming ticket, so it needs a cheap model; the judge runs on a few dozen saved replies when you evaluate, so paying over 40 times as much per call is a small total.
   - question: In the position check, what changes between the "before" and "after" requests?
     options:
       - The system prompt is rewritten, and the rubric is removed from it
-      - Only where the rubric copy sits in the user message, before or after the reply; the system prompt, with its own copy of the rubric, stays the same
-      - The judge model changes from Opus to Sonnet
       - The reply is shortened in one of the two orders
-    answer: 1
+      - The judge model changes from Opus to Sonnet
+      - Only where the rubric copy sits in the user message, before or after the reply; the system prompt, with its own copy of the rubric, stays the same
+    answer: 3
     explanation: The judge prompt puts the rubric in the system prompt through its {rubric} placeholder, and that text is identical in both orders. The user message also carries a copy, and only that copy moves. Everything else is the same, so any verdict that changes was changed by position alone. It is a narrow test, since the rubric is still at the top of the system prompt either way.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -134,7 +134,7 @@ print(f"{len(lines)} judge calls, rubric after: ${cost:.4f} recorded, ${L.estima
 
 ```bash
 cd llms/python
-python judge_demo.py
+../../.venv-llms/bin/python judge_demo.py
 ```
 
 You should see:
@@ -148,7 +148,7 @@ after  pass  Asking the customer to retry later today is a suggestion, not a com
 Now judge the replies the model itself wrote. The recording judged `v2_rules`'s replies on the 20 test tickets, with the rubric after:
 
 ```bash
-python triage_lab.py judge --prompt v2_rules --split test
+../../.venv-llms/bin/python triage_lab.py judge --prompt v2_rules --split test
 ```
 
 ```text

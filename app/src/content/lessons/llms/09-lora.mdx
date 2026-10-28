@@ -8,27 +8,27 @@ minutes: 25
 quiz:
   - question: What does fine-tuning change that a new prompt version does not?
     options:
-      - The tokenizer
       - The model's weights, so the new behaviour is in the model itself and needs no instructions in the request
+      - The tokenizer
       - The JSON schema the model must follow
       - The cache key
-    answer: 1
+    answer: 0
     explanation: A prompt changes what goes into the model on each call; the model is the same. Fine-tuning runs training on your examples and changes the model's weights, so the trained model behaves differently with a short prompt or none. That is also why it costs more to change. A new prompt is an edit; a new behaviour is a training run.
   - question: LoRA adds A (896 × 8) and B (8 × 896) beside a frozen 896 × 896 matrix W. Why does it train so few numbers?
     options:
       - It trains only every hundredth weight of W
-      - The update A·B is built from two thin matrices, 2 × 896 × 8 = 14,336 numbers, instead of all 802,816 in W; the product still has W's shape but can only change W in 8 independent directions
       - It compresses W to 8-bit numbers
+      - The update A·B is built from two thin matrices, 2 × 896 × 8 = 14,336 numbers, instead of all 802,816 in W; the product still has W's shape but can only change W in 8 independent directions
       - It trains W but skips the backward pass
-    answer: 1
+    answer: 2
     explanation: A·B is a full 896 × 896 matrix, so it can be added to W, but its rank is at most 8. Training learns only A and B, 1.79% of W's size. The bet is that the change a task needs is small in this sense, which holds well enough for many tasks.
   - question: Suppose your Colab run scores a little below Haiku's 19 of 20 with v2_rules on the same test tickets. What can you conclude?
     options:
       - Haiku is better, by the size of the gap
       - The LoRA model is nearly as good, so fine-tune instead
-      - Nothing about which is better; with 20 tickets the band is about ±22%, and 15 optimizer steps on 40 examples is a demonstration, not a tuned model
       - The LoRA run failed
-    answer: 2
+      - Nothing about which is better; with 20 tickets the band is about ±22%, and 15 optimizer steps on 40 examples is a demonstration, not a tuned model
+    answer: 3
     explanation: A gap of a ticket or two on 20 is well inside ±22.4%. The training run is also tiny on purpose, so a weak score says little about what fine-tuning could reach with more data. What the run does show is the mechanics, end to end, graded by the same code as every other configuration.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -152,14 +152,14 @@ Section 5 predicts on test and grades the answers.
 
 ## Try it
 
-First, run the format tests on your own machine. They check `to_example`, `parse_completion` and `prediction_line`, and need no GPU and no model:
+First, run the format tests on your own machine, from the repo root with the venv from lesson 1. They check `to_example`, `parse_completion`, `prediction_line` and the prompt masking in `tokenize`, and that `lora.py` imports without the Anthropic SDK. They need no GPU and no model:
 
 ```bash
-python3 -m pytest llms/finetune -q
+.venv-llms/bin/python -m pytest llms/finetune -q
 ```
 
 ```text
-6 passed
+9 passed
 ```
 
 Then train in Google Colab. A free Colab session with a T4 GPU costs nothing, and no step calls the Claude API. The steps, as `lora.py`'s docstring gives them, take about 10 minutes:
@@ -190,7 +190,7 @@ Then read the result against what you know. Haiku with `v2_rules` gets 19 of the
 Back on your machine, grade the saved file again, with no GPU:
 
 ```bash
-python3 llms/finetune/lora.py --score ~/Downloads/predictions.jsonl
+.venv-llms/bin/python llms/finetune/lora.py --score ~/Downloads/predictions.jsonl
 ```
 
 Use the path where you saved the file. It prints the same lines as the end of the Colab run. To see whether the rank matters, change `LORA_R` to 4 or 16 in your copy, rerun in Colab, and compare the two `correct on all 20` lines. Expect the difference to sit inside the band: 20 tickets cannot rank two small training runs.

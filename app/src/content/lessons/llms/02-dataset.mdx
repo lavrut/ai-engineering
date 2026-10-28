@@ -16,19 +16,19 @@ quiz:
     explanation: Different models agreeing with each other and disagreeing with your label points at the label first. In this lab, a blind relabel matched only 33 of 60 priorities, so the definitions did not decide priority, and the labelling guide later changed 10 of those 16 labels. The other 6 kept their labels; those were prompt or model mistakes. Check the labels first, then the prompt.
   - question: You read the test split's mistakes, adjust the prompt until they are fixed, and report the new test score. What went wrong?
     options:
-      - Nothing; fixing mistakes is the point of an eval
       - The test score now measures how well the prompt was fitted to those 20 tickets, not how it does on tickets it has not seen
+      - Nothing; fixing mistakes is the point of an eval
       - The test split is too small to fix mistakes on
       - Prompts should be tuned on the judge, not on labels
-    answer: 1
+    answer: 0
     explanation: Every change you keep because it helped on a set fits the prompt to that set a little. The dev split absorbs that. The test split stays honest only while you leave it alone, so you read it once, at the end, to report. Tune on test and it has become a second dev set.
   - question: The test split has 1 high-priority ticket. The model gets it right. What is its accuracy on high-priority tickets?
     options:
       - 100%, and that is good evidence it handles high tickets well
-      - 100%, but one ticket can only score 0% or 100%, so it says almost nothing; read per-priority numbers from the 40-ticket dev split
       - It cannot be computed
+      - 100%, but one ticket can only score 0% or 100%, so it says almost nothing; read per-priority numbers from the 40-ticket dev split
       - The same as its overall accuracy
-    answer: 1
+    answer: 2
     explanation: A rate over one case can only be 0% or 100%. Per-priority numbers need several cases in each group. The dev split has 9 high, 9 normal, 16 low and 6 urgent tickets, which is still small but far more informative than one.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -137,7 +137,7 @@ for name in ("dev", "test"):
 
 ```bash
 cd llms/python
-python splits.py
+../../.venv-llms/bin/python splits.py
 ```
 
 You should see:
@@ -152,7 +152,7 @@ Now add a ticket of your own, in a copy of the data so the lab's files stay as t
 ```bash
 cp -r ../data ~/lumen-data
 echo '{"id": "x001", "text": "Search returns nothing since this morning, on web and on my phone.", "category": "bug", "priority": "normal", "tags": [], "split": "dev"}' >> ~/lumen-data/tickets.jsonl
-python triage_lab.py --data ~/lumen-data run --prompt v1_basic
+../../.venv-llms/bin/python triage_lab.py --data ~/lumen-data run --prompt v1_basic
 ```
 
 Replay stops with `error: no saved response for triage / claude-haiku-5-5 / v1_basic / case x001 (rep 0)`. Replay never falls back to a paid call; a new ticket has no answer until you record one. Check your label against the guide first: one user, nothing lost, no deadline, so C5 `bug` and `normal`.

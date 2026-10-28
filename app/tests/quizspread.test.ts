@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 const lessons = join(dirname(fileURLToPath(import.meta.url)), '../src/content/lessons');
 // Tracks not yet rebalanced (found by this test in the ML fix wave, left for their own wave). Each is
 // asserted to still be unbalanced, so fixing one fails here until it is removed from the list.
-const NOT_YET_REBALANCED = new Set(['agents', 'llms']);
+const NOT_YET_REBALANCED = new Set(['agents']);
 const tracks = readdirSync(lessons, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
 
 describe('quiz answers are spread over the option positions', () => {

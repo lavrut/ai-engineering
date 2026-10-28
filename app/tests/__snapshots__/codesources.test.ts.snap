@@ -104,12 +104,12 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
   },
   "llms/01-what.mdx #1": {
     "go": {
-      "lines": 27,
-      "sha256": "f932afe77be81947dda4b0cf55a9c462ed5d3ff29f0768cc42375745d63e81c9",
+      "lines": 28,
+      "sha256": "770d011da52ea59ff4697ffa1b4a1c53cfebce285cf2772d4f0e89098fae7a13",
     },
     "python": {
-      "lines": 18,
-      "sha256": "82e5437bfbd91545c81e2d000b808c1540e41f25b415aaf89e7ab4971f8b60fc",
+      "lines": 20,
+      "sha256": "9326ef44558b5fc071e7db5cb885710fe024ca6fc30436a212c5ebf991f76fb4",
     },
   },
   "llms/02-dataset.mdx #1": {
@@ -148,8 +148,8 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
       "sha256": "c3451ee6bfb809f8ab370fa85f94a8e9ab22641d24a766e79ca5b6442d186849",
     },
     "python": {
-      "lines": 105,
-      "sha256": "2083c355cb22d5375f73530f399415e77e18b69908f565e713d477e51b11471f",
+      "lines": 106,
+      "sha256": "14a9d13791ec0b0534202e2589d44efc820f37eb449eff3339b891c9b0d3e6f1",
     },
   },
   "llms/04-runner.mdx #2": {
@@ -204,12 +204,12 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
   },
   "llms/08-model.mdx #1": {
     "go": {
-      "lines": 27,
-      "sha256": "f932afe77be81947dda4b0cf55a9c462ed5d3ff29f0768cc42375745d63e81c9",
+      "lines": 28,
+      "sha256": "770d011da52ea59ff4697ffa1b4a1c53cfebce285cf2772d4f0e89098fae7a13",
     },
     "python": {
-      "lines": 18,
-      "sha256": "82e5437bfbd91545c81e2d000b808c1540e41f25b415aaf89e7ab4971f8b60fc",
+      "lines": 20,
+      "sha256": "9326ef44558b5fc071e7db5cb885710fe024ca6fc30436a212c5ebf991f76fb4",
     },
   },
   "llms/08-model.mdx #2": {
@@ -253,8 +253,8 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
   "llms/09-lora.mdx #5": {
     "go": null,
     "python": {
-      "lines": 56,
-      "sha256": "cd5d28de7bae02e47edaf2539ee2eef3de3fcf31e54a21143a63e864543ccf5b",
+      "lines": 59,
+      "sha256": "f7646198568581aa75e97d48993458503f95184c7c303b800202d71772a81cb4",
     },
   },
   "llms/10-capstone.mdx #1": {
@@ -269,19 +269,19 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
   },
   "llms/10-capstone.mdx #2": {
     "go": {
-      "lines": 1407,
-      "sha256": "b2523ff5846d7c1a4ab5a83349928f61f4caecb1d93d1d847f6c99f8a40c678b",
+      "lines": 1408,
+      "sha256": "c859d43a7d7396d265580b52aeeceb26c5e58428559ef2aaa081c67562cde6fa",
     },
     "python": {
-      "lines": 861,
-      "sha256": "4372ed418f503ab1952c5bbfe073a6294716151853830b5804937e161b0a7324",
+      "lines": 866,
+      "sha256": "c6809ef69253541a03ac3745430d3c02bd3829e0b36507763c990bbabc46bf40",
     },
   },
   "llms/11-framework.mdx #1": {
     "go": null,
     "python": {
-      "lines": 93,
-      "sha256": "6f03eb1ba0c087d8b13f6db37ecd31c5a8418934463350fec04ad49dc3bc66ff",
+      "lines": 106,
+      "sha256": "136b4c072a4c0593de2625567e5d573398be5f7d1ee55faf52ccd0b0e5ffe2d6",
     },
   },
   "llms/11-framework.mdx #2": {
@@ -294,8 +294,8 @@ exports[`existing lessons > show the same CodeTabs code as before the source reg
   "llms/11-framework.mdx #3": {
     "go": null,
     "python": {
-      "lines": 51,
-      "sha256": "abee1a7fbe7c66feca618a5b5d124ac2518483d50e133ce6cc0a44713ea3dfd4",
+      "lines": 52,
+      "sha256": "6be71f090b38c7dc02e275c95915c16aa448e75187e6af4360b7b7fab972bcd3",
     },
   },
 }

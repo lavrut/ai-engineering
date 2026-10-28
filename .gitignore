@@ -26,3 +26,4 @@ agents/data/traces/*/proxy.log
 .venv-harness/
 .venv-llms/
 .venv-ml/
+.ipynb_checkpoints/

@@ -10,9 +10,9 @@ quiz:
     options:
       - It sends the request to the API so the run still finishes
       - It returns the closest saved answer, so the score stays close
-      - It raises an error that names the lab's record command, because a quiet fallback would either spend money or score an answer the prompt never produced
       - It scores the sample as incorrect and carries on
-    answer: 2
+      - It raises an error that names the lab's record command, because a quiet fallback would either spend money or score an answer the prompt never produced
+    answer: 3
     explanation: Replay is only worth trusting if a changed input cannot return an old answer. The key is rebuilt from the request, so changed text is a miss. With fail_on_error=0.5, a few missing samples are left out of the score, but an edited prompt misses on most samples, so the eval fails and shows the hint.
   - question: With --epochs 3, the second epoch must replay the lab's rep 1 answer, not rep 0. How does the replay provider know which epoch it is in?
     options:
@@ -24,11 +24,11 @@ quiz:
     explanation: A model API only sees the messages and the config it is handed. The solver knows state.epoch, which counts from 1, so it sends str(state.epoch - 1) in the header and the provider rebuilds the lab's key with that rep. A missing header means rep 0.
   - question: Inspect reports the same priority score as the lab, 0.9611 for v2_rules on all 60 tickets. Which of these does Inspect not give you, so the lab's code still has to provide it?
     options:
-      - The standard error of the score
-      - The log you can browse with inspect view
       - The cost estimate and the spend cap before a paid run
+      - The log you can browse with inspect view
+      - The standard error of the score
       - Repeating each sample and combining the repeats
-    answer: 2
+    answer: 0
     explanation: Inspect gives you the sample format, epochs, scorers with metrics and standard error, and logs. The replay keys, the cost estimate and cap, the judge's position check, and the choice of which numbers matter stay ours.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
@@ -100,6 +100,7 @@ Three sections hold the parts that are not a straight translation. Section 3 is 
 - `variant = next((v for v, text in self.prompts["triage"].items() if system == text), None)` finds the prompt version by matching the system message. An edited prompt matches nothing and falls through to the miss.
 - `key = triage_key(user, variant, self.model_name, None, rep, self.prompts)` is the lab's own function. The key has one definition.
 - `if line.get("error"): raise RuntimeError(...)` turns a saved error line into a sample error. Inspect leaves it out of the score, as the lab does.
+- `replay_or_approved(model)` is the gate on the live path. The solver and the judge scorer call it before every request. A `replay/` model passes. Any other model raises `PermissionError`, naming the estimate command, unless `LUMEN_LIVE_OK=1` is set, so a paid run needs a deliberate approval. It also keeps the `x-replay-rep` header away from a paid model.
 
 Section 5 holds the code scorers.
 
