@@ -38,15 +38,16 @@ import Term from '../../../components/Term.astro';
 
 ## Concept
 
-`ontology/lumen.yaml` is the one place that says what a Lumen support ticket is, what its category and priority mean, and which labelling rules hold between them. It quotes the labelling guide and the ML track's category map, and names the guide rule each entry came from. It has five sections, each under a `# ── N.` comment, so the lessons can quote them by number.
+`ontology/lumen.yaml` is the one place that says what a Lumen support ticket is, what its category and priority mean, and which labelling rules hold between them. It quotes the labelling guide and the ML track's category map, and names the guide rule each entry came from. It has six sections, each under a `# ── N.` comment, so the lessons can quote them by number.
 
-### The five sections
+### The six sections
 
-1. **Classes.** The kinds of thing Lumen's support work talks about: 7 of them. `Ticket`, `Category` and `Priority` are the ones the data uses; `Reply`, `Complaint`, `Product` and `Customer` round out the domain.
+1. **Classes.** The kinds of thing Lumen's support work talks about: 9 of them. `Ticket`, `Category` and `Priority` are the ones the data uses; `Reply`, `Complaint`, `Product` and `Customer` round out the domain; `Action` and `AgentRole` name what the agents track's desk does and who does it.
 2. **Properties.** The fields a `Ticket` record carries, exactly the 6 fields of `llms/data/tickets.jsonl`: `id`, `text`, `category`, `priority`, `tags` and `split`. Each has a range and a cardinality. The range of `category` is an enumeration of the category individuals, so a value outside it fails the property itself.
 3. **Relations.** Named edges between classes, 5 of them: a ticket has one category and one priority, a reply answers one ticket, a complaint is about one product, a ticket is raised by one customer.
-4. **Individuals.** The named members of a class, 16 of them: the 6 categories, the 4 priorities and the 6 complaint products. Each carries a `definition`, the guide rule it came from in `source`, and an `order`.
+4. **Individuals.** The named members of a class, 27 of them: the 6 categories, the 4 priorities, the 6 complaint products, the 4 actions and the 7 agent roles. Each carries a `definition`, where it came from in `source` (a guide rule, the category map, or the agents desk and its servers), and an `order`.
 5. **Constraints.** The guide's rules, 25 of them, each with its guide rule id and a kind: `checkable` or `manual`.
+6. **Actions.** Which agent role may take which action, and on what condition: the conditions, a table from each tool to the action it takes, and 11 permitted rows. Lesson 4 reads it.
 
 ### Individuals carry the guide's order
 
@@ -75,7 +76,7 @@ Section 4 holds the individuals. Here are the categories and the priorities as t
 <CodeTabs source="ontology-lumen" section={4} />
 
 - `order: 1` with `source: C1` puts `outage` first: the guide's first category rule. A ticket that fits two categories gets the one with the lower `order`.
-- `definition: >-` on a category is the guide's table text for its rule. The audit in lesson 4 compares it with the guide, word for word after normalising. On a priority it is the ontology's own summary of the bullets, and the audit compares the bullets instead.
+- `definition: >-` on a category is the guide's table text for its rule. The audit in lesson 5 compares it with the guide, word for word after normalising. On a priority it is the ontology's own summary of the bullets, and the audit compares the bullets instead.
 - `source: U1-U4` names the guide bullets a priority summarises. The bullets themselves are manual constraints in section 5.
 - `source: category_map` marks the products as the ML track's, in the category map's order.
 

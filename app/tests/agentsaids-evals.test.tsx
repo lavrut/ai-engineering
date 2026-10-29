@@ -469,19 +469,19 @@ describe('page budget', () => {
     },
   );
 
-  // The Ontology track, measured the same way: the props of its three aids over its four lessons. The test is bound
-  // to the content: it lists src/content/lessons/ontology/*.mdx, requires the four lessons spec §5 names, one
+  // The Ontology track, measured the same way: the props of its four aids over its five lessons. The test is bound
+  // to the content: it lists src/content/lessons/ontology/*.mdx, requires the five lessons spec §5 names, one
   // ontology-* view per file in the built page, and each lesson to carry the aid spec §5 names for it. A lesson file
   // whose slug has no aid in ONTOLOGY_LESSON_AIDS fails here, so a new lesson cannot slip past the check.
   const ONTOLOGY_DIR = join(APP, 'src', 'content', 'lessons', 'ontology');
   const ONTOLOGY_FILES = existsSync(ONTOLOGY_DIR) ? readdirSync(ONTOLOGY_DIR).filter((f) => f.endsWith('.mdx')).sort() : [];
-  const ONTOLOGY_AIDS = ['OntologyBrowser', 'GroundingReport', 'AuditTable'];
+  const ONTOLOGY_AIDS = ['OntologyBrowser', 'GroundingReport', 'AuditTable', 'ActionMatrix'];
   // spec §5: the aid each ontology lesson shows, by slug.
-  const ONTOLOGY_LESSON_AIDS: Record<string, string> = { what: 'FlowDiagram', lumen: 'OntologyBrowser', grounding: 'GroundingReport', capstone: 'AuditTable' };
+  const ONTOLOGY_LESSON_AIDS: Record<string, string> = { what: 'FlowDiagram', lumen: 'OntologyBrowser', grounding: 'GroundingReport', architectures: 'ActionMatrix', capstone: 'AuditTable' };
   const ontologySlugs = ONTOLOGY_FILES.map((f) => f.replace(/^\d+-/, '').replace(/\.mdx$/, ''));
 
-  it('finds the four ontology lessons spec §5 names, each slug mapped to its aid', () => {
-    expect(ontologySlugs).toEqual(['what', 'lumen', 'grounding', 'capstone']);
+  it('finds the five ontology lessons spec §5 names, each slug mapped to its aid', () => {
+    expect(ontologySlugs).toEqual(['what', 'lumen', 'grounding', 'architectures', 'capstone']);
     expect(ontologySlugs.filter((s) => !Object.hasOwn(ONTOLOGY_LESSON_AIDS, s)), 'an ontology lesson slug with no aid in ONTOLOGY_LESSON_AIDS').toEqual([]);
   });
 
