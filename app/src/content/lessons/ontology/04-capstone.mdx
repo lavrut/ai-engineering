@@ -6,14 +6,14 @@ title: "Capstone: one source of truth"
 goal: Audit every artefact that states the ontology's facts, read the gate's verdict, and decide for a disagreement which side must change and who owns that change.
 minutes: 25
 quiz:
-  - question: The audit finds that tickets.v2 allows a category, security, that the ontology lacks. The gate is red. What should happen next?
+  - question: The audit finds that tickets.v2 allows a category, security, that the ontology lacks, and no ticket uses it. The gate is red. What is an honest way to turn it green?
     options:
+      - Edit tickets.v2 in place to drop security, since no row uses it
+      - Add security to the ontology as a bare id, so the gate turns green
+      - Write tickets.v3 without security and move every v2 consumer to it by a sunset date, or have the guide define a security category and the ontology quote it. Until someone takes one of those decisions, the red gate is correct
       - Edit the audit to ignore contracts
-      - Add security to the ontology right away, so the gate turns green
-      - Nothing; contracts are allowed to differ
-      - Decide which side is wrong. A value with no definition, no guide rule and no place in the decision order should not be in a contract yet, so either its owner writes that meaning into the ontology first, or the data track takes it out of v2. The gate stays red until one of them does
-    answer: 3
-    explanation: Turning the gate green by adding a bare id to the ontology would copy the problem, not solve it. The ontology is where meaning lives, so a value enters it with a definition, a rule and an order, and the prompts, the schema and the tool follow from it. If nobody can write that yet, the contract changes instead, and that is the data track's change to make.
+    answer: 2
+    explanation: Under the data track's rule, taking a value away is a removal, and a removal needs a new major even when no row uses the value. A producer may write security under v2 today. A bare id in the ontology would copy the gap instead of closing it. Both real fixes need a decision nobody has made yet, so the gate stays red with a named reason.
   - question: audit.py prints the gate RED, and audit.py with the check flag passes. Why is that not a contradiction?
     options:
       - The check flag has a bug
@@ -65,13 +65,13 @@ The row's detail is `extra value the ontology lacks: security`. The data track's
 
 ### Who must change
 
-A disagreement says two artefacts contradict each other. It does not say which one is wrong, so someone has to decide. There are two ways to turn this row green.
+A disagreement says two artefacts contradict each other. It does not say which one is wrong. There are two honest ways to turn this row green, and each costs something.
 
-**The ontology adds `security`.** A category is more than an id. It needs a definition, a guide rule that says when a ticket is `security`, and a place in the decision order. Does it come before `outage`, or after `account`? And how does it sit beside rule U2, which already treats signs of unauthorized access as a priority, not a category? The labelling guide belongs to the LLMs track, so that track writes the rule. Then the ontology quotes it, `generate.py` puts it in the prompts, the schema and the tool, and someone checks the 60 gold labels against it. Adding a bare `security` individual to make the gate green would copy the contract's gap into the source of truth.
+**A new contract version without `security`.** `tickets.v2` is the data track's contract, and the data track's versioning rule says: "Renaming a field, removing one or changing its type breaks every reader that looks it up." Taking a value out of an enum is a removal too. Today v2 lets a producer write `category: security`. After an edit in place, that row would fail, with no new version to move to. That holds even though none of the 60 rows in `tickets.v2.jsonl` uses `security` today. So the fix is a new major, `tickets.v3`, as a new file without `security`. Then come the rest of the data track's rule: v2 is deprecated with a sunset date, a migration note, and every consumer of v2 moving to v3 by that date. The empty column makes the move cheap. It does not make it free.
 
-**The contract drops `security`.** `tickets.v2` is the data track's file, so this is the data track's change. Its own versioning rule asks one question: does an existing reader break? Adding the value broke none: an enum that gains a value accepts every row it accepted before. Taking it out renames, removes or retypes no field, and none of the 60 rows in `tickets.v2.jsonl` carries `security`. So every row v2 accepts today it still accepts, and by that rule the change stays on version 2, with a note in its migration text.
+**A defined `security` category.** A category is more than an id. It needs a guide rule that says when a ticket is `security`, a definition, and a place in the decision order. Does it come before `outage`, or after `account`? And how does it sit beside rule U2, which already treats signs of unauthorized access as a priority, not a category? The labelling guide belongs to the LLMs track, and it has not made that labelling decision. Once it does, the ontology quotes the rule, `generate.py` puts it in the prompts, the schema and the tool, and someone checks the 60 gold labels against it. Adding a bare `security` individual just to make the gate green would copy the contract's gap into the source of truth.
 
-The ontology is where meaning lives, so a value should enter it with its meaning, and a contract should follow. Until someone can write what `security` means, the contract is ahead of the ontology, and the change belongs in the contract. That is a decision for the data track, the contract's owner, made with the LLMs track, which owns the guide. This course never edits another track's files, so the row stays red here. That is the gate doing its job: it names the artefact and the fact, and it will not go green on its own.
+Both need a decision nobody has taken yet. The data track would have to choose to retire a value it added on purpose. The LLMs track would have to define a category its guide does not have. So the course leaves the gate red on purpose. A red gate with a named reason is the audit doing its job: it says which artefact and which fact, and it will not go green until someone decides.
 
 ### A drift check is not a gate
 
@@ -165,4 +165,4 @@ You should see:
 red: 1 disagree (data/contracts/tickets.v2.yaml enum:category); 0 missing
 ```
 
-A pipeline that runs this stops until the data track and the LLMs track settle what `security` means, or take it out. That is the track: one file that says what the words mean, artefacts generated from it, answers checked against it, and an audit that will not let the rest drift away.
+A pipeline that runs this stops until the data track and the LLMs track settle what `security` means, or retire it in a new contract version. That is the track: one file that says what the words mean, artefacts generated from it, answers checked against it, and an audit that will not let the rest drift away.

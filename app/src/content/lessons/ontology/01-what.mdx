@@ -21,7 +21,7 @@ quiz:
       - The four standards are alternatives; the course picked SKOS
       - The file follows the shape of those standards (classes like RDFS and OWL, individuals like SKOS concepts, constraints like SHACL shapes), and the section names are the course's own
     answer: 3
-    explanation: Naming the standards means a reader who meets a real OWL file or a SHACL shape recognises each part. The file itself is plain YAML, read by a few hundred lines of Python, so every line can be read end to end. It is not OWL, and no standard's tool reads it.
+    explanation: Naming the standards means a reader who meets a real OWL file or a SHACL shape recognises each part. The file itself is plain YAML, read by four small Python files, so every line can be read end to end. It is not OWL, and no standard's tool reads it.
   - question: A model returns category feature_request and priority high. The ontology says a feature request is never above normal. Where does the ontology help, and where does it stop?
     options:
       - It catches the rule break after the call, and its definitions go into the prompt before it. It cannot make a valid answer right; a label that breaks no rule can still be the wrong label
@@ -56,7 +56,7 @@ Lumen's ontology is a YAML file, `ontology/lumen.yaml`. It has 7 classes, 5 rela
 Ontologies have standards, published by the W3C. The file is in their shape, so here is what each section corresponds to:
 
 - `classes`, with an optional `subclass_of`, corresponds to classes in <Term t="RDFS" /> and <Term t="OWL" />: `rdfs:Class` and `owl:Class`, joined by `rdfs:subClassOf`.
-- `properties` corresponds to OWL datatype properties, each with an `rdfs:domain` and an `rdfs:range`. Its `cardinality` is what OWL states as a cardinality restriction.
+- `properties` corresponds to OWL datatype properties, each with an `rdfs:domain` and an `rdfs:range`, when the range is a literal type such as `string`. A range that is an enumeration of individuals, as for `category` and `priority`, is closer to an OWL object property whose range is an `owl:oneOf` of those individuals. Its `cardinality` is what OWL states as a cardinality restriction.
 - `relations` corresponds to OWL object properties: a named edge from one class to another.
 - `individuals` corresponds to <Term t="SKOS" /> concepts: a preferred label and a `skos:definition` for each category and priority. The guide's decision order is closest to a SKOS ordered collection.
 - `constraints` corresponds to <Term t="SHACL" /> shapes: rules a record must meet, checked by a program. SHACL has no kind for a rule a program cannot check. This file lists those too, as `manual`, so the gap stays visible.
@@ -65,7 +65,7 @@ The section names are the course's own, not the standards'. The file is plain YA
 
 ### Where ontologies sit beside LLMs today
 
-A language model has read a great deal about support tickets, but it has no fixed meaning for Lumen's `outage`. The prompt gives it one. Teams that run models in production keep that meaning in one place and feed it to the model in four ways:
+A language model has read a great deal about support tickets, but it has no fixed meaning for Lumen's `outage`. The prompt gives it one. A common pattern is to keep that meaning in one place and feed it to the model in four ways:
 
 - **Before the call**, the definitions go into the prompt. If they are generated from the ontology, every prompt says the same thing.
 - **At the call**, the ontology's closed lists shape the structured output schema and the tool's input schema, so the model can only return a known value.
@@ -75,7 +75,7 @@ A language model has read a great deal about support tickets, but it has no fixe
 The traffic also runs the other way: models now draft ontologies from documents, and a person reviews what they drafted. An ontology cannot make a model right. A label that breaks no rule can still be the wrong label. What it gives is one place where the meaning lives, and a check that catches the answers that break it.
 
 <Callout kind="note" title="The tools you would use at work">
-  Production teams rarely hand-build this. Protégé is the usual editor for OWL ontologies. `rdflib` reads and writes RDF in Python, and `pySHACL` checks data against SHACL shapes. An OWL reasoner such as HermiT infers class membership and finds contradictions. Triple stores such as Apache Jena hold a knowledge graph and answer SPARQL queries over it. This track names them and installs none: the loader, the generator and the audit are a few hundred lines of Python you can read end to end.
+  Production teams rarely hand-build this. Protégé is the usual editor for OWL ontologies. `rdflib` reads and writes RDF in Python, and `pySHACL` checks data against SHACL shapes. An OWL reasoner such as HermiT infers class membership and finds contradictions. Triple stores such as Apache Jena hold a knowledge graph and answer SPARQL queries over it. This track names them and installs none: the loader, the generator, the validation and the audit are four small Python files you can read end to end.
 </Callout>
 
 ### What a production ontology stack adds

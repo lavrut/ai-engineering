@@ -201,11 +201,15 @@ const CLAIMS: Claim[] = [
     expect(audit.gate).toEqual({ ok: false, disagree: 1, missing: 0, reason: 'red: 1 disagree (data/contracts/tickets.v2.yaml enum:category); 0 missing' });
   }],
   ['04-capstone', 'someone checks the 60 gold labels against it', () => expect(tickets).toHaveLength(60)],
-  ['04-capstone', 'none of the 60 rows in `tickets.v2.jsonl` carries `security`', () => {
+  ['04-capstone', 'That holds even though none of the 60 rows in `tickets.v2.jsonl` uses `security` today', () => {
     expect(ticketsV2).toHaveLength(60);
     expect(ticketsV2.filter((t) => t.category === 'security')).toEqual([]);
   }],
-  ['04-capstone', 'the change stays on version 2', () => expect(text('data/contracts/tickets.v2.yaml')).toContain('  version: 2\n  status: active')],
+  ['04-capstone', 'So the fix is a new major, `tickets.v3`, as a new file without `security`', () => {
+    // ruling O11: a removal is a new major; v2 is the current one, and no v3 exists yet
+    expect(text('data/contracts/tickets.v2.yaml')).toContain('  version: 2\n  status: active');
+    expect(existsSync(join(repo, 'data/contracts/tickets.v3.yaml'))).toBe(false);
+  }],
   ['04-capstone', '`audit.py` itself exits with 0 after printing `RED`', () => expect(py('audit.py')).toContain('    _report(data)\n    return 0\n')],
   ['04-capstone', 'and exits with status 1 because it is red', () => {
     expect(read('04-capstone')).toContain('sys.exit(0 if gate["ok"] else 1)');
@@ -251,6 +255,8 @@ const QUOTES: Claim[] = [
     expect(generated.compare.tool.generated.input_schema.properties.label.enum).toEqual(individuals('Category').map((i) => i.id));
     expect(generated.compare.tool.generated.input_schema.properties.id.pattern).toBe('^t\\d{3}$');
   }],
+  ['01-what', 'read by four small Python files', () => expect(readdirSync(join(repo, 'ontology/python')).filter((f) => f.endsWith('.py')).sort()).toEqual(['audit.py', 'generate.py', 'grounding.py', 'ontology.py'])],
+  ['01-what', 'the loader, the generator, the validation and the audit are four small Python files', () => expect(readdirSync(join(repo, 'ontology/python')).filter((f) => f.endsWith('.py'))).toHaveLength(4)],
   ['03-grounding', 'They differ only in enum order', () => {
     const { existing, generated: gen } = generated.compare.schema;
     const sortEnums = (s: { properties: Record<string, { enum?: string[] }> }) =>
@@ -265,7 +271,7 @@ const QUOTES: Claim[] = [
     const existing = generated.compare.definitions.existing as string;
     for (const i of [...individuals('Category'), ...individuals('Priority')]) expect(existing, i.id).toContain(i.id);
   }],
-  ['03-grounding', '`v1_basic` states no rule at all: it is one sentence asking for a category, a priority and a reply', () => {
+  ['03-grounding', '`v1_basic` states no rule at all: it is two sentences: who the model is, and a request for a category, a priority and a reply', () => {
     expect(json('llms/data/prompts.json').triage.v1_basic).toBe("You triage support tickets for Lumen, a cloud notes app. Return the ticket's category, its priority and a short reply draft.");
   }],
   ['03-grounding', 'Each is a feature request answered `high`. Both tickets name a business impact, a large evaluation and a renewal', () => {
@@ -366,12 +372,27 @@ describe('ontology lessons: files, aids and anatomy', () => {
     expect(read('04-capstone')).toContain('so it catches drift: a stale file, or one edited by hand. It says nothing about what the file holds.');
   });
 
-  it('argues lesson 4\'s disagreement through with the data track\'s own versioning rule', () => {
+  it('argues lesson 4\'s disagreement through with the data track\'s own versioning rule (ruling O11)', () => {
     const l4 = read('04-capstone').split('### Who must change')[1].split('\n### ')[0];
-    for (const s of ['**The ontology adds `security`.**', '**The contract drops `security`.**', 'Its own versioning rule asks one question: does an existing reader break?', 'the change belongs in the contract', 'the data track, the contract\'s owner']) expect(l4).toContain(s);
-    // the data track's rule as its lessons state it
+    for (const s of [
+      '**A new contract version without `security`.**',
+      '**A defined `security` category.**',
+      'Taking a value out of an enum is a removal too.',
+      'Today v2 lets a producer write `category: security`.',
+      'v2 is deprecated with a sunset date, a migration note, and every consumer of v2 moving to v3 by that date',
+      'it has not made that labelling decision',
+      'Both need a decision nobody has taken yet.',
+      'So the course leaves the gate red on purpose. A red gate with a named reason is the audit doing its job',
+    ]) expect(l4).toContain(s);
+    expect(l4).not.toMatch(/stays on version 2|change belongs in the contract/);
+    // the data track's rule, quoted as its lesson states it, and v2 really allows security today
+    expect(l4).toContain('"Renaming a field, removing one or changing its type breaks every reader that looks it up."');
     expect(text('app/src/content/lessons/data/04-contract.mdx')).toContain('Renaming a field, removing one or changing its type breaks every reader that looks it up.');
-    expect(text('app/src/content/lessons/data/06-capstone.mdx')).toContain('An enum that gains a value accepts every row it accepted before.');
+    expect(text('data/contracts/tickets.v2.yaml')).toContain('enum: [billing, bug, account, feature_request, how_to, outage, security]');
+    // quiz 1 grades exactly that reasoning; editing v2 in place is the distractor
+    const q1 = (matter(read('04-capstone')).data.quiz as { options: string[]; answer: number }[])[0];
+    expect(q1.options[q1.answer]).toContain('Write tickets.v3 without security');
+    expect(q1.options.findIndex((o) => o.startsWith('Edit tickets.v2 in place'))).not.toBe(q1.answer);
   });
 
   it('pins the record count of every one of the 16 validation sources', () => {
