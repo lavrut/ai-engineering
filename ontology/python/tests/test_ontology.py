@@ -32,7 +32,7 @@ def test_load_lumen_and_check_is_clean():
     onto = O.load(LUMEN)
     assert onto.source == LUMEN
     assert O.check(onto) == []
-    assert set(onto.classes) == {"Ticket", "Category", "Priority", "Reply", "Complaint", "Product", "Customer"}
+    assert set(onto.classes) == {"Ticket", "Category", "Priority", "Reply", "Complaint", "Product", "Customer", "Action", "AgentRole"}
     assert set(onto.properties) >= {"id", "text", "category", "priority", "tags", "split"}
     assert {k: (r["domain"], r["range"]) for k, r in onto.relations.items()}.items() >= {
         "has_category": ("Ticket", "Category"),
@@ -370,3 +370,52 @@ def test_validate_missing_file_is_one_line_not_a_traceback(tmp_path, capsys):
     assert O.main(["validate", "Ticket", str(tmp_path / "missing.jsonl")]) == 1
     out = capsys.readouterr().out.strip().splitlines()
     assert len(out) == 1 and "missing.jsonl" in out[0] and "cannot read" in out[0]
+
+
+# ── Section 6: actions ──────────────────────────────────────────────────────
+def test_lumen_actions_section():
+    onto = O.load(LUMEN)
+    a = onto.actions
+    assert {i for i, x in onto.individuals.items() if x["class"] == "Action"} == {"read", "write", "approve", "escalate"}
+    assert {i for i, x in onto.individuals.items() if x["class"] == "AgentRole"} == {
+        "single", "triage", "research", "drafter", "reviewer", "supervisor", "human"}
+    assert [c["id"] for c in a["conditions"]] == ["human_confirmed", "review_passed"]
+    assert a["tools"]["label_ticket"] == "write" and a["tools"]["handoff"] == "escalate"
+    rows = {(r["role"], r["action"]): r.get("conditions", []) for r in a["permitted"]}
+    assert rows[("single", "write")] == ["human_confirmed"]
+    assert rows[("supervisor", "write")] == ["review_passed", "human_confirmed"]
+    assert ("research", "write") not in rows and ("drafter", "escalate") not in rows
+    assert all(rows[(r, "read")] == [] for r in ("single", "triage", "research", "drafter", "reviewer", "supervisor", "human"))
+    text = LUMEN.read_text()
+    assert text.index("# ── 6. Actions") < text.index("\nactions:")
+
+
+def test_check_actions_dangling_ids_are_errors_naming_the_id():
+    findings = O.check(O.load(FIX / "actions_dangling.yaml"))
+    got = sorted((f["subject"], f["level"]) for f in findings if f["rule"] == "dangling_action_ref")
+    assert got == [("Bob", "error"), ("delete", "error"), ("fly", "error"), ("ghost", "error"), ("signed_off", "error")]
+    detail = {f["subject"]: f["detail"] for f in findings if f["rule"] == "dangling_action_ref"}
+    assert "AgentRole" in detail["Bob"] and "permitted[3]" in detail["Bob"]
+    assert "delete_ticket" in detail["delete"]
+    assert "condition" in detail["signed_off"]
+    assert [(f["subject"], f["level"]) for f in findings if f["rule"] == "duplicate_permission"] == [("bot read", "error")]
+    assert "unknown_section" not in rules(findings)
+
+
+def test_check_actions_malformed_is_a_finding_not_an_exception():
+    findings = O.check(O.load(FIX / "actions_malformed.yaml"))
+    assert "internal" not in rules(findings)
+    bad = sorted(f["subject"] for f in findings if f["rule"] == "malformed")
+    assert bad == ["actions.conditions[0]", "actions.conditions[1]", "actions.permitted[0]",
+                   "actions.permitted[1]", "actions.permitted[2]", "actions.tools"]
+    assert all(f["level"] == "error" for f in findings if f["rule"] == "malformed")
+
+
+def test_actions_section_is_optional_and_exported():
+    assert O.load(FIX / "cycle.yaml").actions == {}
+    assert "actions" not in rules(O.check(O.load(FIX / "cycle.yaml")))
+    data = O.to_json(O.load(LUMEN))
+    assert data["actions"]["tools"]["label_ticket"] == "write"
+    assert [c["id"] for c in data["actions"]["conditions"]] == ["human_confirmed", "review_passed"]
+    assert "\n" not in data["actions"]["conditions"][0]["text"]
+    assert len(data["actions"]["permitted"]) == 11

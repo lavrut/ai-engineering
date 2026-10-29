@@ -1,9 +1,11 @@
 # Lumen's ontology: the one place that says what a support ticket is, what its
-# category and priority mean, and which labelling rules hold between them.
+# category and priority mean, which labelling rules hold between them, and which
+# agent may take which action.
 #
 # Sources, read in place: llms/data/labeling_guide.md (every definition and rule,
 # quoted or closely paraphrased, with its rule id in `source`), llms/data/tickets.jsonl
-# (the record's fields) and ml/data/category_map.json (the complaint products).
+# (the record's fields) and ml/data/category_map.json (the complaint products); for the
+# actions and agent roles, the agents track's desk and the lumen-read and lumen-ops servers.
 # Checked and exported by ontology/python/ontology.py.
 
 # ── 1. Classes ──────────────────────────────────────────────────────────────
@@ -30,6 +32,12 @@ classes:
   - id: Customer
     label: Customer
     definition: A person or team who uses Lumen and writes to support.
+  - id: Action
+    label: Action
+    definition: Something an agent or a person does at Lumen's agent desk through the course's tools, such as reading a ticket or writing its label.
+  - id: AgentRole
+    label: Agent role
+    definition: Who acts at Lumen's agent desk, one of the agents the agents track runs or the person the desk asks before a write. Section 6 says which role may take which action.
 
 # ── 2. Properties ───────────────────────────────────────────────────────────
 # The fields a Ticket record carries (llms/data/tickets.jsonl). A range is a class,
@@ -223,6 +231,64 @@ individuals:
     source: category_map
     label: Money transfer, virtual currency, or money service
     definition: Money transfer, virtual currency, or money service.
+
+  # Actions and agent roles (the agents track's desk and the lumen-read and lumen-ops MCP
+  # servers). Their `order` is the order the lessons list them in; section 6 holds the rules.
+  - id: read
+    class: Action
+    order: 1
+    source: lumen-read
+    definition: Look at tickets without changing anything, with the lumen-read tools get_ticket, search_tickets and classify_complaint.
+  - id: write
+    class: Action
+    order: 2
+    source: lumen-ops
+    definition: Change a ticket, with the lumen-ops tool label_ticket, which sets its category.
+  - id: approve
+    class: Action
+    order: 3
+    source: agents desk
+    definition: Say yes or no to a write the desk is about to make. The desk asks a person before label_ticket reaches lumen-ops.
+  - id: escalate
+    class: Action
+    order: 4
+    source: agents desk
+    definition: Hand a task to another agent, as the supervisor does when it gives a job to one of its workers.
+  - id: single
+    class: AgentRole
+    order: 1
+    source: agents desk
+    definition: The single agent, one model that holds every desk tool and does the whole job alone.
+  - id: triage
+    class: AgentRole
+    order: 2
+    source: agents desk
+    definition: The supervisor's worker that sets a ticket's category and priority.
+  - id: research
+    class: AgentRole
+    order: 3
+    source: agents desk
+    definition: The supervisor's worker that looks tickets up with the read tools.
+  - id: drafter
+    class: AgentRole
+    order: 4
+    source: agents desk
+    definition: The supervisor's worker that drafts the reply. It calls no tool.
+  - id: reviewer
+    class: AgentRole
+    order: 5
+    source: agents desk
+    definition: The supervisor's worker that reviews the current draft and passes or fails it.
+  - id: supervisor
+    class: AgentRole
+    order: 6
+    source: agents desk
+    definition: The agent that splits the job, hands each part to a worker, and makes the write itself.
+  - id: human
+    class: AgentRole
+    order: 7
+    source: agents desk
+    definition: The person the desk asks before a write. In every recorded run the answer is scripted.
 
 # ── 5. Constraints ──────────────────────────────────────────────────────────
 # Rules from the labelling guide, each with the guide rule id it encodes.
@@ -433,3 +499,43 @@ constraints:
     text: >-
       a feature request that names a business impact: a team that relies on it, a deal
       being evaluated, a renewal.
+
+# ── 6. Actions ──────────────────────────────────────────────────────────────
+# Which role may take which action, and on what condition. Every id is an individual
+# above (an AgentRole, an Action) or a condition defined here; ontology.py check reports
+# any id that is not. governance.py reads these rules and checks every recorded agents
+# trace against them. The rules are enforced in code elsewhere: the desk's guard and
+# the lumen-ops server ask before a write, and the agents track's scorer checks a write
+# against the review. This section is where a person reads them.
+actions:
+  conditions:            # every condition a permission may name, each defined
+    - id: human_confirmed
+      text: >-
+        A person said yes to the write. The desk asks before label_ticket reaches
+        lumen-ops, and the trace records the answer as approve; the server then asks
+        for its own confirmation.
+      evaluated_from: approve
+    - id: review_passed
+      text: >-
+        The reviewer passed the current draft before the write: the last reviewer
+        handoff that did not fail says the review passed.
+      evaluated_from: handoffs.review
+  tools:                 # tool name -> the action it takes
+    get_ticket: read
+    search_tickets: read
+    classify_complaint: read
+    label_ticket: write
+    handoff: escalate
+    confirmation: approve   # the desk's question to the person, not a model tool
+  permitted:             # {role, action, conditions?}: explicit rows, no wildcards
+    - {role: single,     action: read}
+    - {role: triage,     action: read}
+    - {role: research,   action: read}
+    - {role: drafter,    action: read}
+    - {role: reviewer,   action: read}
+    - {role: supervisor, action: read}
+    - {role: human,      action: read}
+    - {role: single,     action: write, conditions: [human_confirmed]}
+    - {role: supervisor, action: write, conditions: [review_passed, human_confirmed]}
+    - {role: supervisor, action: escalate}
+    - {role: human,      action: approve}

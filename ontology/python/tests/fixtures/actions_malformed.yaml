@@ -1,0 +1,20 @@
+# Section 6 in the wrong shapes: a list where a mapping goes, a condition without text,
+# a permitted row that is not a mapping, and conditions that are not a list.
+classes:
+  - {id: Action, label: Action, definition: Something done.}
+  - {id: AgentRole, label: Agent role, definition: Who does it.}
+properties: []
+relations: []
+individuals:
+  - {id: read, class: Action, definition: Read., source: X}
+  - {id: bot, class: AgentRole, definition: A bot., source: X}
+constraints: []
+actions:
+  conditions:
+    - {id: confirmed}
+    - just a string
+  tools: [get_ticket]
+  permitted:
+    - bot may read
+    - {role: bot, action: read, conditions: confirmed}
+    - {role: [bot], action: read}
