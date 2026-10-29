@@ -1,0 +1,16 @@
+---
+// Build-time wrapper: passes traces.sample.json's three labelled traces unchanged, their team, tag and outcome
+// values, and capstone.json's gate lines verbatim. initial="cached" (a trace label) opens that trace first; an
+// unknown label fails the build, naming the known ones.
+import TraceExplorerIsland from './TraceExplorer.tsx';
+import { loadInfraData, traceExplorerProps } from '../../lib/infraData';
+
+interface Props {
+  initial?: string;
+}
+
+const { capstone, traces } = loadInfraData();
+const props = traceExplorerProps(traces, capstone.gate, { initial: Astro.props.initial });
+---
+
+<TraceExplorerIsland client:visible {...props} />

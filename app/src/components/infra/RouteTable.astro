@@ -1,0 +1,10 @@
+---
+// Build-time wrapper: passes gateway.yaml's routes as capstone.json's config holds them (one row per configured
+// route, then the '*' row), the configured models, the upstream and the replay-key note. No props.
+import RouteTableIsland from './RouteTable.tsx';
+import { loadInfraData, routeTableProps } from '../../lib/infraData';
+
+const props = routeTableProps(loadInfraData().capstone.config);
+---
+
+<RouteTableIsland client:visible {...props} />

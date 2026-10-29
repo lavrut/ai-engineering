@@ -1,0 +1,16 @@
+---
+// Build-time wrapper: passes ledger.json's spend per team against gateway.yaml's budget lines, the idle teams, the
+// top tags, and the agents ledger per set beside capstone.json's gateway figure. initial="all" (or a team) sets the
+// team filter; an unknown team fails the build, naming the known ones.
+import LedgerViewIsland from './LedgerView.tsx';
+import { ledgerViewProps, loadInfraData } from '../../lib/infraData';
+
+interface Props {
+  initial?: string;
+}
+
+const { capstone, ledger } = loadInfraData();
+const props = ledgerViewProps(ledger, capstone.config.budgets, { sets: capstone.sets, initial: Astro.props.initial });
+---
+
+<LedgerViewIsland client:visible {...props} />
