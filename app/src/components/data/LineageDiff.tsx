@@ -14,7 +14,13 @@ function Version({ v, rows, asOf }: { v: VersionView; rows: ConsumerRow[]; asOf:
       <h3>{v.id}</h3>
       <p>Status: {v.status}</p>
       <p>Sunset: {v.sunset ?? 'none'}</p>
-      {v.sunset && <p>{warned ? `Warning: past its sunset as of ${asOf}.` : `No warning: as of ${asOf} the sunset is still ahead.`}</p>}
+      {v.sunset && (
+        <p>
+          {asOf <= v.sunset
+            ? `No warning: as of ${asOf} the sunset is still ahead.`
+            : `Past its sunset as of ${asOf}${warned ? ': gate.py warns.' : ', but gate.json has no warning: rerun gate.py.'}`}
+        </p>
+      )}
       <p>
         Dataset: {v.dataset} ({v.path})
       </p>
@@ -90,7 +96,7 @@ export default function LineageDiff({ from, to, asOf, migration, migrationNote, 
         {picked ? consumerText(picked, asOf) : 'No consumer declares either version.'}
       </p>
 
-      <div class={`dt-status${gate.ok ? '' : ' dt-status-bad'}`} role="status">
+      <div class={`dt-status${gate.ok ? '' : ' dt-status-bad'}`} role="status" aria-live="off">
         <p class="dt-verdict">
           <Mark ok={gate.ok} text={gateHeadline(gate)} />
         </p>

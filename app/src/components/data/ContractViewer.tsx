@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { SECTIONS, fieldRule, infoLines, qualityLines, sectionLine, verdictView, verdictsFrom, type ContractViewerProps } from '../../lib/dataAids';
+import { SECTIONS, fieldRule, plural, infoLines, qualityLines, sectionLine, verdictView, verdictsFrom, type ContractViewerProps } from '../../lib/dataAids';
 import Picker from '../agents/Picker';
 import { useStepper } from '../mcp/useStepper';
 import { DATA_CSS } from './dataStyle';
@@ -20,7 +20,7 @@ function sectionTable(c: ContractViewerProps['contract'], i: number): { cols: st
     case 'quality':
       return { cols: ['Rule', 'Value'], rows: qualityLines(c.quality) };
     case 'servicing':
-      return { cols: ['Promise', 'Value'], rows: c.servicing.freshness ? [['freshness', `at most ${c.servicing.freshness.max_age_days} days old`]] : [] };
+      return { cols: ['Promise', 'Value'], rows: c.servicing.freshness ? [['freshness', `at most ${plural(c.servicing.freshness.max_age_days, 'day')} old`]] : [] };
     default:
       return { cols: ['Consumer', 'Version', 'Reads'], rows: c.consumers.map((x) => [x.name, x.version, x.reads]) };
   }

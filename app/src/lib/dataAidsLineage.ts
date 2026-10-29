@@ -114,6 +114,8 @@ export const gateHeadline = (g: LineageDiffProps['gate']) => (g.ok ? 'Gate: gree
 export function consumerText(r: ConsumerRow, asOf: string): string {
   const head = `${r.name} reads ${r.declared}: ${r.green ? 'OK' : 'FAIL'}.`;
   if (r.warning) return `${head} Past its sunset ${r.sunset}: a warning, not a failure.`;
-  if (r.sunset) return `${head} Sunset ${r.sunset}; as of ${asOf} that is still ahead, so no warning yet.`;
+  // ISO dates compare as strings. Past the sunset without gate.py's warning would mean a stale gate.json: say so.
+  if (r.sunset && asOf <= r.sunset) return `${head} Sunset ${r.sunset}; as of ${asOf} that is still ahead, so no warning yet.`;
+  if (r.sunset) return `${head} Sunset ${r.sunset} has passed as of ${asOf}, but gate.json has no warning: rerun gate.py.`;
   return head;
 }

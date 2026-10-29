@@ -239,7 +239,7 @@ describe('code source registry', () => {
     const title = (t: string | undefined, n: number) => listSections(t ?? '').find((s) => s.n === n)?.title;
 
     it.each([
-      ['data-contract', 'data/python/contract.py', [1, 2, 3, 4, 5], [6, 7, 8, 9, 1, 2, 3, 4, 5]],
+      ['data-contract', 'data/python/contract.py', [1, 2, 3, 4, 5], [1, 2, 3, 4, 5, 6, 7, 8, 9]],
       ['data-catalog', 'data/python/catalog.py', [1, 2, 3, 4, 5, 6], undefined],
       ['data-quality', 'data/python/quality.py', [1, 2, 3, 4, 5], undefined],
       ['data-gate', 'data/python/gate.py', [1, 2, 3, 4], undefined],
@@ -258,11 +258,11 @@ describe('code source registry', () => {
     it('pairs the Python validator with its Go twin, whose files number their own sections', () => {
       expect(CODE_SOURCES['data-contract']).toEqual({
         python: 'data/python/contract.py',
-        go: 'data/go/validate/rules.go',
-        goMore: ['data/go/validate/main.go', 'data/go/validate/contract.go'],
+        go: 'data/go/validate/contract.go',
+        goMore: ['data/go/validate/rules.go', 'data/go/validate/main.go'],
         goSections: 'own',
       });
-      expect(fileName('data-contract', 'go')).toBe('rules.go');
+      expect(fileName('data-contract', 'go')).toBe('contract.go');
       // The rules: Python section 3, Go section 7 (rules.go); the contract file loader: Python 1, Go 3 (contract.go).
       const rules = resolveCode({ source: 'data-contract', section: 3, goSection: 7 });
       expect(rules.python.split('\n')[0]).toMatch(/^# ── 3\. Rules/);
@@ -271,7 +271,7 @@ describe('code source registry', () => {
       expect(resolveCode({ source: 'data-contract', section: 1, goSection: 3 }).go!.split('\n')[0]).toMatch(/^\/\/ ── 3\. Contracts/);
       expect(resolveCode({ source: 'data-contract', section: 5, goSection: 9 }).go).toContain('func main()');
       expect(codeProblems({ source: 'data-contract', section: 3 })).toEqual([
-        'data-contract: data/go/validate/rules.go numbers its own sections; add goSection={n} (or pythonOnly)',
+        'data-contract: data/go/validate/contract.go numbers its own sections; add goSection={n} (or pythonOnly)',
       ]);
     });
 

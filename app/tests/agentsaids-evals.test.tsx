@@ -427,15 +427,43 @@ describe('page budget', () => {
     dataLessons = shippedIslands(html, 'data');
   }, 180_000);
 
-  // The Data Fabric & Data Contracts track, measured the same way: the props of its four aids over its lessons
-  // (none until its lessons ship; tests/dataaids-contract.test.tsx also measures the largest props they could ship).
-  it('keeps the props the data aids ship, as the built page carries them, under 200 KB', () => {
-    const DATA_AIDS = ['CatalogExplorer', 'QualityReport', 'ContractViewer', 'LineageDiff'];
-    const sizes = dataLessons.map((l) => [l.lesson, l.islands.filter((x) => DATA_AIDS.includes(x.component)).reduce((a, x) => a + x.bytes, 0)] as const);
-    const total = sizes.reduce((a, [, n]) => a + n, 0);
-    expect(total, `the data aids ship ${total} bytes of props: ${sizes.map(([name, n]) => `${name} ${n}`).join(', ')}`).toBeLessThan(200_000);
-    for (const l of dataLessons) expect(l.islands.every((x) => !DATA_AIDS.includes(x.component) || x.bytes > 500), l.lesson).toBe(true);
+  // The Data Fabric & Data Contracts track, measured the same way: the props of its four aids over its lessons.
+  // The test is bound to the content: it lists src/content/lessons/data/*.mdx, requires one data-* view per file in
+  // the built page, and each lesson to carry the aid spec §5 names for it. Until Task 7 adds the lessons there is
+  // nothing to measure, so the budget test is skipped (its name says why) rather than passing on an empty sum;
+  // tests/dataaids-contract.test.tsx meanwhile measures the largest props the lessons could ship.
+  // Task 7 removes the skipIf when it adds lessons/data/*.mdx: from then on the test must run and pass.
+  const DATA_DIR = join(APP, 'src', 'content', 'lessons', 'data');
+  const DATA_FILES = existsSync(DATA_DIR) ? readdirSync(DATA_DIR).filter((f) => f.endsWith('.mdx')).sort() : [];
+  const DATA_AIDS = ['CatalogExplorer', 'QualityReport', 'ContractViewer', 'LineageDiff'];
+  // spec §5: the aid each data lesson shows, by slug.
+  const DATA_LESSON_AIDS: Record<string, string> = {
+    fabric: 'FlowDiagram', catalog: 'CatalogExplorer', quality: 'QualityReport', contract: 'ContractViewer', enforce: 'ContractViewer', capstone: 'LineageDiff',
+  };
+
+  it('finds no data-* view in the built page while there is no data lesson file', () => {
+    if (DATA_FILES.length > 0) return; // covered by the next test once the lessons exist
+    console.warn('page budget: no data lessons yet (src/content/lessons/data/*.mdx); the data props budget test is skipped');
+    expect(dataLessons).toEqual([]);
   });
+
+  it.skipIf(DATA_FILES.length === 0)(
+    `keeps the props the data aids ship, as the built page carries them, under 200 KB${DATA_FILES.length === 0 ? ' (skipped: no data lessons yet)' : ''}`,
+    () => {
+      const slugs = DATA_FILES.map((f) => f.replace(/^\d+-/, '').replace(/\.mdx$/, ''));
+      expect(dataLessons.map((l) => l.lesson.replace(/^lesson \d+ \((.*)\)$/, '$1'))).toEqual(slugs.map((s) => `data-${s}`));
+      dataLessons.forEach((l, i) => {
+        const want = DATA_LESSON_AIDS[slugs[i]];
+        if (want) expect(l.islands.map((x) => x.component), l.lesson).toContain(want);
+      });
+      const shipped = dataLessons.flatMap((l) => l.islands).filter((x) => DATA_AIDS.includes(x.component));
+      expect(shipped.length).toBeGreaterThan(0);
+      expect(shipped.every((x) => x.bytes > 500)).toBe(true);
+      const sizes = dataLessons.map((l) => [l.lesson, l.islands.filter((x) => DATA_AIDS.includes(x.component)).reduce((a, x) => a + x.bytes, 0)] as const);
+      const total = sizes.reduce((a, [, n]) => a + n, 0);
+      expect(total, `the data aids ship ${total} bytes of props: ${sizes.map(([name, n]) => `${name} ${n}`).join(', ')}`).toBeLessThan(200_000);
+    },
+  );
 
   it('finds every agents lesson and its aids in the built page', () => {
     expect(lessons.map((l) => l.lesson.replace(/^lesson \d+ \((.*)\)$/, '$1'))).toEqual(AGENTS_VIEWS);

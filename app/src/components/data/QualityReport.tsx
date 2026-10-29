@@ -75,7 +75,7 @@ export default function QualityReport({ dataset, asOf, entries, grouped }: Quali
                   return (
                     <tr key={x.key} aria-current={x.key === e.key ? 'true' : undefined}>
                       <th scope="row">{x.label}</th>
-                      <td class="mc-num">{x.files ?? 1}</td>
+                      <td class="mc-num">{x.files ?? '—'}</td>
                       <td class="mc-num">{x.verdicts.length}</td>
                       <td class="mc-num">{t.ok}</td>
                       <td class="mc-num">{t.failed}</td>
@@ -101,7 +101,7 @@ export default function QualityReport({ dataset, asOf, entries, grouped }: Quali
         </button>
       </fieldset>
 
-      <div class={`dt-status${e.ok ? '' : ' dt-status-bad'}`} role="status">
+      <div class={`dt-status${e.ok ? '' : ' dt-status-bad'}`} role="status" aria-live="off">
         <p class="dt-verdict">
           <Mark ok={e.ok} text={entryStatus(e)} />
         </p>

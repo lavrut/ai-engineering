@@ -332,10 +332,19 @@ describe('diagram data', () => {
       }
     });
 
-    it('names the numbers it states as lineage.json and gate.json have them', () => {
-      expect(dataFabric.steps[0].caption).toContain('12 datasets');
-      expect(dataFabric.steps[0].caption).toContain('5 tracks');
-      expect(dataFabric.steps[5].caption).toContain('2027-01-31');
+    it('names the numbers it states as catalog.json, lineage.json and the tickets.v1 contract have them', () => {
+      type Entry = { producer: string; contract: string | null };
+      const entries = Object.values(catalog) as Entry[];
+      const producers = new Set(lineage.edges.filter((e) => kind.get(e.from)?.kind === 'track').map((e) => e.from));
+      const ml = entries.filter((e) => e.producer === 'ml');
+      const words = ['none', 'one', 'two', 'three', 'four', 'five'];
+      const v1 = JSON.parse(readFileSync(join(here, '../../data/contracts/tickets.v1.contract.json'), 'utf8')) as { info: { sunset: string } };
+      expect(dataFabric.steps[0].caption).toContain(`${entries.length} datasets`);
+      expect(dataFabric.steps[0].caption).toContain(`${producers.size} tracks`);
+      expect(dataFabric.steps[1].caption).toContain(`ml writes ${words[ml.length]} of them`);
+      expect(ml.filter((e) => e.contract).map((e) => (e as Entry & { contract: string }).contract)).toEqual(['complaints.v1']);
+      expect(dataFabric.steps[1].caption).toContain('only complaints has a contract');
+      expect(dataFabric.steps[5].caption).toContain(v1.info.sunset);
       expect(dataFabric.steps[5].caption).toContain('priority');
       expect(dataFabric.steps[5].caption).toContain('urgency');
     });

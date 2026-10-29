@@ -101,6 +101,9 @@ describe('ContractViewer', () => {
     fireEvent.keyDown(screen.getByRole('group', { name: 'Sections' }), { key: 'ArrowRight' });
     fireEvent.keyDown(screen.getByRole('group', { name: 'Sections' }), { key: 'ArrowRight' });
     expect(live()).toBe('Section 5 of 5: consumers. 1 consumer: mcp-read-server on version 1.');
+    fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
+    expect(screen.getByRole('table', { name: 'servicing of tickets.v1' }).textContent).toBe('PromiseValuefreshnessat most 365 days old');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(screen.getByRole('table', { name: 'consumers of tickets.v1' }).textContent).toContain('llms/data/tickets.jsonl via mcp/core/python/lumen_core/tickets.py');
     expect(screen.queryByRole('table', { name: /^Verdicts/ })).toBeNull();
   });
@@ -176,6 +179,10 @@ describe('lineage diff data', () => {
     expect(consumerText({ name: 'x', declared: 'tickets.v1', green: false, sunset: '2027-01-31', warning: true }, '2027-02-01')).toBe(
       'x reads tickets.v1: FAIL. Past its sunset 2027-01-31: a warning, not a failure.',
     );
+    // The sunset is compared with as_of, not inferred from the missing warning.
+    expect(consumerText({ name: 'x', declared: 'tickets.v1', green: true, sunset: '2027-01-31', warning: false }, '2027-02-01')).toBe(
+      'x reads tickets.v1: OK. Sunset 2027-01-31 has passed as of 2027-02-01, but gate.json has no warning: rerun gate.py.',
+    );
   });
 
   it('refuses two versions of different contracts, or a version that does not exist', () => {
@@ -199,6 +206,8 @@ describe('LineageDiff', () => {
     const changes = within(screen.getByRole('table', { name: 'What changed from tickets.v1 to tickets.v2' })).getAllByRole('row').slice(1);
     expect(changes.map((r) => r.textContent)).toEqual(['categoryenum gains security', 'priorityonly in tickets.v1', 'urgencyonly in tickets.v2']);
     const gate = screen.getByRole('status');
+    expect(gate.getAttribute('aria-live')).toBe('off'); // one announcement per change: the live line only
+    expect(v1.textContent).toContain('No warning: as of 2026-10-28 the sunset is still ahead.');
     expect(gate.textContent).toContain('Gate: green');
     expect(gate.textContent).toContain('every consumer is green on the version it declares (4 of 4)');
   });

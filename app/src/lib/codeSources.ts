@@ -121,11 +121,12 @@ export const CODE_SOURCES: Record<CodeSourceId, CodeSourceInfo> = {
   'agents-judge-set': { python: 'agents/evals/judge_set.py' }, // the judge set: estimate and record, 1
   // Data Fabric & Data Contracts track. The validator is contract.py (1-5) and its Go twin, three files that number
   // 1-9 between them (contract.go 1-5, rules.go 6-8, main.go 9), so a quote gives goSection: the rules are Python 3
-  // and Go 7. gate.py and migrate_tickets.py both number 1-4, so each is its own source. The contracts are YAML.
+  // and Go 7. The Go files join in section order (ruling D14), so a whole quote reads 1-9. gate.py and
+  // migrate_tickets.py both number 1-4, so each is its own source. The contracts are YAML.
   'data-contract': {
     python: 'data/python/contract.py',
-    go: 'data/go/validate/rules.go',
-    goMore: ['data/go/validate/main.go', 'data/go/validate/contract.go'],
+    go: 'data/go/validate/contract.go',
+    goMore: ['data/go/validate/rules.go', 'data/go/validate/main.go'],
     goSections: 'own',
   }, // contract files, rows, rules, verdicts, command line: 1-5 (Go 1-9)
   'data-catalog': { python: 'data/python/catalog.py' }, // the datasets, files and git, the catalogue, lineage, the JSON, command line: 1-6
