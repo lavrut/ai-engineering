@@ -418,7 +418,7 @@ def evaluate(c: dict, record: dict, subject: str, known: dict | None = None, inv
     check, so judging the rule on it would count one mistake twice)."""
     clauses = _clauses(c)
     rule = f"{c.get('source')}: {c['text']}"
-    if not c.get("then") \
+    if not isinstance(c.get("then"), list) or not c["then"] \
             or not all(_clause_well_formed(cl) for cl in clauses) \
             or (known is not None and any(cl["property"] not in known or not _ordered_ok(cl["op"], known[cl["property"]])
                                           for cl in clauses)):
@@ -613,7 +613,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "validate":
         n, counts = 0, {lvl: 0 for lvl in LEVELS}
-        for i, line in enumerate(args.jsonl.read_text(encoding="utf-8").splitlines(), 1):
+        try:
+            lines = args.jsonl.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError) as err:
+            print(f"cannot read {_display(args.jsonl)}: {err.strerror if isinstance(err, OSError) else err}")
+            return 1
+        for i, line in enumerate(lines, 1):
             if not line.strip():
                 continue
             n += 1

@@ -100,3 +100,16 @@ def test_generated_json_deterministic_and_check(tmp_path):
 
 def test_committed_generated_json_is_current():
     assert G.main(["--check"]) == 0
+
+
+def test_module_values_reads_literals_and_never_runs_code(tmp_path):
+    """Final review M5: other tracks' modules are read, never run: a call is skipped,
+    a name defined earlier resolves, a literal reads as itself."""
+    f = tmp_path / "m.py"
+    marker = tmp_path / "ran"
+    f.write_text(f"A = ['x', 'y']\nB = {{'enum': A, 'n': -1}}\nC = open({str(marker)!r}, 'w')\nD = A + ['z']\n",
+                 encoding="utf-8")
+    _, env = G._module_values(f)
+    assert env["A"] == ["x", "y"] and env["B"] == {"enum": ["x", "y"], "n": -1}
+    assert "C" not in env and not marker.exists()
+    assert env["D"] == ["x", "y", "z"]

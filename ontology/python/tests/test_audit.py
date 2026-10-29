@@ -313,3 +313,16 @@ def test_constraint_matching_no_guide_text_gets_its_own_row():
     rows = A.audit(onto, ROOT)["rows"]
     [r] = _rows(rows, GUIDE_MD, "rule-text:extra_r0")
     assert r["status"] == "disagree" and "R0" in r["detail"]
+
+
+def test_deleted_guide_bullet_is_never_silent(tmp_path):
+    """Final review M7 (Task 4's deferred minor): a guide bullet deleted outright no longer
+    drops silently. Its id gone from the guide, the rule id is `missing`; its id still
+    named elsewhere (H4, in U3's text), the constraint that quoted it disagrees."""
+    root = _reword_guide(tmp_path, "- **U2 Security.** Signs of unauthorized access or exposed data.\n", "")
+    [r] = _rows(A.audit(_onto(), root)["rows"], GUIDE_MD, "rule:U2")
+    assert r["status"] == "missing"
+    h4 = next(line for line in (ROOT / GUIDE_MD).read_text(encoding="utf-8").splitlines() if line.startswith("- **H4 "))
+    root = _reword_guide(tmp_path / "h4", h4 + "\n", "")
+    [r] = _rows(A.audit(_onto(), root)["rows"], GUIDE_MD, "rule-text:feature_down_for_group")
+    assert r["status"] == "disagree" and "matches no rule text" in r["detail"]

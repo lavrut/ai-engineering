@@ -285,7 +285,7 @@ const QUOTES: Claim[] = [
     const existing = generated.compare.definitions.existing as string;
     for (const i of [...individuals('Category'), ...individuals('Priority')]) expect(existing, i.id).toContain(i.id);
   }],
-  ['03-grounding', '`v1_basic` states no rule at all: it is two sentences: who the model is, and a request for a category, a priority and a reply', () => {
+  ['03-grounding', '`v1_basic` states no rule at all. It is two sentences: who the model is, and a request for a category, a priority and a reply', () => {
     expect(json('llms/data/prompts.json').triage.v1_basic).toBe("You triage support tickets for Lumen, a cloud notes app. Return the ticket's category, its priority and a short reply draft.");
   }],
   ['03-grounding', 'Each is a feature request answered `high`. Both tickets name a business impact, a large evaluation and a renewal', () => {

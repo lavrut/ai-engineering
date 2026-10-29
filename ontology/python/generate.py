@@ -84,16 +84,36 @@ def tool_definition(onto: O.Ontology) -> dict:
 
 
 # ── 4. Compare ──────────────────────────────────────────────────────────────
+def _literal(node: ast.AST, env: dict):
+    """A value built only from literals, names assigned earlier and `+`; anything else
+    (a call, an attribute) raises ValueError. Nothing is run: other tracks' code is read."""
+    if isinstance(node, ast.Name):
+        if node.id not in env:
+            raise ValueError(f"unknown name {node.id}")
+        return env[node.id]
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        items = [_literal(e, env) for e in node.elts]
+        return {ast.List: list, ast.Tuple: tuple, ast.Set: set}[type(node)](items)
+    if isinstance(node, ast.Dict):
+        if any(k is None for k in node.keys):
+            raise ValueError("** in a dict")
+        return {_literal(k, env): _literal(v, env) for k, v in zip(node.keys, node.values)}
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        return _literal(node.left, env) + _literal(node.right, env)
+    return ast.literal_eval(node)
+
+
 def _module_values(path: Path) -> tuple[ast.Module, dict]:
-    """A module's top-level assignments that evaluate from literals and earlier ones."""
+    """A module's top-level assignments that read as literals, built from literals and
+    earlier ones (see _literal); the module is parsed, never imported or run."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     env: dict = {}
     for node in tree.body:
         if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
             try:
-                env[node.targets[0].id] = eval(compile(ast.Expression(node.value), str(path), "eval"), {}, dict(env))
-            except Exception:  # noqa: BLE001 - not a literal we can read; skipped
-                pass
+                env[node.targets[0].id] = _literal(node.value, env)
+            except (ValueError, TypeError, SyntaxError, RecursionError):
+                pass  # not a literal we can read; skipped
     return tree, env
 
 

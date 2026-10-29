@@ -33,13 +33,23 @@ def _response_files(responses: Path) -> list[Path]:
     return sorted([*responses.glob("triage__*.jsonl"), *responses.glob("triage__*/*.jsonl")])
 
 
+def _source_names(files: list[Path], responses: Path) -> dict[Path, str]:
+    """Each file's source name: its stem, or, when two files share a stem, its path under
+    `responses` without the suffix, so two files never merge into one source."""
+    stems = [f.stem for f in files]
+    return {f: f.stem if stems.count(f.stem) == 1 else f.relative_to(responses).with_suffix("").as_posix()
+            for f in files}
+
+
 def triage_records(responses: Path = RESPONSES) -> list[dict]:
     """One record per saved triage line: `triage__*.jsonl` and the files inside a
     `triage__*/` subfolder (the fine-tuned Qwen run). A line with an
     `error`, or without an output or a field, still yields a record (None fields), so the
     validation counts it instead of skipping it."""
     out = []
-    for f in _response_files(responses):
+    files = _response_files(responses)
+    names = _source_names(files, responses)
+    for f in files:
         for n, raw in enumerate(f.read_text(encoding="utf-8").splitlines()):
             if not raw.strip():
                 continue
@@ -51,7 +61,7 @@ def triage_records(responses: Path = RESPONSES) -> list[dict]:
             o = line.get("output")
             o = o if isinstance(o, dict) else {}
             out.append({
-                "source": f.stem,
+                "source": names[f],
                 "case_id": line.get("case_id"),
                 "category": o.get("category"),
                 "priority": o.get("priority"),

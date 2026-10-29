@@ -117,3 +117,15 @@ def test_unreadable_trace_is_counted_through_run(tmp_path):
     assert s["records"] == 3 and s["violations"] == {"unreadable_trace": 2}
     assert s["violating"] == ["a-single-t002.json", "a-single-t003.json"]
     assert data["totals"]["violations"] == {"missing_field": 1, "response_error": 1, "unreadable_trace": 2}
+
+
+def test_source_names_never_collide(tmp_path):
+    """Final review M4: a subfolder file whose stem equals a top-level file's keeps its
+    folder in the source name, so two files never merge into one source."""
+    (tmp_path / "triage__x").mkdir()
+    line = json.dumps({"case_id": "t001", "output": {"category": "bug", "priority": "low"}}) + "\n"
+    (tmp_path / "triage__a.jsonl").write_text(line, encoding="utf-8")
+    (tmp_path / "triage__x" / "triage__a.jsonl").write_text(line, encoding="utf-8")
+    (tmp_path / "triage__x" / "b.jsonl").write_text(line, encoding="utf-8")
+    names = sorted({r["source"] for r in G.triage_records(tmp_path)})
+    assert names == ["b", "triage__a", "triage__x/triage__a"]

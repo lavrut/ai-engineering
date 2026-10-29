@@ -354,3 +354,19 @@ def test_ordered_op_on_string_is_malformed_on_integer_is_not(tmp_path):
     assert [(x["rule"], x["subject"]) for x in O.check(onto)] == [("constraint_malformed", "s_gt")]
     found = O.validate(onto, {"s": "z", "n": 7}, "T")
     assert [(x["level"], x["rule"]) for x in found] == [("error", "n_lt"), ("manual", "s_gt")]
+
+
+# ── Final review minors ─────────────────────────────────────────────────────
+def test_then_as_mapping_reads_malformed_not_a_type_error(tmp_path):
+    """M1: a `then` written as a mapping is reported as malformed, with no leaked error text."""
+    onto = _lumen_with(tmp_path, NEVER_ABOVE, "then: {property: priority, op: in, value: [normal, low]}")
+    found = O.validate(onto, {"id": "t1", "category": "feature_request", "priority": "high"}, "Ticket", partial=True)
+    [fr] = [f for f in found if f["rule"] == "feature_request_never_above_normal"]
+    assert fr["level"] == "manual" and fr["detail"].startswith("not evaluated: the constraint is malformed")
+
+
+def test_validate_missing_file_is_one_line_not_a_traceback(tmp_path, capsys):
+    """M2: a JSONL file that is not there is a one-line message and exit 1."""
+    assert O.main(["validate", "Ticket", str(tmp_path / "missing.jsonl")]) == 1
+    out = capsys.readouterr().out.strip().splitlines()
+    assert len(out) == 1 and "missing.jsonl" in out[0] and "cannot read" in out[0]
