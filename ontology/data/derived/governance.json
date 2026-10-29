@@ -1,0 +1,1349 @@
+{
+  "actions": [
+    "read",
+    "write",
+    "approve",
+    "escalate"
+  ],
+  "approvals": {
+    "decline": 60
+  },
+  "by_engine": {
+    "hand": {
+      "single": {
+        "conditional": 5,
+        "events": 33,
+        "not_permitted": 0,
+        "permitted": 28
+      },
+      "supervisor": {
+        "conditional": 12,
+        "events": 119,
+        "not_permitted": 0,
+        "permitted": 107
+      }
+    },
+    "hand-go": {
+      "single": {
+        "conditional": 5,
+        "events": 33,
+        "not_permitted": 0,
+        "permitted": 28
+      },
+      "supervisor": {
+        "conditional": 11,
+        "events": 115,
+        "not_permitted": 0,
+        "permitted": 104
+      }
+    },
+    "langgraph": {
+      "single": {
+        "conditional": 3,
+        "events": 26,
+        "not_permitted": 0,
+        "permitted": 23
+      },
+      "supervisor": {
+        "conditional": 10,
+        "events": 113,
+        "not_permitted": 0,
+        "permitted": 103
+      }
+    },
+    "sdk": {
+      "single": {
+        "conditional": 5,
+        "events": 20,
+        "not_permitted": 0,
+        "permitted": 15
+      },
+      "supervisor": {
+        "conditional": 9,
+        "events": 118,
+        "not_permitted": 0,
+        "permitted": 109
+      }
+    }
+  },
+  "conditions": [
+    {
+      "evaluated_from": [
+        "approve",
+        "elicit"
+      ],
+      "id": "human_confirmed",
+      "text": "A person said yes to the write, and so did the lumen-ops server. The desk asks the person before label_ticket reaches lumen-ops (the trace's approve); the server then asks for its own confirmation (elicit). Both must be yes, as the agents track's scorer requires."
+    },
+    {
+      "evaluated_from": "handoffs.review",
+      "id": "review_passed",
+      "text": "The reviewer passed the current draft before the write: the last reviewer handoff that did not fail says the review passed."
+    }
+  ],
+  "gate": {
+    "ok": true,
+    "reason": "green: 0 not permitted; 60 conditional, 517 permitted, of 577 events"
+  },
+  "matrix": [
+    {
+      "action": "read",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 23,
+          "not_permitted": 0,
+          "permitted": 23
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 23,
+          "not_permitted": 0,
+          "permitted": 23
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 20,
+          "not_permitted": 0,
+          "permitted": 20
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 10,
+          "not_permitted": 0,
+          "permitted": 10
+        }
+      },
+      "conditions": [],
+      "events": 76,
+      "role": "single",
+      "rule": "permitted",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 76
+      }
+    },
+    {
+      "action": "write",
+      "by_engine": {
+        "hand": {
+          "conditional": 5,
+          "events": 5,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 5,
+          "events": 5,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 3,
+          "events": 3,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 5,
+          "events": 5,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [
+        "human_confirmed"
+      ],
+      "events": 18,
+      "landed": 0,
+      "role": "single",
+      "rule": "conditional",
+      "unmet": {
+        "human_confirmed": 18
+      },
+      "verdicts": {
+        "conditional": 18,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "approve",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "role": "single",
+      "rule": "no",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "escalate",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "role": "single",
+      "rule": "no",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "read",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "role": "triage",
+      "rule": "permitted",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "write",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "landed": 0,
+      "role": "triage",
+      "rule": "no",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "approve",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "role": "triage",
+      "rule": "no",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "escalate",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "role": "triage",
+      "rule": "no",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "read",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 39,
+          "not_permitted": 0,
+          "permitted": 39
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 33,
+          "not_permitted": 0,
+          "permitted": 33
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 35,
+          "not_permitted": 0,
+          "permitted": 35
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 34,
+          "not_permitted": 0,
+          "permitted": 34
+        }
+      },
+      "conditions": [],
+      "events": 141,
+      "role": "research",
+      "rule": "permitted",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 141
+      }
+    },
+    {
+      "action": "write",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "landed": 0,
+      "role": "research",
+      "rule": "no",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "approve",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "role": "research",
+      "rule": "no",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "escalate",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "role": "research",
+      "rule": "no",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "read",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "role": "drafter",
+      "rule": "permitted",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "write",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "landed": 0,
+      "role": "drafter",
+      "rule": "no",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "approve",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "role": "drafter",
+      "rule": "no",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "escalate",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "role": "drafter",
+      "rule": "no",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "read",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "role": "reviewer",
+      "rule": "permitted",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "write",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "landed": 0,
+      "role": "reviewer",
+      "rule": "no",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "approve",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "role": "reviewer",
+      "rule": "no",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "escalate",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "role": "reviewer",
+      "rule": "no",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "read",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "role": "supervisor",
+      "rule": "permitted",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "write",
+      "by_engine": {
+        "hand": {
+          "conditional": 12,
+          "events": 12,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 11,
+          "events": 11,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 10,
+          "events": 10,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 9,
+          "events": 9,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [
+        "review_passed",
+        "human_confirmed"
+      ],
+      "events": 42,
+      "landed": 0,
+      "role": "supervisor",
+      "rule": "conditional",
+      "unmet": {
+        "human_confirmed": 42
+      },
+      "verdicts": {
+        "conditional": 42,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "approve",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "role": "supervisor",
+      "rule": "no",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "escalate",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 56,
+          "not_permitted": 0,
+          "permitted": 56
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 60,
+          "not_permitted": 0,
+          "permitted": 60
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 58,
+          "not_permitted": 0,
+          "permitted": 58
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 66,
+          "not_permitted": 0,
+          "permitted": 66
+        }
+      },
+      "conditions": [],
+      "events": 240,
+      "role": "supervisor",
+      "rule": "permitted",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 240
+      }
+    },
+    {
+      "action": "read",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "role": "human",
+      "rule": "permitted",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "write",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "landed": 0,
+      "role": "human",
+      "rule": "no",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    },
+    {
+      "action": "approve",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 17,
+          "not_permitted": 0,
+          "permitted": 17
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 16,
+          "not_permitted": 0,
+          "permitted": 16
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 13,
+          "not_permitted": 0,
+          "permitted": 13
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 14,
+          "not_permitted": 0,
+          "permitted": 14
+        }
+      },
+      "conditions": [],
+      "events": 60,
+      "role": "human",
+      "rule": "permitted",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 60
+      }
+    },
+    {
+      "action": "escalate",
+      "by_engine": {
+        "hand": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "hand-go": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "langgraph": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        },
+        "sdk": {
+          "conditional": 0,
+          "events": 0,
+          "not_permitted": 0,
+          "permitted": 0
+        }
+      },
+      "conditions": [],
+      "events": 0,
+      "role": "human",
+      "rule": "no",
+      "unmet": {},
+      "verdicts": {
+        "conditional": 0,
+        "not_permitted": 0,
+        "permitted": 0
+      }
+    }
+  ],
+  "roles": [
+    "single",
+    "triage",
+    "research",
+    "drafter",
+    "reviewer",
+    "supervisor",
+    "human"
+  ],
+  "skipped": [
+    {
+      "file": "patterns-go/hand-go-chain-t001.json",
+      "reason": "pattern demo (pattern:chain): no tool calls"
+    },
+    {
+      "file": "patterns-go/hand-go-chain-t007.json",
+      "reason": "pattern demo (pattern:chain): no tool calls"
+    },
+    {
+      "file": "patterns-go/hand-go-chain-t061.json",
+      "reason": "pattern demo (pattern:chain): no tool calls"
+    },
+    {
+      "file": "patterns-go/hand-go-evaluate_optimize-t001.json",
+      "reason": "pattern demo (pattern:evaluate_optimize): no tool calls"
+    },
+    {
+      "file": "patterns-go/hand-go-evaluate_optimize-t007.json",
+      "reason": "pattern demo (pattern:evaluate_optimize): no tool calls"
+    },
+    {
+      "file": "patterns-go/hand-go-evaluate_optimize-t061.json",
+      "reason": "pattern demo (pattern:evaluate_optimize): no tool calls"
+    },
+    {
+      "file": "patterns-go/hand-go-orchestrate-t001.json",
+      "reason": "pattern demo (pattern:orchestrate): no tool calls"
+    },
+    {
+      "file": "patterns-go/hand-go-orchestrate-t007.json",
+      "reason": "pattern demo (pattern:orchestrate): no tool calls"
+    },
+    {
+      "file": "patterns-go/hand-go-orchestrate-t061.json",
+      "reason": "pattern demo (pattern:orchestrate): no tool calls"
+    },
+    {
+      "file": "patterns-go/hand-go-parallel-t001.json",
+      "reason": "pattern demo (pattern:parallel): no tool calls"
+    },
+    {
+      "file": "patterns-go/hand-go-parallel-t007.json",
+      "reason": "pattern demo (pattern:parallel): no tool calls"
+    },
+    {
+      "file": "patterns-go/hand-go-parallel-t061.json",
+      "reason": "pattern demo (pattern:parallel): no tool calls"
+    },
+    {
+      "file": "patterns-go/hand-go-route-t001.json",
+      "reason": "pattern demo (pattern:route): no tool calls"
+    },
+    {
+      "file": "patterns-go/hand-go-route-t007.json",
+      "reason": "pattern demo (pattern:route): no tool calls"
+    },
+    {
+      "file": "patterns-go/hand-go-route-t061.json",
+      "reason": "pattern demo (pattern:route): no tool calls"
+    },
+    {
+      "file": "patterns/hand-chain-t001.json",
+      "reason": "pattern demo (pattern:chain): no tool calls"
+    },
+    {
+      "file": "patterns/hand-chain-t007.json",
+      "reason": "pattern demo (pattern:chain): no tool calls"
+    },
+    {
+      "file": "patterns/hand-chain-t061.json",
+      "reason": "pattern demo (pattern:chain): no tool calls"
+    },
+    {
+      "file": "patterns/hand-evaluate_optimize-t001.json",
+      "reason": "pattern demo (pattern:evaluate_optimize): no tool calls"
+    },
+    {
+      "file": "patterns/hand-evaluate_optimize-t007.json",
+      "reason": "pattern demo (pattern:evaluate_optimize): no tool calls"
+    },
+    {
+      "file": "patterns/hand-evaluate_optimize-t061.json",
+      "reason": "pattern demo (pattern:evaluate_optimize): no tool calls"
+    },
+    {
+      "file": "patterns/hand-orchestrate-t001.json",
+      "reason": "pattern demo (pattern:orchestrate): no tool calls"
+    },
+    {
+      "file": "patterns/hand-orchestrate-t007.json",
+      "reason": "pattern demo (pattern:orchestrate): no tool calls"
+    },
+    {
+      "file": "patterns/hand-orchestrate-t061.json",
+      "reason": "pattern demo (pattern:orchestrate): no tool calls"
+    },
+    {
+      "file": "patterns/hand-parallel-t001.json",
+      "reason": "pattern demo (pattern:parallel): no tool calls"
+    },
+    {
+      "file": "patterns/hand-parallel-t007.json",
+      "reason": "pattern demo (pattern:parallel): no tool calls"
+    },
+    {
+      "file": "patterns/hand-parallel-t061.json",
+      "reason": "pattern demo (pattern:parallel): no tool calls"
+    },
+    {
+      "file": "patterns/hand-route-t001.json",
+      "reason": "pattern demo (pattern:route): no tool calls"
+    },
+    {
+      "file": "patterns/hand-route-t007.json",
+      "reason": "pattern demo (pattern:route): no tool calls"
+    },
+    {
+      "file": "patterns/hand-route-t061.json",
+      "reason": "pattern demo (pattern:route): no tool calls"
+    }
+  ],
+  "tools": {
+    "classify_complaint": "read",
+    "confirmation": "approve",
+    "get_ticket": "read",
+    "handoff": "escalate",
+    "label_ticket": "write",
+    "search_tickets": "read"
+  },
+  "totals": {
+    "conditional": 60,
+    "desk_runs": 104,
+    "events": 577,
+    "not_permitted": 0,
+    "permitted": 517,
+    "skipped": 30,
+    "traces": 134,
+    "unreadable": 0,
+    "writes_landed": 0
+  },
+  "violations": []
+}

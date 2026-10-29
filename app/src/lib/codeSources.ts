@@ -61,6 +61,7 @@ export type CodeSourceId =
   | 'ontology-generate'
   | 'ontology-grounding'
   | 'ontology-audit'
+  | 'ontology-governance'
   | 'ontology-lumen';
 
 export type CodeSourceInfo = {
@@ -143,12 +144,13 @@ export const CODE_SOURCES: Record<CodeSourceId, CodeSourceInfo> = {
   'data-contract-complaints': { python: 'data/contracts/complaints.v1.yaml', lang: 'yaml' },
   'data-contract-traces': { python: 'data/contracts/agent-traces.v1.yaml', lang: 'yaml' },
   // Ontology track: Python only, each script numbering its own sections, so each is its own source. Lumen's
-  // ontology is YAML, quoted by its five `# ── N.` sections as the data contracts are.
+  // ontology is YAML, quoted by its six `# ── N.` sections as the data contracts are.
   'ontology-core': { python: 'ontology/python/ontology.py' }, // file, checks, constraint expressions, validation, export, command line: 1-6
   'ontology-generate': { python: 'ontology/python/generate.py' }, // definitions, schema, tool, compare, entry point: 1-5
   'ontology-grounding': { python: 'ontology/python/grounding.py' }, // reading the saved outputs, validation, build/write/check: 1-3
   'ontology-audit': { python: 'ontology/python/audit.py' }, // rows, the guide, the prompts, the category map, the contracts, the gate, command line: 1-7
-  'ontology-lumen': { python: 'ontology/lumen.yaml', lang: 'yaml' }, // classes, properties, relations, individuals, constraints: 1-5
+  'ontology-governance': { python: 'ontology/python/governance.py' }, // reading the traces, rules/events/verdicts, build/write/check: 1-3
+  'ontology-lumen': { python: 'ontology/lumen.yaml', lang: 'yaml' }, // classes, properties, relations, individuals, constraints, actions: 1-6
 };
 
 export const isSource = (id: string): id is CodeSourceId => Object.hasOwn(CODE_SOURCES, id);

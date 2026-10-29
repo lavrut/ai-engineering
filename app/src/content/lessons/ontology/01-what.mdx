@@ -14,14 +14,14 @@ quiz:
       - A knowledge graph, because the names link to complaints
     answer: 1
     explanation: A taxonomy is a controlled vocabulary, perhaps with a hierarchy. A schema adds fields and types, an ontology adds definitions, relations and rules, and a knowledge graph holds the facts themselves. The category map is the first rung, which is why Lumen's ontology takes its products from it as individuals.
-  - question: Lumen's ontology is a YAML file with sections called classes, properties, relations, individuals and constraints. What does the lesson say about OWL, RDFS, SKOS and SHACL?
+  - question: Lumen's ontology is a YAML file with sections called classes, properties, relations, individuals, constraints and actions. What does the lesson say about OWL, RDFS, SKOS and SHACL?
     options:
       - The file is written in OWL and can be loaded by any OWL tool
       - The track installs a SHACL engine to check the constraints
       - The four standards are alternatives; the course picked SKOS
       - The file follows the shape of those standards (classes like RDFS and OWL, individuals like SKOS concepts, constraints like SHACL shapes), and the section names are the course's own
     answer: 3
-    explanation: Naming the standards means a reader who meets a real OWL file or a SHACL shape recognises each part. The file itself is plain YAML, read by four small Python files, so every line can be read end to end. It is not OWL, and no standard's tool reads it.
+    explanation: Naming the standards means a reader who meets a real OWL file or a SHACL shape recognises each part. The file itself is plain YAML, read by five small Python files, so every line can be read end to end. It is not OWL, and no standard's tool reads it.
   - question: A model returns category feature_request and priority high. The ontology says a feature request is never above normal. Where does the ontology help, and where does it stop?
     options:
       - It catches the rule break after the call, and its definitions go into the prompt before it. It cannot make a valid answer right; a label that breaks no rule can still be the wrong label
@@ -49,7 +49,7 @@ Four words come up whenever a team tries to pin down what its data means. Each o
 - An <Term t="ontology" /> adds meaning: classes with definitions, the relations between them, named members in a set order, and the rules that hold. "A ticket has exactly one category, and a feature request is never above normal" is ontology, not schema.
 - A <Term t="knowledge graph" /> holds the facts themselves, typed by an ontology: this ticket, raised by this customer, about this outage. The ontology says what kinds of thing and link may exist; the graph says which ones do.
 
-Lumen's ontology is a YAML file, `ontology/lumen.yaml`. It has 7 classes, 5 relations and 16 individuals, and it is the third rung.
+Lumen's ontology is a YAML file, `ontology/lumen.yaml`. It has 9 classes, 5 relations and 27 individuals, and it is the third rung.
 
 ### The standards it borrows its shape from
 
@@ -60,6 +60,7 @@ Ontologies have standards, published by the W3C. The file is in their shape, so 
 - `relations` corresponds to OWL object properties: a named edge from one class to another.
 - `individuals` corresponds to <Term t="SKOS" /> concepts: a preferred label and a `skos:definition` for each category and priority. The guide's decision order is closest to a SKOS ordered collection.
 - `constraints` corresponds to <Term t="SHACL" /> shapes: rules a record must meet, checked by a program. SHACL has no kind for a rule a program cannot check. This file lists those too, as `manual`, so the gap stays visible.
+- `actions` has no counterpart in those four. The closest W3C standard is ODRL, the Open Digital Rights Language, whose policies say which party may take which action under which constraint. Lesson 4 reads this section.
 
 The section names are the course's own, not the standards'. The file is plain YAML, not OWL or RDF, and no standard's tool reads it. Naming the standards means a reader who meets a real OWL file or SHACL shape recognises each part under its own name.
 
@@ -75,7 +76,7 @@ A language model has read a great deal about support tickets, but it has no fixe
 The traffic also runs the other way: models now draft ontologies from documents, and a person reviews what they drafted. An ontology cannot make a model right. A label that breaks no rule can still be the wrong label. What it gives is one place where the meaning lives, and a check that catches the answers that break it.
 
 <Callout kind="note" title="The tools you would use at work">
-  Production teams rarely hand-build this. Protégé is the usual editor for OWL ontologies. `rdflib` reads and writes RDF in Python, and `pySHACL` checks data against SHACL shapes. An OWL reasoner such as HermiT infers class membership and finds contradictions. Triple stores such as Apache Jena hold a knowledge graph and answer SPARQL queries over it. This track names them and installs none: the loader, the generator, the validation and the audit are four small Python files you can read end to end.
+  Production teams rarely hand-build this. Protégé is the usual editor for OWL ontologies. `rdflib` reads and writes RDF in Python, and `pySHACL` checks data against SHACL shapes. An OWL reasoner such as HermiT infers class membership and finds contradictions. Triple stores such as Apache Jena hold a knowledge graph and answer SPARQL queries over it. This track names them and installs none: the loader, the generator, the validation, the audit and the governance check are five small Python files you can read end to end.
 </Callout>
 
 ### What a production ontology stack adds
@@ -113,7 +114,7 @@ Set up the track's virtual environment from the repo root. It holds two packages
 python3 -m venv .venv-ontology && .venv-ontology/bin/pip install -r ontology/requirements.txt
 ```
 
-Load the ontology and run its consistency checks. Then run the four drift checks: each rebuilds a derived file in memory and compares it with the committed one. None of them calls a model, so all of them are free.
+Load the ontology and run its consistency checks. Then run the five drift checks: each rebuilds a derived file in memory and compares it with the committed one. None of them calls a model, so all of them are free.
 
 ```bash
 .venv-ontology/bin/python ontology/python/ontology.py check
@@ -121,6 +122,7 @@ Load the ontology and run its consistency checks. Then run the four drift checks
 .venv-ontology/bin/python ontology/python/generate.py --check
 .venv-ontology/bin/python ontology/python/grounding.py --check
 .venv-ontology/bin/python ontology/python/audit.py --check
+.venv-ontology/bin/python ontology/python/governance.py --check
 ```
 
 You should see:
@@ -131,6 +133,7 @@ ontology.json matches
 generated.json: up to date
 validation.json: up to date
 audit.json: up to date
+governance.json: up to date
 ```
 
-The first line says the file is consistent: every range names something that exists, no `subclass_of` loops, no constraint names an unknown class or property. The other four say each derived file still matches what built it. They say nothing about whether the artefacts agree with the ontology; that is the audit's job, in lesson 4.
+The first line says the file is consistent: every range names something that exists, no `subclass_of` loops, no constraint names an unknown class or property. The other five say each derived file still matches what built it. They say nothing about whether the artefacts agree with the ontology; that is the audit's job, in lesson 5.

@@ -3,10 +3,11 @@
 ontology — load Lumen's ontology, check it is consistent, validate records against it.
 
 The ontology (ontology/lumen.yaml) is the one place that says what a ticket is, what
-each category and priority means and which labelling rules hold. Everything later in
-the track reads it through this module: the generator turns it into prompt text and
-schemas, the grounding step validates model outputs with it, the audit compares it
-with the course's other artefacts, and the app reads the exported ontology.json.
+each category and priority means, which labelling rules hold and which agent may take
+which action. Everything later in the track reads it through this module: the generator
+turns it into prompt text and schemas, the grounding step validates model outputs with
+it, the audit compares it with the course's other artefacts, governance.py checks the
+agents' recorded actions against it, and the app reads the exported ontology.json.
 
 Run (from the repo root):
     .venv-ontology/bin/python ontology/python/ontology.py check                       # consistency findings
@@ -39,6 +40,7 @@ DERIVED = ROOT / "ontology" / "data" / "derived"
 ONTOLOGY_JSON = DERIVED / "ontology.json"
 
 SECTIONS = ("classes", "properties", "relations", "individuals", "constraints")
+ACTIONS = "actions"  # section 6: a mapping {conditions, tools, permitted}, not a list of entries; optional
 LITERALS = ("string", "integer", "number", "boolean", "date")
 CARDINALITIES = ("one", "many")
 KINDS = ("checkable", "manual")
@@ -65,7 +67,8 @@ REF_FIELDS = {
 
 @dataclass
 class Ontology:
-    """The five sections as dicts keyed by id, in file order, plus where they came from.
+    """The five entry sections as dicts keyed by id, in file order, section 6 (`actions`) as
+    the mapping the file holds (empty when the file has none), plus where they came from.
 
     `findings` holds what went wrong while loading (a parse error, a section in the
     wrong shape, a duplicate id); check() reports them with everything else.
@@ -75,6 +78,7 @@ class Ontology:
     relations: dict = field(default_factory=dict)
     individuals: dict = field(default_factory=dict)
     constraints: dict = field(default_factory=dict)
+    actions: dict = field(default_factory=dict)
     source: Path = LUMEN
     findings: list = field(default_factory=list)
 
@@ -152,8 +156,12 @@ def load(path: Path) -> Ontology:
         onto.findings.append(finding("error", "malformed", path.name, "the file is not a mapping of sections"))
         return onto
     for key in raw:
-        if key not in SECTIONS:
-            onto.findings.append(finding("warning", "unknown_section", str(key), f"not one of {', '.join(SECTIONS)}"))
+        if key not in SECTIONS and key != ACTIONS:
+            onto.findings.append(finding("warning", "unknown_section", str(key), f"not one of {', '.join(SECTIONS + (ACTIONS,))}"))
+    if isinstance(raw.get(ACTIONS), dict):
+        onto.actions = raw[ACTIONS]
+    elif raw.get(ACTIONS) is not None:
+        onto.findings.append(finding("error", "malformed", ACTIONS, "must be a mapping of conditions, tools and permitted"))
     seen: dict[str, str] = {}  # id -> the section it was first defined in
     for name in SECTIONS:
         if name not in raw:
@@ -193,6 +201,11 @@ def class_properties(onto: Ontology, cls: str) -> dict:
     """The properties a record of cls may carry: its own and its superclasses'."""
     chain = set(ancestors(onto, cls))
     return {pid: p for pid, p in onto.properties.items() if _is_id(p.get("domain")) and p["domain"] in chain}
+
+
+def ids_of(onto: Ontology, cls: str) -> list[str]:
+    """The ids of one class's individuals, in their `order` (0 when missing, then by id)."""
+    return [i for _, i in sorted((x.get("order", 0), i) for i, x in onto.individuals.items() if x.get("class") == cls)]
 
 
 def _cycles(onto: Ontology) -> list[list[str]]:
@@ -370,7 +383,58 @@ def check(onto: Ontology) -> list[dict]:
 
     for cid, c in onto.constraints.items():
         out += _check_constraint(onto, cid, c)
+    out += _check_actions(onto)
     return _sorted(out)
+
+
+def _check_actions(onto: Ontology) -> list[dict]:
+    """Section 6: each row's role is an AgentRole, its action an Action and each condition
+    one defined under `conditions`; each tool maps to an Action; one row per role and
+    action. A dangling id is an error whose subject is that id; a part in the wrong shape
+    is `malformed`, never an exception."""
+    a, out = onto.actions, []
+    roles, acts, conds, seen = set(ids_of(onto, "AgentRole")), set(ids_of(onto, "Action")), set(), set()
+
+    def bad(where: str, what: str) -> None:
+        out.append(finding("error", "malformed", f"actions.{where}", what))
+
+    def dangling(eid, where: str, what: str) -> None:
+        out.append(finding("error", "dangling_action_ref", str(eid), f"actions.{where}: {what}"))
+
+    parts = {k: a.get(k) or ([] if k != "tools" else {}) for k in ("conditions", "tools", "permitted")}
+    for name, want in (("conditions", list), ("tools", dict), ("permitted", list)):
+        if not isinstance(parts[name], want):
+            bad(name, f"must be a {'mapping of tool to action' if want is dict else 'list'}")
+            parts[name] = want()
+    for i, c in enumerate(parts["conditions"]):
+        if isinstance(c, dict) and _is_id(c.get("id")) and c.get("text"):
+            if c["id"] in conds:
+                out.append(finding("error", "duplicate_condition", c["id"], f"actions.conditions[{i}]: a second condition with this id"))
+            conds.add(c["id"])
+        else:
+            bad(f"conditions[{i}]", "a condition is a mapping with an id and a text")
+    for tool, act in parts["tools"].items():
+        if not _is_id(act):
+            bad(f"tools.{tool}", _bad("action", act))
+        elif act not in acts:
+            dangling(act, f"tools.{tool}", f"maps to {act!r}, which is not an Action")
+    for i, r in enumerate(parts["permitted"]):
+        where = f"permitted[{i}]"
+        if not (isinstance(r, dict) and _is_id(r.get("role")) and _is_id(r.get("action"))
+                and isinstance(r.get("conditions", []), list)):
+            bad(where, "a row is {role, action, conditions?}: two ids and a list of condition ids")
+            continue
+        if r["role"] not in roles:
+            dangling(r["role"], where, f"role {r['role']!r} is not an AgentRole")
+        if r["action"] not in acts:
+            dangling(r["action"], where, f"action {r['action']!r} is not an Action")
+        for c in r.get("conditions", []):
+            if not _is_id(c) or c not in conds:
+                dangling(c, where, f"condition {c!r} is not defined under actions.conditions")
+        if (r["role"], r["action"]) in seen:
+            out.append(finding("error", "duplicate_permission", f"{r['role']} {r['action']}", f"actions.{where}: a second row for this role and action"))
+        seen.add((r["role"], r["action"]))
+    return out
 
 
 # ── 3. Constraint expressions ───────────────────────────────────────────────
@@ -545,12 +609,17 @@ def validate(onto: Ontology, record: dict, cls: str, partial: bool = False) -> l
 
 # ── 5. Export ───────────────────────────────────────────────────────────────
 def to_json(onto: Ontology) -> dict:
-    """The five sections as lists sorted by id, for the app. Order that matters (the
-    guide's decision order) travels in each individual's `order`, not in list position."""
+    """The five entry sections as lists sorted by id, for the app, and section 6 as the file
+    has it when there is one. Order that matters (the guide's decision order) travels in
+    each individual's `order`, not in list position."""
     def norm(entry: dict) -> dict:
         return {k: (" ".join(v.split()) if isinstance(v, str) and k not in ("pattern",) else v)
                 for k, v in entry.items()}
     data = {name: [norm(e) for _, e in sorted(getattr(onto, name).items())] for name in SECTIONS}
+    if onto.actions:
+        conds = onto.actions.get("conditions")
+        data[ACTIONS] = {**onto.actions, **({"conditions": [norm(c) if isinstance(c, dict) else c for c in conds]}
+                                            if isinstance(conds, list) else {})}
     try:
         data["source"] = onto.source.resolve().relative_to(ROOT).as_posix()
     except ValueError:

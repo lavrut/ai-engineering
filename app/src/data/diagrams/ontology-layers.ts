@@ -56,7 +56,7 @@ export const ontologyLayers: Diagram = {
       n: 3,
       highlight: ['schema', 'e-schema-ontology', 'ontology', 'e-lumen-ontology-ontology', 'lumen-ontology'],
       caption:
-        'An ontology adds meaning: classes with definitions, the relations between them (a ticket has exactly one category; a reply answers one ticket), and named individuals in a set order. ontology/lumen.yaml has 7 classes, 5 relations and 16 individuals. In the code: section 3.',
+        'An ontology adds meaning: classes with definitions, the relations between them (a ticket has exactly one category; a reply answers one ticket), and named individuals in a set order. ontology/lumen.yaml has 9 classes, 5 relations and 27 individuals. In the code: section 3.',
       code: { file: 'python', section: 3, source: 'ontology-lumen' },
     },
     {

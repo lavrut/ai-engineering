@@ -1,0 +1,14 @@
+{
+  "engine": "test",
+  "desk": "single",
+  "approve": "decline",
+  "elicit": "accept",
+  "output": {
+    "tool_calls": [
+      {"agent": "single", "tool": "get_ticket", "args": {"id": "t004"}, "is_error": false},
+      {"agent": "single", "tool": "delete_ticket", "args": {"id": "t004"}, "is_error": true},
+      {"agent": "single", "tool": "label_ticket", "args": {"id": "t004", "label": "bug"}, "is_error": true}
+    ],
+    "handoffs": []
+  }
+}

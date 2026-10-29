@@ -1,7 +1,8 @@
-// CSS shared by the three Ontology aids: the data aids' base (buttons, live region, tables that scroll in their own
-// box, pickers, marks, facts and status boxes, the two-column split) plus the class tabs, the diff lines and a third
-// mark tone for "missing". Tokens only (no hex): colours come from tokens.css, so the aids follow the light and
-// dark themes. A mark is always a symbol and a word (✓ AGREE, ✗ DISAGREE, ? MISSING), never colour alone.
+// CSS shared by the four Ontology aids: the data aids' base (buttons, live region, tables that scroll in their own
+// box, pickers, marks, facts and status boxes, the two-column split) plus the class tabs, the diff lines, a third
+// mark tone for "missing" and the action matrix's cells. Tokens only (no hex): colours come from tokens.css, so the
+// aids follow the light and dark themes. A mark is always a symbol and a word (✓ AGREE, ✗ DISAGREE, ? MISSING,
+// ◐ CONDITIONAL), never colour alone.
 import { DATA_CSS } from '../data/dataStyle';
 
 export const ONTOLOGY_CSS =
@@ -29,4 +30,13 @@ export const ONTOLOGY_CSS =
 .on-diff-add { border-left: 3px solid var(--good); background: var(--surface); }
 .on-diff-del { border-left: 3px solid var(--bad); }
 .on-diff-meta { color: var(--muted); }
+.am-table { min-width: 40rem; }
+.am-cell { vertical-align: top; cursor: pointer; }
+.am-cell[aria-selected="true"] { background: var(--surface-2); outline: 2px solid var(--accent); outline-offset: -2px; }
+.am-cell:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+.am-line { display: block; margin-top: 4px; font-family: var(--font-mono); font-size: var(--text-label); color: var(--ink); }
+.am-conds { margin: 0; display: grid; gap: 8px; font-size: var(--text-small); color: var(--ink); }
+.am-conds dt { font-family: var(--font-mono); font-weight: 700; }
+.am-conds dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.am-tools { min-width: 16rem; }
 `;

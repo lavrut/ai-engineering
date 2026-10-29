@@ -1,0 +1,221 @@
+---
+track: ontology
+order: 4
+slug: architectures
+title: Three ways to give an agent meaning
+goal: Tell inferred context, written definitions and governed action apart, say when each fits and what each costs, and check every recorded agent action against the permissions an ontology states.
+minutes: 25
+quiz:
+  - question: An analyst points an agent at a dataset nobody has documented and asks one question about it. The agent reads the column names and answers. Which way of giving it meaning is that, and what is its weak point?
+    options:
+      - Governed action, because the agent only reads
+      - Written definitions, because the column names are written down
+      - None of the three; reading column names is not meaning
+      - Inferred context. It is quick to start and covers whatever the data holds, but the meaning lives in the model's guess, so two runs can read a column two ways and no file records why
+    answer: 3
+    explanation: Column names and types describe fields, not what each value means. They say what a field is called and what shape it has. What a value means is the model's inference, made at run time, which is fine for a one-off question and weak wherever answers must agree or be audited.
+  - question: governance.py finds no recorded event that is not permitted, and marks every label write attempt conditional. What does conditional mean here?
+    options:
+      - The write broke a rule, and the gate should be red
+      - A row permits the role to write, one of its conditions was not met, and the desk refused the attempt. The person the desk asked said no every time, and the traces show no label landed
+      - The check could not read the trace
+      - The write happened before the review in every run
+    answer: 1
+    explanation: Not permitted means no row allows the role the action, or a write landed without its condition. Conditional means a row allows it on a condition, the condition did not hold, and the trace marks the attempt refused. The gate counts these and stays green; a write that landed without a yes would turn it red.
+  - question: The rule that the supervisor labels a ticket only after a passed review now lives in the desk's code, the agents track's scorer and the ontology. Why write it a third time?
+    options:
+      - So the ontology can stop the write when the review fails
+      - Because the scorer will be removed
+      - The ontology is where a person reads the rule and where every recorded run is checked against it. The desk's code is still what stops a write; writing a rule down enforces nothing on its own
+      - Because a rule must be stated three times to count
+    answer: 2
+    explanation: Each place does one job. The desk enforces the rule before the call, the scorer checks each attempt in the agents track's evals, and the ontology states it once, in words a person can read, next to the definitions of the roles and actions it names.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import ActionMatrix from '../../../components/ontology/ActionMatrix.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+An agent that works on support tickets needs two kinds of meaning. It needs to know what the words in its data mean: when a ticket is an `outage`, why `low` is checked before `normal`. And once it can change things, it needs to know what it may do. There are three common places for that meaning to come from, and the course already has an artefact for each.
+
+### Inferred context
+
+With <Term t="inferred context" />, the agent reads the data and what describes it, such as a schema, column names or a catalogue entry, and works out at run time what things mean. The data track's catalogue and contracts, `data/contracts/*.yaml`, are that kind of description. They say that `category` is a required string from a closed list, give each field a `meaning:` line, and add quality rules. A `meaning:` line describes the field, though, not its values: nothing there says when a ticket is an `outage`, or that `low` is checked before `normal`. An agent given only them infers those rules from the words.
+
+It is fast to start: point the agent at the data and ask. It covers whatever the data holds, defined or not. But the meaning lives in the model's guess. Two runs can read the same column two ways, and no file records which reading was used, so there is nothing to audit.
+
+### Written definitions
+
+The second way writes the meaning down once and builds everything else from it. That is this track so far: lesson 2's `ontology/lumen.yaml`, lesson 3's generated prompt definitions, schema and tool, and the validator that checks the saved answers.
+
+It is slower to start. Someone had to write each definition and rule from the labelling guide, and decide which rules a program can check. It covers only what someone has defined. In return the rules go deep, with a decision order and constraints, and every artefact can be audited against the one file, which is what lesson 5 does.
+
+### Governed action
+
+The third way adds permissions. With <Term t="governed action" />, the ontology also says which role may take which action, and on what condition, and code enforces it. Section 6 of `lumen.yaml` does this for the agents track's desk:
+
+- Every role may read.
+- The single agent may write, only with two yeses: the person the desk asks, and the lumen-ops server's own confirmation.
+- The supervisor may write, only after the current draft's review passed, and with the same two yeses.
+- Handing a task to a worker is an escalation, and only the supervisor escalates.
+- Approving a write is the person's alone.
+
+The desk is stricter than this table. It gives each worker only the tools its job needs, so the drafter and the reviewer call none. The ontology governs actions, not jobs.
+
+The same rule now lives in three places. The desk's code enforces it before the call: the supervisor desk offers the supervisor `label_ticket` only while the current draft's review is passed, every write waits for a person's yes, and the lumen-ops server then asks for its own confirmation. `human_confirmed` holds only when both said yes, as the agents track's scorer requires. The agents track's trajectory scorer, in `agents/evals/scorers.py`, checks the same rule for every write attempt in its evals. And the ontology states it, next to the definitions of the roles and actions it names. The ontology is where a person reads the rule; the desk and the server are where it is enforced.
+
+### What the check found
+
+`governance.py` reads every recorded agents trace and judges each action against section 6. Of the 134 trace files, 30 are pattern demos with no tool calls, listed as skipped. The other 104 are desk runs. They hold 577 events: 277 tool calls, 240 handoffs and 60 answers to the write question. A run's recorded answer counts only where it attempted a write: in the other 44 runs nobody was asked.
+
+517 events are permitted, 60 are conditional and none is not permitted, so the gate is green. The 60 are every label write attempt: 18 by the single agent and 42 by the supervisor. In every run where the supervisor attempted a write, its last review had passed, so `review_passed` was met each time. Every attempt waited for a person, and in each of those runs the scripted person said no. The traces mark all 60 attempts refused, and 0 writes landed. Conditional here means a condition did not hold and the desk refused the write. A write that landed without its conditions would be not permitted, and the gate would turn red.
+
+`governance.py` judges each condition once per run, from the fields its `evaluated_from` names. That is coarser than the agents track's scorer, which places each write against the review at the moment it was made (`review_at_labels` in `agents/evals/scorers.py`).
+
+### When to use each
+
+- **Inferred context** for exploration and one-off questions over data nobody has defined. Writing an ontology first would cost more than the question is worth.
+- **Written definitions** when answers must agree across prompts, schemas and tools. Triage is that case: the guide, the prompts, the schema and the MCP tool all name the same six categories, and lesson 3 showed what drifted when they were written by hand.
+- **Governed action** as soon as an agent can write, pay or send. A wrong label can be fixed; a refund or an email cannot be taken back.
+
+### The trade-offs
+
+Each cell is a claim a lesson in this course backs: the data track's contracts for the first column, lessons 2, 3 and 5 for the second, and this lesson for the third.
+
+| | Inferred context | Written definitions | Governed action |
+|---|---|---|---|
+| Source of meaning | The data and its schema, read at run time | One ontology, written once | The ontology's permissions, enforced in code |
+| Time to value | At once: point the agent at the data | Slower: every definition and rule is written by hand | Slower again: roles, actions, conditions and the code that enforces them |
+| Coverage | Whatever the data holds | What someone has defined | The actions someone has listed |
+| Rule depth | Names, types, a line of meaning per field and quality rules | A decision order, checkable and manual rules | Who may do what, and on what condition |
+| Auditability | Low: the reading is a guess no file records | High: every artefact is audited against the file | High: every recorded action is checked against the rules |
+| Main limitation | Two runs can read one column two ways | Says nothing about what an agent may do | A rule written down enforces nothing until code does |
+
+The three build on each other. Definitions need data to describe, and a permission names roles and actions the ontology has defined. Grounding settles what something means. Governance settles what an agent may do, wherever it acts.
+
+## See it
+
+Step through the diagram. The left column is the pyramid: data, then definitions, then permitted actions. Each architecture sits on the level it reaches, joined to the course's artefact for it. Watch step 4: that is where a written rule meets the recorded runs.
+
+<FlowDiagram diagram="ontology-architectures" />
+
+Inferred context stops at the data. Definitions add meaning on top of it, and governed action adds who may act on it. Only the top level needs code that stops an action; the levels below it are read.
+
+Now the rules and the recorded runs together. Each cell is a role and an action: the rule section 6 gives it, its conditions, and how many recorded events it judged. Move with the arrow keys to the supervisor's write. Then press `sdk` to see one engine's runs.
+
+<ActionMatrix />
+
+Every cell with events is permitted or conditional. The 17 cells marked NO have no events: no recorded run had a role take an action the ontology does not give it.
+
+## The code
+
+Section 6 of the ontology holds the rules as data.
+
+<CodeTabs source="ontology-lumen" section={6} pythonOnly />
+
+- `evaluated_from: [approve, elicit]` names the trace fields a condition is judged from, and every one must say yes. A condition whose source the checker does not know is never passed.
+- `label_ticket: write` maps the tool to the action. A tool missing from this table is not permitted, whatever role calls it.
+- `{role: supervisor, action: write, conditions: [review_passed, human_confirmed]}` is the supervisor's write rule. There are no wildcards: a role that is not listed for an action is not permitted to take it.
+
+`ontology.py check` reports a role, action or condition that is not defined, or a tool mapped to an unknown action, as an error that names the id. `governance.py` refuses to run on an ontology with errors.
+
+The verdicts are section 2 of `governance.py`.
+
+<CodeTabs source="ontology-governance" section={2} pythonOnly />
+
+- `return "not_permitted", f"no row permits {role} to {action}", []` is the verdict for a role and action no row allows.
+- `"elicit": lambda run: run["elicit"] == "accept",` is the server's half of `human_confirmed`; `"approve"` beside it is the person's.
+- `return "not_permitted", f"landed without {' and '.join(unmet)}", unmet` is the verdict for a call that reached the tools with a condition unmet. A refused attempt stays conditional.
+- `fns = [EVALUATE.get(str(s)) for s in (src if isinstance(src, list) else [src])]` looks each of the condition's sources up. When one is missing, the condition `cannot be evaluated` and is never met.
+
+<Callout kind="note" title="Checked after, enforced before">
+  `governance.py` reads recordings. It cannot stop a write; the desk's code and the lumen-ops server do that. What it adds is one place, the ontology, where the rule is written for people, and a check of every recorded run against it: which actions no rule allows, and which writes landed without their conditions.
+</Callout>
+
+## Try it
+
+Check that the ontology is consistent and that `governance.json` still matches the rules and the traces:
+
+```bash
+.venv-ontology/bin/python ontology/python/ontology.py check
+.venv-ontology/bin/python ontology/python/governance.py --check
+```
+
+You should see:
+
+```text
+ontology/lumen.yaml: 0 errors, 0 other findings
+governance.json: up to date
+```
+
+Run the check into a scratch file. It reads the traces, prints the gate and every cell that has a rule, and calls nothing:
+
+```bash
+.venv-ontology/bin/python ontology/python/governance.py --out /tmp/governance.json
+```
+
+You should see:
+
+```text
+wrote governance.json: 577 events in 104 desk runs, 30 files skipped
+gate: GREEN (0 not permitted, 60 conditional)
+  single     read     permitted    76 events: 76 permitted, 0 conditional, 0 not permitted
+  single     write    conditional  18 events: 0 permitted, 18 conditional (human_confirmed unmet 18), 0 not permitted
+  triage     read     permitted     0 events: 0 permitted, 0 conditional, 0 not permitted
+  research   read     permitted   141 events: 141 permitted, 0 conditional, 0 not permitted
+  drafter    read     permitted     0 events: 0 permitted, 0 conditional, 0 not permitted
+  reviewer   read     permitted     0 events: 0 permitted, 0 conditional, 0 not permitted
+  supervisor read     permitted     0 events: 0 permitted, 0 conditional, 0 not permitted
+  supervisor write    conditional  42 events: 0 permitted, 42 conditional (human_confirmed unmet 42), 0 not permitted
+  supervisor escalate permitted   240 events: 240 permitted, 0 conditional, 0 not permitted
+  human      read     permitted     0 events: 0 permitted, 0 conditional, 0 not permitted
+  human      approve  permitted    60 events: 60 permitted, 0 conditional, 0 not permitted
+```
+
+Now take a permission away. This copies the ontology to a scratch file without the row that lets the research worker read, and checks the same runs against the copy:
+
+```bash
+grep -v '{role: research,   action: read}' ontology/lumen.yaml > /tmp/lumen.yaml
+.venv-ontology/bin/python ontology/python/governance.py --ontology /tmp/lumen.yaml --out /tmp/governance.json
+```
+
+You should see:
+
+```text
+wrote governance.json: 577 events in 104 desk runs, 30 files skipped
+gate: RED (141 not permitted, 60 conditional)
+  single     read     permitted    76 events: 76 permitted, 0 conditional, 0 not permitted
+  single     write    conditional  18 events: 0 permitted, 18 conditional (human_confirmed unmet 18), 0 not permitted
+  triage     read     permitted     0 events: 0 permitted, 0 conditional, 0 not permitted
+  research   read     no          141 events: 0 permitted, 0 conditional, 141 not permitted
+  drafter    read     permitted     0 events: 0 permitted, 0 conditional, 0 not permitted
+  reviewer   read     permitted     0 events: 0 permitted, 0 conditional, 0 not permitted
+  supervisor read     permitted     0 events: 0 permitted, 0 conditional, 0 not permitted
+  supervisor write    conditional  42 events: 0 permitted, 42 conditional (human_confirmed unmet 42), 0 not permitted
+  supervisor escalate permitted   240 events: 240 permitted, 0 conditional, 0 not permitted
+  human      read     permitted     0 events: 0 permitted, 0 conditional, 0 not permitted
+  human      approve  permitted    60 events: 60 permitted, 0 conditional, 0 not permitted
+  not permitted: research called get_ticket 44 times (no row permits research to read)
+  not permitted: research called search_tickets 97 times (no row permits research to read)
+```
+
+The research worker's 141 reads are now outside the rules, and the gate turns red. Like `audit.py`, `governance.py` still exits with 0 after printing `RED`; a pipeline reads `gate.ok` from the file. The committed `governance.json` is untouched.
+
+Last, a typo in a condition id. This copy names `human_confirm` where the single agent's write row should say `human_confirmed`. The check finds the dangling id before any trace is read, prints it, writes nothing, and exits with status 1:
+
+```bash
+sed 's/conditions: \[human_confirmed\]}/conditions: [human_confirm]}/' ontology/lumen.yaml > /tmp/typo.yaml
+.venv-ontology/bin/python ontology/python/governance.py --ontology /tmp/typo.yaml --out /tmp/governance.json
+```
+
+You should see:
+
+```text
+error   dangling_action_ref human_confirm: actions.permitted[7]: condition 'human_confirm' is not defined under actions.conditions
+typo.yaml: 1 errors; run ontology.py check. Nothing written
+```
+
+`ontology.py check --file /tmp/typo.yaml` prints the same error line. A permission that names something the ontology never defined is a mistake in the rules, so it is caught as one, not read as a rule that never matches.

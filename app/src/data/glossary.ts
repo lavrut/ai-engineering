@@ -292,6 +292,10 @@ export const glossary = {
     'Tying an AI system to a source of meaning: its prompts, schemas and tools come from it, and its outputs are checked against it.',
   'single source of truth':
     'The one place a fact is written. Every other artefact that states the fact is generated from it or audited against it.',
+  'inferred context':
+    'Meaning an agent works out at run time from the data and what describes it, such as a schema or column names, with no definition written down.',
+  'governed action':
+    'An agent action that a written rule permits, names a role and a condition for, and that code enforces: who may do what, and when.',
 } as const satisfies Record<string, string>;
 
 export type GlossaryKey = keyof typeof glossary;

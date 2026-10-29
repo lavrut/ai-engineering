@@ -1,0 +1,7 @@
+{
+  "engine": "test",
+  "desk": "pattern:chain",
+  "approve": "decline",
+  "elicit": "accept",
+  "output": {"calls": [], "result": {}}
+}

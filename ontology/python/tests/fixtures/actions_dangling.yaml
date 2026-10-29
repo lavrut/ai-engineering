@@ -1,0 +1,27 @@
+# Section 6 with one dangling id of each kind: a role, an action and a condition that are
+# not defined, and a tool mapped to an unknown action; plus a duplicate row and a duplicate condition.
+classes:
+  - {id: Action, label: Action, definition: Something done.}
+  - {id: AgentRole, label: Agent role, definition: Who does it.}
+properties: []
+relations: []
+individuals:
+  - {id: read, class: Action, definition: Read., source: X}
+  - {id: write, class: Action, definition: Write., source: X}
+  - {id: bot, class: AgentRole, definition: A bot., source: X}
+  - {id: Bob, class: Action, definition: Not a role., source: X}
+constraints: []
+actions:
+  conditions:
+    - {id: confirmed, text: Someone said yes., evaluated_from: approve}
+    - {id: confirmed, text: Someone said yes again., evaluated_from: elicit}
+  tools:
+    get_ticket: read
+    delete_ticket: delete
+  permitted:
+    - {role: bot, action: read}
+    - {role: bot, action: read}
+    - {role: ghost, action: read}
+    - {role: Bob, action: read}
+    - {role: bot, action: fly}
+    - {role: bot, action: write, conditions: [confirmed, signed_off]}

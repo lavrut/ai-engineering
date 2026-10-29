@@ -46,9 +46,8 @@ def row(artefact: str, fact: str, status: str, detail: str) -> dict:
 
 
 def _ids(onto: O.Ontology, cls: str) -> list[str]:
-    """The individuals of one class, in their `order`."""
-    members = [(v.get("order", 0), i) for i, v in onto.individuals.items() if v.get("class") == cls]
-    return [i for _, i in sorted(members)]
+    """The individuals of one class, in their `order` (ontology.ids_of)."""
+    return O.ids_of(onto, cls)
 
 
 def _token(word: str, flags: int = 0) -> re.Pattern:

@@ -1,5 +1,93 @@
 {
+  "actions": {
+    "conditions": [
+      {
+        "evaluated_from": [
+          "approve",
+          "elicit"
+        ],
+        "id": "human_confirmed",
+        "text": "A person said yes to the write, and so did the lumen-ops server. The desk asks the person before label_ticket reaches lumen-ops (the trace's approve); the server then asks for its own confirmation (elicit). Both must be yes, as the agents track's scorer requires."
+      },
+      {
+        "evaluated_from": "handoffs.review",
+        "id": "review_passed",
+        "text": "The reviewer passed the current draft before the write: the last reviewer handoff that did not fail says the review passed."
+      }
+    ],
+    "permitted": [
+      {
+        "action": "read",
+        "role": "single"
+      },
+      {
+        "action": "read",
+        "role": "triage"
+      },
+      {
+        "action": "read",
+        "role": "research"
+      },
+      {
+        "action": "read",
+        "role": "drafter"
+      },
+      {
+        "action": "read",
+        "role": "reviewer"
+      },
+      {
+        "action": "read",
+        "role": "supervisor"
+      },
+      {
+        "action": "read",
+        "role": "human"
+      },
+      {
+        "action": "write",
+        "conditions": [
+          "human_confirmed"
+        ],
+        "role": "single"
+      },
+      {
+        "action": "write",
+        "conditions": [
+          "review_passed",
+          "human_confirmed"
+        ],
+        "role": "supervisor"
+      },
+      {
+        "action": "escalate",
+        "role": "supervisor"
+      },
+      {
+        "action": "approve",
+        "role": "human"
+      }
+    ],
+    "tools": {
+      "classify_complaint": "read",
+      "confirmation": "approve",
+      "get_ticket": "read",
+      "handoff": "escalate",
+      "label_ticket": "write",
+      "search_tickets": "read"
+    }
+  },
   "classes": [
+    {
+      "definition": "Something an agent or a person does at Lumen's agent desk through the course's tools, such as reading a ticket or writing its label.",
+      "id": "Action",
+      "label": "Action"
+    },
+    {
+      "definition": "Who acts at Lumen's agent desk, one of the agents the agents track runs or the person the desk asks before a write. Section 6 says which role may take which action.",
+      "id": "AgentRole",
+      "label": "Agent role"
+    },
     {
       "definition": "What a ticket is about. Exactly one per ticket, chosen by the first rule (C1 to C6) that matches.",
       "id": "Category",
@@ -242,6 +330,13 @@
       "source": "C3"
     },
     {
+      "class": "Action",
+      "definition": "Say yes or no to a write the desk is about to make. The desk asks a person before label_ticket reaches lumen-ops.",
+      "id": "approve",
+      "order": 3,
+      "source": "agents desk"
+    },
+    {
       "class": "Category",
       "definition": "Money, charges, refunds, invoices, plans, discounts or payment methods. This beats how_to: \"how do I update my billing address\" is billing.",
       "id": "billing",
@@ -288,6 +383,20 @@
       "source": "category_map"
     },
     {
+      "class": "AgentRole",
+      "definition": "The supervisor's worker that drafts the reply. It calls no tool.",
+      "id": "drafter",
+      "order": 4,
+      "source": "agents desk"
+    },
+    {
+      "class": "Action",
+      "definition": "Hand a task to another agent, as the supervisor does when it gives a job to one of its workers.",
+      "id": "escalate",
+      "order": 4,
+      "source": "agents desk"
+    },
+    {
       "class": "Category",
       "definition": "The customer asks for something and says or assumes the app can't do it yet (\"please build\", \"I wish it could\", \"will you ever support…\", \"is it planned\", \"it only lets me use one colour\").",
       "id": "feature_request",
@@ -307,6 +416,13 @@
       "id": "how_to",
       "order": 6,
       "source": "C6"
+    },
+    {
+      "class": "AgentRole",
+      "definition": "The person the desk asks before a write. In every recorded run the answer is scripted.",
+      "id": "human",
+      "order": 7,
+      "source": "agents desk"
     },
     {
       "class": "Priority",
@@ -346,11 +462,60 @@
       "source": "C1"
     },
     {
+      "class": "Action",
+      "definition": "Look at tickets without changing anything, with the lumen-read tools get_ticket, search_tickets and classify_complaint.",
+      "id": "read",
+      "order": 1,
+      "source": "lumen-read"
+    },
+    {
+      "class": "AgentRole",
+      "definition": "The supervisor's worker that looks tickets up with the read tools.",
+      "id": "research",
+      "order": 3,
+      "source": "agents desk"
+    },
+    {
+      "class": "AgentRole",
+      "definition": "The supervisor's worker that reviews the current draft and passes or fails it.",
+      "id": "reviewer",
+      "order": 5,
+      "source": "agents desk"
+    },
+    {
+      "class": "AgentRole",
+      "definition": "The single agent, one model that holds every desk tool and does the whole job alone.",
+      "id": "single",
+      "order": 1,
+      "source": "agents desk"
+    },
+    {
+      "class": "AgentRole",
+      "definition": "The agent that splits the job, hands each part to a worker, and makes the write itself.",
+      "id": "supervisor",
+      "order": 6,
+      "source": "agents desk"
+    },
+    {
+      "class": "AgentRole",
+      "definition": "The supervisor's worker that sets a ticket's category and priority.",
+      "id": "triage",
+      "order": 2,
+      "source": "agents desk"
+    },
+    {
       "class": "Priority",
       "definition": "Any one of: content the customer had is gone and not recovered (U1); signs of unauthorized access or exposed data (U2); more than one person can't sign in, or can't open or edit their notes (U3); a wrongly taken charge over $100, or one that caused an overdraft, or one the bank is already disputing (U4).",
       "id": "urgent",
       "order": 1,
       "source": "U1-U4"
+    },
+    {
+      "class": "Action",
+      "definition": "Change a ticket, with the lumen-ops tool label_ticket, which sets its category.",
+      "id": "write",
+      "order": 2,
+      "source": "lumen-ops"
     }
   ],
   "properties": [

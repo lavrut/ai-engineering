@@ -1,0 +1,10 @@
+---
+// Build-time wrapper: passes governance.json's roles x actions grid (the rule, the conditions and the recorded events
+// per cell, in all and per engine), the tool table, the conditions and the gate as governance.py wrote it.
+import ActionMatrixIsland from './ActionMatrix.tsx';
+import { actionMatrixProps, loadOntologyData } from '../../lib/ontologyData';
+
+const props = actionMatrixProps(loadOntologyData().governance);
+---
+
+<ActionMatrixIsland client:visible {...props} />

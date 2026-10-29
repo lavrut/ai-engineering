@@ -85,6 +85,7 @@ export function sourceTexts(id: CodeSourceId): { python: string; go?: string } {
         '../../../ontology/python/generate.py',
         '../../../ontology/python/grounding.py',
         '../../../ontology/python/audit.py',
+        '../../../ontology/python/governance.py',
         '../../../ontology/lumen.yaml',
       ],
       { query: '?raw', import: 'default', eager: true },

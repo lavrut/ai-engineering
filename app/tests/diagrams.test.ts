@@ -16,6 +16,7 @@ import { agentPatterns } from '../src/data/diagrams/agent-patterns';
 import { replayProxy } from '../src/data/diagrams/replay-proxy';
 import { dataFabric } from '../src/data/diagrams/data-fabric';
 import { ontologyLayers } from '../src/data/diagrams/ontology-layers';
+import { ontologyArchitectures } from '../src/data/diagrams/ontology-architectures';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +37,7 @@ const all: [string, Diagram][] = [
   ['replay-proxy', replayProxy],
   ['data-fabric', dataFabric],
   ['ontology-layers', ontologyLayers],
+  ['ontology-architectures', ontologyArchitectures],
 ];
 
 describe('diagram data', () => {
@@ -424,13 +426,81 @@ describe('diagram data', () => {
       expect(caption(1)).toContain('6 individuals of Product');
       expect(onto.properties).toHaveLength(6);
       expect(caption(2)).toContain('6 properties');
-      expect([onto.classes.length, onto.relations.length, onto.individuals.length]).toEqual([7, 5, 16]);
-      expect(caption(3)).toContain('7 classes, 5 relations and 16 individuals');
+      expect([onto.classes.length, onto.relations.length, onto.individuals.length]).toEqual([9, 5, 27]);
+      expect(caption(3)).toContain('9 classes, 5 relations and 27 individuals');
       const kinds = onto.constraints.map((c) => c.kind);
       expect([kinds.length, kinds.filter((k) => k === 'checkable').length, kinds.filter((k) => k === 'manual').length]).toEqual([25, 1, 24]);
       expect(caption(4)).toContain('25 constraints: 1 a program can check, 24 a person must judge');
       expect([lineage.nodes.length, lineage.edges.length]).toEqual([27, 32]);
       expect(caption(5)).toContain('27 nodes and 32 edges');
+    });
+  });
+
+  describe('ontology-architectures', () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const read = (p: string) => JSON.parse(readFileSync(join(here, '../..', p), 'utf8'));
+    const gov = read('ontology/data/derived/governance.json') as { totals: Record<string, number> };
+    const node = (id: string) => ontologyArchitectures.nodes.find((n) => n.id === id)!;
+    const LEVELS = ['permitted-actions', 'definitions', 'data'];
+    const ARCHS = ['governed', 'explicit', 'inferred'];
+    const ARTEFACTS = ['actions-section', 'lumen-ontology', 'data-contracts'];
+
+    it('stacks the pyramid top to bottom, each level wider than the one above, each edge saying what the upper level adds', () => {
+      expect(ontologyArchitectures.id).toBe('ontology-architectures');
+      expect(ontologyArchitectures.nodes.map((n) => n.id)).toEqual([...LEVELS, ...ARCHS, ...ARTEFACTS]);
+      expect(LEVELS.map((id) => node(id).label)).toEqual(['Permitted actions', 'Definitions', 'Data']);
+      const ys = LEVELS.map((id) => node(id).y);
+      expect([...ys].sort((a, b) => a - b)).toEqual(ys);
+      const ws = LEVELS.map((id) => node(id).w!);
+      expect(ws[0]).toBeLessThan(ws[1]);
+      expect(ws[1]).toBeLessThan(ws[2]);
+      const adds = ontologyArchitectures.edges.filter((e) => LEVELS.includes(e.from) && LEVELS.includes(e.to)).map((e) => [e.from, e.to, e.label]);
+      expect(adds).toEqual([
+        ['data', 'definitions', '+ meaning, written once'],
+        ['definitions', 'permitted-actions', '+ who may do what'],
+      ]);
+    });
+
+    it('puts each architecture on the level it reaches, joined to the artefact it stands on', () => {
+      expect(ARCHS.map((id) => node(id).label)).toEqual(['Governed action', 'Written definitions', 'Inferred context']);
+      expect(ARTEFACTS.map((id) => node(id).label)).toEqual(['lumen.yaml actions', 'ontology/lumen.yaml', 'data/contracts/*.yaml']);
+      const reach = ontologyArchitectures.edges.filter((e) => ARCHS.includes(e.from)).map((e) => [e.from, e.to]);
+      expect(reach).toEqual([['inferred', 'data'], ['explicit', 'definitions'], ['governed', 'permitted-actions']]);
+      const stands = ontologyArchitectures.edges.filter((e) => ARTEFACTS.includes(e.from)).map((e) => [e.from, e.to]);
+      expect(stands).toEqual([['data-contracts', 'inferred'], ['lumen-ontology', 'explicit'], ['actions-section', 'governed']]);
+      for (const [a, l] of [...reach, ...stands]) expect(node(a).y, a).toBe(node(l).y);
+      for (const e of ontologyArchitectures.edges) expect(e.id).toBe(`e-${e.from}-${e.to}`);
+    });
+
+    it('links its steps to the pinned sources and sections, each caption ending with its section', () => {
+      const got = Object.fromEntries(ontologyArchitectures.steps.map((s) => [s.n, s.code ? [s.code.source, s.code.section] : null]));
+      expect(got).toEqual({ 1: ['data-contract-tickets', 2], 2: ['ontology-lumen', 4], 3: ['ontology-lumen', 6], 4: ['ontology-governance', 2], 5: null });
+      for (const s of ontologyArchitectures.steps) {
+        const m = /In the code: section (\d+)\.$/.exec(s.caption);
+        if (!s.code) {
+          expect(m, `step ${s.n}`).toBeNull();
+          continue;
+        }
+        expect(Number(m![1]), `step ${s.n}`).toBe(s.code.section);
+        expect(codeProblems(s.code), `step ${s.n}`).toEqual([]);
+      }
+      const want: Record<number, string> = { 1: 'category', 2: 'class: Category', 3: 'permitted:', 4: 'def verdict(' };
+      for (const [n, text] of Object.entries(want)) expect(resolveCode(ontologyArchitectures.steps[Number(n) - 1].code!).python, `step ${n}`).toContain(text);
+    });
+
+    it('names the numbers it states as governance.json has them', () => {
+      const t = gov.totals;
+      expect([t.events, t.desk_runs, t.not_permitted, t.conditional]).toEqual([577, 104, 0, 60]);
+      expect(ontologyArchitectures.steps[3].caption).toContain('577 events in 104 desk runs, 0 not permitted, 60 conditional. The 60 are the write attempts, each refused because a person said no; no write landed.');
+      expect((gov.totals as Record<string, number>).writes_landed).toBe(0);
+      const writes = (read('ontology/data/derived/governance.json').matrix as { action: string; events: number; verdicts: { conditional: number } }[])
+        .filter((c) => c.action === 'write');
+      expect(writes.reduce((a, c) => a + c.events, 0)).toBe(60);
+      expect(writes.reduce((a, c) => a + c.verdicts.conditional, 0)).toBe(60);
+      const digits = ontologyArchitectures.steps.flatMap((s) => s.caption.replace(/In the code: section \d+\.$/, '').match(/\d+/g) ?? []);
+      // 'section 6' in step 4 is the ontology's actions section
+      expect(readFileSync(join(here, '../../ontology/lumen.yaml'), 'utf8')).toContain('# ── 6. Actions');
+      expect(digits).toEqual(['6', '577', '104', '0', '60', '60']);
     });
   });
 

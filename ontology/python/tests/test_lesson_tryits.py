@@ -85,9 +85,9 @@ def env() -> dict[str, str]:
 
 def test_every_lesson_has_a_try_it_with_commands():
     lessons = sorted(p.stem for p in LESSONS.glob("*.mdx"))
-    assert lessons == ["01-what", "02-lumen", "03-grounding", "04-capstone"]
+    assert lessons == ["01-what", "02-lumen", "03-grounding", "04-architectures", "05-capstone"]
     per = {lesson: sum(1 for c in CASES if c.values[0] == lesson) for lesson in lessons}
-    assert per == {"01-what": 1, "02-lumen": 3, "03-grounding": 4, "04-capstone": 4}
+    assert per == {"01-what": 1, "02-lumen": 3, "03-grounding": 4, "04-architectures": 4, "05-capstone": 4}
 
 
 def test_the_setup_line_is_the_readmes():
@@ -103,8 +103,9 @@ def test_no_command_can_pay():
 
 
 def test_the_exit_codes_are_read_from_the_prose():
-    """Three blocks say they exit with status 1: the bad record, the record as ticket and answer, the gate."""
-    assert sorted(c.values[0] for c in CASES if c.values[3] == 1) == ["02-lumen", "02-lumen", "04-capstone"]
+    """Four blocks say they exit with status 1: the bad record, the record as ticket and answer, the typo in a
+    permission, the gate."""
+    assert sorted(c.values[0] for c in CASES if c.values[3] == 1) == ["02-lumen", "02-lumen", "04-architectures", "05-capstone"]
 
 
 @pytest.fixture

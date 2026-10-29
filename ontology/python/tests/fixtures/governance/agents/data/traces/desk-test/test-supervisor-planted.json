@@ -1,0 +1,17 @@
+{
+  "engine": "test",
+  "desk": "supervisor",
+  "approve": "decline",
+  "elicit": "accept",
+  "output": {
+    "tool_calls": [
+      {"agent": "research", "tool": "get_ticket", "args": {"id": "t001"}, "is_error": false},
+      {"agent": "research", "tool": "label_ticket", "args": {"id": "t001", "label": "billing"}, "is_error": true},
+      {"agent": "supervisor", "tool": "label_ticket", "args": {"id": "t001", "label": "billing"}, "is_error": true}
+    ],
+    "handoffs": [
+      {"worker": "research", "task": "Look it up.", "changed": {"findings": "None."}, "is_error": false},
+      {"worker": "reviewer", "task": "Review the draft.", "changed": {"review": {"passed": true}}, "is_error": false}
+    ]
+  }
+}

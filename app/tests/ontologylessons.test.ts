@@ -4,10 +4,11 @@ import { fileURLToPath } from 'node:url';
 import matter from 'gray-matter';
 import { describe, expect, it } from 'vitest';
 import { ontologyLayers } from '../src/data/diagrams/ontology-layers';
+import { ontologyArchitectures } from '../src/data/diagrams/ontology-architectures';
 
-// The Ontology track, lessons 1-4: every number a lesson states in prose or in its quiz is pinned here against what
-// produced it: ontology/data/derived/*.json (ontology.py export, generate.py, grounding.py, audit.py, never written
-// by hand), the ontology file, the other tracks' files it reads, or the source text. Each claim is a phrase the
+// The Ontology track, lessons 1-5: every number a lesson states in prose or in its quiz is pinned here against what
+// produced it: ontology/data/derived/*.json (ontology.py export, generate.py, grounding.py, audit.py, governance.py, never
+// written by hand), the ontology file, the other tracks' files it reads, or the source text. Each claim is a phrase the
 // lesson must contain plus the check behind it. A last test strips every claimed phrase, the lesson references, the
 // numbered lists and the names that carry digits (rule ids, prompt versions, ticket ids, contract ids) from each
 // lesson, and fails on any digit left over, inline code included, so a new number cannot ship unpinned. The Try-it
@@ -25,7 +26,11 @@ const onto = json('ontology/data/derived/ontology.json');
 const generated = json('ontology/data/derived/generated.json');
 const validation = json('ontology/data/derived/validation.json');
 const audit = json('ontology/data/derived/audit.json');
+const governance = json('ontology/data/derived/governance.json');
 const lumen = text('ontology/lumen.yaml');
+type Cell = { role: string; action: string; rule: string; events: number; verdicts: Record<string, number>; unmet: Record<string, number> };
+const cells = governance.matrix as Cell[];
+const cell = (role: string, action: string) => cells.find((c) => c.role === role && c.action === action)!;
 const py = (name: string) => text(`ontology/python/${name}`);
 const tickets = jsonl('llms/data/tickets.jsonl');
 const ticketsV2 = jsonl('data/data/tickets.v2.jsonl');
@@ -54,12 +59,12 @@ const CODE_OK: RegExp[] = [
 ];
 
 // A code quote that appears verbatim in the track's sources is pinned by that source text (the walkthrough spans).
-const SOURCES = [...['ontology.py', 'generate.py', 'grounding.py', 'audit.py'].map((f) => `ontology/python/${f}`), 'ontology/lumen.yaml']
+const SOURCES = [...['ontology.py', 'generate.py', 'grounding.py', 'audit.py', 'governance.py'].map((f) => `ontology/python/${f}`), 'ontology/lumen.yaml']
   .map(text)
   .join('\n');
 const codeOk = (span: string) => CODE_OK.some((re) => re.test(span)) || SOURCES.includes(span);
 
-const LESSONS = ['01-what', '02-lumen', '03-grounding', '04-capstone'];
+const LESSONS = ['01-what', '02-lumen', '03-grounding', '04-architectures', '05-capstone'];
 const read = (name: string) => readFileSync(join(lessonsDir, `${name}.mdx`), 'utf8');
 
 /** The lesson's prose and quiz: no fenced blocks (test_lesson_tryits.py checks those), imports or component tags. */
@@ -77,8 +82,8 @@ type Claim = [lesson: string, phrase: string, check: () => void];
 
 const CLAIMS: Claim[] = [
   // ── lesson 1 ──
-  ['01-what', 'It has 7 classes, 5 relations and 16 individuals', () => {
-    expect([onto.classes.length, onto.relations.length, onto.individuals.length]).toEqual([7, 5, 16]);
+  ['01-what', 'It has 9 classes, 5 relations and 27 individuals', () => {
+    expect([onto.classes.length, onto.relations.length, onto.individuals.length]).toEqual([9, 5, 27]);
   }],
   ['01-what', 'Watch step 4: that is where the rules come in', () => {
     const s = ontologyLayers.steps[3];
@@ -98,7 +103,7 @@ const CLAIMS: Claim[] = [
   }],
   ['01-what', 'It holds two packages, `pyyaml` and `pytest`', () => expect(text('ontology/requirements.txt').trim().split('\n')).toEqual(['pyyaml==6.0.3', 'pytest>=8'])],
   // ── lesson 2 ──
-  ['02-lumen', 'talks about: 7 of them', () => expect(onto.classes).toHaveLength(7)],
+  ['02-lumen', 'talks about: 9 of them', () => expect(onto.classes).toHaveLength(9)],
   ['02-lumen', 'exactly the 6 fields of `llms/data/tickets.jsonl`: `id`, `text`, `category`, `priority`, `tags` and `split`', () => {
     for (const t of tickets) expect(Object.keys(t)).toEqual(['id', 'text', 'category', 'priority', 'tags', 'split']);
     expect((onto.properties as { id: string; domain: string }[]).map((p) => [p.id, p.domain]).sort()).toEqual(
@@ -106,9 +111,13 @@ const CLAIMS: Claim[] = [
     );
   }],
   ['02-lumen', 'Named edges between classes, 5 of them', () => expect(onto.relations).toHaveLength(5)],
-  ['02-lumen', 'The named members of a class, 16 of them: the 6 categories, the 4 priorities and the 6 complaint products', () => {
-    expect(onto.individuals).toHaveLength(16);
-    expect(['Category', 'Priority', 'Product'].map((c) => individuals(c).length)).toEqual([6, 4, 6]);
+  ['02-lumen', 'The named members of a class, 27 of them: the 6 categories, the 4 priorities, the 6 complaint products, the 4 actions and the 7 agent roles', () => {
+    expect(onto.individuals).toHaveLength(27);
+    expect(['Category', 'Priority', 'Product', 'Action', 'AgentRole'].map((c) => individuals(c).length)).toEqual([6, 4, 6, 4, 7]);
+  }],
+  ['02-lumen', 'a table from each tool to the action it takes, and 11 permitted rows', () => {
+    expect(onto.actions.permitted).toHaveLength(11);
+    expect(hasSection(lumen, 6, 'Actions')).toBe(true);
   }],
   ["02-lumen", "The guide's rules, 25 of them", () => expect(constraints).toHaveLength(25)],
   ['02-lumen', 'from C1 to C6', () => expect(individuals('Category').map((i) => i.source)).toEqual(['C1', 'C2', 'C3', 'C4', 'C5', 'C6'])],
@@ -192,7 +201,70 @@ const CLAIMS: Claim[] = [
   }],
   ['03-grounding', 'The validation is section 2 of `grounding.py`', () => expect(hasSection(py('grounding.py'), 2, 'Validation')).toBe(true)],
   // ── lesson 4 ──
-  ['04-capstone', 'each rule the guide words has a constraint citing it, worded alike: the R0 bullets, the rule the `C2` and `C3` rows add after their first sentence, the tie-breakers, the priority bullets, the workaround paragraph and the sentence that closes the normal list', () => {
+  ['04-architectures', 'Section 6 of `lumen.yaml` does this', () => expect(hasSection(lumen, 6, 'Actions')).toBe(true)],
+  ['04-architectures', 'Of the 134 trace files, 30 are pattern demos with no tool calls, listed as skipped. The other 104 are desk runs. They hold 577 events: 277 tool calls, 240 handoffs and 60 answers to the write question. A run\'s recorded answer counts only where it attempted a write: in the other 44 runs nobody was asked.', () => {
+    expect(governance.totals).toMatchObject({ traces: 134, skipped: 30, unreadable: 0, desk_runs: 104, events: 577 });
+    // ruling A10: one answer per run that attempted a write; the other 44 of the 104 runs asked nobody
+    expect(governance.approvals).toEqual({ decline: 60 });
+    expect(governance.totals.desk_runs - governance.approvals.decline).toBe(44);
+    expect(governance.skipped.every((s: { reason: string }) => s.reason.startsWith('pattern demo'))).toBe(true);
+    const sum = (action: string) => cells.filter((c) => c.action === action).reduce((a, c) => a + c.events, 0);
+    expect([sum('read') + sum('write'), sum('escalate'), sum('approve')]).toEqual([277, 240, 60]);
+    expect(sum('approve')).toBe(sum('write'));
+  }],
+  ['04-architectures', '517 events are permitted, 60 are conditional and none is not permitted, so the gate is green. The 60 are every label write attempt: 18 by the single agent and 42 by the supervisor.', () => {
+    expect(governance.totals).toMatchObject({ permitted: 517, conditional: 60, not_permitted: 0 });
+    expect(governance.gate.ok).toBe(true);
+    expect([cell('single', 'write').events, cell('supervisor', 'write').events]).toEqual([18, 42]);
+    expect(cell('single', 'write').verdicts.conditional + cell('supervisor', 'write').verdicts.conditional).toBe(60);
+    expect(governance.tools.label_ticket).toBe('write');
+  }],
+  ['04-architectures', 'In every run where the supervisor attempted a write, its last review had passed, so `review_passed` was met each time.', () => {
+    expect(cell('supervisor', 'write').unmet).toEqual({ human_confirmed: 42 });
+  }],
+  ['04-architectures', 'in each of those runs the scripted person said no. The traces mark all 60 attempts refused, and 0 writes landed.', () => {
+    expect(governance.approvals).toEqual({ decline: 60 });
+    expect(governance.totals.writes_landed).toBe(0);
+    const writes = cells.filter((c) => c.action === 'write');
+    expect(writes.map((c) => (c as Cell & { landed: number }).landed)).toEqual(writes.map(() => 0));
+    expect(writes.reduce((a, c) => a + c.verdicts.conditional, 0)).toBe(60);
+  }],
+  ['04-architectures', 'the data track\'s contracts for the first column, lessons 2, 3 and 5 for the second, and this lesson for the third', () => {
+    // each column's sources say what its cells claim: the contracts carry types, a meaning line per field and quality
+    // rules; lesson 2 has the decision order and the rule kinds, lesson 3 the generated artefacts, lesson 5 the audit
+    const contract = text('data/contracts/tickets.v1.yaml');
+    expect(contract.match(/^ {6}meaning:/gm)).toHaveLength(6);
+    expect(contract).toContain('# ── 3. quality');
+    expect(read('02-lumen')).toContain('### Individuals carry the guide\'s order');
+    expect(read('02-lumen')).toContain('<Term t="checkable constraint" />');
+    expect(read('03-grounding')).toContain('<GroundingReport show="generated" />');
+    expect(read('05-capstone')).toMatch(/<AuditTable \/>/);
+    expect(read('04-architectures')).toContain('| Rule depth | Names, types, a line of meaning per field and quality rules | A decision order, checkable and manual rules |');
+  }],
+  ['04-architectures', 'Watch step 4: that is where a written rule meets the recorded runs', () => {
+    const s = ontologyArchitectures.steps[3];
+    expect(s.n).toBe(4);
+    expect(s.caption).toContain('governance.py reads every recorded agents run');
+  }],
+  ['04-architectures', 'The 17 cells marked NO have no events', () => {
+    const no = cells.filter((c) => c.rule === 'no');
+    expect(no).toHaveLength(17);
+    expect(no.every((c) => c.events === 0)).toBe(true);
+  }],
+  ['04-architectures', 'reads every recorded agents trace and judges each action against section 6.', () => {
+    expect(hasSection(lumen, 6, 'Actions')).toBe(true);
+    expect(py('governance.py')).toContain('Section 6 of ontology/lumen.yaml says which agent role may take which action');
+  }],
+  ['04-architectures', 'Each cell is a role and an action: the rule section 6 gives it', () => {
+    expect(cells).toHaveLength(governance.roles.length * governance.actions.length);
+    expect(onto.actions.permitted.map((r: { role: string; action: string }) => cell(r.role, r.action).rule).every((x: string) => x !== 'no')).toBe(true);
+  }],
+  ['04-architectures', 'Section 6 of the ontology holds the rules as data.', () => expect(hasSection(lumen, 6, 'Actions')).toBe(true)],
+  ['04-architectures', 'The verdicts are section 2 of `governance.py`.', () => expect(hasSection(py('governance.py'), 2, 'Rules, events and verdicts')).toBe(true)],
+  ['04-architectures', "The research worker's 141 reads are now outside the rules", () => expect(cell('research', 'read').events).toBe(141)],
+  ['04-architectures', '`governance.py` still exits with 0 after printing `RED`', () => expect(py('governance.py')).toContain('    _report(data)\n    return 0\n')],
+  ['04-architectures', 'writes nothing, and exits with status 1', () => expect(py('governance.py')).toContain('Nothing written")\n        return 1\n')],
+  ['05-capstone', 'each rule the guide words has a constraint citing it, worded alike: the R0 bullets, the rule the `C2` and `C3` rows add after their first sentence, the tie-breakers, the priority bullets, the workaround paragraph and the sentence that closes the normal list', () => {
     const texts = rowsOf('llms/data/labeling_guide.md').filter((r) => r.fact.startsWith('rule-text:'));
     const keys = texts.map((r) => r.fact.slice('rule-text:'.length));
     expect(keys.filter((k) => k.startsWith('R0.'))).toHaveLength(4);
@@ -202,7 +274,7 @@ const CLAIMS: Claim[] = [
     const cited = texts.map((r) => r.detail).join(' ');
     for (const c of onto.constraints as Entry[]) expect(cited, c.id).toContain(c.id);
   }],
-  ['04-capstone', 'The audit writes 82 rows across 7 artefacts: 49 for the guide, 11 for each prompt, 6 for the category map and 5 for the contracts. 81 agree, 1 disagrees, and none is missing.', () => {
+  ['05-capstone', 'The audit writes 82 rows across 7 artefacts: 49 for the guide, 11 for each prompt, 6 for the category map and 5 for the contracts. 81 agree, 1 disagrees, and none is missing.', () => {
     expect(rows).toHaveLength(82);
     expect(new Set(rows.map((r) => r.artefact)).size).toBe(7);
     expect(rowsOf('llms/data/labeling_guide.md')).toHaveLength(49);
@@ -211,36 +283,46 @@ const CLAIMS: Claim[] = [
     expect(rows.filter((r) => r.artefact.startsWith('data/contracts/'))).toHaveLength(5);
     expect(['agree', 'disagree', 'missing'].map((s) => rows.filter((r) => r.status === s).length)).toEqual([81, 1, 0]);
   }],
-  ['04-capstone', '`red: 1 disagree (data/contracts/tickets.v2.yaml enum:category); 0 missing`', () => {
+  ['05-capstone', '`red: 1 disagree (data/contracts/tickets.v2.yaml enum:category); 0 missing`', () => {
     expect(audit.gate).toEqual({ ok: false, disagree: 1, missing: 0, reason: 'red: 1 disagree (data/contracts/tickets.v2.yaml enum:category); 0 missing' });
   }],
-  ['04-capstone', 'someone checks the 60 gold labels against it', () => expect(tickets).toHaveLength(60)],
-  ['04-capstone', 'That holds even though none of the 60 rows in `tickets.v2.jsonl` uses `security` today', () => {
+  ['05-capstone', 'someone checks the 60 gold labels against it', () => expect(tickets).toHaveLength(60)],
+  ['05-capstone', 'That holds even though none of the 60 rows in `tickets.v2.jsonl` uses `security` today', () => {
     expect(ticketsV2).toHaveLength(60);
     expect(ticketsV2.filter((t) => t.category === 'security')).toEqual([]);
   }],
-  ['04-capstone', 'So the fix is a new major, `tickets.v3`, as a new file without `security`', () => {
+  ['05-capstone', 'So the fix is a new major, `tickets.v3`, as a new file without `security`', () => {
     // ruling O11: a removal is a new major; v2 is the current one, and no v3 exists yet
     expect(text('data/contracts/tickets.v2.yaml')).toContain('  version: 2\n  status: active');
     expect(existsSync(join(repo, 'data/contracts/tickets.v3.yaml'))).toBe(false);
   }],
-  ['04-capstone', '`audit.py` itself exits with 0 after printing `RED`', () => expect(py('audit.py')).toContain('    _report(data)\n    return 0\n')],
-  ['04-capstone', 'and exits with status 1 because it is red', () => {
-    expect(read('04-capstone')).toContain('sys.exit(0 if gate["ok"] else 1)');
+  ['05-capstone', '`audit.py` itself exits with 0 after printing `RED`', () => expect(py('audit.py')).toContain('    _report(data)\n    return 0\n')],
+  ['05-capstone', 'and exits with status 1 because it is red', () => {
+    expect(read('05-capstone')).toContain('sys.exit(0 if gate["ok"] else 1)');
     expect(audit.gate.ok).toBe(false);
   }],
-  ['04-capstone', 'The contracts\' rows come from section 5 of `audit.py`', () => expect(hasSection(py('audit.py'), 5, 'The data contracts')).toBe(true)],
-  ['04-capstone', 'The gate is section 6.', () => expect(hasSection(py('audit.py'), 6, 'The audit and the gate')).toBe(true)],
+  ['05-capstone', 'The contracts\' rows come from section 5 of `audit.py`', () => expect(hasSection(py('audit.py'), 5, 'The data contracts')).toBe(true)],
+  ['05-capstone', 'The gate is section 6.', () => expect(hasSection(py('audit.py'), 6, 'The audit and the gate')).toBe(true)],
 ];
 
 // The audit detail strings and the hand-written artefacts' text the lessons quote, pinned to the files they come from.
 const QUOTES: Claim[] = [
-  ['04-capstone', "The row's detail is `extra value the ontology lacks: security`", () => {
+  ['04-architectures', 'It gives each worker only the tools its job needs, so the drafter and the reviewer call none.', () => {
+    for (const r of ['drafter', 'reviewer']) for (const a of ['read', 'write']) expect(cell(r, a).events, `${r} ${a}`).toBe(0);
+    expect(text('agents/desk/python/supervisor.py')).toContain('offered = [HANDOFF] + (ops_schema if _passed(state) else [])');
+  }],
+  ['04-architectures', 'the supervisor desk offers the supervisor `label_ticket` only while the current draft\'s review is passed', () => {
+    expect(text('agents/desk/python/supervisor.py')).toContain('offered = [HANDOFF] + (ops_schema if _passed(state) else [])   # the gate: rebuilt every turn');
+  }],
+  ['04-architectures', 'The agents track\'s trajectory scorer, in `agents/evals/scorers.py`, checks the same rule for every write attempt in its evals', () => {
+    expect(text('agents/evals/scorers.py')).toContain('def review_at_labels(doc: dict)');
+  }],
+  ['05-capstone', "The row's detail is `extra value the ontology lacks: security`", () => {
     expect(rows.filter((r) => r.status !== 'agree')).toEqual([
       { artefact: 'data/contracts/tickets.v2.yaml', fact: 'enum:category', status: 'disagree', detail: 'extra value the ontology lacks: security' },
     ]);
   }],
-  ['04-capstone', 'Of the contracts, `tickets.v1` and `complaints.v1` agree, and `tickets.v2` agrees on `urgency` and disagrees on `category`', () => {
+  ['05-capstone', 'Of the contracts, `tickets.v1` and `complaints.v1` agree, and `tickets.v2` agrees on `urgency` and disagrees on `category`', () => {
     expect(rows.filter((r) => r.artefact.startsWith('data/contracts/')).map((r) => [r.artefact, r.fact, r.status, r.detail])).toEqual([
       ['data/contracts/complaints.v1.yaml', 'enum:product', 'agree', 'the 6 products'],
       ['data/contracts/tickets.v1.yaml', 'enum:category', 'agree', 'the 6 categories'],
@@ -249,14 +331,14 @@ const QUOTES: Claim[] = [
       ['data/contracts/tickets.v2.yaml', 'enum:urgency', 'agree', 'the 4 priorities'],
     ]);
   }],
-  ['04-capstone', 'Both prompts name every value and state the rule', () => {
+  ['05-capstone', 'Both prompts name every value and state the rule', () => {
     for (const p of ['v2_rules', 'v3_examples']) {
       const r = rowsOf(`llms/data/prompts.json#triage.${p}`);
       expect(r.every((x) => x.status === 'agree')).toBe(true);
       expect(r.find((x) => x.fact === 'rule:feature_request_never_above_normal')!.detail).toBe('stated ("never above normal")');
     }
   }],
-  ['04-capstone', 'rule U2, which already treats signs of unauthorized access as a priority', () => {
+  ['05-capstone', 'rule U2, which already treats signs of unauthorized access as a priority', () => {
     const c = constraints.find((x) => x.source === 'U2')!;
     expect([c.id, c.kind, c.text]).toEqual(['security', 'manual', 'Signs of unauthorized access or exposed data.']);
   }],
@@ -269,8 +351,8 @@ const QUOTES: Claim[] = [
     expect(generated.compare.tool.generated.input_schema.properties.label.enum).toEqual(individuals('Category').map((i) => i.id));
     expect(generated.compare.tool.generated.input_schema.properties.id.pattern).toBe('^t\\d{3}$');
   }],
-  ['01-what', 'read by four small Python files', () => expect(readdirSync(join(repo, 'ontology/python')).filter((f) => f.endsWith('.py')).sort()).toEqual(['audit.py', 'generate.py', 'grounding.py', 'ontology.py'])],
-  ['01-what', 'the loader, the generator, the validation and the audit are four small Python files', () => expect(readdirSync(join(repo, 'ontology/python')).filter((f) => f.endsWith('.py'))).toHaveLength(4)],
+  ['01-what', 'read by five small Python files', () => expect(readdirSync(join(repo, 'ontology/python')).filter((f) => f.endsWith('.py')).sort()).toEqual(['audit.py', 'generate.py', 'governance.py', 'grounding.py', 'ontology.py'])],
+  ['01-what', 'the loader, the generator, the validation, the audit and the governance check are five small Python files', () => expect(readdirSync(join(repo, 'ontology/python')).filter((f) => f.endsWith('.py'))).toHaveLength(5)],
   ['03-grounding', 'They differ only in enum order', () => {
     const { existing, generated: gen } = generated.compare.schema;
     const sortEnums = (s: { properties: Record<string, { enum?: string[] }> }) =>
@@ -319,14 +401,31 @@ const RECORDS: Record<string, number> = {
 };
 
 describe('ontology lessons: files, aids and anatomy', () => {
-  it('has the four lessons, each with the aid spec §5 names', () => {
+  it('has the five lessons, each with the aid spec §5 names', () => {
     expect(readdirSync(lessonsDir).filter((f) => f.endsWith('.mdx')).sort()).toEqual(LESSONS.map((l) => `${l}.mdx`));
     for (const l of LESSONS) expect(existsSync(join(lessonsDir, `${l}.mdx`)), l).toBe(true);
     expect(read('01-what')).toMatch(/<FlowDiagram diagram="ontology-layers" \/>/);
     expect(read('02-lumen')).toMatch(/<OntologyBrowser cls="Ticket" \/>/);
     expect(read('03-grounding')).toMatch(/<GroundingReport show="generated" \/>/);
     expect(read('03-grounding')).toMatch(/<GroundingReport show="validation" \/>/);
-    expect(read('04-capstone')).toMatch(/<AuditTable \/>/);
+    expect(read('04-architectures')).toMatch(/<FlowDiagram diagram="ontology-architectures" \/>/);
+    expect(read('04-architectures')).toMatch(/<ActionMatrix \/>/);
+    expect(read('04-architectures')).toContain('<CodeTabs source="ontology-lumen" section={6} pythonOnly />');
+    expect(read('04-architectures')).toContain('<CodeTabs source="ontology-governance" section={2} pythonOnly />');
+    expect(read('05-capstone')).toMatch(/<AuditTable \/>/);
+    expect(matter(read('05-capstone')).data.order).toBe(5);
+  });
+
+  it('lesson 4 names the three architectures, when to use each, the trade-offs table and the bottom line', () => {
+    const l4 = read('04-architectures');
+    for (const h of ['### Inferred context', '### Written definitions', '### Governed action', '### When to use each', '### The trade-offs']) expect(l4).toContain(h);
+    for (const s of ['<Term t="inferred context" />', '<Term t="governed action" />']) expect(l4).toContain(s);
+    const table = l4.split('### The trade-offs')[1].split('\n## ')[0];
+    const rowsOf4 = table.split('\n').filter((l) => l.startsWith('| ') && !l.startsWith('| |'));
+    expect(rowsOf4.map((l) => l.split('|')[1].trim())).toEqual(['Source of meaning', 'Time to value', 'Coverage', 'Rule depth', 'Auditability', 'Main limitation']);
+    expect(table).toContain('| | Inferred context | Written definitions | Governed action |');
+    expect(l4).toContain('Grounding settles what something means. Governance settles what an agent may do, wherever it acts.');
+    expect(l4).toContain('`data/contracts/*.yaml`');
   });
 
   it('gives lesson 2, and only lesson 2, the Go callout, and no lesson a "How Go does it" section (Python only)', () => {
@@ -358,8 +457,9 @@ describe('ontology lessons: files, aids and anatomy', () => {
       '- `constraints` corresponds to <Term t="SHACL" /> shapes',
       "The section names are the course's own, not the standards'.",
     ]) expect(l1).toContain(line);
-    // the five sections the mapping names are the file's, in order
-    expect([...lumen.matchAll(/^# ── \d\. (\w+)/gm)].map((m) => m[1])).toEqual(['Classes', 'Properties', 'Relations', 'Individuals', 'Constraints']);
+    expect(l1).toContain('- `actions` has no counterpart in those four. The closest W3C standard is ODRL');
+    // the six sections the mapping names are the file's, in order
+    expect([...lumen.matchAll(/^# ── \d\. (\w+)/gm)].map((m) => m[1])).toEqual(['Classes', 'Properties', 'Relations', 'Individuals', 'Constraints', 'Actions']);
   });
 
   it('lesson 1 carries the concept tour: the LLM page, the tools in one callout, and the out-of-scope list as what a production stack adds', () => {
@@ -380,14 +480,14 @@ describe('ontology lessons: files, aids and anatomy', () => {
     expect(checkable.map((c) => [c.id, c.source])).toEqual([['feature_request_never_above_normal', 'N-F']]);
   });
 
-  it('never calls a --check a gate: lesson 4 says it catches drift only', () => {
+  it('never calls a --check a gate: lesson 5 says it catches drift only', () => {
     for (const l of LESSONS) expect(read(l), l).not.toMatch(/--check`?\s+(is|acts as|works as|serves as)\s+(a|the)\s+(CI\s+)?gate/i);
-    expect(read('04-capstone')).toContain('### A drift check is not a gate');
-    expect(read('04-capstone')).toContain('so it catches drift: a stale file, or one edited by hand. It says nothing about what the file holds.');
+    expect(read('05-capstone')).toContain('### A drift check is not a gate');
+    expect(read('05-capstone')).toContain('so it catches drift: a stale file, or one edited by hand. It says nothing about what the file holds.');
   });
 
-  it('argues lesson 4\'s disagreement through with the data track\'s own versioning rule (ruling O11)', () => {
-    const l4 = read('04-capstone').split('### Who must change')[1].split('\n### ')[0];
+  it('argues lesson 5\'s disagreement through with the data track\'s own versioning rule (ruling O11)', () => {
+    const l4 = read('05-capstone').split('### Who must change')[1].split('\n### ')[0];
     for (const s of [
       '**A new contract version without `security`.**',
       '**A defined `security` category.**',
@@ -404,7 +504,7 @@ describe('ontology lessons: files, aids and anatomy', () => {
     expect(text('app/src/content/lessons/data/04-contract.mdx')).toContain('Renaming a field, removing one or changing its type breaks every reader that looks it up.');
     expect(text('data/contracts/tickets.v2.yaml')).toContain('enum: [billing, bug, account, feature_request, how_to, outage, security]');
     // quiz 1 grades exactly that reasoning; editing v2 in place is the distractor
-    const q1 = (matter(read('04-capstone')).data.quiz as { options: string[]; answer: number }[])[0];
+    const q1 = (matter(read('05-capstone')).data.quiz as { options: string[]; answer: number }[])[0];
     expect(q1.options[q1.answer]).toContain('Write tickets.v3 without security');
     expect(q1.options.findIndex((o) => o.startsWith('Edit tickets.v2 in place'))).not.toBe(q1.answer);
   });
@@ -424,7 +524,7 @@ describe('ontology lessons: every number is pinned', () => {
     let t = prose(lesson);
     for (const [l, phrase] of REAL) if (l === lesson) t = t.split(phrase).join(' ');
     const refs = [...t.matchAll(/\b[Ll]esson (\d)\b/g)].map((m) => Number(m[1]));
-    expect(refs.every((n) => n >= 1 && n <= 4), `${lesson} refers to ${refs}`).toBe(true);
+    expect(refs.every((n) => n >= 1 && n <= 5), `${lesson} refers to ${refs}`).toBe(true);
     t = t
       .replace(/\b[Ll]esson \d\b/g, ' ')
       .replace(/^\d\. /gm, ' ')
