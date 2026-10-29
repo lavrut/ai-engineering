@@ -315,34 +315,37 @@ constraints:
     source: C6
     text: Content the customer deleted themselves ("I emptied the trash by mistake, can I undo that?") is how_to.
 
-  # urgent
+  # urgent. Each priority rule's text is the guide's bullet verbatim, without its bold
+  # title; audit.py compares them after normalising (ruling O9).
   - id: data_loss
     kind: manual
     class: Ticket
     source: U1
     text: >-
-      Data loss is urgent: content the customer had is gone (emptied, missing or deleted,
-      whoever caused it) and the ticket doesn't say it was recovered. Content that is
-      duplicated or only at risk doesn't count.
+      Content the customer had is gone (emptied, missing or deleted, whoever caused it)
+      and the ticket doesn't say it was recovered. Content that is duplicated or only at
+      risk doesn't count.
   - id: security
     kind: manual
     class: Ticket
     source: U2
-    text: Signs of unauthorized access or exposed data are urgent.
+    text: Signs of unauthorized access or exposed data.
   - id: group_blocked
     kind: manual
     class: Ticket
     source: U3
     text: >-
-      More than one person can't sign in, or can't open or edit notes they already had:
-      urgent. Newly shared notebooks, share links or invites that don't work are H4, not U3.
+      More than one person (a team, an office, an organization) can't sign in, or can't
+      open or edit their notes. "Their notes" means notes those people already had and
+      could open. Newly shared notebooks, share links or invites that don't work are H4,
+      not U3.
   - id: large_wrongful_charge
     kind: manual
     class: Ticket
     source: U4
     text: >-
       A wrongly taken charge over $100, or one that caused an overdraft, or one the bank
-      is already disputing, is urgent. Threats to dispute don't count.
+      is already disputing. Threats to dispute don't count (R0).
 
   # high
   - id: wrongful_charge
@@ -350,7 +353,7 @@ constraints:
     class: Ticket
     source: H1
     text: >-
-      Money taken wrongly at any amount is high: a duplicate charge, a charge after
+      Money was taken wrongly at any amount: a duplicate charge, a charge after
       cancellation, the wrong amount, or a payment for something the customer didn't get.
   - id: one_person_blocked
     kind: manual
@@ -358,7 +361,7 @@ constraints:
     source: H2
     text: >-
       One customer can't sign in, or can't open their notes in an app they use, and the
-      ticket gives no workaround: high.
+      ticket gives no workaround.
   - id: workaround
     kind: manual
     class: Ticket
@@ -371,48 +374,59 @@ constraints:
     class: Ticket
     source: H3
     text: >-
-      A deadline today or tomorrow that the issue stands in the way of is high. Deadlines
-      that have already passed don't count.
+      The ticket states a deadline today or tomorrow ("before 5pm", "in two hours") that
+      the issue stands in the way of. Deadlines that have already passed don't count.
   - id: feature_down_for_group
     kind: manual
     class: Ticket
     source: H4
     text: >-
-      More than one person can't use a feature at all because it fails, and the ticket
-      gives no workaround: high. Missing permission is not a failure. A share link or shared
-      notebook several people can't open is H4, though its category is bug.
+      More than one person can't use a feature at all because it fails (errors, won't
+      open, doesn't show up), and the ticket gives no workaround. Missing permission to use
+      a feature is not a failure. H4 includes sharing: a share link or shared notebook that
+      several people can't open is H4, even though its category is `bug` (one customer's
+      item).
 
   # low
   - id: cosmetic
     kind: manual
     class: Ticket
     source: L1
-    text: A visual glitch that doesn't change what the customer can do is low.
+    text: >-
+      A visual glitch that doesn't change what the customer can do: a wrong count, a
+      misplaced underline, an icon's size.
   - id: general_question
     kind: manual
     class: Ticket
     source: L2
     text: >-
-      A question whose whole answer is general product information, with nothing broken
-      and no request for staff to act on this customer's account, is low.
+      A question whose whole answer is general product information (how to do X, whether
+      X is possible, what a plan includes, what happens when Y), with nothing broken and no
+      request for staff to act on this customer's account. A request for staff to act means
+      the customer asks support to do something ("please cancel my plan", "could you resend
+      my receipt", "remove this member for me"). Stating an intent and then asking how or
+      what ("I'm thinking of cancelling. Do I keep my notes?") is a question, so it's L2.
   - id: personal_wish
     kind: manual
     class: Ticket
     source: L3
-    text: A feature request that states no impact on a team, a purchase or a renewal is low.
+    text: A feature request that states no impact on a team, a purchase or a renewal.
 
-  # normal
-  - id: everything_else_is_normal
+  # normal: everything else. That includes the three bullets below.
+  - id: malfunction_is_normal
     kind: manual
     class: Ticket
     source: N
-    text: >-
-      Everything else is normal: a malfunction that needs investigation but doesn't block
-      access, or a request for staff to act, such as a custom or past invoice.
+    text: a malfunction that needs investigation but doesn't block access
+  - id: staff_request_is_normal
+    kind: manual
+    class: Ticket
+    source: N
+    text: a request for staff to act, such as a custom invoice or a copy of a past invoice
   - id: feature_request_with_business_impact
     kind: manual
     class: Ticket
     source: N-F
     text: >-
-      A feature request that names a business impact (a team that relies on it, a deal
-      being evaluated, a renewal) is normal.
+      a feature request that names a business impact: a team that relies on it, a deal
+      being evaluated, a renewal.

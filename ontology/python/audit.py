@@ -63,13 +63,20 @@ def normalise(text: str) -> str:
     return " ".join(text.split()).lower()
 
 
-def _diff(ours: str, theirs: str, where: str) -> str:
+def _diff(ours: str, theirs: str, where: str, ours_name: str = "ontology") -> str:
     """A unified diff of the normalised texts, one sentence or clause (split after `.`,
-    `;`, `:`) per line, so the changed clause stands out instead of one long line
-    against another."""
+    `;`, `:`) per line, then the changed words alone, so a one-word change in a long
+    sentence is visible without comparing two long lines by eye."""
     split = lambda t: re.split(r"(?<=[.;:])\s+", t)  # noqa: E731
-    lines = difflib.unified_diff(split(ours), split(theirs), "ontology", where, n=0, lineterm="")
-    return "\n".join(line for line in lines if not line.startswith("@@"))
+    lines = difflib.unified_diff(split(ours), split(theirs), ours_name, where, n=0, lineterm="")
+    out = [line for line in lines if not line.startswith("@@")]
+    a, b = ours.split(), theirs.split()
+    words = []
+    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
+        if op != "equal":
+            words.append(f"[-{' '.join(a[i1:i2])}-]{{+{' '.join(b[j1:j2])}+}}".replace("[--]", "").replace("{++}", ""))
+    out.append("changed words: " + " ".join(words))
+    return "\n".join(out)
 
 
 def _read(root: Path, rel: str) -> tuple[str | None, str]:
@@ -84,12 +91,83 @@ def _read(root: Path, rel: str) -> tuple[str | None, str]:
 
 # ── 2. The labelling guide ──────────────────────────────────────────────────
 # A category row of the guide's table: | C2 | `billing` | Money, charges, ... |
-TABLE_ROW = re.compile(r"^\|\s*(C\d+)\s*\|\s*`?([a-z_]+)`?\s*\|(.*)\|\s*$", re.M)
+TABLE_ROW = re.compile(r"^\|\s*(C\d+)\s*\|\s*`?([^|`]*?)`?\s*\|(.*)\|\s*$", re.M)
+# A priority heading (**urgent**: ...) and a numbered priority bullet (- **U1 Data loss.** text).
+PRIORITY_HEAD = re.compile(r"^\*\*(urgent|high|low|normal)\*\*:")
+RULE_BULLET = re.compile(r"^- \*\*([A-Z]\d+)\b[^*]*\*\*\s*(.*)$")
+NF_MARK = re.compile(r"\s*\(\*\*(N-F)\*\*\)")
+
+
+def guide_rules(text: str) -> list[tuple[str, str, str]]:
+    """(fact key, priority heading, text) for every bullet under the guide's priority
+    headings. Numbered bullets (U1 ... L3) are keyed by their id, without the bold title;
+    the normal rule's unnumbered bullets are N.1, N.2 ..., except the one marked (**N-F**),
+    which is N-F. A list bullet's trailing `;` is the list's punctuation, not the rule's."""
+    out, head, n = [], None, 0
+    for line in text.splitlines():
+        m = PRIORITY_HEAD.match(line)
+        if m:
+            head = m.group(1)
+            continue
+        if head is None or not line.startswith("- "):
+            if line.strip():
+                head = None  # any other paragraph or heading ends the list
+            continue
+        b = RULE_BULLET.match(line)
+        if b:
+            out.append((b.group(1), head, b.group(2)))
+        elif head == "normal":
+            body = line[2:].rstrip().rstrip(";")
+            if NF_MARK.search(body):
+                out.append(("N-F", head, NF_MARK.sub("", body)))
+            else:
+                n += 1
+                out.append((f"N.{n}", head, body))
+    return out
+
+
+def _priority_of(onto: O.Ontology, rid: str) -> str | None:
+    """The Priority individual whose `source` covers a rule id, by its letter: U1-U4 ->
+    urgent, H -> high, L -> low, N and N-F -> normal (source N)."""
+    for pid in _ids(onto, "Priority"):
+        if str(onto.individuals[pid].get("source", ""))[:1] == rid[:1]:
+            return pid
+    return None
+
+
+def _audit_priority_rules(onto: O.Ontology, text: str) -> list[dict]:
+    """Ruling O9: each guide bullet under a priority exists as a constraint with that
+    `source`, worded alike after O5 normalising. The priority individuals' `definition`s
+    are summaries and are not compared."""
+    out = []
+    for key, head, theirs in guide_rules(text):
+        rid = key.split(".")[0]
+        fact = f"rule-text:{key}"
+        cands = [(cid, c) for cid, c in onto.constraints.items() if c.get("source") == rid]
+        if not cands:
+            out.append(row(GUIDE, fact, "disagree", f"rule in guide, not in ontology: no constraint has source {rid} (guide, under {head}: {theirs})"))
+            continue
+        theirs_n = normalise(theirs)
+        same = [cid for cid, c in cands if normalise(str(c.get("text", ""))) == theirs_n]
+        notes = []
+        want = _priority_of(onto, rid)
+        if want != head:
+            notes.append(f"the guide lists {rid} under {head}; the ontology's {want or 'no priority'} covers it")
+        if not same:
+            best_id, best = max(((cid, normalise(str(c.get("text", "")))) for cid, c in cands),
+                                key=lambda p: difflib.SequenceMatcher(None, p[1], theirs_n).ratio())
+            notes.append(_diff(best, theirs_n, f"guide {key}", f"ontology {best_id}"))
+        if notes:
+            out.append(row(GUIDE, fact, "disagree", "\n".join(notes)))
+        else:
+            out.append(row(GUIDE, fact, "agree", f"worded alike ({', '.join(same)})"))
+    return out
 
 
 def audit_guide(onto: O.Ontology, root: Path) -> list[dict]:
     """Every constraint's rule id appears in the guide; every category's definition is the
-    guide's table text for that category, worded alike after normalising."""
+    guide's table text for its rule id, worded alike after normalising; every priority
+    bullet is a constraint worded alike."""
     text, why = _read(root, GUIDE)
     if text is None:
         return [row(GUIDE, "file", "missing", why)]
@@ -100,24 +178,34 @@ def audit_guide(onto: O.Ontology, root: Path) -> list[dict]:
             out.append(row(GUIDE, f"rule:{rid}", "agree", f"{rid} is in the guide ({', '.join(named)})"))
         else:
             out.append(row(GUIDE, f"rule:{rid}", "missing", f"{rid} is not in the guide; the ontology cites it for {', '.join(named)}"))
-    table = {m.group(2): (m.group(1), m.group(3).strip()) for m in TABLE_ROW.finditer(text)}
-    for cid in _ids(onto, "Category"):
+    # The table is keyed by rule id (C1-C6); the category cell is a cross-check.
+    table = {m.group(1): (m.group(2).strip(), m.group(3).strip()) for m in TABLE_ROW.finditer(text)}
+    cats = _ids(onto, "Category")
+    sources = {}
+    for cid in cats:
         ind = onto.individuals[cid]
+        rid = ind.get("source")
+        sources[rid] = cid
         fact = f"definition:{cid}"
-        if cid not in table:
-            out.append(row(GUIDE, fact, "missing", f"no row for {cid} in the guide's category table"))
+        if rid not in table:
+            out.append(row(GUIDE, fact, "missing", f"no row {rid} for {cid} in the guide's category table"))
             continue
-        rid, theirs = table[cid]
+        cell, theirs = table[rid]
         ours_n, theirs_n = normalise(str(ind.get("definition", ""))), normalise(theirs)
         notes = []
-        if ind.get("source") != rid:
-            notes.append(f"the guide gives {cid} rule {rid}; the ontology says {ind.get('source')}")
+        if cell != cid:
+            notes.append(f"the guide calls {rid} {cell}; the ontology says {cid}")
         if ours_n != theirs_n:
             notes.append(_diff(ours_n, theirs_n, f"guide {rid}"))
         if notes:
             out.append(row(GUIDE, fact, "disagree", "\n".join(notes)))
         else:
             out.append(row(GUIDE, fact, "agree", f"{rid} worded alike"))
+    for rid, (cell, _) in table.items():
+        if rid not in sources:
+            what = f"{cell} is no Category in the ontology" if cell not in cats else f"the ontology gives {cell} rule {onto.individuals[cell].get('source')}"
+            out.append(row(GUIDE, f"category-row:{rid}", "disagree", f"guide row {rid} {cell}: {what}"))
+    out += _audit_priority_rules(onto, text)
     return out
 
 

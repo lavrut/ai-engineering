@@ -185,3 +185,59 @@ def test_audit_json_check(tmp_path, capsys):
     assert A.main(["--check", "--out", str(out)]) == 1
     # The committed file is current.
     assert A.main(["--check"]) == 0
+
+
+# ── Fix round 1: priorities per guide bullet (ruling O9); the table keyed by rule id ──
+def _reword_guide(tmp_path, old, new):
+    root = _copy(tmp_path)
+    guide = root / "llms/data/labeling_guide.md"
+    text = guide.read_text(encoding="utf-8")
+    assert old in text
+    guide.write_text(text.replace(old, new, 1), encoding="utf-8")
+    return root
+
+
+def test_live_priority_bullets_each_have_a_verbatim_constraint():
+    rows = _rows(A.audit(_onto(), ROOT)["rows"], "llms/data/labeling_guide.md")
+    facts = {r["fact"]: r for r in rows if r["fact"].startswith("rule-text:")}
+    want = {f"rule-text:{i}" for i in ("U1", "U2", "U3", "U4", "H1", "H2", "H3", "H4",
+                                       "L1", "L2", "L3", "N.1", "N.2", "N-F")}
+    assert set(facts) == want
+    assert all(r["status"] == "agree" for r in facts.values()), [r for r in facts.values() if r["status"] != "agree"]
+
+
+def test_reworded_priority_bullet_is_disagree_with_diff(tmp_path):
+    root = _reword_guide(tmp_path, "whoever caused it", "whoever deleted it")
+    rows = A.audit(_onto(), root)["rows"]
+    [r] = _rows(rows, "llms/data/labeling_guide.md", "rule-text:U1")
+    assert r["status"] == "disagree"
+    assert "--- ontology data_loss" in r["detail"]
+    assert "whoever caused it" in r["detail"] and "whoever deleted it" in r["detail"]
+    assert "llms/data/labeling_guide.md rule-text:U1" in A.gate(rows)["reason"]
+
+
+def test_guide_bullet_not_in_ontology_is_disagree(tmp_path):
+    root = _reword_guide(tmp_path, "- **U2 Security.**", "- **U5 Spam wave.** Many spam notes appear at once.\n- **U2 Security.**")
+    [r] = _rows(A.audit(_onto(), root)["rows"], "llms/data/labeling_guide.md", "rule-text:U5")
+    assert r["status"] == "disagree" and "rule in guide, not in ontology" in r["detail"]
+
+
+def test_renamed_category_cell_is_disagree(tmp_path):
+    root = _reword_guide(tmp_path, "| C2 | `billing` |", "| C2 | `payments` |")
+    [r] = _rows(A.audit(_onto(), root)["rows"], "llms/data/labeling_guide.md", "definition:billing")
+    assert r["status"] == "disagree"
+    assert "payments" in r["detail"] and "billing" in r["detail"]
+
+
+def test_added_guide_row_is_disagree(tmp_path):
+    c6 = "| C6 | `how_to` |"
+    root = _copy(tmp_path)
+    guide = root / "llms/data/labeling_guide.md"
+    lines = guide.read_text(encoding="utf-8").splitlines(keepends=True)
+    i = next(n for n, line in enumerate(lines) if line.startswith(c6))
+    lines.insert(i + 1, "| C7 | `security` | Signs of an attack on the service. |\n")
+    guide.write_text("".join(lines), encoding="utf-8")
+    rows = A.audit(_onto(), root)["rows"]
+    [r] = _rows(rows, "llms/data/labeling_guide.md", "category-row:C7")
+    assert r["status"] == "disagree" and "security" in r["detail"]
+    assert not A.gate(rows)["ok"]

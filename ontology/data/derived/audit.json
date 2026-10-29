@@ -74,6 +74,90 @@
     },
     {
       "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (wrongful_charge)",
+      "fact": "rule-text:H1",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (one_person_blocked)",
+      "fact": "rule-text:H2",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (deadline_within_24_hours)",
+      "fact": "rule-text:H3",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (feature_down_for_group)",
+      "fact": "rule-text:H4",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (cosmetic)",
+      "fact": "rule-text:L1",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (general_question)",
+      "fact": "rule-text:L2",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (personal_wish)",
+      "fact": "rule-text:L3",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (feature_request_with_business_impact)",
+      "fact": "rule-text:N-F",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (malfunction_is_normal)",
+      "fact": "rule-text:N.1",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (staff_request_is_normal)",
+      "fact": "rule-text:N.2",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (data_loss)",
+      "fact": "rule-text:U1",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (security)",
+      "fact": "rule-text:U2",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (group_blocked)",
+      "fact": "rule-text:U3",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (large_wrongful_charge)",
+      "fact": "rule-text:U4",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
       "detail": "C1 is in the guide (one_report_is_not_an_outage)",
       "fact": "rule:C1",
       "status": "agree"
@@ -140,7 +224,7 @@
     },
     {
       "artefact": "llms/data/labeling_guide.md",
-      "detail": "N is in the guide (everything_else_is_normal)",
+      "detail": "N is in the guide (malfunction_is_normal, staff_request_is_normal)",
       "fact": "rule:N",
       "status": "agree"
     },
