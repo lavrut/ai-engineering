@@ -23,27 +23,11 @@ func pyIsSpace(r rune) bool {
 	return unicode.IsSpace(r) || (r >= 0x1c && r <= 0x1f)
 }
 
-// splitLines is Python's str.splitlines: every line break Python knows, \r\n as one.
+// splitLines splits JSONL text into lines as contract.py does: only \n ends a row, after
+// universal newlines, so U+2028, U+2029 and U+0085 (which JSON allows raw in a string) do not.
 func splitLines(s string) []string {
-	var out []string
-	start := 0
-	for i, r := range s {
-		switch r {
-		case '\n', '\r', '\v', '\f', 0x1c, 0x1d, 0x1e, 0x85, 0x2028, 0x2029:
-		default:
-			continue
-		}
-		if r == '\n' && i > 0 && s[i-1] == '\r' {
-			start = i + 1
-			continue
-		}
-		out = append(out, s[start:i])
-		start = i + utf8.RuneLen(r)
-	}
-	if start < len(s) {
-		out = append(out, s[start:])
-	}
-	return out
+	s = strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\r", "\n")
+	return strings.Split(s, "\n")
 }
 
 // MaxDepth is ruling D16's nesting cap, the same number in contract.py.

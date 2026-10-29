@@ -173,8 +173,8 @@ const CLAIMS: Claim[] = [
     expect(goSrc('contract.go')).toContain('"string", "integer", "number", "boolean", "object", "array"');
   }],
   // ── lesson 5 ──
-  ['05-enforce', '`data/fixtures/cases.jsonl` holds 28 cases', () => expect(cases).toHaveLength(28)],
-  ['05-enforce', '`validate_test.go` runs the 28 fixture cases in Go as well', () => expect(goSrc('validate_test.go')).toContain('func TestCasesMatchFixtures(')],
+  ['05-enforce', '`data/fixtures/cases.jsonl` holds 29 cases', () => expect(cases).toHaveLength(29)],
+  ['05-enforce', '`validate_test.go` runs the 29 fixture cases in Go as well', () => expect(goSrc('validate_test.go')).toContain('func TestCasesMatchFixtures(')],
   ['05-enforce', 'nesting deeper than 64 and a lone surrogate escape', () => {
     expect(py('contract.py')).toContain('MAX_DEPTH = 64');
     expect(goSrc('rules.go')).toContain('const MaxDepth = 64');
@@ -310,7 +310,8 @@ describe('data lessons: files, aids and anatomy', () => {
       '- `schema` corresponds to its schema.',
       '- `quality` corresponds to its data quality rules.',
       "- `servicing` corresponds to its service-level agreement (`slaProperties`)",
-      '- `consumers`, together with `owner` in `info`, corresponds to its team and roles',
+      '- `consumers`, together with `owner` in `info`, is closest to its team and roles',
+      'ODCS records the access roles readers hold, not a list of the readers themselves',
     ]) expect(l1).toContain(line);
     // quiz 3 no longer claims the course uses ODCS's section names, nor that every named tool reads ODCS
     const q3 = (matter(l1).data.quiz as { question: string; options: string[]; answer: number }[])[2];

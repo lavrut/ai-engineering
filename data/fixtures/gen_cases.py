@@ -192,6 +192,11 @@ def cases() -> list[dict]:
               v("type", "id", True, "all values are integer"), v("type", "name", True, "all values are string")],
              dataset='{"id": 1, "name": "\\ud800"}\n{"id": 2, "name": "\\ud83d\\ude00"}\n'
                      '{"id": 3, "name": "\\udc00x"}\n{"id": 4, "name": "\\\\ud800"}\n'),
+        # JSON allows U+2028, U+2029 and U+0085 raw inside a string; only \n ends a JSONL row
+        case("raw-unicode-line-separators-in-a-string", contract([field("id", "integer", True), field("s")]),
+             [FRESH, v("required", "id", True, "present in 2 rows"),
+              v("type", "id", True, "all values are integer"), v("type", "s", True, "all values are string")],
+             dataset='{"id": 1, "s": "a\u2028b\u2029c\u0085d"}\n{"id": 2, "s": "e"}\n'),
     ]
 
 

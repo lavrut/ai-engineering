@@ -269,7 +269,7 @@ def test_cases_file_matches_generator():
 
 
 def test_every_fixture_case_reproduces():
-    lines = (HERE.parents[1] / "fixtures" / "cases.jsonl").read_text().splitlines()
+    lines = (HERE.parents[1] / "fixtures" / "cases.jsonl").read_text(encoding="utf-8").split("\n")[:-1]
     assert len(lines) >= 12
     names = set()
     for line in lines:
@@ -311,7 +311,7 @@ ALLOWED = [
 ]
 REJECTED = [
     ("(?i)abc", "(?i"), ("(?x)a", "(?x"), ("(?a)a", "(?a"), ("(?=x)", "(?="), ("(?!x)", "(?!"),
-    ("(?<=A)B", "(?<"), ("(?P<n>a)", "(?P"), ("(?#c)", "(?#"), ("(?>a)", "(?>"),
+    ("(?<=A)B", "(?<"), ("(?P<n>a)", "(?P"), ("(a)(?P=n)", "(?P"), ("(?#c)", "(?#"), ("(?>a)", "(?>"),
     (r"(a)\1", r"\1"), ("\\" + "u0041", r"\u"), (r"\N{LATIN SMALL LETTER A}", r"\N"), (r"\p{L}+", r"\p"),
     (r"\Aab", r"\A"), (r"ab\Z", r"\Z"), (r"a\b", r"\b"), (r"a\B", r"\B"), (r"\n", r"\n"), ("a\\", "\\"),
     ("[[:alpha:]]", "["), (r"[\b]", r"\b"), ("[]", "[]"), ("[^]", "[^]"), ("[abc", "["), ("[z-a]", "z-a"),

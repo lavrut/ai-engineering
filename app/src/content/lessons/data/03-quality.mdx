@@ -80,7 +80,7 @@ Section 2 measures freshness from git, as of a date.
 
 <CodeTabs source="data-quality" section={2} />
 
-- `["git", "log", "-1", "--format=%ct", "--", path.name]` asks git for the Unix time of the file's last commit. Without git, as in a zip download, `commit_time` returns `None`, and freshness reads "unknown: no git date" and passes.
+- `["git", "log", "-1", "--format=%at", "--", path.name]` asks git for the Unix time of the file's last commit, as authored: the author time survives a rebase or a cherry-pick, which rewrite the commit time. Without the full git history, as in a zip download or a shallow clone, `commit_time` returns `None`, and freshness reads "unknown: no git date" and passes.
 - `ref = datetime.combine(as_of or today(), datetime.min.time(), timezone.utc).timestamp()` is the start of the as-of day, in UTC, so the same date gives the same age on any machine.
 - `return round(max(0.0, ref - stamp) / 86400, 1)` turns seconds into days, to one decimal place, never negative.
 

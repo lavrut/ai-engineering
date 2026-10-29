@@ -86,12 +86,15 @@ def has_history(where: Path) -> bool:
 
 
 def commit_time(path: Path) -> int | None:
-    """Unix time of the file's last commit; None without full history, outside a checkout, or uncommitted."""
+    """Unix author time of the file's last commit; None without full history, outside a checkout, or uncommitted.
+
+    Author time, not commit time: a rebase or cherry-pick rewrites the commit time and keeps this one.
+    """
     path = Path(path)
     if not path.parent.is_dir() or not has_history(path.parent):
         return None
     try:
-        p = subprocess.run(["git", "log", "-1", "--format=%ct", "--", path.name],
+        p = subprocess.run(["git", "log", "-1", "--format=%at", "--", path.name],
                            cwd=path.parent, capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError):
         return None

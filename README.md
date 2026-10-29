@@ -385,7 +385,9 @@ Both print one line per verdict, `OK  rule field: detail` or `FAIL rule field: d
 .venv-data/bin/python data/python/quality.py --live    # freshness as of today; writes nothing
 ```
 
-Each writes its file under `data/data/` and prints what it found. `quality.py` measures each dataset's age from its last git commit as of the date stored in `verdicts.json`, so the committed file does not go stale; `--as-of YYYY-MM-DD` moves that date. `--live` asks about today instead, and starts failing once a dataset is older than its contract's `max_age_days` (365 days). That is the check doing its job. Ages come from commit times, so merge this track with a regular merge (not a squash) to keep them.
+Each writes its file under `data/data/` and prints what it found. `quality.py` measures each dataset's age from its last git commit as of the date stored in `verdicts.json`, so the committed file does not go stale; `--as-of YYYY-MM-DD` moves that date. `--live` asks about today instead, and starts failing once a dataset is older than its contract's `max_age_days` (365 days). That is the check doing its job. Ages come from each file's last commit, by author time, which a rebase or cherry-pick keeps; a squash merge makes one new commit and loses them, so merge this track with a regular merge.
+
+The catalogue and the verdicts read the other tracks' data in place, so a commit to a catalogued file in another track (re-recorded traces, a new saved model response, new ML reports) makes `catalog.py --check` and `quality.py --check` fail until you rerun `catalog.py`, `quality.py` and `gate.py` and commit what they write.
 
 ### Test the data code
 

@@ -113,7 +113,12 @@ def _in_git(root: Path) -> bool:
 
 
 def files(root: Path, pattern: str) -> list[str]:
-    """The dataset's files, relative to root, sorted; git-ignored files left out."""
+    """The dataset's files, relative to root, sorted; git-ignored files left out.
+
+    Outside git (a zip or `git archive` copy) nothing says what is ignored, so a file a
+    learner generated under a catalogued glob counts too, and the counts can differ from
+    a clone's; --check then reports the catalogue stale, which is the honest answer.
+    """
     found = sorted(p.relative_to(root).as_posix() for p in Path(root).glob(pattern) if p.is_file())
     if found and _in_git(root):
         p = _git(root, "check-ignore", "--stdin", stdin="\n".join(found) + "\n")

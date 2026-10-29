@@ -528,7 +528,9 @@ def parse_rows(text: str) -> Rows:
     if stripped.startswith("["):
         return Rows(problems=["invalid JSON array"])
     rows, problems = [], []
-    for n, line in enumerate(text.splitlines(), start=1):
+    # Only \n ends a row (after universal newlines): str.splitlines would also break inside a
+    # string on U+2028, U+2029 or U+0085, which JSON allows raw.
+    for n, line in enumerate(text.replace("\r\n", "\n").replace("\r", "\n").split("\n"), start=1):
         if not line.strip():
             continue
         bad = _scan(line)

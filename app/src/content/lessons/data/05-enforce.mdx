@@ -46,7 +46,7 @@ Both validators take a contract and a dataset and return the same verdicts, in t
 
 Two things hold them to it.
 
-- **Shared fixtures.** `data/fixtures/cases.jsonl` holds 28 cases: a small contract, a few rows and the verdicts expected, written by hand. Both validators must reproduce every case. The cases cover each rule passing and failing, the three file forms (JSON Lines, a JSON array, one object), a bad line, an empty file, a composite key, a stale file, and the two parse caps both validators share: nesting deeper than 64 and a lone surrogate escape, each a `parse` verdict instead of a crash.
+- **Shared fixtures.** `data/fixtures/cases.jsonl` holds 29 cases: a small contract, a few rows and the verdicts expected, written by hand. Both validators must reproduce every case. The cases cover each rule passing and failing, the three file forms (JSON Lines, a JSON array, one object), a bad line, an empty file, a composite key, a stale file, raw Unicode line separators inside a string (only a newline ends a row), and the two parse caps both validators share: nesting deeper than 64 and a lone surrogate escape, each a `parse` verdict instead of a crash.
 - **The twin test.** `data/python/tests/test_twin.py` runs both command lines on every case and on edge cases the fixtures leave open, and compares their output and exit codes byte for byte.
 
 ### Patterns mean the same thing in both
@@ -104,7 +104,7 @@ The Go twin is three files: `contract.go` (sections 1 to 5), `rules.go` (6 to 8)
 - **The composite key joins with a separator.** Python compares the JSON text of the list of key values. Go joins each value's JSON text with `"\x00"`, a byte no JSON text contains, so two different keys never join to the same string.
 - **It reads the JSON export.** The Go standard library has no YAML, so the twin reads `tickets.v1.contract.json`, which `contract.py --export` writes, and `--export --check` keeps it current.
 
-`validate_test.go` runs the 28 fixture cases in Go as well, and checks the pattern tables and the command line's output and exit code.
+`validate_test.go` runs the 29 fixture cases in Go as well, and checks the pattern tables and the command line's output and exit code.
 
 ## Try it
 
@@ -131,7 +131,7 @@ Run the twin test, which does the same for every fixture case and the edge cases
 The last line begins:
 
 ```text
-61 passed
+62 passed
 ```
 
 Then the Go tests:

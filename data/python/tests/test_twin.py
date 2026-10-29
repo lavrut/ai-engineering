@@ -19,7 +19,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 CONTRACT_PY = HERE.parent / "contract.py"
 GO_DIR = HERE.parents[1] / "go"
-CASES = [json.loads(line) for line in (HERE.parents[1] / "fixtures" / "cases.jsonl").read_text().splitlines()]
+CASES = [json.loads(line) for line in (HERE.parents[1] / "fixtures" / "cases.jsonl").read_text(encoding="utf-8").split("\n")[:-1]]
 
 needs_go = pytest.mark.skipif(shutil.which("go") is None, reason="go is not installed")
 
