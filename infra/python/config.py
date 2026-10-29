@@ -142,6 +142,34 @@ def load(path: Path, live: bool = False) -> Config:
         raw = yaml.safe_load(Path(path).read_text())
     except yaml.YAMLError as e:
         raise ConfigError(f"{path}: not valid YAML ({e})") from e
+    return build(raw, live)
+
+
+def from_dict(d: dict, live: bool = False) -> Config:
+    """A Config from the JSON export's shape (config.json, and a fixture case's merged config):
+    turned back into the YAML's shape, then validated by the same rules as load."""
+    if not isinstance(d, dict):
+        raise ConfigError("config must be a mapping")
+    keys = ("upstream", "models", "routes", "deny_unknown", "cache", "retry", "limit", "budgets",
+            "untagged", "traces_dir")
+    for k in d:
+        if k not in keys:
+            raise ConfigError(f"unknown key {k!r} at top level")
+    raw = {k: d[k] for k in ("upstream", "models", "cache", "retry", "limit") if k in d}
+    if isinstance(d.get("routes"), dict):
+        raw["routes"] = {**d["routes"], **({"*": "deny"} if d.get("deny_unknown") else {})}
+    if isinstance(d.get("budgets"), dict):
+        raw["budgets"] = {t: ({k: v for k, v in b.items() if not (k == "warn_usd" and v is None)}
+                              if isinstance(b, dict) else b) for t, b in d["budgets"].items()}
+        if "untagged" in d:
+            raw["budgets"]["untagged"] = d["untagged"]
+    if "traces_dir" in d:
+        raw["traces"] = {"dir": d["traces_dir"]}
+    return build(raw, live)
+
+
+def build(raw: Any, live: bool = False) -> Config:
+    """Every rule, over the YAML's shape."""
     if not isinstance(raw, dict):
         raise ConfigError("config must be a mapping")
     for k in raw:
