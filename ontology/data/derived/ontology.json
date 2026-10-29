@@ -42,21 +42,21 @@
       "id": "attempt_failed_is_how_to",
       "kind": "manual",
       "source": "C6",
-      "text": "\"Can I do X?\" when X didn't work: if the customer only says their attempt didn't work, it's how_to. It's bug when the ticket says X used to work or shows broken output (an error, broken images, missing content)."
+      "text": "\"Can I do X?\" when X didn't work. If the customer only says their attempt didn't work (\"I dragged a file onto the note and nothing happened\"), it's how_to. It's bug when the ticket says X used to work or shows broken output (an error, broken images, missing content)."
     },
     {
       "class": "Ticket",
       "id": "billing_beats_how_to",
       "kind": "manual",
       "source": "C2",
-      "text": "Money, charges, refunds, invoices, plans, discounts or payment methods: billing. This beats how_to: \"how do I update my billing address\" is billing."
+      "text": "This beats how_to: \"how do I update my billing address\" is billing."
     },
     {
       "class": "Ticket",
       "id": "change_x_is_account",
       "kind": "manual",
       "source": "C3",
-      "text": "A \"how do I change X\" question is account when X is on the C3 list (sign-in, password, two-factor, the account email, the profile/display name, deleting, merging or adding accounts, workspace admin and membership) and how_to otherwise (language, notifications, themes, sorting)."
+      "text": "A \"how do I change X\" question is account when X is on this list and how_to otherwise (language, notifications, themes, sorting)."
     },
     {
       "class": "Ticket",
@@ -223,7 +223,7 @@
       "id": "workaround",
       "kind": "manual",
       "source": "H2",
-      "text": "A workaround (for H2 and H4) is any way the ticket mentions to still get the result, even if slower or clumsier, such as reloading, opening the app, or using another device."
+      "text": "Workaround (for H2 and H4): any way the ticket mentions to still get the result, even if it's slower or clumsier, such as reloading, opening the app, or using another device. \"Export fails in the desktop app but works on the web\" means a workaround exists."
     },
     {
       "class": "Ticket",

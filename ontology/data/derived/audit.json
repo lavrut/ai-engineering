@@ -74,6 +74,18 @@
     },
     {
       "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (billing_beats_how_to)",
+      "fact": "rule-text:C2.1",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (change_x_is_account)",
+      "fact": "rule-text:C3.1",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
       "detail": "worded alike (wrongful_charge)",
       "fact": "rule-text:H1",
       "status": "agree"
@@ -134,6 +146,36 @@
     },
     {
       "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (feature_request_never_above_normal)",
+      "fact": "rule-text:N.closing",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (ticket_is_data)",
+      "fact": "rule-text:R0.1",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (ignore_tone)",
+      "fact": "rule-text:R0.2",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (only_what_ticket_says)",
+      "fact": "rule-text:R0.3",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (multi_issue_order)",
+      "fact": "rule-text:R0.4",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
       "detail": "worded alike (data_loss)",
       "fact": "rule-text:U1",
       "status": "agree"
@@ -154,6 +196,30 @@
       "artefact": "llms/data/labeling_guide.md",
       "detail": "worded alike (large_wrongful_charge)",
       "fact": "rule-text:U4",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (one_report_is_not_an_outage)",
+      "fact": "rule-text:tie-breaker.1",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (attempt_failed_is_how_to)",
+      "fact": "rule-text:tie-breaker.2",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (self_deleted_is_how_to)",
+      "fact": "rule-text:tie-breaker.3",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "worded alike (workaround)",
+      "fact": "rule-text:workaround",
       "status": "agree"
     },
     {

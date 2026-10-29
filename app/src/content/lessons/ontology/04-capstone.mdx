@@ -22,14 +22,14 @@ quiz:
       - A red gate is only a warning
     answer: 1
     explanation: Two questions, two answers. Is the committed file what the audit would write today? Yes, so the check passes. Does every artefact agree with the ontology? No, so the gate is red. A pipeline that should stop on disagreement reads the gate's own verdict, ok, from the file.
-  - question: The audit compares the guide's priority bullets with the ontology's manual constraints, word for word after normalising, even though no program can check those rules. Why compare them at all?
+  - question: The audit compares the guide's rules with the ontology's manual constraints, word for word after normalising, even though no program can check those rules. Why compare them at all?
     options:
       - Because a manual rule is still a fact the ontology states. If the guide's wording changes and the ontology's does not, people labelling from one and models prompted from the other apply different rules
       - To make the audit longer
       - Because the validator evaluates manual rules
       - Because the guide is generated from the ontology
     answer: 0
-    explanation: Manual means a person applies the rule, not that the rule may drift. The audit holds the text of every rule to the guide, so the ontology stays a faithful copy of what labellers read.
+    explanation: Manual means a person applies the rule, not that the rule may drift. The audit holds the text of every rule the ontology cites from the guide to the guide's own wording, so the ontology stays a faithful copy of what labellers read.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
 import AuditTable from '../../../components/ontology/AuditTable.astro';
@@ -42,7 +42,7 @@ Lesson 3 generated new artefacts from the ontology. The course already has old o
 
 ### What the audit compares
 
-- **The labelling guide**, `llms/data/labeling_guide.md`: every guide rule id the ontology cites is in the guide; each category's definition is worded alike; each priority bullet is worded alike, matched after normalising markdown, case and spacing.
+- **The labelling guide**, `llms/data/labeling_guide.md`: every guide rule id the ontology cites is in the guide; each category's definition is worded alike; and each rule the guide words has a constraint citing it, worded alike: the R0 bullets, the rule the `C2` and `C3` rows add after their first sentence, the tie-breakers, the priority bullets, the workaround paragraph and the sentence that closes the normal list. Texts are matched after normalising markdown, case and spacing. A constraint citing a guide id whose text matches none of these disagrees too. The priorities' one-line definitions are the ontology's summaries and are not compared.
 - **The two prompts that state rules**, `v2_rules` and `v3_examples` in `llms/data/prompts.json`: each names every category and every priority, and states the checkable rule, by its guide id or a phrase the ontology lists for it. `v1_basic` states no rules, so it states none of these facts; lesson 3 showed what that cost.
 - **The ML category map**, `ml/data/category_map.json`: every product individual is one of its categories.
 - **The data contracts**, `data/contracts/*.yaml`: each enum for `category`, `priority`, `urgency` or `product` holds exactly the ontology's values.
@@ -57,7 +57,7 @@ The gate is green when no row disagrees. A missing row is counted and allowed: a
 
 ### The result
 
-The audit writes 71 rows across 7 artefacts: 38 for the guide, 11 for each prompt, 6 for the category map and 5 for the contracts. 70 agree, 1 disagrees, and none is missing. The gate's verdict, as `audit.py` wrote it:
+The audit writes 82 rows across 7 artefacts: 49 for the guide, 11 for each prompt, 6 for the category map and 5 for the contracts. 81 agree, 1 disagrees, and none is missing. The gate's verdict, as `audit.py` wrote it:
 
 `red: 1 disagree (data/contracts/tickets.v2.yaml enum:category); 0 missing`
 
@@ -83,7 +83,7 @@ Every row of the audit, with the gate's verdict at the top as `audit.py` wrote i
 
 <AuditTable />
 
-The guide agrees on every rule id it is asked about, every category definition and every priority bullet. Both prompts name every value and state the rule. The category map holds every product. Of the contracts, `tickets.v1` and `complaints.v1` agree, and `tickets.v2` agrees on `urgency` and disagrees on `category`.
+The guide agrees on every rule id it is asked about, every category definition and every rule text. Both prompts name every value and state the rule. The category map holds every product. Of the contracts, `tickets.v1` and `complaints.v1` agree, and `tickets.v2` agrees on `urgency` and disagrees on `category`.
 
 ## The code
 
@@ -118,7 +118,7 @@ Run the audit into a scratch file. It prints the gate and every disagreement, an
 You should see:
 
 ```text
-wrote audit.json: 71 rows
+wrote audit.json: 82 rows
 gate: RED (1 disagree, 0 missing)
   disagree data/contracts/tickets.v2.yaml enum:category:
     extra value the ontology lacks: security
@@ -165,4 +165,4 @@ You should see:
 red: 1 disagree (data/contracts/tickets.v2.yaml enum:category); 0 missing
 ```
 
-A pipeline that runs this stops until the data track and the LLMs track settle what `security` means, or retire it in a new contract version. That is the track: one file that says what the words mean, artefacts generated from it, answers checked against it, and an audit that will not let the rest drift away.
+A pipeline that runs this stops until the data track and the LLMs track settle what `security` means, or retire it in a new contract version. That is the track: one file that says what the words mean, artefacts generated from it, answers checked against it, and an audit that checks, one row at a time, the facts the other artefacts state against it.

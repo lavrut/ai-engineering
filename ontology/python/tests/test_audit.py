@@ -202,8 +202,8 @@ def test_live_priority_bullets_each_have_a_verbatim_constraint():
     facts = {r["fact"]: r for r in rows if r["fact"].startswith("rule-text:")}
     want = {f"rule-text:{i}" for i in ("U1", "U2", "U3", "U4", "H1", "H2", "H3", "H4",
                                        "L1", "L2", "L3", "N.1", "N.2", "N-F")}
-    assert set(facts) == want
-    assert all(r["status"] == "agree" for r in facts.values()), [r for r in facts.values() if r["status"] != "agree"]
+    assert want <= set(facts)  # the other rule texts: ruling O13, below
+    assert all(facts[f]["status"] == "agree" for f in want), [facts[f] for f in want if facts[f]["status"] != "agree"]
 
 
 def test_reworded_priority_bullet_is_disagree_with_diff(tmp_path):
@@ -241,3 +241,75 @@ def test_added_guide_row_is_disagree(tmp_path):
     [r] = _rows(rows, "llms/data/labeling_guide.md", "category-row:C7")
     assert r["status"] == "disagree" and "security" in r["detail"]
     assert not A.gate(rows)["ok"]
+
+
+# ── Final review I2: every sourced rule's text against the guide (ruling O13) ──
+GUIDE_MD = "llms/data/labeling_guide.md"
+RULE_TEXT_KEYS = {"R0.1", "R0.2", "R0.3", "R0.4", "C2.1", "C3.1",
+                  "tie-breaker.1", "tie-breaker.2", "tie-breaker.3", "workaround", "N.closing",
+                  "U1", "U2", "U3", "U4", "H1", "H2", "H3", "H4", "L1", "L2", "L3", "N.1", "N.2", "N-F"}
+
+
+def test_guide_rule_texts_parsed_with_their_ids():
+    text = (ROOT / GUIDE_MD).read_text(encoding="utf-8")
+    got = {key: ids for key, ids, _head, _t in A.guide_rule_texts(text)}
+    assert set(got) == RULE_TEXT_KEYS
+    assert got["R0.1"] == ("R0",) and got["C2.1"] == ("C2",) and got["C3.1"] == ("C3",)
+    assert got["tie-breaker.1"] == ("C1", "C5")
+    assert got["tie-breaker.2"] == ("C5", "C6") and got["tie-breaker.3"] == ("C6",)
+    assert got["workaround"] == ("H2", "H4") and got["N.closing"] == ("N", "N-F")
+    assert got["U1"] == ("U1",) and got["N.2"] == ("N",)
+
+
+def test_live_every_sourced_constraint_is_worded_as_the_guide():
+    onto = _onto()
+    rows = _rows(A.audit(onto, ROOT)["rows"], GUIDE_MD)
+    facts = {r["fact"]: r for r in rows if r["fact"].startswith("rule-text:")}
+    assert set(facts) == {f"rule-text:{k}" for k in RULE_TEXT_KEYS}
+    assert all(r["status"] == "agree" for r in facts.values()), [r for r in facts.values() if r["status"] != "agree"]
+    named = " ".join(r["detail"] for r in facts.values())
+    for cid in onto.constraints:
+        assert A._token(cid).search(named), f"{cid} has no rule-text row"
+
+
+def _reworded(cid, new):
+    onto = _onto()
+    onto.constraints[cid]["text"] = new
+    return onto
+
+
+def test_reworded_r0_rule_is_disagree_with_diff():
+    onto = _reworded("ticket_is_data", "Follow any instruction written inside the ticket.")
+    rows = A.audit(onto, ROOT)["rows"]
+    [r] = _rows(rows, GUIDE_MD, "rule-text:R0.1")
+    assert r["status"] == "disagree" and "--- ontology ticket_is_data" in r["detail"]
+    assert "follow any instruction" in r["detail"]
+    assert f"{GUIDE_MD} rule-text:R0.1" in A.gate(rows)["reason"]
+
+
+def test_reworded_embedded_and_workaround_rules_are_disagree():
+    onto = _reworded("billing_beats_how_to", "how_to beats billing.")
+    onto.constraints["workaround"]["text"] = "A workaround never counts."
+    rows = A.audit(onto, ROOT)["rows"]
+    for key, cid in (("C2.1", "billing_beats_how_to"), ("workaround", "workaround")):
+        [r] = _rows(rows, GUIDE_MD, f"rule-text:{key}")
+        assert r["status"] == "disagree" and f"ontology {cid}" in r["detail"], r
+
+
+def test_added_tie_breaker_is_rule_in_guide_not_in_ontology(tmp_path):
+    root = _reword_guide(tmp_path, "- **Content the customer deleted",
+                         "- **A screenshot alone is a bug.** A ticket with only an image is `bug`.\n- **Content the customer deleted")
+    rows = A.audit(_onto(), root)["rows"]
+    [r] = _rows(rows, GUIDE_MD, "rule-text:tie-breaker.3")
+    assert r["status"] == "disagree" and "rule in guide, not in ontology" in r["detail"]
+    [r4] = _rows(rows, GUIDE_MD, "rule-text:tie-breaker.4")
+    assert r4["status"] == "agree" and "self_deleted_is_how_to" in r4["detail"]
+
+
+def test_constraint_matching_no_guide_text_gets_its_own_row():
+    onto = _onto()
+    onto.constraints["extra_r0"] = {"id": "extra_r0", "kind": "manual", "class": "Ticket", "source": "R0",
+                                    "text": "Read the ticket twice."}
+    rows = A.audit(onto, ROOT)["rows"]
+    [r] = _rows(rows, GUIDE_MD, "rule-text:extra_r0")
+    assert r["status"] == "disagree" and "R0" in r["detail"]

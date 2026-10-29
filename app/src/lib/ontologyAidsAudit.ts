@@ -39,7 +39,7 @@ export function auditCounts(rows: AuditRowJson[]): Record<AuditStatus, number> {
 /** The rows the filter keeps: every row, or only those that do not agree. */
 export const auditShown = (rows: AuditRowJson[], disagreeOnly: boolean) => (disagreeOnly ? rows.filter((r) => r.status !== 'agree') : rows);
 
-/** "71 facts from 7 artefacts: 70 agree, 1 disagree, 0 missing. Showing all 71." */
+/** "82 facts from 7 artefacts: 81 agree, 1 disagree, 0 missing. Showing all 82." */
 export function auditLine(p: AuditTableProps, disagreeOnly: boolean): string {
   const c = auditCounts(p.rows);
   const showing = disagreeOnly ? `Showing the ${auditShown(p.rows, true).length} that disagree or are missing.` : `Showing all ${p.rows.length}.`;

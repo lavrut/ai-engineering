@@ -233,6 +233,8 @@ individuals:
 #   to be checked. Category and priority being in range is carried by the
 #   properties' ranges above.
 constraints:
+  # The guide gives this sentence no id; it closes the normal list, beside the N-F
+  # bullet it limits, so it is cited as N-F. audit.py matches it to that sentence.
   - id: feature_request_never_above_normal
     kind: checkable
     class: Ticket
@@ -276,7 +278,9 @@ constraints:
       highest priority. On a tie, it's the one mentioned first. (3) Apply the category
       table to the main issue only. The ticket gets the main issue's category and priority.
 
-  # Category tie-breakers
+  # Category tie-breakers, and the rule the C2 and C3 rows embed after their first
+  # sentence. Each text is the guide's verbatim, so "this" in C2 and C3 means the
+  # category's row (its definition above); audit.py compares them (ruling O13).
   - id: one_report_is_not_an_outage
     kind: manual
     class: Ticket
@@ -290,24 +294,21 @@ constraints:
     class: Ticket
     source: C2
     text: >-
-      Money, charges, refunds, invoices, plans, discounts or payment methods: billing. This
-      beats how_to: "how do I update my billing address" is billing.
+      This beats how_to: "how do I update my billing address" is billing.
   - id: change_x_is_account
     kind: manual
     class: Ticket
     source: C3
     text: >-
-      A "how do I change X" question is account when X is on the C3 list (sign-in,
-      password, two-factor, the account email, the profile/display name, deleting, merging
-      or adding accounts, workspace admin and membership) and how_to otherwise (language,
-      notifications, themes, sorting).
+      A "how do I change X" question is account when X is on this list and how_to
+      otherwise (language, notifications, themes, sorting).
   - id: attempt_failed_is_how_to
     kind: manual
     class: Ticket
     source: C6
     text: >-
-      "Can I do X?" when X didn't work: if the customer only says their attempt didn't
-      work, it's how_to. It's bug when the ticket says X used to work or shows broken
+      "Can I do X?" when X didn't work. If the customer only says their attempt didn't
+      work ("I dragged a file onto the note and nothing happened"), it's how_to. It's bug when the ticket says X used to work or shows broken
       output (an error, broken images, missing content).
   - id: self_deleted_is_how_to
     kind: manual
@@ -316,7 +317,7 @@ constraints:
     text: Content the customer deleted themselves ("I emptied the trash by mistake, can I undo that?") is how_to.
 
   # urgent. Each priority rule's text is the guide's bullet verbatim, without its bold
-  # title; audit.py compares them after normalising (ruling O9).
+  # title; audit.py compares them after normalising (rulings O9, O13).
   - id: data_loss
     kind: manual
     class: Ticket
@@ -367,8 +368,10 @@ constraints:
     class: Ticket
     source: H2
     text: >-
-      A workaround (for H2 and H4) is any way the ticket mentions to still get the result,
-      even if slower or clumsier, such as reloading, opening the app, or using another device.
+      Workaround (for H2 and H4): any way the ticket mentions to still get the result,
+      even if it's slower or clumsier, such as reloading, opening the app, or using another
+      device. "Export fails in the desktop app but works on the web" means a workaround
+      exists.
   - id: deadline_within_24_hours
     kind: manual
     class: Ticket

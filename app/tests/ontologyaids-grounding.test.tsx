@@ -174,7 +174,7 @@ describe('GroundingReport (validation)', () => {
 describe('audit table data', () => {
   it('takes every row by default, the artefacts in audit.json order, and the gate as written', () => {
     const p = auditTableProps(data.audit);
-    expect(p.rows).toHaveLength(71);
+    expect(p.rows).toHaveLength(82);
     expect(p.artefacts).toEqual([
       'data/contracts/complaints.v1.yaml',
       'data/contracts/tickets.v1.yaml',
@@ -186,7 +186,7 @@ describe('audit table data', () => {
     ]);
     expect(p.narrowed).toBe(false);
     expect(p.gate.reason).toBe('red: 1 disagree (data/contracts/tickets.v2.yaml enum:category); 0 missing');
-    expect(auditCounts(p.rows)).toEqual({ agree: 70, disagree: 1, missing: 0 });
+    expect(auditCounts(p.rows)).toEqual({ agree: 81, disagree: 1, missing: 0 });
   });
 
   it('narrows to the artefacts a lesson names, and refuses one the audit does not have', () => {
@@ -204,17 +204,17 @@ describe('audit table data', () => {
 
   it('says what the table shows', () => {
     const p = auditTableProps(data.audit);
-    expect(auditLine(p, false)).toBe('71 facts from 7 artefacts: 70 agree, 1 disagree, 0 missing. Showing all 71.');
-    expect(auditLine(p, true)).toBe('71 facts from 7 artefacts: 70 agree, 1 disagree, 0 missing. Showing the 1 that disagree or are missing.');
+    expect(auditLine(p, false)).toBe('82 facts from 7 artefacts: 81 agree, 1 disagree, 0 missing. Showing all 82.');
+    expect(auditLine(p, true)).toBe('82 facts from 7 artefacts: 81 agree, 1 disagree, 0 missing. Showing the 1 that disagree or are missing.');
   });
 });
 
 describe('AuditTable', () => {
   it('shows one row per artefact per fact, and the gate verdict verbatim', () => {
     render(<AuditTable {...auditTableProps(data.audit)} />);
-    expect(live()).toBe('71 facts from 7 artefacts: 70 agree, 1 disagree, 0 missing. Showing all 71.');
+    expect(live()).toBe('82 facts from 7 artefacts: 81 agree, 1 disagree, 0 missing. Showing all 82.');
     const rows = within(screen.getByRole('table', { name: 'Audit rows' })).getAllByRole('row').slice(1);
-    expect(rows).toHaveLength(71);
+    expect(rows).toHaveLength(82);
     expect(rows[0].textContent).toBe('data/contracts/complaints.v1.yamlenum:product✓ AGREEthe 6 products');
     expect(rows[3].textContent).toBe('data/contracts/tickets.v2.yamlenum:category✗ DISAGREEextra value the ontology lacks: security');
     const status = screen.getByRole('status');
@@ -225,7 +225,7 @@ describe('AuditTable', () => {
       'data/contracts/complaints.v1.yaml100',
       'data/contracts/tickets.v1.yaml200',
       'data/contracts/tickets.v2.yaml110',
-      'llms/data/labeling_guide.md3800',
+      'llms/data/labeling_guide.md4900',
       'llms/data/prompts.json#triage.v2_rules1100',
       'llms/data/prompts.json#triage.v3_examples1100',
       'ml/data/category_map.json600',

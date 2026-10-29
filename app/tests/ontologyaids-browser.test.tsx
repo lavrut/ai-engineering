@@ -87,7 +87,7 @@ describe('the derived data', () => {
     expect(Object.keys(data.generated.compare)).toEqual(['definitions', 'schema', 'tool']);
     expect(data.validation.totals).toEqual({ records: 700, violations: { feature_request_never_above_normal: 7 } });
     expect(Object.keys(data.validation.sources)).toHaveLength(16);
-    expect(data.audit.rows).toHaveLength(71);
+    expect(data.audit.rows).toHaveLength(82);
     expect(data.audit.gate).toEqual({ disagree: 1, missing: 0, ok: false, reason: 'red: 1 disagree (data/contracts/tickets.v2.yaml enum:category); 0 missing' });
   });
 });

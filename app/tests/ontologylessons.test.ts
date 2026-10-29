@@ -153,9 +153,13 @@ const CLAIMS: Claim[] = [
     expect(generated.compare.definitions.diff).toContain('@@ -1,14 +1,10 @@');
     expect(generated.compare.definitions.existing.trimEnd().split('\n')).toHaveLength(14);
   }],
-  ["03-grounding", "the guide's own wording in 10 lines, one per individual", () => {
+  ["03-grounding", "The generated text is 10 lines, one per individual: the 6 category lines are the guide's own wording, and the 4 priority lines are the ontology's summaries", () => {
     expect(generated.definitions_text.trimEnd().split('\n')).toHaveLength(10);
-    expect(individuals('Category').length + individuals('Priority').length).toBe(10);
+    expect([individuals('Category').length, individuals('Priority').length]).toEqual([6, 4]);
+    // the category lines are what the audit holds to the guide; the priority definitions it does not compare
+    const defs = rows.filter((r) => r.fact.startsWith('definition:'));
+    expect(defs.map((r) => r.fact.slice('definition:'.length)).sort()).toEqual(individuals('Category').map((i) => i.id).sort());
+    expect(defs.every((r) => r.status === 'agree')).toBe(true);
   }],
   ["03-grounding", "The `v3_examples` prompt's rule lines are the same as `v2_rules'`", () => expect(generated.compare.definitions.v3_rule_lines_equal_v2).toBe(true)],
   ['03-grounding', 'That is 700 records from 16 sources: 640 saved triage answers in 12 response files from the LLMs track, and 60 `label_ticket` calls in the 4 recorded agent desks. They hold 7 violations', () => {
@@ -188,14 +192,24 @@ const CLAIMS: Claim[] = [
   }],
   ['03-grounding', 'The validation is section 2 of `grounding.py`', () => expect(hasSection(py('grounding.py'), 2, 'Validation')).toBe(true)],
   // ── lesson 4 ──
-  ['04-capstone', 'The audit writes 71 rows across 7 artefacts: 38 for the guide, 11 for each prompt, 6 for the category map and 5 for the contracts. 70 agree, 1 disagrees, and none is missing.', () => {
-    expect(rows).toHaveLength(71);
+  ['04-capstone', 'each rule the guide words has a constraint citing it, worded alike: the R0 bullets, the rule the `C2` and `C3` rows add after their first sentence, the tie-breakers, the priority bullets, the workaround paragraph and the sentence that closes the normal list', () => {
+    const texts = rowsOf('llms/data/labeling_guide.md').filter((r) => r.fact.startsWith('rule-text:'));
+    const keys = texts.map((r) => r.fact.slice('rule-text:'.length));
+    expect(keys.filter((k) => k.startsWith('R0.'))).toHaveLength(4);
+    expect(keys.filter((k) => k.startsWith('tie-breaker.'))).toHaveLength(3);
+    expect(keys).toEqual(expect.arrayContaining(['C2.1', 'C3.1', 'workaround', 'N.closing', 'U1', 'N-F']));
+    expect(texts.every((r) => r.status === 'agree')).toBe(true);
+    const cited = texts.map((r) => r.detail).join(' ');
+    for (const c of onto.constraints as Entry[]) expect(cited, c.id).toContain(c.id);
+  }],
+  ['04-capstone', 'The audit writes 82 rows across 7 artefacts: 49 for the guide, 11 for each prompt, 6 for the category map and 5 for the contracts. 81 agree, 1 disagrees, and none is missing.', () => {
+    expect(rows).toHaveLength(82);
     expect(new Set(rows.map((r) => r.artefact)).size).toBe(7);
-    expect(rowsOf('llms/data/labeling_guide.md')).toHaveLength(38);
+    expect(rowsOf('llms/data/labeling_guide.md')).toHaveLength(49);
     expect(['v2_rules', 'v3_examples'].map((p) => rowsOf(`llms/data/prompts.json#triage.${p}`).length)).toEqual([11, 11]);
     expect(rowsOf('ml/data/category_map.json')).toHaveLength(6);
     expect(rows.filter((r) => r.artefact.startsWith('data/contracts/'))).toHaveLength(5);
-    expect(['agree', 'disagree', 'missing'].map((s) => rows.filter((r) => r.status === s).length)).toEqual([70, 1, 0]);
+    expect(['agree', 'disagree', 'missing'].map((s) => rows.filter((r) => r.status === s).length)).toEqual([81, 1, 0]);
   }],
   ['04-capstone', '`red: 1 disagree (data/contracts/tickets.v2.yaml enum:category); 0 missing`', () => {
     expect(audit.gate).toEqual({ ok: false, disagree: 1, missing: 0, reason: 'red: 1 disagree (data/contracts/tickets.v2.yaml enum:category); 0 missing' });
