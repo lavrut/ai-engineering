@@ -155,6 +155,14 @@ describe('the cursor and the view transitions', () => {
     expect(TRANSITION_MS).toBeGreaterThanOrEqual(250);
   });
 
+  it('fades between views only when the view changes', async () => {
+    const { needsTransition } = await import('../scripts/demo/record.mjs');
+    expect(needsTransition('#home', '#home')).toBe(false);
+    expect(needsTransition('', '#home')).toBe(false);
+    expect(needsTransition('#home', '#ontology-what')).toBe(true);
+    expect(needsTransition('#infra-capstone', '#home')).toBe(true);
+  });
+
   it('records in the light theme unless told otherwise', async () => {
     const { themeOf } = await import('../scripts/demo/record.mjs');
     expect(themeOf([])).toBe('light');
