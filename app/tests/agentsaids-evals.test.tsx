@@ -363,7 +363,7 @@ const APP = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PAGE = join(APP, 'dist', 'index.html');
 const SOURCES = [
   join(APP, 'src'), resolve(APP, '../agents/data/derived'), resolve(APP, '../data/data/derived'), resolve(APP, '../data/contracts'),
-  resolve(APP, '../ontology/data/derived'), join(APP, 'astro.config.mjs'),
+  resolve(APP, '../ontology/data/derived'), resolve(APP, '../infra/data/derived'), join(APP, 'astro.config.mjs'),
 ];
 const AIDS = ['PatternStepper', 'AgentTrace', 'CostCompare', 'EngineScorecard'];
 const AGENTS_VIEWS = [
@@ -422,6 +422,7 @@ describe('page budget', () => {
   let lessons: { lesson: string; islands: Island[] }[] = [];
   let dataLessons: { lesson: string; islands: Island[] }[] = [];
   let ontologyLessons: { lesson: string; islands: Island[] }[] = [];
+  let infraLessons: { lesson: string; islands: Island[] }[] = [];
   const bytes = (l: { islands: Island[] }) => l.islands.filter((x) => AIDS.includes(x.component)).reduce((a, x) => a + x.bytes, 0);
 
   beforeAll(() => {
@@ -430,6 +431,7 @@ describe('page budget', () => {
     lessons = shippedIslands(html);
     dataLessons = shippedIslands(html, 'data');
     ontologyLessons = shippedIslands(html, 'ontology');
+    infraLessons = shippedIslands(html, 'infra');
   }, 180_000);
 
   // The Data Fabric & Data Contracts track, measured the same way: the props of its four aids over its lessons.
@@ -501,6 +503,45 @@ describe('page budget', () => {
       const total = sizes.reduce((a, [, n]) => a + n, 0);
       console.info(`ontology props: ${sizes.map(([name, n]) => `${name} ${n}`).join(', ')}; total ${total}`);
       expect(total, `the ontology aids ship ${total} bytes of props: ${sizes.map(([name, n]) => `${name} ${n}`).join(', ')}`).toBeLessThan(200_000);
+    },
+  );
+
+  // The AI Infrastructure track, measured the same way: the props of its five aids over its six lessons. The test is
+  // bound to the content: it lists src/content/lessons/infra/*.mdx, requires the six lessons spec §6 names, one
+  // infra-* view per file in the built page, and each lesson to carry the aid spec §6 names for it. A lesson file
+  // whose slug has no aid in INFRA_LESSON_AIDS fails here, so a new lesson cannot slip past the check.
+  const INFRA_DIR = join(APP, 'src', 'content', 'lessons', 'infra');
+  const INFRA_FILES = existsSync(INFRA_DIR) ? readdirSync(INFRA_DIR).filter((f) => f.endsWith('.mdx')).sort() : [];
+  const INFRA_AIDS = ['RouteTable', 'RetryTimeline', 'CacheReport', 'LedgerView', 'TraceExplorer'];
+  // spec §6: the aid each infra lesson shows, by slug.
+  const INFRA_LESSON_AIDS: Record<string, string> = {
+    gateway: 'FlowDiagram', routing: 'RouteTable', resilience: 'RetryTimeline', cache: 'CacheReport', budgets: 'LedgerView', capstone: 'TraceExplorer',
+  };
+  const infraSlugs = INFRA_FILES.map((f) => f.replace(/^\d+-/, '').replace(/\.mdx$/, ''));
+
+  // Skipped until Task 10 adds lessons 4-6 (ruling I9); Task 10 un-skips it.
+  it.skip('finds the six infra lessons spec §6 names, each slug mapped to its aid', () => {
+    expect(infraSlugs).toEqual(['gateway', 'routing', 'resilience', 'cache', 'budgets', 'capstone']);
+    expect(infraSlugs.filter((s) => !Object.hasOwn(INFRA_LESSON_AIDS, s)), 'an infra lesson slug with no aid in INFRA_LESSON_AIDS').toEqual([]);
+  });
+
+  it(
+    'keeps the props the infra aids ship, as the built page carries them, under 200 KB',
+    () => {
+      expect(infraSlugs.filter((s) => !Object.hasOwn(INFRA_LESSON_AIDS, s)), 'an infra lesson slug with no aid in INFRA_LESSON_AIDS').toEqual([]);
+      expect(infraLessons.map((l) => l.lesson.replace(/^lesson \d+ \((.*)\)$/, '$1'))).toEqual(infraSlugs.map((s) => `infra-${s}`));
+      infraLessons.forEach((l, i) => {
+        const want = INFRA_LESSON_AIDS[infraSlugs[i]];
+        expect(want, `${l.lesson}: no aid mapped for slug "${infraSlugs[i]}"`).toBeDefined();
+        expect(l.islands.map((x) => x.component), l.lesson).toContain(want);
+      });
+      const shipped = infraLessons.flatMap((l) => l.islands).filter((x) => INFRA_AIDS.includes(x.component));
+      expect(shipped.length).toBeGreaterThan(0);
+      expect(shipped.every((x) => x.bytes > 500)).toBe(true);
+      const sizes = infraLessons.map((l) => [l.lesson, l.islands.filter((x) => INFRA_AIDS.includes(x.component)).reduce((a, x) => a + x.bytes, 0)] as const);
+      const total = sizes.reduce((a, [, n]) => a + n, 0);
+      console.info(`infra props: ${sizes.map(([name, n]) => `${name} ${n}`).join(', ')}; total ${total}`);
+      expect(total, `the infra aids ship ${total} bytes of props: ${sizes.map(([name, n]) => `${name} ${n}`).join(', ')}`).toBeLessThan(200_000);
     },
   );
 

@@ -1,0 +1,214 @@
+---
+track: infra
+order: 1
+slug: gateway
+title: What an AI gateway is
+goal: Say what sits between a program and a model API in production, what a gateway gives every caller at once and what the drop-in trade costs, and put one recorded set through the course's gateway for free.
+minutes: 25
+quiz:
+  - question: The agents track's desk sends no x-team header. The course's config says untagged requests are refused. What happens to the desk's first call through the gateway?
+    options:
+      - The gateway forwards it and books it to the desk team, because the call came from the desk
+      - The gateway reads the system prompt and works out which team sent it
+      - The budget stage refuses it with a 402 before anything is spent, and the refusal is still traced
+      - The gateway forwards it without a budget check, because a budget needs a team
+    answer: 2
+    explanation: Headers are the only channel between a caller and a drop-in gateway. A call with no team is untagged, and the budget stage refuses untagged calls under the course's config. Nothing is forwarded, nothing is spent, and the trace records why. A config can instead book untagged calls to a named team, which is what the Try it does.
+  - question: Why does the course's gateway speak the Messages API shape, the same paths and bodies as the model API, instead of an API of its own?
+    options:
+      - So a program uses it by changing one setting, its base URL. The price is that the gateway learns only what the request and its headers carry
+      - Because the model API refuses calls that do not come through a gateway
+      - Because the Messages API shape makes request bodies smaller
+      - So the gateway can rewrite each request into a better one before forwarding it
+    answer: 0
+    explanation: A drop-in gateway needs no change to the caller's code, which is why every program in the course can use it. In exchange it cannot ask the caller anything. Who is calling, and for which ticket, arrives in headers or not at all.
+  - question: You replay the patterns set through a gateway you started by hand, and some calls come back 429. The capstone replays the same calls through the same config and none is refused. Why?
+    options:
+      - The capstone uses a config with a higher rate limit
+      - The replay proxy answers more slowly in the capstone
+      - The capstone turns the limiter off
+      - The hand-started gateway judges the limiter on the wall clock, and a replay sends the calls far faster than they were recorded. The capstone moves the gateway's clock by each call's recorded time, so the limiter sees the pace the calls really had
+    answer: 3
+    explanation: A token bucket refills with time. Replayed from disk, the calls arrive within a second or so, faster than any real run, so the bucket runs dry. The capstone runs on replay time, so its limiter judges the recorded pace, and the course's limits let all of it through.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+Every program in this course that calls Claude does it on its own. The harness, the LLMs lab and the agents desk each send their own requests, handle their own failures and count their own cost, if they count it at all. That is fine for one program. A company runs dozens, and each one would build the same retries, limits and cost accounting again, slightly differently.
+
+### What sits between a program and a model API
+
+In production, the usual answer is a <Term t="gateway" />: one HTTP server that every program calls instead of the model API. The gateway forwards each call and does, once and for every caller, the jobs each program would otherwise do itself:
+
+- **Routing with fallback.** Each model name maps to a target, with other targets to try when it fails. A model nobody approved is refused.
+- **Retries and rate limits.** A failed call is retried with a growing wait, and calls are held back before the upstream's own limit refuses them.
+- **A <Term t="response cache" />.** A call identical to one already answered gets the stored answer, with no model call at all. This is not the API's <Term t="prompt cache" />, which still makes the call and only bills a repeated prefix for less. Lesson 4 compares the two.
+- **Budgets with a spend ledger.** Every answer is priced and booked to a team, and a team over its limit is refused before it spends.
+- **Traces.** Every call leaves one line saying what each stage decided and why, and the lines can be queried.
+
+### The drop-in trade
+
+The course's gateway is a drop-in. It speaks the Messages API shape, the same paths and bodies as the model API, so a program uses it by changing one setting, its base URL. Nothing else in the program changes.
+
+The price is that the gateway learns only what a request carries. It cannot ask the program which team it works for or which ticket it is on. So headers are the only channel. A caller says who it is in `x-team` and what the call is for in `x-request-tag`, and may name the call it belongs to in `x-parent-id`. A call with no team is `untagged`, and the course's config refuses it: `untagged: refuse`. When a caller sends no tag, the gateway looks for a ticket id in the messages. Lesson 6 shows what is lost when a caller sends no parent id.
+
+The gateway never edits a body. It forwards every request byte for byte, and its own decisions go into headers and traces. Lesson 2 explains why.
+
+### The course's gateway
+
+`infra/python/gateway.py` listens on the loopback and runs each call through eight stages, in order: tag, budget, cache, route, limit, retry, ledger, trace. The first six are functions in `infra/python/stages.py`, one per stage. The other two write the ledger row and the trace line. One config file, `infra/gateway.yaml`, sets every stage, in six sections: upstream and models, routes, cache, retry and limits, budgets, traces.
+
+The upstream is the agents track's replay proxy, started on port 8791 so the gateway can take 8790. Every call is answered from the agents track's recordings, so a run is free and gives the same answers every time. A live mode that forwards to the real API exists, behind the usual estimate and y/N. No lesson uses it, and no number in this track depends on it. The request path has a Go twin, `infra/go/gateway`, which the next four lessons quote beside the Python.
+
+The traffic is the course's own. The capstone replays all 957 calls the agents track recorded, in the order its runs made them, as three teams: `desk`, `patterns` and `judge`. This lesson puts one set through, the patterns set's 60 calls.
+
+<Callout kind="note" title="The tools you would use at work">
+  Teams rarely build a gateway from scratch. Open-source proxies such as LiteLLM and Envoy AI Gateway, and hosted ones such as Cloudflare AI Gateway, sit in the same place and do the same jobs, across many model providers. This track builds a small one you can read end to end, so you know what those products do with each call.
+</Callout>
+
+### What a production gateway adds
+
+The course's gateway stops where a production one keeps going. Six things are left out on purpose:
+
+- **Multi-tenant auth and key issuance.** Here the gateway trusts any caller on the loopback and reads the team from a header anyone could set.
+- **Streaming beyond byte forwarding.** Here a streamed reply is passed through as the replay proxy sends it, and no stage reads it as a stream.
+- **Distributed state.** Here the cache, the rate limiter and the ledger live in one process and two files, so a second gateway would not see them.
+- **A metrics backend and dashboards.** Here traces are JSON Lines files and a query command.
+- **Horizontal deployment.** No containers, no service discovery, no load balancer in front of several gateways.
+- **Serving models.** The gateway forwards to a model API. Running a model, and planning the GPUs it needs, is a different job.
+
+## See it
+
+Step through the diagram. Watch where each call can stop: a refusal ends the chain at the stage that refused, and a cache hit skips everything between the cache and the ledger.
+
+<FlowDiagram diagram="infra-gateway" />
+
+Every call, answered or refused, ends with a trace line. Only the retry stage talks to the upstream, so a call refused before it costs nothing.
+
+## The code
+
+The server is `infra/python/gateway.py`. Section 1 is the handler: one request in, one answer out.
+
+<CodeTabs source="infra-gateway" section={1} pythonOnly />
+
+- `if self.headers.get("origin") is not None:` refuses any request a web page sent. Together with the `Host` check, this keeps a browser tab from driving the gateway.
+- `why = "only POST is accepted"` and the path check below it refuse what is not a Messages call before any stage runs.
+- `with srv.lock:` runs one request at a time through the chain, the ledger and the trace, so the stores see requests in order.
+- `out = refused(why) if why else srv.cap_check(req) or srv.run(req)` is the whole decision: a bad request, live mode's spending cap, or the chain.
+- `headers = {**out.headers, "x-gateway-trace": trace["id"]}` tells the caller which trace line is its own. This header and `x-cache` are all the gateway adds to the answer.
+
+Section 3 holds the state and books every call.
+
+<CodeTabs source="infra-gateway" section={3} pythonOnly />
+
+- `out = run_chain(req, self.state, self.cfg, self.send, self.prices, self.sleep)` runs the stages from `stages.py`. The server adds nothing between them.
+- `if word in ("ok", "cached"):` adds the ledger and trace decisions only to answered calls. A refused call's trace stops at the stage that refused it.
+- `"parent_id": req.headers.get("x-parent-id") or None` keeps the parent id only when the caller sent one. The gateway cannot invent it.
+- `state = State(spend=ledger.Ledger(ledger_path).spend_by_team(), cache=load_cache(cache_path))` rebuilds each team's spend from the ledger and reloads the cache, so a restart keeps both. That is why the Try it below starts from a clean state.
+
+<Callout kind="go" title="The Go twin starts in lesson 2">
+  The server is Python only. The Go twin, `infra/go/gateway`, covers the request path: the stages from tag to retry and the chain that runs them, over the same config and the same fixture cases, with a test that both give the same verdict and status on every case. Lesson 2 shows its first stage beside the Python. A production team would twin the ledger and trace stages and the server too.
+</Callout>
+
+## Try it
+
+Set up the track's virtual environment from the repo root. It holds `pyyaml`, `pytest` and `httpx`, which the agents proxy needs when the tests import it:
+
+```bash
+python3 -m venv .venv-infra && .venv-infra/bin/pip install -r infra/requirements.txt
+```
+
+The gateway keeps its ledger in `infra/data/ledger.jsonl` and its cache in `infra/data/cache.json`, both git-ignored, and loads them again when it starts. Remove them so this run starts clean:
+
+```bash
+rm -f infra/data/ledger.jsonl infra/data/cache.json
+```
+
+In a first terminal, start the agents replay proxy on port 8791, answering from the patterns set's recordings. It prints one line naming the store it reads.
+
+```bash
+.venv-agents/bin/python agents/proxy/proxy.py --port 8791 --set patterns
+```
+
+In a second terminal, start the gateway on 8790. `--run first` names its trace file:
+
+```bash
+.venv-infra/bin/python infra/python/gateway.py --port 8790 --run first
+```
+
+You should see:
+
+```text
+gateway on http://127.0.0.1:8790 -> http://127.0.0.1:8791  traces infra/data/traces/first.jsonl
+```
+
+In a third terminal, send the patterns set through it. The driver tags each call `x-team: patterns`, reads the ticket id for `x-request-tag`, and writes its summary under `/tmp`:
+
+```bash
+.venv-infra/bin/python infra/python/replay.py --gateway http://127.0.0.1:8790 --sets patterns --out /tmp/infra-run --gate
+```
+
+You should see:
+
+```text
+replayed 60 calls: 0 cache hits, 17 refusals, $0.010939
+gate ledger: ok: no desk set in this run
+gate budgets: ok: patterns $0.0109 of $0.50; 17 refusals, 17 traced
+gate stages: ok: 60 traces: 43 answered with all eight stages, 0 cache hits stop after cache, 17 refusals stop at the refusing stage, 0 out of order; 0 parent ids named, 0 missing
+gate figures: ok: hit rate 0.0 (0 of 60) and p95 3760 ms; from the traces and the recordings: 0.0 and 3760 ms
+wrote capstone.json, ledger.json to /tmp/infra-run
+```
+
+The refusals are the rate limiter, and they are real. A gateway you start by hand judges the limiter on the wall clock. Replayed from disk, the calls arrive within a second or so, far faster than the agents track made them. The bucket's 200,000 tokens a minute run dry, and each call after that would have to wait longer than `max_wait_ms`, 1000 ms, so it gets a 429. Ask the traces which calls those were:
+
+```bash
+.venv-infra/bin/python infra/python/traces.py infra/data/traces/first.jsonl --outcome limited
+```
+
+The first lines read:
+
+```text
+21d8b817993b0b0d 429 patterns t001 0 - limited
+b3b94aa81436d747 429 patterns t001 0 - limited
+b86206f59561c1da 429 patterns t001 0 - limited
+```
+
+Each line is the trace id, the status, the team, the tag, the gateway's own milliseconds, the cost and the outcome, one per refusal. Your trace ids will differ. The capstone, in lesson 6, runs on replay time instead: the gateway's clock moves by each call's recorded wall clock, so the limiter sees the pace the calls really had, and none of them is refused. Run this command a second time and the numbers change, because the gateway loaded the ledger and the cache the first run wrote.
+
+### The desk, unchanged
+
+Last, the agents track's own code against the gateway. The desk's model calls go to `http://127.0.0.1:8790` by default, the port the proxy used in that track, which is now the gateway's. This runs the chain pattern on ticket `t001` with its code untouched:
+
+```bash
+.venv-agents/bin/python -c "import sys; sys.path[:0] = ['agents', 'agents/desk/python']; import run_sets, patterns, desk_core as core; t = next(x for x in core.TICKETS if x['id'] == 't001'); print(patterns.chain(t).output)"
+```
+
+The last line it prints is the refusal:
+
+```text
+desk_core.ProxyError: proxy answered 402 (cost cap): team untagged: budget refused: untagged requests are refused
+```
+
+The desk sends no `x-team`, so the gateway refuses it as untagged. The desk reads every 402 as its proxy's cost cap; the body after it is the gateway's reason. The fix is in the config, not the desk: book untagged calls to a team. Stop the gateway with Ctrl-C, start it on a copy that books them to `patterns`, and run the same command again:
+
+```bash
+sed 's/^  untagged: refuse$/  untagged: patterns/' infra/gateway.yaml > /tmp/gateway-desk.yaml
+.venv-infra/bin/python infra/python/gateway.py --port 8790 --config /tmp/gateway-desk.yaml --run desk
+```
+
+This time the desk prints its triage of `t001`, `{'category': 'billing', 'reply': "Hi Maria, ...`, and the gateway's traces hold its two calls, booked to `patterns` with the tag it found in the messages:
+
+```bash
+.venv-infra/bin/python infra/python/traces.py infra/data/traces/desk.jsonl
+```
+
+```text
+2aca9f180abe2e33 200 patterns t001 1 0.000224 ok
+da93ab2a7628aae1 200 patterns t001 1 0.000066 ok
+```
+
+Your trace ids will differ. This run is shown once, to prove the drop-in works; no number in the track depends on it. Stop the gateway and the proxy with Ctrl-C in their terminals.
