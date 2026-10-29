@@ -147,7 +147,7 @@ describe('catalogue explorer data', () => {
       producer: 'ml',
       consumers: ['mcp'],
       contract: 'complaints.v1',
-      lastCommit: '54c2346',
+      lastCommit: '54c23469f737e2db6ca7fa36636e08c21eb7ad79',
       missing: false,
       schema: [['date', 'string'], ['id', 'string'], ['narrative', 'string'], ['product', 'string'], ['product_raw', 'string']],
     });
@@ -178,6 +178,9 @@ describe('CatalogExplorer', () => {
     expect(live()).toBe('tickets: 60 rows in 1 file, written by llms, read by mcp, under contract tickets.v1.');
     const facts = screen.getByRole('list', { name: 'About tickets' });
     for (const text of ['llms/data/tickets.jsonl', '16,705 bytes', '19296f8', 'tickets.v1']) expect(facts.textContent).toContain(text);
+    // catalog.json stores the full sha (ruling D18); the aid shows its first 7 characters
+    expect(data.catalog.tickets.last_commit).toMatch(/^19296f8[0-9a-f]{33}$/);
+    expect(facts.textContent).not.toContain(data.catalog.tickets.last_commit);
     const schema = screen.getByRole('table', { name: 'Schema sketch of tickets' });
     expect(within(schema).getAllByRole('row').slice(1).map((r) => r.textContent)).toEqual([
       'categorystring', 'idstring', 'prioritystring', 'splitstring', 'tagsarray', 'textstring',

@@ -400,7 +400,9 @@ Each writes its file under `data/data/` and prints what it found. `quality.py` m
 .venv-data/bin/python data/fixtures/gen_cases.py --check      # the shared validator cases are current
 ```
 
-The pytest suite includes the twin test (both command lines on every fixture case, byte for byte) and runs every lesson's Try-it command once (`data/python/tests/test_lesson_tryits.py`).
+The pytest suite includes the twin test (both command lines on every fixture case, byte for byte) and runs every lesson's Try-it command once (`data/python/tests/test_lesson_tryits.py`). It leaves every committed file as it found it.
+
+Commit dates need the full git history. In a shallow clone (CI's default checkout) or a zip or `git archive` copy, `catalog.py --check` and `quality.py --check` compare everything except the commit-derived fields (`last_commit`, the ages and the freshness detail) and print `no git history: commit dates not compared`, and the tests that measure real commit dates skip with `needs full git history: run git fetch --unshallow`. In CI, check out with `fetch-depth: 0` to run them.
 
 ## The site
 

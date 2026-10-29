@@ -13,6 +13,7 @@ export type DatasetView = {
   producer: string;
   consumers: string[];
   contract: string | null;
+  /** The full sha catalog.json stores (ruling D18); the facts list shows its first 7 characters. */
   lastCommit: string | null;
   missing: boolean;
   /** The schema sketch as [field, type] pairs, in catalog.json's order. */
@@ -67,6 +68,6 @@ export function datasetFacts(d: DatasetView): [string, string][] {
     ['Written by', d.producer],
     ['Read by', listText(d.consumers)],
     ['Contract', d.contract ?? 'none'],
-    ['Last commit', d.lastCommit ?? 'not in git'],
+    ['Last commit', d.lastCommit === null ? 'not in git' : d.lastCommit.slice(0, 7)],
   ];
 }

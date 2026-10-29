@@ -8,8 +8,10 @@ place (it never writes to another track's files), and measures freshness the
 way a static repo can: from the date of the file's last git commit, as of a
 pinned date that verdicts.json stores (ruling D10), so the file stays the same
 until someone moves the date; --live asks about today instead. A zip
-download has no git history, so freshness there is "unknown", which passes
-with a note rather than failing a learner who never cloned the repo.
+download has no git history, and a shallow clone (CI's default checkout) has
+only its tip, which would date every file to that one commit; so in both,
+freshness is "unknown", which passes with a note rather than failing a
+learner who never cloned the whole repo (ruling D17).
 
 Run (from the repo root):
     .venv-data/bin/python data/python/quality.py                        # rewrite verdicts.json as of its stored date
@@ -31,6 +33,7 @@ entry carries `"expect": "fail"` and the run counts it as fine while it fails.
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import subprocess
 import sys
@@ -67,10 +70,25 @@ def today() -> date:
     return date.today()
 
 
+@functools.lru_cache(maxsize=None)
+def has_history(where: Path) -> bool:
+    """True inside a git checkout with its full history (ruling D17).
+
+    False without git, outside a checkout (a zip or `git archive` copy), and in a
+    shallow clone, whose one commit would look like every file's last change.
+    """
+    try:
+        p = subprocess.run(["git", "rev-parse", "--is-inside-work-tree", "--is-shallow-repository"],
+                           cwd=where, capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return p.returncode == 0 and p.stdout.split() == ["true", "false"]
+
+
 def commit_time(path: Path) -> int | None:
-    """Unix time of the file's last commit; None without git, outside a checkout, or uncommitted."""
+    """Unix time of the file's last commit; None without full history, outside a checkout, or uncommitted."""
     path = Path(path)
-    if not path.parent.is_dir():
+    if not path.parent.is_dir() or not has_history(path.parent):
         return None
     try:
         p = subprocess.run(["git", "log", "-1", "--format=%ct", "--", path.name],
@@ -181,16 +199,11 @@ def write_verdicts(out: Path = VERDICTS, as_of: date | None = None) -> dict:
     return doc
 
 
-def _in_git() -> bool:
-    try:
-        p = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=ROOT, capture_output=True, text=True, timeout=30)
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return p.returncode == 0
+NO_HISTORY = "no git history: commit dates not compared"
 
 
 def _without_ages(doc: dict) -> dict:
-    """A zip download has no git dates: compare everything but the ages and freshness."""
+    """Without git history there are no commit dates: compare everything but the ages and freshness."""
     doc = json.loads(json.dumps(doc))
     for entry in doc.get("datasets", {}).values():
         entry.pop("age_days", None)
@@ -201,14 +214,15 @@ def _without_ages(doc: dict) -> dict:
 
 def check(out: Path = VERDICTS) -> int:
     """0 when the file on disk is byte-identical to a rebuild as of its own as_of; 1 naming the file."""
+    history = has_history(ROOT)
+    if not history:
+        print(NO_HISTORY)
     as_of = stored_as_of(out)
     if as_of is not None:
         fresh = build(as_of)
-        if Path(out).read_text(encoding="utf-8") == _text(fresh):
+        text = Path(out).read_text(encoding="utf-8")
+        if text == _text(fresh) or (not history and _without_ages(json.loads(text)) == _without_ages(fresh)):
             print("verdicts.json matches")
-            return 0
-        if not _in_git() and _without_ages(json.loads(Path(out).read_text(encoding="utf-8"))) == _without_ages(fresh):
-            print("verdicts.json matches (no git history: ages not compared)")
             return 0
     print("verdicts.json is stale: run data/python/quality.py")
     return 1

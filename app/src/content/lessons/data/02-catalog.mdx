@@ -53,7 +53,7 @@ For each dataset the catalogue records:
 - the files, their total size, and the number of rows (a JSONL line, or a whole JSON file where one file is one record);
 - a <Term t="schema sketch" />: each field name and the JSON type its values have, read from the first 50 rows of the first file;
 - the producer track, and the consumer tracks;
-- the contract it is under, if any, and the short hash of the last commit that changed its files.
+- the contract it is under, if any, and the hash of the last commit that changed its files, stored in full (the explorer shows the first seven characters). Without the repo's full git history, as in a zip or a shallow clone, it is `null`.
 
 A schema sketch is not a contract. The sketch describes the rows that exist today. A contract promises what rows will look like, and says what each field means. The sketch is how you find a dataset worth a contract; the contract is what a reader can rely on.
 

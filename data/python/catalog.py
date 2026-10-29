@@ -16,8 +16,10 @@ Free and offline: no model calls.
 
 Datasets are read in place and never modified. A listed dataset with no files is
 recorded as missing, never skipped. Files git ignores are left out, because a
-fresh clone would not have them. A zip download has no git history, so there
-last_commit is null and --check compares everything else.
+fresh clone would not have them. last_commit is the full sha (ruling D18; the
+app shows its first 7 characters). A zip download has no git history, and a
+shallow clone has only its tip, so in both last_commit is null and --check
+compares everything else, saying so (ruling D17).
 """
 from __future__ import annotations
 
@@ -29,6 +31,7 @@ from collections import Counter
 from pathlib import Path
 
 import contract as C
+import quality as Q
 
 # ── 1. The datasets ─────────────────────────────────────────────────────────
 ROOT = Path(__file__).resolve().parents[2]
@@ -119,10 +122,13 @@ def files(root: Path, pattern: str) -> list[str]:
 
 
 def last_commit(root: Path, paths: list[str]) -> str | None:
-    """Short sha of the last commit that changed any of the files; None without git or history."""
-    if not paths or not _in_git(root):
+    """Full sha of the last commit that changed any of the files; None without full history.
+
+    The full sha, because git's own abbreviation grows a digit as the repo grows (ruling D18).
+    """
+    if not paths or not Q.has_history(Path(root)):
         return None
-    p = _git(root, "log", "-1", "--format=%h", "--", *paths)
+    p = _git(root, "log", "-1", "--format=%H", "--", *paths)
     sha = p.stdout.strip() if p is not None and p.returncode == 0 else ""
     return sha or None
 
@@ -275,12 +281,15 @@ def write() -> tuple[dict, dict]:
 
 
 def _without_commits(doc: dict) -> dict:
-    """A zip download has no git history: compare everything but last_commit."""
+    """Without git history there are no commits: compare everything but last_commit."""
     return {k: {**v, "last_commit": None} for k, v in doc.items()}
 
 
 def check() -> int:
     """0 when both files are byte-identical to a rebuild; 1 naming the stale one."""
+    history = Q.has_history(ROOT)
+    if not history:
+        print(Q.NO_HISTORY)
     cat, lin = build()
     stale = []
     for path, fresh in ((CATALOG, cat), (LINEAGE, lin)):
@@ -291,7 +300,7 @@ def check() -> int:
             continue
         if text == _text(fresh):
             continue
-        if path == CATALOG and not _in_git(ROOT) and _without_commits(json.loads(text)) == _without_commits(fresh):
+        if path == CATALOG and not history and _without_commits(json.loads(text)) == _without_commits(fresh):
             continue
         stale.append(path.name)
     if stale:

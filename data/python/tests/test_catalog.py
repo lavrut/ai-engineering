@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from history import needs_history
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
@@ -131,10 +133,32 @@ def test_last_commit_and_ignored_files_in_a_git_repo(repo):
     git(repo, "init", "-q")
     git(repo, "add", ".")
     git(repo, "commit", "-q", "-m", "one")
-    sha = subprocess.run(["git", "log", "-1", "--format=%h"], cwd=repo, capture_output=True, text=True).stdout.strip()
+    sha = subprocess.run(["git", "log", "-1", "--format=%H"], cwd=repo, capture_output=True, text=True).stdout.strip()
     orders = K.catalog(repo, FIXTURE)["orders"]
-    assert orders["last_commit"] == sha
+    assert orders["last_commit"] == sha and len(sha) == 40  # ruling D18: the full sha, whatever the repo's size
     assert orders["files"] == 1 and orders["rows"] == 2  # the ignored b.jsonl is not catalogued
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git not installed")
+def test_last_commit_none_in_a_shallow_clone(repo, tmp_path_factory):
+    """Ruling D17: a shallow clone would date every dataset to its one commit."""
+    git(repo, "init", "-q")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "one")
+    (repo / "shop" / "ghost.json").write_text("{}\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "two")
+    shallow = tmp_path_factory.mktemp("clone") / "shallow"
+    git(shallow.parent, "clone", "-q", "--depth", "1", f"file://{repo}", str(shallow))
+    assert K.catalog(shallow, FIXTURE)["orders"]["last_commit"] is None
+    assert K.catalog(repo, FIXTURE)["orders"]["last_commit"] is not None
+
+
+def test_check_without_history_compares_all_but_last_commit(monkeypatch, capsys):
+    monkeypatch.setattr(K.Q, "has_history", lambda where: False)
+    assert K.check() == 0
+    assert capsys.readouterr().out.splitlines() == ["no git history: commit dates not compared",
+                                                    "catalog.json and lineage.json match"]
 
 
 # ── 2. Lineage ──────────────────────────────────────────────────────────────
@@ -203,6 +227,12 @@ def test_live_lineage_carries_the_contract_versions():
     assert governed[("tickets_v2", "agents-eval")] == ("tickets.v2", "2")  # moved in the capstone
     assert governed[("complaints", "mcp-read-server")] == ("complaints.v1", "1")
     assert governed[("agents_traces", "agents-eval")] == ("agent-traces.v1", "1")
+
+
+@needs_history
+def test_live_last_commits_are_full_shas():
+    cat = json.loads(K.CATALOG.read_text(encoding="utf-8"))
+    assert all(len(e["last_commit"]) == 40 and int(e["last_commit"], 16) >= 0 for e in cat.values())
 
 
 def test_derived_json_is_current_and_small(capsys):

@@ -15,10 +15,14 @@ date, and once a dataset is past its max_age_days the run must fail, which lesso
 
 None of these commands can pay: no track's record mode is named, and ANTHROPIC_API_KEY is removed
 from the environment they run in. Some commands rewrite derived files (catalog.py, gate.py) with
-the bytes already committed, so the test also checks that no committed file under data/ changed.
+the bytes already committed, so each test also checks that no committed file under data/ changed,
+and puts back the bytes it found either way, so a failing run never leaves a committed file changed.
 The scratch files the lessons write under /tmp go to a per-test temporary folder here instead.
+
+Without full git history (ruling D17) the checks print one more line, `no git history: commit
+dates not compared`, which is dropped before comparing; lesson 2's rebuild of catalog.json would
+write it without commits, so that one command skips, by name, and says how to get the history.
 """
-import hashlib
 import os
 import re
 import subprocess
@@ -27,6 +31,8 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+
+from history import HAS_HISTORY, NEEDS_HISTORY
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -85,10 +91,14 @@ def squash(line: str) -> str:
     return re.sub(r"[ \t]+", " ", line).strip()
 
 
-def digest() -> dict[str, str]:
-    """sha256 of every committed file the commands could touch."""
-    return {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
+REWRITES_COMMITS = re.compile(r"data/python/catalog\.py\s*$", re.M)  # writes catalog.json's last_commit
+
+
+def snapshot() -> dict[str, bytes]:
+    """The bytes of every committed file the commands could touch."""
+    return {str(p.relative_to(ROOT)): p.read_bytes()
             for d in WATCHED for p in sorted(d.rglob("*")) if p.is_file() and "__pycache__" not in p.parts}
+
 
 
 def env() -> dict[str, str]:
@@ -122,11 +132,19 @@ def test_no_command_can_pay():
     assert "ANTHROPIC_API_KEY" not in env()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def unchanged():
-    before = digest()
+    """Fails a command that changed a committed file under data/, after putting the file back."""
+    before = snapshot()
     yield
-    assert digest() == before, "a Try-it command changed a committed file under data/"
+    after = snapshot()
+    changed = sorted(k for k in before.keys() | after.keys() if after.get(k) != before.get(k))
+    for k in changed:
+        if k in before:
+            (ROOT / k).write_bytes(before[k])
+        else:
+            (ROOT / k).unlink()
+    assert not changed, f"a Try-it command changed a committed file under data/: {changed}"
 
 
 @pytest.mark.parametrize("lesson, command, expected, mode, exit_code", CASES)
@@ -134,9 +152,13 @@ def test_tryit_output(lesson, command, expected, mode, exit_code, unchanged, tmp
     # The lessons' scratch files live under /tmp; each run gets its own folder instead, so two runs never collide
     # and pytest cleans up. No expected output names a /tmp path.
     assert "/tmp/" not in expected
+    if not HAS_HISTORY and REWRITES_COMMITS.search(command):
+        pytest.skip(NEEDS_HISTORY)
     command = command.replace("/tmp/", f"{tmp_path}/")
     run = subprocess.run(["bash", "-c", command], cwd=ROOT, env=env(), capture_output=True, text=True, timeout=600)
     got, want = run.stdout.splitlines(), expected.splitlines()
+    if not HAS_HISTORY:
+        got = [line for line in got if line != Q.NO_HISTORY]
     if "quality.py --live" in command:
         want[0] = f"as of {date.today().isoformat()}"
         if stale_today():  # lesson 3: the live run fails once a dataset is too old, on purpose

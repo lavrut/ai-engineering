@@ -5,11 +5,14 @@ never depend on today's date, so they stay green for as long as the data does.
 """
 import json
 import shutil
+import subprocess
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+
+from history import needs_history
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -44,6 +47,7 @@ def test_git_age_days_none_without_git(tmp_path):
     assert Q.git_age_days(tmp_path / "missing.jsonl", AS_OF) is None
 
 
+@needs_history
 def test_git_age_days_is_measured_from_as_of():
     stamp = Q.commit_time(TICKETS)
     assert stamp is not None
@@ -53,12 +57,52 @@ def test_git_age_days_is_measured_from_as_of():
     assert Q.git_age_days(TICKETS, day - timedelta(days=5)) == 0  # as_of before the commit: never negative
 
 
+@needs_history
 def test_a_dataset_400_days_old_fails_freshness():
     day = datetime.fromtimestamp(Q.commit_time(TICKETS), timezone.utc).date()
     out = Q.run(CONTRACTS / "tickets.v1.yaml", TICKETS, as_of=day + timedelta(days=401))
     f = freshness(out)
     assert f["ok"] is False and f["detail"].endswith("days old, over max 365")
     assert 400 <= float(f["detail"].split()[0]) <= 401
+
+
+def git(cwd, *args):
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args],
+                   cwd=cwd, check=True, capture_output=True)
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git not installed")
+def test_a_shallow_clone_has_no_history(tmp_path):
+    """Ruling D17: a shallow clone dates every file to its tip, so it counts as no history."""
+    full = tmp_path / "full"
+    full.mkdir()
+    git(full, "init", "-q")
+    (full / "a.jsonl").write_text('{"id": 1}\n')
+    git(full, "add", ".")
+    git(full, "commit", "-q", "-m", "one")
+    (full / "b.jsonl").write_text('{"id": 2}\n')
+    git(full, "add", ".")
+    git(full, "commit", "-q", "-m", "two")
+    shallow = tmp_path / "shallow"
+    git(tmp_path, "clone", "-q", "--depth", "1", f"file://{full}", str(shallow))
+    assert Q.has_history(full) is True and Q.commit_time(full / "a.jsonl") is not None
+    assert Q.has_history(shallow) is False and Q.commit_time(shallow / "a.jsonl") is None
+    assert Q.has_history(tmp_path) is False
+
+
+def test_check_without_history_compares_all_but_the_dates(tmp_path, monkeypatch, capsys, frozen_clock):
+    """Ruling D17: without history --check still compares every verdict but freshness, and says so."""
+    p = tmp_path / "verdicts.json"
+    Q.write_verdicts(p, as_of=AS_OF)
+    monkeypatch.setattr(Q, "has_history", lambda where: False)
+    assert Q.check(p) == 0
+    assert capsys.readouterr().out.splitlines() == ["no git history: commit dates not compared", "verdicts.json matches"]
+    doc = json.loads(p.read_text())
+    doc["datasets"]["tickets"]["verdicts"][1]["detail"] = "changed"
+    p.write_text(json.dumps(doc))
+    assert Q.check(p) == 1
+    assert capsys.readouterr().out.splitlines() == ["no git history: commit dates not compared",
+                                                    "verdicts.json is stale: run data/python/quality.py"]
 
 
 def test_freshness_unknown_in_zip_download(tmp_path):
@@ -84,6 +128,7 @@ def test_merge_rolls_files_up_per_rule():
 
 
 # ── 3. verdicts.json ────────────────────────────────────────────────────────
+@needs_history
 def test_verdicts_json_check(capsys, frozen_clock):
     """--check rebuilds with the stored as_of, so a later day changes nothing."""
     assert Q.main(["--check"]) == 0
@@ -137,6 +182,7 @@ def test_default_run_keeps_the_stored_as_of(tmp_path, monkeypatch, frozen_clock)
     assert json.loads(p.read_text())["as_of"] == "2026-10-28"
 
 
+@needs_history
 def test_live_past_max_age_exits_1_and_writes_nothing(tmp_path, monkeypatch, capsys):
     p = tmp_path / "verdicts.json"
     monkeypatch.setattr(Q, "VERDICTS", p)
