@@ -6,10 +6,10 @@ title: Writing a data contract
 goal: Write a data contract in five sections, give each field a type, a rule and a meaning, and decide whether a change needs a new major version.
 minutes: 20
 quiz:
-  - question: The LLMs track wants to add a `language` field to every ticket. Under the versioning rule, what happens to tickets.v1?
+  - question: The LLMs track wants to add a `language` field to every ticket. Under the versioning rule, what happens to `tickets.v1`?
     options:
       - It stays on the same major. An added field breaks no reader, and the validator reports an unknown field as extra_field without failing
-      - It needs tickets.v2, because the schema changed
+      - It needs `tickets.v2`, because the schema changed
       - Every consumer must be updated first
       - The field cannot be added while v1 has consumers
     answer: 0
@@ -22,7 +22,7 @@ quiz:
       - It is optional and could be left out
     answer: 2
     explanation: The contract is documentation that is checked. The checkable parts (type, enum, pattern) keep the data honest. The meaning keeps readers from misusing honest data, and the loader still refuses a field without one.
-  - question: tickets.v1 is `deprecated`. A contract author deletes its `sunset` line. What does the validator do?
+  - question: '`tickets.v1` is `deprecated`. A contract author deletes its `sunset` line. What does the validator do?'
     options:
       - Nothing; sunset is optional
       - It refuses the contract itself (info.sunset is required when info.status is deprecated), so no dataset is checked against it

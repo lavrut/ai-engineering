@@ -16,6 +16,7 @@ date, and once a dataset is past its max_age_days the run must fail, which lesso
 None of these commands can pay: no track's record mode is named, and ANTHROPIC_API_KEY is removed
 from the environment they run in. Some commands rewrite derived files (catalog.py, gate.py) with
 the bytes already committed, so the test also checks that no committed file under data/ changed.
+The scratch files the lessons write under /tmp go to a per-test temporary folder here instead.
 """
 import hashlib
 import os
@@ -129,7 +130,11 @@ def unchanged():
 
 
 @pytest.mark.parametrize("lesson, command, expected, mode, exit_code", CASES)
-def test_tryit_output(lesson, command, expected, mode, exit_code, unchanged):
+def test_tryit_output(lesson, command, expected, mode, exit_code, unchanged, tmp_path):
+    # The lessons' scratch files live under /tmp; each run gets its own folder instead, so two runs never collide
+    # and pytest cleans up. No expected output names a /tmp path.
+    assert "/tmp/" not in expected
+    command = command.replace("/tmp/", f"{tmp_path}/")
     run = subprocess.run(["bash", "-c", command], cwd=ROOT, env=env(), capture_output=True, text=True, timeout=600)
     got, want = run.stdout.splitlines(), expected.splitlines()
     if "quality.py --live" in command:

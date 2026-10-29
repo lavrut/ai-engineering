@@ -22,14 +22,14 @@ quiz:
       - Each domain team owns its datasets as products, and answers for them to the teams that read them
     answer: 3
     explanation: A mesh is about who owns the data, an organisational choice. A fabric is about the technology that connects data, wherever it lives. The two fit together, and the course has both. Each track owns its files (`owner` in every contract names a track), and the data track lays a small fabric over them.
-  - question: The track's contracts use the section names of the Open Data Contract Standard but install no contract tool. Why name the standard at all?
+  - question: The track's contracts follow the shape of the Open Data Contract Standard, with section names of the course's own, and install no contract tool. Why name the standard at all?
     options:
-      - So a reader who meets a real contract recognises its shape. The format here is a small subset, and the tools that read the full standard are named in this lesson, not used
+      - So a reader who meets a real ODCS contract recognises each part under its own name. The format here is a small subset, and the data contract CLIs that read the full standard are named in this lesson, not used
       - Because the validators need the standard's library to run
       - Because the standard requires exactly five sections
       - So the contracts can be uploaded to a hosted catalogue
     answer: 0
-    explanation: The standard is the reference form. Borrowing its shape costs nothing, and it means the skill transfers. The validators here are hand-built with the standard library and `pyyaml`, so you can read every line of them.
+    explanation: The standard is the reference form. Following its shape costs nothing, and it means the skill transfers. Schema, quality, service levels and who answers for the data are the same ideas under the standard's names. The validators here are hand-built with the standard library and `pyyaml`, so you can read every line of them.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
 import FlowDiagram from '../../../components/FlowDiagram.astro';
@@ -54,13 +54,21 @@ The course already works like a mesh. Each track owns its files and no other tra
 
 The fabric's key part is the <Term t="data contract" />: a file in which the <Term t="producer" /> of a dataset states what it promises its <Term t="consumer" />s. It gives the shape of each field and what the field means. It gives the quality and freshness the producer guarantees, who owns the data, and who reads it. A contract turns "the agents eval happens to work" into "the agents eval reads `tickets.v2`, and here is what `tickets.v2` guarantees".
 
-The reference form is the <Term t="Open Data Contract Standard" /> (ODCS), an open YAML format maintained by the Bitol project under the Linux Foundation. The contracts in this track borrow its shape in a small subset of five sections. `info` holds the standard's fundamentals: id, version, status and owner. `schema` and `quality` keep the standard's own names. `servicing` holds what the standard calls service-level properties, here only freshness. `consumers` names who reads the data. A reader who meets a full ODCS contract will recognise each part.
+The reference form is the <Term t="Open Data Contract Standard" /> (ODCS), an open YAML format maintained by the Bitol project under the Linux Foundation. The contracts in this track are in the shape of ODCS, a small subset in five sections. The section names are the course's own, not the standard's, so here is what each one corresponds to in ODCS:
+
+- `info` corresponds to the standard's fundamentals: id, version, status and description.
+- `schema` corresponds to its schema.
+- `quality` corresponds to its data quality rules.
+- `servicing` corresponds to its service-level agreement (`slaProperties`); here it holds only freshness.
+- `consumers`, together with `owner` in `info`, corresponds to its team and roles: who answers for the data and who relies on it.
+
+A reader who meets a full ODCS contract will find each part under the standard's own name.
 
 ### What this track builds
 
 - A catalogue of the 12 datasets the tracks share, with their lineage (lesson 2).
 - Quality and freshness checks run against each file in place (lesson 3).
-- Contracts for 3 datasets that cross a track boundary: the tickets, the complaints and the agent traces (lesson 4).
+- Contracts for 3 datasets that cross a track boundary: the tickets, the complaints and the agent traces (lesson 4). A fourth, the migrated tickets, arrives in lesson 6.
 - One validator in Python and its twin in Go, with identical verdicts (lesson 5).
 - A breaking change carried through a new version, a <Term t="sunset" /> date and a migration, without surprising any reader (lesson 6).
 

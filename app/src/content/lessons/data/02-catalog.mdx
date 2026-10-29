@@ -6,7 +6,7 @@ title: Cataloguing and lineage
 goal: Build a catalogue of shared datasets from a fixed list, read its schema sketches, and use lineage to say which readers a change to one dataset would reach.
 minutes: 20
 quiz:
-  - question: catalog.py reads a fixed list of dataset paths instead of walking the repo for data files. What does that buy?
+  - question: '`catalog.py` reads a fixed list of dataset paths instead of walking the repo for data files. What does that buy?'
     options:
       - Speed; walking a repo is slow
       - Nothing; a crawl finds the same datasets
@@ -22,7 +22,7 @@ quiz:
       - The contract is generated from the sketch
     answer: 1
     explanation: A sketch only describes. It reads the first 50 rows and reports what it saw, so it cannot tell a rule from an accident. The contract is written by a person and promises the type, the allowed values and the meaning.
-  - question: Lineage shows an edge from tickets to tickets_v2 under tickets.v1. What question does that edge answer?
+  - question: Lineage shows an edge from `tickets` to `tickets_v2` under `tickets.v1`. What question does that edge answer?
     options:
       - Which model wrote the tickets
       - How large the v2 file is

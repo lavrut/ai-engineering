@@ -33,6 +33,27 @@ type V = { rule: string; field: string | null; ok: boolean; detail: string };
 const verdict = (key: string, rule: string, field: string | null) => (ds[key].verdicts as V[]).find((v) => v.rule === rule && v.field === field)!;
 const hasSection = (src: string, n: number) => new RegExp(`^(#|//) ── ${n}\\. `, 'm').test(src);
 
+// Inline code whose digits are names, not numbers, and so need no pin: every other digit in inline code is checked
+// like prose. Listed one by one on purpose, so a new span with a digit has to be added here or pinned.
+const CODE_OK: RegExp[] = [
+  /^(tickets|complaints|agent-traces)\.v[12](\.yaml|\.contract\.json)?$/, // contract ids and files
+  /^tickets_v2$/, // the catalogued v2 dataset
+  /^tickets-v2-before$/, // the verdicts.json entry for v1 judged by v2
+  /^t0\d\d$/, // ticket ids (t001, t061)
+  /^[\w.-]*\/[\w./*<>-]+$/, // file paths (data/data/tickets.v2.jsonl, agents_eval_v2.py under data/python/consumers)
+  /^agents_eval_v2\.py$/,
+  /^data-contract-tickets(-v2)?$/, // code-source ids
+  /^RE2$/,
+];
+
+// A code quote that appears verbatim in the track's sources is pinned by that source text (the walkthrough spans).
+const SOURCES = [
+  ...['contract.py', 'catalog.py', 'quality.py', 'gate.py', 'migrate_tickets.py'].map((f) => `data/python/${f}`),
+  ...['contract.go', 'rules.go', 'main.go'].map((f) => `data/go/validate/${f}`),
+  ...['tickets.v1', 'tickets.v2', 'complaints.v1', 'agent-traces.v1'].map((c) => `data/contracts/${c}.yaml`),
+].map(text).join('\n');
+const codeOk = (span: string) => CODE_OK.some((re) => re.test(span)) || SOURCES.includes(span);
+
 const LESSONS = ['01-fabric', '02-catalog', '03-quality', '04-contract', '05-enforce', '06-capstone'];
 const read = (name: string) => readFileSync(join(lessonsDir, `${name}.mdx`), 'utf8');
 
@@ -61,7 +82,7 @@ const CLAIMS: Claim[] = [
     // the three the lesson names: the tickets, the complaints and the agent traces, each with a declared reader
     expect(v1.map((c) => c.consumers.map((x: { name: string }) => x.name))).toEqual([['mcp-read-server'], ['mcp-read-server'], ['agents-eval']]);
   }],
-  ['01-fabric', 'in a small subset of five sections', () => expect(Object.keys(contract('tickets.v1')).sort()).toEqual(['consumers', 'info', 'quality', 'schema', 'servicing'])],
+  ['01-fabric', 'a small subset in five sections', () => expect(Object.keys(contract('tickets.v1')).sort()).toEqual(['consumers', 'info', 'quality', 'schema', 'servicing'])],
   ['01-fabric', 'The 12 datasets are written by 5 tracks, and the lines between them are the 31 edges in `lineage.json`', () => {
     expect(new Set(Object.values(catalog).map((e) => (e as { producer: string }).producer))).toEqual(new Set(['llms', 'data', 'ml', 'mcp', 'agents']));
     expect(lineage.edges).toHaveLength(31);
@@ -94,6 +115,7 @@ const CLAIMS: Claim[] = [
     expect(evalIds.filter((t) => t !== 't061')).toHaveLength(12);
     expect(Object.values(catalog).some((e) => (e as { path: string }).path.includes('injection'))).toBe(false);
   }],
+  ['02-catalog', 'reports a field holding both `1` and `1.5` as `number`', () => expect(py('catalog.py')).toContain('if set(kinds) == {"integer", "number"}:\n            out[name] = "number"')],
   ['02-catalog', 'Section 3 builds the catalogue', () => expect(py('catalog.py')).toContain('# ── 3. The catalogue')],
   ['02-catalog', 'listed beside it in section 1', () => expect(py('catalog.py')).toContain('# ── 1. The datasets')],
   ['02-catalog', 'Section 4 turns the catalogue into lineage', () => expect(py('catalog.py')).toContain('# ── 4. Lineage')],
@@ -102,7 +124,6 @@ const CLAIMS: Claim[] = [
   ['03-quality', 'the file was 2 days old as of 2026-10-28, the pinned date', () => {
     expect([ds.tickets.age_days, verdicts.as_of]).toEqual([2.0, '2026-10-28']);
   }],
-  ['03-quality', 'verdicts.json says the tickets are 2 days old as of 2026-10-28', () => expect(verdict('tickets', 'freshness', null).detail).toBe('2 days old (max 365)')],
   ['03-quality', 'There are 6 trace sets and 134 files', () => {
     expect(traceSets).toHaveLength(6);
     expect(traceSets.reduce((a, k) => a + ds[k].files, 0)).toBe(134);
@@ -114,7 +135,8 @@ const CLAIMS: Claim[] = [
     for (const id of ['tickets.v1', 'tickets.v2', 'complaints.v1', 'agent-traces.v1']) expect(contract(id).servicing.freshness.max_age_days, id).toBe(365);
   }],
   ['03-quality', 'the same command fails on freshness and exits with 1', () => expect(py('quality.py')).toContain('return 0 if ok else 1')],
-  ['03-quality', 'A dataset is checked with --age-days 400 against a contract whose max_age_days is 365', () => {
+  ['03-quality', '`verdicts.json` says the tickets are 2 days old as of 2026-10-28', () => expect([ds.tickets.age_days, verdicts.as_of]).toEqual([2.0, '2026-10-28'])],
+  ['03-quality', 'A dataset is checked with `--age-days 400` against a contract whose `max_age_days` is 365', () => {
     expect(contract('tickets.v1').servicing.freshness.max_age_days).toBe(365);
   }],
   ['03-quality', 'the producer promised data no older than 365 days', () => expect(contract('tickets.v1').servicing.freshness.max_age_days).toBe(365)],
@@ -171,6 +193,13 @@ const CLAIMS: Claim[] = [
     expect(py('contract.py')).toContain('return 1 if any(not x["ok"] for x in verdicts) else 0');
     expect(goSrc('main.go')).toContain('return 1');
   }],
+  ['05-enforce', "Python's `re` accepts the pattern `^t(?=\\d{3}$)\\d+$`, and it matches `t001`", () => {
+    // the Try-it block runs it (test_lesson_tryits.py); both validators' tables refuse `(?=`
+    expect(read('05-enforce')).toContain('p = r"^t(?=\\d{3}$)\\d+$"');
+    expect(text('data/python/tests/test_contract.py')).toContain('("(?=x)", "(?=")');
+    expect(goSrc('validate_test.go')).toContain('{"(?=x)", "(?="}');
+  }],
+  ['05-enforce', 'so `1` and `"1"` are different keys in both languages', () => expect(py('contract.py')).toContain('key = _show([r[n] for n in key_fields])')],
   ['05-enforce', 'and the same `400 days old` rather than `400.0`', () => expect(py('contract.py')).toContain('return f"{x:g}"')],
   ['05-enforce', 'an age prints as `1.8` and a limit as `365` in both', () => {
     expect(ds.complaints.age_days).toBe(1.8);
@@ -203,7 +232,7 @@ const CLAIMS: Claim[] = [
     expect(verdict('tickets-v2-before', 'extra_field', 'priority')).toMatchObject({ ok: true });
     expect(ds['tickets-v2-before'].expect).toBe('fail');
   }],
-  ['06-capstone', 'The eval scores 13 tickets: 12 come from the v2 file, and the thirteenth, `t061`', () => {
+  ['06-capstone', "The shim returns the eval's 13 tickets: 12 come from the v2 file, and the thirteenth, `t061`", () => {
     expect(evalIds).toHaveLength(13);
     expect(evalIds.at(-1)).toBe('t061');
     expect(text('mcp/data/injection.jsonl')).toContain('"id": "t061"');
@@ -219,9 +248,14 @@ const CLAIMS: Claim[] = [
     expect(gate.reason).toBe('every consumer is green on the version it declares (4 of 4)');
   }],
   ['06-capstone', '`sunset: 2027-01-31`', () => expect(text('data/contracts/tickets.v1.yaml')).toContain('sunset: 2027-01-31')],
-  ['06-capstone', 'The agents eval has moved, the MCP read server has until 2027-01-31', () => {
+  ['06-capstone', 'The agents eval has a v2 reader ready (the shim), the MCP read server has until 2027-01-31', () => {
     expect(contract('tickets.v2').consumers.map((c: { name: string }) => c.name)).toEqual(['agents-eval']);
     expect(contract('tickets.v1').info.sunset).toBe('2027-01-31');
+  }],
+  ['06-capstone', '`data/python/tests/test_capstone.py` proves the shim returns the same 13 tickets as the agents track\'s loader, field for field', () => {
+    // the agents track's own loader still reads the v1 file; the shim stands in for the moved loader (review I2)
+    expect(text('agents/desk/python/desk_core.py')).toContain('LUMEN_TICKETS = REPO / "llms" / "data" / "tickets.jsonl"');
+    expect(text('data/python/tests/test_capstone.py')).toContain('assert [t["id"] for t in v2] == [t["id"] for t in v1] and len(v2) == 13');
   }],
   ['06-capstone', 'This asks the gate as of 2027-02-01', () => expect('2027-02-01' > contract('tickets.v1').info.sunset).toBe(true)],
   ['06-capstone', '`version: 2`', () => expect(text('data/contracts/tickets.v2.yaml')).toContain('  version: 2\n  status: active')],
@@ -256,6 +290,24 @@ describe('data lessons: files, aids and anatomy', () => {
       expect(quiz.length, l).toBeLessThanOrEqual(3);
       for (const q of quiz) expect(q.options, l).toHaveLength(4);
     }
+  });
+
+  it('lesson 1 states the ODCS mapping honestly (ruling D15): the shape of ODCS, the names the course\'s own, each section beside its ODCS one', () => {
+    const l1 = read('01-fabric');
+    expect(l1).toContain('The contracts in this track are in the shape of ODCS');
+    expect(l1).toContain("The section names are the course's own, not the standard's");
+    for (const line of [
+      "- `info` corresponds to the standard's fundamentals",
+      '- `schema` corresponds to its schema.',
+      '- `quality` corresponds to its data quality rules.',
+      "- `servicing` corresponds to its service-level agreement (`slaProperties`)",
+      '- `consumers`, together with `owner` in `info`, corresponds to its team and roles',
+    ]) expect(l1).toContain(line);
+    // quiz 3 no longer claims the course uses ODCS's section names, nor that every named tool reads ODCS
+    const q3 = (matter(l1).data.quiz as { question: string; options: string[]; answer: number }[])[2];
+    expect(q3.question).toContain('with section names of the course\'s own');
+    expect(q3.options[q3.answer]).toContain('the data contract CLIs that read the full standard');
+    expect(q3.options[q3.answer]).not.toMatch(/Great Expectations|dbt/);
   });
 
   it('lesson 1 carries the concept tour: fabric, mesh, warehouse, ODCS, the tools in one callout, and what a production fabric adds', () => {
@@ -309,7 +361,7 @@ describe('data lessons: every number is pinned', () => {
       .replace(/\b[Ll]esson \d\b/g, ' ')
       .replace(/^\d\. /gm, ' ')
       .replace(/^### \d\. /gm, ' ')
-      .replace(/`[^`]*`/g, ' ') // inline code: identifiers, paths and commands (tickets.v1, t061, --age-days)
+      .replace(/`([^`]*)`/g, (_m, span: string) => (codeOk(span) ? ' ' : ` ${span} `))
       .replace(/\b(tickets|complaints|agent-traces)\.v\d\b/g, ' ')
       .replace(/\bv[12]\b/g, ' ')
       .replace(/\btickets_v2\b/g, ' ')

@@ -2,27 +2,27 @@
 track: data
 order: 6
 slug: capstone
-title: "Capstone: a breaking change under contract"
+title: '"Capstone: a breaking change under contract"'
 goal: Carry a breaking change through a new major version, a migration, a sunset date and a consumer shim, and show with a gate that every reader is green on the version it declares.
 minutes: 25
 quiz:
-  - question: tickets.v2 renames `priority` to `urgency`. Why not just rename the field in the v1 file, since both readers are in the same repo?
+  - question: '`tickets.v2` renames `priority` to `urgency`. Why not just rename the field in the v1 file, since both readers are in the same repo?'
     options:
       - The JSON Lines format cannot rename a field
       - Renaming in place would be fine if done in one commit
       - The validators cannot read renamed fields
       - The MCP read server looks up `priority`. Renaming in place breaks it the moment the file changes, before anyone has moved. A new major beside the old one lets each reader move on its own schedule, by the sunset
     answer: 3
-    explanation: A breaking change is about readers, not files. With v1 kept and deprecated, no reader is surprised. The agents eval has moved, the MCP read server has until 2027-01-31, and the gate shows both green meanwhile.
-  - question: The gate re-validates each consumer's declared contract against its dataset itself, instead of reading the committed verdicts.json. What does that prevent?
+    explanation: A breaking change is about readers, not files. With v1 kept and deprecated, no reader is surprised. The agents eval has a v2 reader ready (the shim), the MCP read server has until 2027-01-31, and the gate shows both green meanwhile.
+  - question: The gate re-validates each consumer's declared contract against its dataset itself, instead of reading the committed `verdicts.json`. What does that prevent?
     options:
       - Nothing; the two always agree
       - Slow runs
-      - A hand-edited or stale verdicts.json turning the gate green. The gate only trusts a verdict it computed, and takes just the pinned date from that file
+      - A hand-edited or stale `verdicts.json` turning the gate green. The gate only trusts a verdict it computed, and takes just the pinned date from that file
       - It lets the gate skip freshness
     answer: 2
     explanation: A gate that reads someone else's verdicts is only as good as that file. Recomputing is cheap here, and it removes the question. The pinned as_of keeps its ages equal to quality.py's.
-  - question: The sunset date has passed, and the MCP read server is still on tickets.v1. What does the gate report, and why that and not a failure?
+  - question: The sunset date has passed, and the MCP read server is still on `tickets.v1`. What does the gate report, and why that and not a failure?
     options:
       - A warning naming the consumer and the sunset, while the gate stays green. The data still meets v1, so nothing is broken. The warning shows who has not kept the promise to move
       - A failure, because the date has passed
@@ -58,7 +58,7 @@ The new category needs no migration. An enum that gains a value accepts every ro
 
 ### 4. Move one reader, keep the other
 
-The agents eval moves to v2. Its scorer was written against `priority`, and the agents track is never edited, so the move goes through a <Term t="shim" />: `data/python/consumers/agents_eval_v2.py` reads the v2 file and renames `urgency` back to `priority` at the edge. The scorer keeps working unchanged, while the data it reads is governed by v2. The eval scores 13 tickets: 12 come from the v2 file, and the thirteenth, `t061`, is the prompt-injection canary from `mcp/data/injection.jsonl`. That file is outside every contract, so the shim takes it as is.
+The agents eval moves to v2. In a real migration the consumer's own code would change: its loader would open the v2 file and read `urgency`. This course never edits another track, so the agents track's own loader, `load_eval_tickets` in `agents/desk/python/desk_core.py`, still reads the v1 file. A <Term t="shim" /> stands in for the moved loader: `data/python/consumers/agents_eval_v2.py` reads the v2 file and renames `urgency` back to `priority` at the edge, so the eval's scorer would keep working unchanged. `data/python/tests/test_capstone.py` proves the shim returns the same 13 tickets as the agents track's loader, field for field. The contract and the gate treat the shim as the agents eval's v2 reader; switching the eval over to it is the agents track's step. The shim returns the eval's 13 tickets: 12 come from the v2 file, and the thirteenth, `t061`, is the prompt-injection canary from `mcp/data/injection.jsonl`. That file is outside every contract, so the shim takes it as is.
 
 The MCP read server stays on v1 until the sunset.
 
@@ -74,7 +74,7 @@ v1 and v2 sit side by side. Look at each version's status, sunset and consumers.
 
 <LineageDiff from="tickets.v1" to="tickets.v2" />
 
-The diff shows `priority` only in v1, `urgency` only in v2, and `category` gaining `security`. The migration edge runs from `tickets` to `tickets_v2`, reading under `tickets.v1`. The MCP read server is green on v1, with its sunset still ahead as of 2026-10-28. The agents eval is green on v2. The gate counts every consumer of every contract, 4 of 4, and is green.
+The diff shows `priority` only in v1, `urgency` only in v2, and `category` gaining `security`. The migration edge runs from `tickets` to `tickets_v2`, reading under `tickets.v1`. The MCP read server is green on v1, with its sunset still ahead as of 2026-10-28. The agents eval, read through the shim, is green on v2. The gate counts every consumer of every contract, 4 of 4, and is green.
 
 ## The code
 
@@ -180,4 +180,4 @@ You should see:
 every consumer is green on the version it declares (4 of 4); warning: mcp-read-server is on tickets.v1, past its sunset 2027-01-31
 ```
 
-Still green, with a warning that names the reader that has not moved. The next step belongs to the MCP track: move its read server to v2, through its own shim or a change to its loader. Then `tickets.v1` has no consumers left and can be retired.
+Still green, with a warning that names the reader that has not moved. The next steps belong to the other tracks: the agents track switches its eval to the v2 loader, and the MCP track moves its read server to v2, through its own shim or a change to its loader. Then `tickets.v1` has no consumers left and can be retired.

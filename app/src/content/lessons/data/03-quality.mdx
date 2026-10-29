@@ -6,10 +6,10 @@ title: Quality and freshness checks
 goal: Run a dataset's quality rules where the data lives, read the verdicts, and explain why freshness is judged as of a pinned date.
 minutes: 20
 quiz:
-  - question: verdicts.json says the tickets are 2 days old as of 2026-10-28, and it will still say so next year. Why is that not a bug?
+  - question: '`verdicts.json` says the tickets are 2 days old as of 2026-10-28, and it will still say so next year. Why is that not a bug?'
     options:
       - Git dates never change, so ages never change
-      - The file stores the date it was judged as of, and --check recomputes as of that same date, so the committed file does not go stale. The run that asks about today is quality.py --live, and that one is meant to fail once a dataset is too old
+      - The file stores the date it was judged as of, and `--check` recomputes as of that same date, so the committed file does not go stale. The run that asks about today is `quality.py --live`, and that one is meant to fail once a dataset is too old
       - Freshness is turned off for committed files
       - The tickets are regenerated every day
     answer: 1
@@ -22,7 +22,7 @@ quiz:
       - No two rows share the same pair of desk and ticket; the same ticket may appear once per desk
     answer: 3
     explanation: The fields listed under `unique` are one composite key. A row repeats only when every field matches. A row missing any key field fails the rule too, with its row number.
-  - question: A dataset is checked with --age-days 400 against a contract whose max_age_days is 365. Which verdict fails, and what does it say about the data?
+  - question: A dataset is checked with `--age-days 400` against a contract whose `max_age_days` is 365. Which verdict fails, and what does it say about the data?
     options:
       - freshness fails; the rows may all be valid, but the producer promised data no older than 365 days, and this file is older
       - row_count fails, because old files have fewer rows
