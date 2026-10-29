@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { BEATS, PHONE, TEST_COUNT_NOTE, VIEWPORT, plannedMs } from '../scripts/demo/beats.mjs';
 import { formatTime, timingsToCues, toSrt } from '../scripts/demo/srt.mjs';
 import { CAPTION_CSS } from '../scripts/demo/caption.mjs';
+import { CURSOR_CSS, CURSOR_MS, OVERLAY_CSS, TRANSITION_MS } from '../scripts/demo/overlay.mjs';
 
 const KINDS = new Set(['goto', 'scrollTo', 'click', 'clickUntilDisabled', 'select', 'wait', 'resize', 'caption', 'phoneFrame']);
 const STEPPING = /\.mc-btn-primary|Next/;
@@ -52,9 +53,10 @@ describe('the beats', () => {
   it('plans enough fixed waiting to clear the 140 s minimum with a margin', () => {
     // The recording's length is the fixed waits plus the replay beat's stepping; the fixed part alone must
     // leave a margin above the encoder's 140 s floor so a faster machine cannot fail the encode.
-    // Fixed waits of about 118 s plus roughly 30 s of stepping and overheads land near 150 s, inside 140–170.
-    expect(plannedMs(BEATS)).toBeGreaterThanOrEqual(118000);
-    expect(plannedMs(BEATS)).toBeLessThanOrEqual(130000);
+    // Fixed waits of about 82 s plus roughly 65 s of cursor glides, presses, transitions, eased scrolls and the
+    // replay beat's stepping land near 150 s, inside 140–170.
+    expect(plannedMs(BEATS)).toBeGreaterThanOrEqual(80000);
+    expect(plannedMs(BEATS)).toBeLessThanOrEqual(92000);
   });
 
   it('counts the tracks the way the home page does', () => {
@@ -138,6 +140,26 @@ describe('the caption strip', () => {
     expect(CAPTION_CSS).toContain('max-width: 72%');
     expect(CAPTION_CSS).toContain('margin-inline: auto');
     expect(CAPTION_CSS).not.toContain('left: 50%');
+  });
+});
+
+describe('the cursor and the view transitions', () => {
+  it('draws a fixed cursor that glides and presses, and an overlay that fades', () => {
+    expect(CURSOR_CSS).toContain('#demo-cursor');
+    expect(CURSOR_CSS).toContain('pointer-events: none');
+    expect(CURSOR_CSS).toContain(`transform ${CURSOR_MS}ms`);
+    expect(CURSOR_CSS).toContain('#demo-cursor.is-press');
+    expect(OVERLAY_CSS).toContain('#demo-overlay');
+    expect(OVERLAY_CSS).toContain(`opacity ${TRANSITION_MS}ms`);
+    expect(CURSOR_MS).toBeGreaterThanOrEqual(400);
+    expect(TRANSITION_MS).toBeGreaterThanOrEqual(250);
+  });
+
+  it('records in the light theme unless told otherwise', async () => {
+    const { themeOf } = await import('../scripts/demo/record.mjs');
+    expect(themeOf([])).toBe('light');
+    expect(themeOf(['--theme', 'dark'])).toBe('dark');
+    expect(() => themeOf(['--theme', 'sepia'])).toThrow('light or dark');
   });
 });
 

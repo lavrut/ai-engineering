@@ -31,7 +31,7 @@ Builds on: the published course page (`app/publish`, v16 of the artifact), the a
 
 ## 3. The beats and the captions
 
-Dark theme (emulated `prefers-color-scheme: dark`), 1920×1080, the page served from `app/publish` on the loopback. Each caption is at most two short lines and stays for its beat; two captions in one beat change halfway.
+Light theme (emulated `prefers-color-scheme: light` and `data-theme="light"`; `--theme dark` records the dark theme instead), 1920×1080, the page served from `app/publish` on the loopback. Each caption is at most two short lines and stays for its beat; two captions in one beat change halfway. A drawn cursor glides to every element before it is clicked and shows a press; every view change fades out and in over 350 ms each way; scrolls are eased over 900 ms. (Changed on 2026-10-29 at the user's request from the dark, cursor-less, hard-cut first version.)
 
 | # | Seconds | On screen | Caption |
 |---|---|---|---|
