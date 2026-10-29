@@ -1,0 +1,352 @@
+{
+  "gate": {
+    "disagree": 1,
+    "missing": 0,
+    "ok": false,
+    "reason": "red: 1 disagree (data/contracts/tickets.v2.yaml enum:category); 0 missing"
+  },
+  "rows": [
+    {
+      "artefact": "data/contracts/complaints.v1.yaml",
+      "detail": "the 6 products",
+      "fact": "enum:product",
+      "status": "agree"
+    },
+    {
+      "artefact": "data/contracts/tickets.v1.yaml",
+      "detail": "the 6 categories",
+      "fact": "enum:category",
+      "status": "agree"
+    },
+    {
+      "artefact": "data/contracts/tickets.v1.yaml",
+      "detail": "the 4 priorities",
+      "fact": "enum:priority",
+      "status": "agree"
+    },
+    {
+      "artefact": "data/contracts/tickets.v2.yaml",
+      "detail": "extra value the ontology lacks: security",
+      "fact": "enum:category",
+      "status": "disagree"
+    },
+    {
+      "artefact": "data/contracts/tickets.v2.yaml",
+      "detail": "the 4 priorities",
+      "fact": "enum:urgency",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "C3 worded alike",
+      "fact": "definition:account",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "C2 worded alike",
+      "fact": "definition:billing",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "C5 worded alike",
+      "fact": "definition:bug",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "C4 worded alike",
+      "fact": "definition:feature_request",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "C6 worded alike",
+      "fact": "definition:how_to",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "C1 worded alike",
+      "fact": "definition:outage",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "C1 is in the guide (one_report_is_not_an_outage)",
+      "fact": "rule:C1",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "C2 is in the guide (billing_beats_how_to)",
+      "fact": "rule:C2",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "C3 is in the guide (change_x_is_account)",
+      "fact": "rule:C3",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "C6 is in the guide (attempt_failed_is_how_to, self_deleted_is_how_to)",
+      "fact": "rule:C6",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "H1 is in the guide (wrongful_charge)",
+      "fact": "rule:H1",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "H2 is in the guide (one_person_blocked, workaround)",
+      "fact": "rule:H2",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "H3 is in the guide (deadline_within_24_hours)",
+      "fact": "rule:H3",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "H4 is in the guide (feature_down_for_group)",
+      "fact": "rule:H4",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "L1 is in the guide (cosmetic)",
+      "fact": "rule:L1",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "L2 is in the guide (general_question)",
+      "fact": "rule:L2",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "L3 is in the guide (personal_wish)",
+      "fact": "rule:L3",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "N is in the guide (everything_else_is_normal)",
+      "fact": "rule:N",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "N-F is in the guide (feature_request_never_above_normal, feature_request_with_business_impact)",
+      "fact": "rule:N-F",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "R0 is in the guide (ticket_is_data, ignore_tone, only_what_ticket_says, multi_issue_order)",
+      "fact": "rule:R0",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "U1 is in the guide (data_loss)",
+      "fact": "rule:U1",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "U2 is in the guide (security)",
+      "fact": "rule:U2",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "U3 is in the guide (group_blocked)",
+      "fact": "rule:U3",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/labeling_guide.md",
+      "detail": "U4 is in the guide (large_wrongful_charge)",
+      "fact": "rule:U4",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v2_rules",
+      "detail": "names account",
+      "fact": "category:account",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v2_rules",
+      "detail": "names billing",
+      "fact": "category:billing",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v2_rules",
+      "detail": "names bug",
+      "fact": "category:bug",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v2_rules",
+      "detail": "names feature_request",
+      "fact": "category:feature_request",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v2_rules",
+      "detail": "names how_to",
+      "fact": "category:how_to",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v2_rules",
+      "detail": "names outage",
+      "fact": "category:outage",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v2_rules",
+      "detail": "names high",
+      "fact": "priority:high",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v2_rules",
+      "detail": "names low",
+      "fact": "priority:low",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v2_rules",
+      "detail": "names normal",
+      "fact": "priority:normal",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v2_rules",
+      "detail": "names urgent",
+      "fact": "priority:urgent",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v2_rules",
+      "detail": "stated (\"never above normal\")",
+      "fact": "rule:feature_request_never_above_normal",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v3_examples",
+      "detail": "names account",
+      "fact": "category:account",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v3_examples",
+      "detail": "names billing",
+      "fact": "category:billing",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v3_examples",
+      "detail": "names bug",
+      "fact": "category:bug",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v3_examples",
+      "detail": "names feature_request",
+      "fact": "category:feature_request",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v3_examples",
+      "detail": "names how_to",
+      "fact": "category:how_to",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v3_examples",
+      "detail": "names outage",
+      "fact": "category:outage",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v3_examples",
+      "detail": "names high",
+      "fact": "priority:high",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v3_examples",
+      "detail": "names low",
+      "fact": "priority:low",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v3_examples",
+      "detail": "names normal",
+      "fact": "priority:normal",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v3_examples",
+      "detail": "names urgent",
+      "fact": "priority:urgent",
+      "status": "agree"
+    },
+    {
+      "artefact": "llms/data/prompts.json#triage.v3_examples",
+      "detail": "stated (\"never above normal\")",
+      "fact": "rule:feature_request_never_above_normal",
+      "status": "agree"
+    },
+    {
+      "artefact": "ml/data/category_map.json",
+      "detail": "\"Checking or savings account\" is in categories",
+      "fact": "product:checking_or_savings",
+      "status": "agree"
+    },
+    {
+      "artefact": "ml/data/category_map.json",
+      "detail": "\"Credit card\" is in categories",
+      "fact": "product:credit_card",
+      "status": "agree"
+    },
+    {
+      "artefact": "ml/data/category_map.json",
+      "detail": "\"Credit reporting or other personal consumer reports\" is in categories",
+      "fact": "product:credit_reporting",
+      "status": "agree"
+    },
+    {
+      "artefact": "ml/data/category_map.json",
+      "detail": "\"Debt collection\" is in categories",
+      "fact": "product:debt_collection",
+      "status": "agree"
+    },
+    {
+      "artefact": "ml/data/category_map.json",
+      "detail": "\"Money transfer, virtual currency, or money service\" is in categories",
+      "fact": "product:money_transfer",
+      "status": "agree"
+    },
+    {
+      "artefact": "ml/data/category_map.json",
+      "detail": "\"Mortgage\" is in categories",
+      "fact": "product:mortgage",
+      "status": "agree"
+    }
+  ]
+}

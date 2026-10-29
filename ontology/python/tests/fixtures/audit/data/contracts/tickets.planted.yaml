@@ -1,0 +1,24 @@
+# A planted disagreement for test_audit.py: a tickets contract whose category enum
+# carries a value the ontology does not have (security), and whose priority enum lacks
+# one the ontology has (low). The audit must report both as `disagree`, naming them.
+
+# ── 1. info ─────────────────────────────────────────────────────────────────
+info:
+  id: tickets.planted
+  version: 1
+  status: active
+  owner: ontology-tests
+  dataset: none
+  description: A fixture contract, never a real dataset.
+
+# ── 2. schema ───────────────────────────────────────────────────────────────
+schema:
+  fields:
+    - name: category
+      type: string
+      required: true
+      enum: [billing, bug, account, feature_request, how_to, outage, security]
+    - name: priority
+      type: string
+      required: true
+      enum: [normal, high, urgent]
