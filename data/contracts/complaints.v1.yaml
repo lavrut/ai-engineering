@@ -1,0 +1,62 @@
+# complaints.v1 — the 3600 consumer complaints the ML track trains its classifier on;
+# the MCP read server's classify tool serves the model trained from them. Validate:
+#     .venv-data/bin/python data/python/contract.py data/contracts/complaints.v1.yaml ml/data/complaints.jsonl
+
+# ── 1. info ─────────────────────────────────────────────────────────────────
+info:
+  id: complaints.v1
+  version: 1
+  status: active
+  owner: ml
+  dataset: ml/data/complaints.jsonl
+  description: Public consumer complaints, one per line, with the product the classifier learns to predict.
+
+# ── 2. schema ───────────────────────────────────────────────────────────────
+schema:
+  fields:
+    - name: id
+      type: string
+      required: true
+      pattern: '^\d+$'
+      meaning: the complaint number from the public source, kept as text
+    - name: date
+      type: string
+      required: true
+      pattern: '^\d{4}-\d{2}-\d{2}$'
+      meaning: the day the complaint was received, YYYY-MM-DD
+    - name: product
+      type: string
+      required: true
+      enum:
+        - Checking or savings account
+        - Credit card
+        - Credit reporting or other personal consumer reports
+        - Debt collection
+        - Money transfer, virtual currency, or money service
+        - Mortgage
+      meaning: the label the classifier learns; a seventh value would be a class the model has never seen
+    - name: product_raw
+      type: string
+      required: true
+      meaning: the product as the source wrote it, before mapping to the six labels
+    - name: narrative
+      type: string
+      required: true
+      meaning: the complainant's own words, with personal details masked as XXXX
+
+# ── 3. quality ──────────────────────────────────────────────────────────────
+quality:
+  row_count: {min: 3600, max: 3600}
+  unique: [id]
+  enum_coverage: [product]
+
+# ── 4. servicing ────────────────────────────────────────────────────────────
+servicing:
+  freshness:
+    max_age_days: 365
+
+# ── 5. consumers ────────────────────────────────────────────────────────────
+consumers:
+  - name: mcp-read-server
+    version: 1
+    reads: the classify tool's model, trained on ml/data/complaints.jsonl, via mcp/core/python/lumen_core/classify.py

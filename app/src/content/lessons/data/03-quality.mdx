@@ -1,0 +1,154 @@
+---
+track: data
+order: 3
+slug: quality
+title: Quality and freshness checks
+goal: Run a dataset's quality rules where the data lives, read the verdicts, and explain why freshness is judged as of a pinned date.
+minutes: 20
+quiz:
+  - question: 'verdicts.json says the tickets are 2 days old as of 2026-10-28, and it will still say so next year. Why is that not a bug?'
+    options:
+      - Git dates never change, so ages never change
+      - The file stores the date it was judged as of, and --check recomputes as of that same date, so the committed file does not go stale. The run that asks about today is quality.py --live, and that one is meant to fail once a dataset is too old
+      - Freshness is turned off for committed files
+      - The tickets are regenerated every day
+    answer: 1
+    explanation: An age is always "as of" some date. Pinning it keeps the derived file reproducible, so the app and the tests read stable numbers. A live check has to use today, and failing when the data is old is its whole job.
+  - question: 'The tickets contract says unique: [id]. A trace contract could say unique: [desk, ticket]. What does the second one promise?'
+    options:
+      - No two rows share the same desk, and no two rows share the same ticket
+      - Both fields are present in every row
+      - The desk and ticket fields are sorted
+      - No two rows share the same pair of desk and ticket; the same ticket may appear once per desk
+    answer: 3
+    explanation: The fields listed under unique are one composite key. A row repeats only when every field matches. A row missing any key field fails the rule too, with its row number.
+  - question: A dataset is checked with --age-days 400 against a contract whose max_age_days is 365. Which verdict fails, and what does it say about the data?
+    options:
+      - freshness fails; the rows may all be valid, but the producer promised data no older than 365 days, and this file is older
+      - row_count fails, because old files have fewer rows
+      - Every verdict fails
+      - None; freshness is only a warning
+    answer: 0
+    explanation: Freshness is a promise about time, not about the rows. The other 20 verdicts can pass while this one fails. A reader that needs current data learns that before using it.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import QualityReport from '../../../components/data/QualityReport.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+A catalogue says what exists. A quality check says whether it is still what its readers expect. The checks here are the rules a contract states, run against the real file where it lives. The runner never copies a file and never writes to another track's folder.
+
+### The rules
+
+Each rule gives one <Term t="verdict" />: `{rule, field, ok, detail}`. The rules come in three groups.
+
+- **Per field.** `required` (present and not null in every row), `type` (one of the six JSON types), `enum` (one of a fixed list of values) and `pattern` (lesson 5 covers patterns).
+- **Per dataset.** `row_count` (between a min and a max), `unique` (no two rows share a key) and `enum_coverage` (every enum value appears at least once, so a dataset with no `urgent` tickets is caught).
+- **Freshness.** The file is no older than `max_age_days`.
+
+Fields the contract does not mention are reported as `extra_field` and never fail. Adding a field breaks no reader, so it is not a breach.
+
+`unique` takes a list of fields, and the list is one <Term t="composite key" />. `unique: [id]` means no two tickets share an id. `unique: [desk, ticket]` means no two rows share the same pair, so one ticket may appear once per desk. A row missing any of the key fields fails the rule too, naming the row.
+
+### Freshness, as of a date
+
+<Term t="freshness" /> is how old the data is. A pipeline that writes data would stamp each file with the time it was made. These files are committed to git, so their age is the time since the last commit that changed them.
+
+An age is always measured as of some date. `quality.py` writes that date into `verdicts.json` as `as_of`, and every age in the file is measured to it. Rebuilding the file, or running `--check`, uses the stored date, so the committed verdicts give the same bytes next year as today.
+
+That is right for a file the app reads, and wrong for a live check. `quality.py --live` judges freshness as of today and writes nothing. Every contract here allows `max_age_days: 365`. So about a year after a dataset's last commit, `--live` starts failing on it. That is the point. A check that can never fail is not a check, and a stale dataset should stop the pipeline until someone either refreshes it or decides the promise was wrong.
+
+## See it
+
+The first report is the tickets, checked against `tickets.v1`. Read the status line for the age and the date it is measured to. Then press **Show failures only**.
+
+<QualityReport dataset="tickets" />
+
+All 21 verdicts pass, and the freshness line says the file was 2 days old as of 2026-10-28, the pinned date. There are no failures to show.
+
+The second report is the agent traces. Each trace file is one JSON object, so each file is a one-row dataset. The runner checks every file and rolls a trace set up into one entry. Pick a set and read the details: each starts with how many files it covers.
+
+<QualityReport dataset="agent-traces" />
+
+There are 6 trace sets and 134 files. Each set has 26 verdicts, and every one passes in every file. The `extra_field` lines show fields such as `cost_usd` that the contract does not mention: reported, not failed.
+
+## The code
+
+Section 2 measures freshness from git, as of a date.
+
+<CodeTabs source="data-quality" section={2} />
+
+- `["git", "log", "-1", "--format=%at", "--", path.name]` asks git for the Unix time of the file's last commit, as authored: the author time survives a rebase or a cherry-pick, which rewrite the commit time. Without the full git history, as in a zip download or a shallow clone, `commit_time` returns `None`, and freshness reads "unknown: no git date" and passes.
+- `ref = datetime.combine(as_of or today(), datetime.min.time(), timezone.utc).timestamp()` is the start of the as-of day, in UTC, so the same date gives the same age on any machine.
+- `return round(max(0.0, ref - stamp) / 86400, 1)` turns seconds into days, to one decimal place, never negative.
+
+Section 4 writes `verdicts.json`.
+
+<CodeTabs source="data-quality" section={4} />
+
+- `verdicts = C.validate(C.load_contract(CONTRACTS / name), C.read_rows(path), file_age_days=age)` is the whole check: load the contract, read the file, validate. The validator is lesson 5's.
+- `datasets[f"{prefix}/{set_dir.name}"] = _entry(... merge(per_file), ... files=len(files))` stores one entry per trace set. Its shape differs from a one-file entry: it carries `files`, the number of trace files rolled up, and its age is the oldest file's.
+- `return entry["ok"] != (entry.get("expect") == "fail")` is `as_expected`. The capstone records one check that must fail, the v1 file judged by v2, and this counts that failure as fine.
+- `return {"as_of": as_of.isoformat(), "datasets": datasets}` stores the pinned date beside the verdicts.
+
+<Callout kind="go" title="Go takes the age as a flag">
+  The Go validator does not run git. Like `contract.py`, it takes the age from its caller, as `-age-days N`, so the freshness rule is the same in both languages and only the git lookup is Python's.
+</Callout>
+
+## Try it
+
+Judge freshness as of today. It writes nothing:
+
+```bash
+.venv-data/bin/python data/python/quality.py --live
+```
+
+You should see:
+
+```text
+as of 2026-10-28
+OK  tickets (tickets.v1): 21 ok, 0 failed
+OK  complaints (complaints.v1): 17 ok, 0 failed
+OK  tickets-v2 (tickets.v2): 20 ok, 0 failed
+FAIL tickets-v2-before (tickets.v2): 19 ok, 2 failed (expected to fail)
+OK  agent-traces/desk-hand (agent-traces.v1): 26 ok, 0 failed
+OK  agent-traces/desk-hand-go (agent-traces.v1): 26 ok, 0 failed
+OK  agent-traces/desk-langgraph (agent-traces.v1): 26 ok, 0 failed
+OK  agent-traces/desk-sdk (agent-traces.v1): 26 ok, 0 failed
+OK  agent-traces/patterns (agent-traces.v1): 26 ok, 0 failed
+OK  agent-traces/patterns-go (agent-traces.v1): 26 ok, 0 failed
+live run: nothing written
+```
+
+The first line shows the day you run it. A year or so after these files' last commits, the same command fails on freshness and exits with 1. That is the check doing its job.
+
+Now age the tickets on purpose. `--age-days` tells the validator how old the file is, and `grep -v '^OK'` hides the passing lines:
+
+```bash
+.venv-data/bin/python data/python/contract.py data/contracts/tickets.v1.yaml llms/data/tickets.jsonl --age-days 400 | grep -v '^OK'
+```
+
+You should see:
+
+```text
+FAIL freshness -: 400 days old, over max 365
+verdicts: 20 ok, 1 failed
+```
+
+Then add a duplicate. Copy the tickets with the first ticket repeated at the end, and check the copy:
+
+```bash
+(cat llms/data/tickets.jsonl; head -n 1 llms/data/tickets.jsonl) > /tmp/tickets-dup.jsonl && .venv-data/bin/python data/python/contract.py data/contracts/tickets.v1.yaml /tmp/tickets-dup.jsonl | grep -v '^OK'
+```
+
+You should see:
+
+```text
+FAIL row_count -: 61 rows, above max 60
+FAIL unique id: row 61: duplicate of row 1
+verdicts: 19 ok, 2 failed
+```
+
+One extra row breaks two promises: the row count and the key. The fixture case `composite-key-duplicate` in `data/fixtures/cases.jsonl` does the same with a two-field key, `[desk, ticket]`, and fails with `row 4: duplicate of row 1`.

@@ -1,0 +1,68 @@
+# tickets.v2 — the same 60 Lumen support tickets with `priority` renamed `urgency`
+# and a new category, `security`. A rename is a breaking change, so this is a new
+# major; data/python/migrate_tickets.py derives the v2 file from the v1 file. Validate:
+#     .venv-data/bin/python data/python/contract.py data/contracts/tickets.v2.yaml data/data/tickets.v2.jsonl
+
+# ── 1. info ─────────────────────────────────────────────────────────────────
+info:
+  id: tickets.v2
+  version: 2
+  status: active
+  owner: data
+  dataset: data/data/tickets.v2.jsonl
+  description: Lumen support tickets in the v2 shape, one per line, with a gold category and urgency and a dev/test split.
+  migration: >-
+    From tickets.v1: priority is renamed urgency (same four values), and category gains the
+    value security, which no ticket uses yet. Run data/python/migrate_tickets.py to write the
+    v2 file from the v1 file. tickets.v1 stays, deprecated, until its sunset on 2027-01-31.
+
+# ── 2. schema ───────────────────────────────────────────────────────────────
+schema:
+  fields:
+    - name: id
+      type: string
+      required: true
+      pattern: '^t\d{3}$'
+      meaning: the ticket's stable key, t001 to t060; consumers look tickets up by it
+    - name: text
+      type: string
+      required: true
+      meaning: the customer's message, verbatim
+    - name: category
+      type: string
+      required: true
+      enum: [billing, bug, account, feature_request, how_to, outage, security]
+      meaning: the gold label a classifier is scored against; security is new in v2
+    - name: urgency
+      type: string
+      required: true
+      enum: [low, normal, high, urgent]
+      meaning: the gold urgency of the ticket (v1 called it priority)
+    - name: tags
+      type: array
+      required: true
+      meaning: free-form labels, often empty (the contract checks the array, not its items)
+    - name: split
+      type: string
+      required: true
+      enum: [dev, test]
+      meaning: dev tickets tune prompts, test tickets score them; never mixed
+
+# ── 3. quality ──────────────────────────────────────────────────────────────
+# category is left out of enum_coverage: no ticket is labelled security yet, so
+# promising every value would fail. It comes back once a security ticket exists.
+quality:
+  row_count: {min: 60, max: 60}
+  unique: [id]
+  enum_coverage: [urgency]
+
+# ── 4. servicing ────────────────────────────────────────────────────────────
+servicing:
+  freshness:
+    max_age_days: 365
+
+# ── 5. consumers ────────────────────────────────────────────────────────────
+consumers:
+  - name: agents-eval-v2
+    version: 2
+    reads: data/data/tickets.v2.jsonl via data/python/consumers/agents_eval_v2.py

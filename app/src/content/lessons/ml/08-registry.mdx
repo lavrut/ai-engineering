@@ -14,15 +14,15 @@ quiz:
       - So a server can check at startup that the file on disk is exactly the one that was registered, and refuse to start if it was swapped or edited
     answer: 3
     explanation: A path says where a file is, not what is in it. The hash pins the contents. Both servers recompute it before loading production, so a changed file stops the server instead of serving numbers nobody registered.
-  - question: "`write_json_atomic` writes a temporary file, flushes it to disk, then calls `os.replace`. What does that protect against?"
+  - question: "write_json_atomic writes a temporary file, flushes it to disk, then calls os.replace. What does that protect against?"
     options:
       - Two people promoting at the same moment
       - A wrong version being promoted
       - A crash or power cut halfway through a write leaving a half-written registry.json that no server can read
       - The file growing too large
     answer: 2
-    explanation: "`os.replace` swaps the new file in with one rename, which is atomic on one filesystem: a reader sees the whole old file or the whole new one, never half. It does not stop two writers racing; each would read, change and replace, and the later write would win."
-  - question: v1 is production. You promote v2, then run `rollback` twice. What is production afterwards?
+    explanation: "os.replace swaps the new file in with one rename, which is atomic on one filesystem: a reader sees the whole old file or the whole new one, never half. It does not stop two writers racing; each would read, change and replace, and the later write would win."
+  - question: v1 is production. You promote v2, then run rollback twice. What is production afterwards?
     options:
       - v1, because rollback always goes back to the first version
       - v2, because the first rollback restores v1 and the second finds v2 as the last other version ever in production

@@ -1,0 +1,142 @@
+---
+track: data
+order: 1
+slug: fabric
+title: What a data fabric is
+goal: Tell a data fabric from a data mesh and a warehouse, say what a data contract promises, and map which course datasets cross from one track to another.
+minutes: 20
+quiz:
+  - question: The MCP read server reads the tickets the LLMs track wrote. Nobody copies the file anywhere. Which idea does that match?
+    options:
+      - A data warehouse, because the tickets are stored centrally
+      - A data fabric, because the data stays where its owner keeps it and a layer of metadata (catalogue, lineage, contracts) connects the readers to it
+      - A data lake, because the file is JSON Lines
+      - None of them; reading a file from another folder is not data engineering
+    answer: 1
+    explanation: A warehouse copies data into one central store. A fabric leaves each dataset where its owner keeps it and adds the map and the checks around it. That is what this track builds over the course's own files.
+  - question: Which of these is a data mesh idea rather than a data fabric idea?
+    options:
+      - A catalogue that lists every dataset and where it lives
+      - Lineage that records which reader depends on which dataset
+      - A quality check that runs against each file in place
+      - Each domain team owns its datasets as products, and answers for them to the teams that read them
+    answer: 3
+    explanation: A mesh is about who owns the data, an organisational choice. A fabric is about the technology that connects data, wherever it lives. The two fit together, and the course has both. Each track owns its files (owner in every contract names a track), and the data track lays a small fabric over them.
+  - question: The track's contracts follow the shape of the Open Data Contract Standard, with section names of the course's own, and install no contract tool. Why name the standard at all?
+    options:
+      - So a reader who meets a real ODCS contract recognises each part under its own name. The format here is a small subset, and the data contract CLIs that read the full standard are named in this lesson, not used
+      - Because the validators need the standard's library to run
+      - Because the standard requires exactly five sections
+      - So the contracts can be uploaded to a hosted catalogue
+    answer: 0
+    explanation: The standard is the reference form. Following its shape costs nothing, and it means the skill transfers. Schema, quality, service levels and who answers for the data are the same ideas under the standard's names. The validators here are hand-built with the standard library and pyyaml, so you can read every line of them.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+The tracks in this course write data that other tracks read. The LLMs track wrote 60 support tickets, and the MCP read server serves them. The ML track wrote 3,600 complaints, and the MCP server's classifier was trained on them. The agents track recorded its desk runs, and its eval scores them. Nobody wrote down what each reader relies on. This track does.
+
+### Warehouse, mesh and fabric
+
+Three words come up whenever a company tries to make its data usable across teams. They answer different questions.
+
+- A <Term t="data warehouse" /> answers "where does the data go?" Everything is copied into one central store, in one agreed schema, run by one team. Readers query the copy. It is simple to read and slow to change, because every new source waits for the central team.
+- A <Term t="data mesh" /> answers "who owns the data?" Each domain team owns its datasets as products: it publishes them, documents them and answers for them. There is no central copy, and a small set of shared rules keeps the teams compatible.
+- A <Term t="data fabric" /> answers "how do readers find and trust data that stays where it is?" It is a layer of metadata over the sources: a catalogue of what exists, <Term t="lineage" /> of who reads what, and quality checks that run against each source in place.
+
+The course already works like a mesh. Each track owns its files and no other track edits them. What it lacks is the fabric: nothing lists the datasets, nothing records who reads which, and nothing checks that a file still looks the way its readers expect.
+
+### Contracts
+
+The fabric's key part is the <Term t="data contract" />: a file in which the <Term t="producer" /> of a dataset states what it promises its <Term t="consumer" />s. It gives the shape of each field and what the field means. It gives the quality and freshness the producer guarantees, who owns the data, and who reads it. A contract turns "the agents eval happens to work" into "the agents eval reads `tickets.v1`, and here is what `tickets.v1` guarantees".
+
+The reference form is the <Term t="Open Data Contract Standard" /> (ODCS), an open YAML format maintained by the Bitol project under the Linux Foundation. The contracts in this track are in the shape of ODCS, a small subset in five sections. The section names are the course's own, not the standard's, so here is what each one corresponds to in ODCS:
+
+- `info` corresponds to the standard's fundamentals: id, version, status and description.
+- `schema` corresponds to its schema.
+- `quality` corresponds to its data quality rules.
+- `servicing` corresponds to its service-level agreement (`slaProperties`); here it holds only freshness.
+- `consumers`, together with `owner` in `info`, is closest to its team and roles: who answers for the data and who relies on it. ODCS records the access roles readers hold, not a list of the readers themselves, so the named list of consumers is the course's own addition.
+
+A reader who meets a full ODCS contract will find each part under the standard's own name.
+
+### What this track builds
+
+- A catalogue of the 12 datasets the tracks share, with their lineage (lesson 2).
+- Quality and freshness checks run against each file in place (lesson 3).
+- Contracts for 3 datasets that cross a track boundary: the tickets, the complaints and the agent traces (lesson 4). A fourth, the migrated tickets, arrives in lesson 6.
+- One validator in Python and its twin in Go, with identical verdicts (lesson 5).
+- A breaking change carried through a new version, a <Term t="sunset" /> date and a migration, without surprising any reader (lesson 6).
+
+<Callout kind="note" title="The tools you would use at work">
+  Production teams rarely hand-build this. Data contract CLIs read and test ODCS-style contracts against real databases. Great Expectations runs suites of checks ("expectations") over a dataset in Python. dbt tests attach checks such as `unique`, `not_null` and `accepted_values` to the tables a dbt project builds. This track names them and installs none: the rules here are a few hundred lines you can read end to end, and the ideas carry over to each tool.
+</Callout>
+
+### What a production fabric adds
+
+The track stops where a real fabric keeps going. Four things are left out on purpose:
+
+- **Access control and governance**: who may read which dataset, with audit logs and policies. Here every file is readable by anyone with the repo.
+- **Streaming and event-time freshness**: data that arrives continuously, judged by when events happened. Here every dataset is a file, judged by its last commit.
+- **A live metadata store**: a hosted catalogue product that sources report into. Here the catalogue is a JSON file a script rebuilds.
+- **Contract tooling**: the CLIs and frameworks in the callout above.
+
+## See it
+
+The diagram is the course as a fabric. Step through it and watch the middle column: each box is a dataset, the tracks that write them are on the left, and the readers are on the right. A label on a line is the contract the data travels under.
+
+<FlowDiagram diagram="data-fabric" />
+
+The 12 datasets are written by 5 tracks, and the lines between them are the 32 edges in `lineage.json`. Only a few lines carry a contract label. Most of the course's data still crosses track boundaries on trust, and lesson 2's catalogue shows which.
+
+## The code
+
+A contract is a YAML file in `data/contracts/`. Its first section says who owns the dataset and where it lives.
+
+<CodeTabs source="data-contract-tickets" section={1} />
+
+- `id: tickets.v1` and `version: 1` name this version. A breaking change gets a new major and a new file, `tickets.v2.yaml`, which lesson 6 writes.
+- `status: deprecated` and `sunset: 2027-01-31` say that v1 is on its way out, and by when its readers should move.
+- `owner: llms` names a track, not a person: the LLMs track wrote the tickets, so it answers for them.
+- `dataset: llms/data/tickets.jsonl` points at the file where it lives. The contract never copies it.
+
+The last section names the readers, which is what turns a description into a promise to someone.
+
+<CodeTabs source="data-contract-tickets" section={5} />
+
+- `name: mcp-read-server` is the consumer, and `version: 1` is the version it declares. The producer can now see whom a change would break.
+- `reads: llms/data/tickets.jsonl via mcp/core/python/lumen_core/tickets.py` says how it reads the data, so a test can check that the reader really opens the governed file.
+
+## Try it
+
+Set up the track's virtual environment from the repo root. It holds two packages, `pyyaml` and `pytest`:
+
+```bash
+python3 -m venv .venv-data && .venv-data/bin/pip install -r data/requirements.txt
+```
+
+Then run the five checks. Each one rebuilds something in memory and compares it with the committed file: the catalogue and lineage, the verdicts, the gate, the migrated tickets and the contracts' JSON exports. None of them calls a model, so all of them are free.
+
+```bash
+.venv-data/bin/python data/python/catalog.py --check
+.venv-data/bin/python data/python/quality.py --check
+.venv-data/bin/python data/python/gate.py --check
+.venv-data/bin/python data/python/migrate_tickets.py --check
+.venv-data/bin/python data/python/contract.py --export --check
+```
+
+You should see:
+
+```text
+catalog.json and lineage.json match
+verdicts.json matches
+gate.json matches
+tickets.v2.jsonl matches
+exports: 4 current, 0 stale
+```
+
+Each line means one derived file still matches the data it was built from. The next five lessons open each of them in turn. In a copy without the repo's full git history, such as a zip or a shallow clone, the first two checks also print `no git history: commit dates not compared`: they compare everything except the commit dates, which only the history holds.

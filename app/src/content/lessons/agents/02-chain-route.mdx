@@ -13,7 +13,7 @@ quiz:
       - The model is asked again until it gives a valid category
       - The chain falls back to the router
     answer: 0
-    explanation: The gate is `if category not in CATEGORIES`, checked in code between the two calls. A bad step fails loudly and early, and the second call is never made. The contract file has a case for exactly this.
+    explanation: The gate is if category not in CATEGORIES, checked in code between the two calls. A bad step fails loudly and early, and the second call is never made. The contract file has a case for exactly this.
   - question: On t061, a how-to question, the Python router chose "other" and the Go router chose "bug". What does that show?
     options:
       - The Go version has a bug

@@ -1,0 +1,184 @@
+---
+track: data
+order: 6
+slug: capstone
+title: "Capstone: a breaking change under contract"
+goal: Carry a breaking change through a new major version, a migration, a sunset date and a consumer shim, and show with a gate that every reader is green on the version it declares.
+minutes: 25
+quiz:
+  - question: 'tickets.v2 renames priority to urgency. Why not just rename the field in the v1 file, since both readers are in the same repo?'
+    options:
+      - The JSON Lines format cannot rename a field
+      - Renaming in place would be fine if done in one commit
+      - The validators cannot read renamed fields
+      - The MCP read server looks up priority. Renaming in place breaks it the moment the file changes, before anyone has moved. A new major beside the old one lets each reader move on its own schedule, by the sunset
+    answer: 3
+    explanation: A breaking change is about readers, not files. With v1 kept and deprecated, no reader is surprised. The agents eval has a v2 reader ready (the shim) but has not switched to it, the MCP read server has until 2027-01-31, and meanwhile the gate shows every reader green on the version it declares.
+  - question: The gate re-validates each consumer's declared contract against its dataset itself, instead of reading the committed verdicts.json. What does that prevent?
+    options:
+      - Nothing; the two always agree
+      - Slow runs
+      - A hand-edited or stale verdicts.json turning the gate green. The gate only trusts a verdict it computed, and takes just the pinned date from that file
+      - It lets the gate skip freshness
+    answer: 2
+    explanation: A gate that reads someone else's verdicts is only as good as that file. Recomputing is cheap here, and it removes the question. The pinned as_of keeps its ages equal to quality.py's.
+  - question: The sunset date has passed, and the MCP read server is still on tickets.v1. What does the gate report, and why that and not a failure?
+    options:
+      - A warning naming the consumer and the sunset, while the gate stays green. The data still meets v1, so nothing is broken. The warning shows who has not kept the promise to move
+      - A failure, because the date has passed
+      - Nothing; sunsets are documentation only
+      - It deletes the v1 contract
+    answer: 0
+    explanation: A failure should mean the data broke a promise to a reader. A missed sunset is a different problem, a reader that has not moved, so it is a warning in the gate's reason. The team can then chase the reader instead of breaking the build.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import LineageDiff from '../../../components/data/LineageDiff.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+The tickets need two changes. The field `priority` should be called `urgency`, the word the support team uses. And there is a new category, `security`, for tickets no team has labelled yet. The first change is a rename, so it is a breaking change: the MCP read server looks tickets up by `priority`. The capstone carries it through without surprising anyone.
+
+### 1. Write the new version
+
+`tickets.v2.yaml` is a new file beside `tickets.v1.yaml`. Its schema has `urgency` where v1 had `priority`, and its category enum gains `security`. `enum_coverage` drops `category`: no ticket is labelled `security` yet, and promising that every value appears would fail on day one. The info section carries a migration note.
+
+v1 is now `deprecated`, with `sunset: 2027-01-31`. It is still a valid contract, and the data still meets it.
+
+### 2. Let the validators catch it
+
+Before anything moves, judge the old file by the new contract. It fails exactly where the change bites: `urgency` is missing from all 60 rows, and none of its values appear. `priority` is reported as an extra field, not a failure, because extra fields never break a reader. `verdicts.json` keeps this run as `tickets-v2-before`, marked `"expect": "fail"`. The break is part of the record, and a run where it stops failing would be news.
+
+### 3. Migrate without touching v1
+
+`migrate_tickets.py` reads the v1 file and writes `data/data/tickets.v2.jsonl`, row for row, with the one field renamed and everything else unchanged. The v1 file stays exactly as the LLMs track wrote it. The v2 file is a dataset of its own, `tickets_v2`, written by the data track. Lineage draws the migration as an edge from `tickets` to `tickets_v2`, so a change to the v1 file is seen to reach the v2 readers too.
+
+The new category needs no migration. An enum that gains a value accepts every row it accepted before.
+
+### 4. Show the move, keep both readers
+
+The agents eval is the reader that can move first. In a real migration its own code would change: its loader would open the v2 file and read `urgency`. This course never edits another track, so the agents track's own loader, `load_eval_tickets` in `agents/desk/python/desk_core.py`, still reads the v1 file, and `tickets.v1` still names it as a consumer, `agents-eval`. The agents track has not migrated yet. A <Term t="shim" /> shows what its move looks like: `data/python/consumers/agents_eval_v2.py` reads the v2 file and renames `urgency` back to `priority` at the edge, so every row comes out in the v1 shape the agents code was written against. `tickets.v2` declares the shim as its consumer, `agents-eval-v2`. `data/python/tests/test_capstone.py` proves the shim returns the same 13 tickets as the agents track's loader, field for field. Switching the eval over to the shim, and then removing `agents-eval` from `tickets.v1`, is the agents track's step. The shim returns the eval's 13 tickets: 12 come from the v2 file, and the thirteenth, `t061`, is the prompt-injection canary from `mcp/data/injection.jsonl`. That file is outside every contract, so the shim takes it as is.
+
+The MCP read server and the agents eval's own loader stay on v1 until the sunset.
+
+### 5. Gate it
+
+The <Term t="consumer gate" /> asks one question: is every consumer green on the version it declares? For each consumer named in any contract, it loads the declared version and checks that the contract file exists. Then it validates the file that version governs, freshness included, as of the pinned date. It never reads a verdict from `verdicts.json`, only that date, so a hand-edited file cannot turn it green.
+
+It also reports each version's sunset. A consumer on a deprecated version past its sunset gets a warning in the gate's reason, not a failure. The data still meets the promise; it is the reader that is late.
+
+## See it
+
+v1 and v2 sit side by side. Look at each version's status, sunset and consumers. Then read the field changes, and pick each consumer to see which version it reads. The gate's verdict is at the bottom.
+
+<LineageDiff from="tickets.v1" to="tickets.v2" />
+
+The diff shows `priority` only in v1, `urgency` only in v2, and `category` gaining `security`. The migration edge runs from `tickets` to `tickets_v2`, reading under `tickets.v1`. The MCP read server and the agents eval are green on v1, with its sunset still ahead as of 2026-10-28. The shim, `agents-eval-v2`, is green on v2. The gate counts every consumer of every contract, 5 of 5, and is green.
+
+## The code
+
+The v2 contract's info section carries the migration note.
+
+<CodeTabs source="data-contract-tickets-v2" section={1} />
+
+- `version: 2` and `status: active`: the new major is the one new readers should use.
+- `migration: >-` is free text for people. It says what changed, which script migrates the data, and until when v1 stays.
+
+The migration is one dictionary comprehension.
+
+<CodeTabs source="data-migrate" section={2} />
+
+- `return {RENAMES.get(k, k): v for k, v in row.items()}` renames each key found in `RENAMES = {"priority": "urgency"}` and keeps every other key, value and position. It builds a new dict, so the row read from the v1 file is never changed.
+
+The gate is section 2 of `gate.py`.
+
+<CodeTabs source="data-gate" section={2} />
+
+- `as_of = Q.stored_as_of(Path(verdicts))` takes only the pinned date from `verdicts.json`, so the gate's ages agree with `quality.py`'s.
+- `declared = f"{K.base_id(doc['info']['id'])}.v{c['version']}"` turns a consumer entry into the contract id it declares, such as `tickets.v1`.
+- `judged[declared] = judge(version, Path(root), as_of)` validates the governed file itself, once per declared version, and returns what failed in words, or `None`.
+- `warning = version["info"]["status"] == "deprecated" and sunset is not None and as_of > date.fromisoformat(sunset)` is the sunset check: a warning, and it never turns the gate red.
+- `return {"consumers": rows, "ok": not problems, "reason": "; ".join(head + warnings)}` is what `gate.json` stores and the aid shows as written.
+
+<Callout kind="note" title="A test per consumer">
+  `data/python/tests/test_consumers.py` imports each real reader without editing it. It checks that the MCP read server's ticket loader and the agents eval's loader open the file `tickets.v1` governs, and that the shim opens the file `tickets.v2` governs. Then it validates what each one reads. If a reader moves to another file, or its file stops meeting the version it declares, that test fails before the gate does.
+</Callout>
+
+## Try it
+
+Judge the v1 file by the v2 contract. This is the break the validators catch:
+
+```bash
+.venv-data/bin/python data/python/contract.py data/contracts/tickets.v2.yaml llms/data/tickets.jsonl | grep -v '^OK'
+```
+
+You should see:
+
+```text
+FAIL enum_coverage urgency: missing values: "low", "normal", "high", "urgent"
+FAIL required urgency: row 1: missing (+59 more)
+verdicts: 19 ok, 2 failed
+```
+
+Check that the migrated file is still what the migration writes, then run the gate. The gate rewrites `gate.json` with the same bytes:
+
+```bash
+.venv-data/bin/python data/python/migrate_tickets.py --check
+.venv-data/bin/python data/python/gate.py
+```
+
+You should see:
+
+```text
+tickets.v2.jsonl matches
+OK  agents-eval on agent-traces.v1
+OK  mcp-read-server on complaints.v1
+OK  mcp-read-server on tickets.v1
+OK  agents-eval on tickets.v1
+OK  agents-eval-v2 on tickets.v2
+gate: green: every consumer is green on the version it declares (5 of 5)
+wrote gate.json
+```
+
+Load the agents eval's tickets through the shim:
+
+```bash
+.venv-data/bin/python -c '
+import sys; sys.path.insert(0, "data/python/consumers")
+from agents_eval_v2 import load_eval_tickets_v2
+tickets = load_eval_tickets_v2()
+print(len(tickets), "tickets:", " ".join(t["id"] for t in tickets))
+print("t001 keys:", ", ".join(tickets[0]))
+'
+```
+
+You should see:
+
+```text
+13 tickets: t001 t007 t002 t008 t003 t009 t004 t010 t005 t011 t006 t018 t061
+t001 keys: id, text, category, priority, tags, split
+```
+
+The rows came from the v2 file, which has `urgency`, and they come out with `priority`, in the same place: the v1 shape the agents code was written against. The shim worked.
+
+Last, move the clock past the sunset. This asks the gate as of 2027-02-01, using a temporary `verdicts.json` that holds only that date, and writes nothing:
+
+```bash
+.venv-data/bin/python -c '
+import json, sys, tempfile, pathlib
+sys.path.insert(0, "data/python")
+import gate
+later = pathlib.Path(tempfile.mkdtemp()) / "verdicts.json"
+later.write_text(json.dumps({"as_of": "2027-02-01", "datasets": {}}))
+print(gate.gate(verdicts=later)["reason"])
+'
+```
+
+You should see:
+
+```text
+every consumer is green on the version it declares (5 of 5); warning: mcp-read-server is on tickets.v1, past its sunset 2027-01-31; warning: agents-eval is on tickets.v1, past its sunset 2027-01-31
+```
+
+Still green, with a warning for each reader that has not moved. The next steps belong to the other tracks: the agents track switches its eval to the v2 loader and removes `agents-eval` from `tickets.v1`, and the MCP track moves its read server to v2, through its own shim or a change to its loader. Then `tickets.v1` has no consumers left and can be retired.

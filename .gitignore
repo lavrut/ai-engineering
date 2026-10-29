@@ -26,6 +26,7 @@ agents/data/traces/*/proxy.log
 .venv-harness/
 .venv-llms/
 .venv-ml/
+.venv-data/
 .ipynb_checkpoints/
 .vscode/
 *.ipynb

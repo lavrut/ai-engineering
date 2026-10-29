@@ -1,0 +1,15 @@
+---
+// Build-time wrapper: passes the verdicts of one dataset from verdicts.json, with its pinned as_of. dataset is a
+// verdicts.json key (tickets, complaints, tickets-v2, tickets-v2-before) or "agent-traces" for the six trace
+// sets, shown as a per-set table. An unknown name fails the build, naming the known ones.
+import QualityReportIsland from './QualityReport.tsx';
+import { loadDataData, qualityReportProps } from '../../lib/dataData';
+
+interface Props {
+  dataset: string;
+}
+
+const props = qualityReportProps(loadDataData().verdicts, Astro.props);
+---
+
+<QualityReportIsland client:visible {...props} />

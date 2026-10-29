@@ -7,6 +7,7 @@ import FlowDiagramIsland from './FlowDiagram.tsx';
 import { resolveCode } from '../lib/codeSourceText';
 import { codeKey } from '../lib/diagram';
 import { agentPatterns } from '../data/diagrams/agent-patterns';
+import { dataFabric } from '../data/diagrams/data-fabric';
 import { evalPipeline } from '../data/diagrams/eval-pipeline';
 import { inspectPipeline } from '../data/diagrams/inspect-pipeline';
 import { harnessFlow } from '../data/diagrams/harness-flow';
@@ -22,6 +23,7 @@ import { toolRoundtrip } from '../data/diagrams/tool-roundtrip';
 
 const diagrams = {
   'agent-patterns': agentPatterns,
+  'data-fabric': dataFabric,
   'eval-pipeline': evalPipeline,
   'harness-flow': harnessFlow,
   'inspect-pipeline': inspectPipeline,

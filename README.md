@@ -1,6 +1,6 @@
 # AI Engineering
 
-An interactive masterclass on AI engineering, with Python and Go side by side. Five tracks are live: **Agent Harness** (build the loop, tools, context handling and guardrails around a model), **LLMs** (evaluate, judge and tune an LLM feature), **Machine Learning** (train a classic text classifier on real complaints, then track, register, serve, monitor and retrain it), **MCP** (build, connect, secure and ship Model Context Protocol servers and clients) and **AI Agents** (design agent workflows and a multi-agent desk, rebuild it in LangGraph and the Claude Agent SDK, record and replay every engine, and evaluate them fairly).
+An interactive masterclass on AI engineering, with Python and Go side by side. Six tracks are live: **Agent Harness** (build the loop, tools, context handling and guardrails around a model), **LLMs** (evaluate, judge and tune an LLM feature), **Machine Learning** (train a classic text classifier on real complaints, then track, register, serve, monitor and retrain it), **MCP** (build, connect, secure and ship Model Context Protocol servers and clients), **AI Agents** (design agent workflows and a multi-agent desk, rebuild it in LangGraph and the Claude Agent SDK, record and replay every engine, and evaluate them fairly) and **Data Fabric & Data Contracts** (catalogue the datasets the tracks share, write contracts for them, enforce them in Python and Go, and ship a breaking change under contract).
 
 Hosted page: https://claude.ai/artifact/MH9ZBPk8GC1duTWc4Ke5cw (private until shared from the page's Share menu)
 
@@ -13,7 +13,8 @@ Hosted page: https://claude.ai/artifact/MH9ZBPk8GC1duTWc4Ke5cw (private until sh
 - `ml/` — the Machine Learning track: `ml/python/` (`train.py`, `mlops.py`, `with_mlflow.py`, `monitor.py`, `compare_llm.py`, `bench.py`), `ml/serve/server.py` (FastAPI), `ml/go/` (the Go server and drift command), and the committed data sample, models, runs, registry and reports; see [ml/data/README.md](ml/data/README.md).
 - `mcp/` — the MCP track: `mcp/core/` (the shared ticket, classifier and label code, Python and Go), `mcp/python/` (`read_server.py`, `ops_server.py`, `client.py` with `client_connect.py` and `client_calls.py`, `auth_server.py`, `agent.py` with `agent_config.py`, `agent_host.py` and `agent_model.py`, `simulate.py`, `derive.py`, the App in `app/`), `mcp/go/` (`readserver`, `opsserver`, `client`, `auth`), the shared contract in `mcp/fixtures/`, and the recordings, simulated transcripts and derived lesson data in `mcp/data/`; see [mcp/fixtures/README.md](mcp/fixtures/README.md) and [mcp/data/recordings/README.md](mcp/data/recordings/README.md).
 - `agents/` — the AI Agents track: `agents/proxy/` (the record/replay proxy: `proxy.py` with `proxy_cost.py`, `proxy_handler.py` and `proxy_server.py`), `agents/desk/python/` and `agents/desk/go/` (the five patterns and the supervisor desk, matching numbered sections), `agents/frameworks/` (`langgraph_desk.py`, `sdk_desk.py`), `agents/evals/` (`scorers.py`, `run_evals.py` with `judge_set.py`, the 13 eval tickets), `agents/run.py` (runs any engine through the proxy, with `run_sets.py`, `run_engines.py` and `run_traces.py`), `agents/derive.py` (the lesson data, with `derive_read.py`), the shared contract in `agents/fixtures/`, and the recordings, traces and derived data in `agents/data/`; see [agents/data/recordings/README.md](agents/data/recordings/README.md).
-- `app/` — the Astro site that teaches all five tracks (lessons, diagrams, simulators, quizzes).
+- `data/` — the Data Fabric & Data Contracts track: `data/contracts/` (four contracts in YAML and their JSON exports), `data/python/` (`contract.py` the validator, `catalog.py`, `quality.py`, `gate.py`, `migrate_tickets.py`, and in `consumers/` the shim that shows the agents eval's move to v2), `data/go/validate/` (the Go twin validator), the shared validator cases in `data/fixtures/`, and the migrated tickets and derived lesson data in `data/data/`; see [data/fixtures/README.md](data/fixtures/README.md).
+- `app/` — the Astro site that teaches all six tracks (lessons, diagrams, simulators, quizzes).
 
 ## Run a harness
 
@@ -351,6 +352,59 @@ No test calls the Claude API. The models are fakes, the Agent SDK runs against a
 (cd agents/desk/go && go test -race ./...)
 .venv-agents/bin/python agents/fixtures/gen_contract.py --check   # the shared Python/Go contract is up to date
 ```
+
+## Run the Data Fabric & Data Contracts track
+
+A catalogue of the datasets the other tracks share, contracts for three of them, a validator in Python and a twin in Go that print identical verdicts, and a breaking change (`tickets.v2`) carried through a migration and a gate. Everything reads the other tracks' files in place and never writes to them. Nothing in this track calls a model, so every command below is free.
+
+### Setup
+
+```sh
+python3 -m venv .venv-data && .venv-data/bin/pip install -r data/requirements.txt
+```
+
+- Python 3.12 or later, in the `.venv-data/` virtual environment at the repo root (git-ignored). `data/requirements.txt` holds `pyyaml==6.0.3` and `pytest>=8`; the rest is the standard library.
+- Go 1.27.2 (`data/go/go.mod`), standard library only, for the twin validator.
+
+### Validate a dataset
+
+```sh
+.venv-data/bin/python data/python/contract.py data/contracts/tickets.v1.yaml llms/data/tickets.jsonl
+(cd data/go && go run ./validate ../contracts/tickets.v1.contract.json ../../llms/data/tickets.jsonl)
+```
+
+Both print one line per verdict, `OK  rule field: detail` or `FAIL rule field: detail`, then `verdicts: N ok, M failed`, and exit 1 when any verdict failed. `--age-days N` (Go: `-age-days N`) gives the file's age for the freshness rule. Go reads the contract's JSON export: after editing a contract, run `.venv-data/bin/python data/python/contract.py --export data/contracts/<name>.yaml`.
+
+### Catalogue, quality and the gate
+
+```sh
+.venv-data/bin/python data/python/catalog.py           # catalog.json and lineage.json
+.venv-data/bin/python data/python/quality.py           # verdicts.json, as of its stored date
+.venv-data/bin/python data/python/migrate_tickets.py   # data/data/tickets.v2.jsonl from the v1 tickets
+.venv-data/bin/python data/python/gate.py              # gate.json: every consumer green on the version it declares
+.venv-data/bin/python data/python/quality.py --live    # freshness as of today; writes nothing
+```
+
+Each writes its file under `data/data/` and prints what it found. `quality.py` measures each dataset's age from its last git commit as of the date stored in `verdicts.json`, so the committed file does not go stale; `--as-of YYYY-MM-DD` moves that date. `--live` asks about today instead, and starts failing once a dataset is older than its contract's `max_age_days` (365 days). That is the check doing its job. Ages come from each file's last commit, by author time, which a rebase or cherry-pick keeps; a squash merge makes one new commit and loses them, so merge this track with a regular merge.
+
+The catalogue and the verdicts read the other tracks' data in place, so a commit to a catalogued file in another track (re-recorded traces, a new saved model response, new ML reports) makes `catalog.py --check` and `quality.py --check` fail until you rerun `catalog.py`, `quality.py` and `gate.py` and commit what they write.
+
+### Test the data code
+
+```sh
+.venv-data/bin/python -m pytest data -q
+(cd data/go && go test ./...)
+.venv-data/bin/python data/python/catalog.py --check          # catalog.json and lineage.json match the datasets
+.venv-data/bin/python data/python/quality.py --check          # verdicts.json matches, as of its stored date
+.venv-data/bin/python data/python/gate.py --check             # gate.json matches
+.venv-data/bin/python data/python/migrate_tickets.py --check  # tickets.v2.jsonl matches the v1 file
+.venv-data/bin/python data/python/contract.py --export --check  # every contract's JSON export is current
+.venv-data/bin/python data/fixtures/gen_cases.py --check      # the shared validator cases are current
+```
+
+The pytest suite includes the twin test (both command lines on every fixture case, byte for byte) and runs every lesson's Try-it command once (`data/python/tests/test_lesson_tryits.py`). It leaves every committed file as it found it.
+
+Commit dates need the full git history. In a shallow clone (CI's default checkout) or a zip or `git archive` copy, `catalog.py --check` and `quality.py --check` compare everything except the commit-derived fields (`last_commit`, the ages and the freshness detail) and print `no git history: commit dates not compared`, and the tests that measure real commit dates skip with `needs full git history: run git fetch --unshallow`. In CI, check out with `fetch-depth: 0` to run them.
 
 ## The site
 

@@ -8,16 +8,16 @@ minutes: 20
 quiz:
   - question: Six months from now, someone asks which data and code produced v1. Which fields of its run record answer that?
     options:
-      - "`params` and `metrics`"
-      - "`time` and `run_id`"
-      - "`data_version`, `git_commit` with `git_dirty`, and `model.sha256`"
+      - "params and metrics"
+      - "time and run_id"
+      - "data_version, git_commit with git_dirty, and model.sha256"
       - Only the model file itself, because it holds everything
     answer: 2
-    explanation: The data version is the hash of the complaints file, the commit names the code, `git_dirty` false says the code and data matched that commit, and the model hash ties the record to one exact file. Params and metrics say what was set and what came out, not where it came from.
-  - question: "`git_dirty` is true on a run you just logged. What does it tell you, and what should you do?"
+    explanation: The data version is the hash of the complaints file, the commit names the code, git_dirty false says the code and data matched that commit, and the model hash ties the record to one exact file. Params and metrics say what was set and what came out, not where it came from.
+  - question: "git_dirty is true on a run you just logged. What does it tell you, and what should you do?"
     options:
       - The run failed; rerun it
-      - The code or data in `ml/python` or `ml/data` differed from the recorded commit, so the commit does not fully describe the run; commit the code, run again, then commit the run
+      - The code or data in ml/python or ml/data differed from the recorded commit, so the commit does not fully describe the run; commit the code, run again, then commit the run
       - The model is worse than the last one
       - Git is not installed
     answer: 1

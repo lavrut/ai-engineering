@@ -1,6 +1,6 @@
 id: data
 title: "Data Fabric & Data Contracts"
 order: 6
-status: planned
-summary: "Connecting data across a company and making its guarantees explicit."
+status: live
+summary: "Catalogue the datasets the course shares, write contracts for them, enforce the contracts in Python and Go, and ship a breaking change without surprising a reader."
 subsections: ["Data Fabric", "Data Contracts"]

@@ -1,7 +1,7 @@
 ---
 import { Code } from 'astro:components';
 import Callout from './Callout.astro';
-import type { CodeSourceId } from '../lib/codeSources';
+import { sourceLang, type CodeSourceId } from '../lib/codeSources';
 import { resolveCode } from '../lib/codeSourceText';
 
 interface Props {
@@ -20,13 +20,15 @@ interface Props {
 const { section, goSection, whole = false, goNote, source = 'harness', pythonOnly = false } = Astro.props;
 // Throws (failing the build) on an unknown source, a missing section, or a missing goSection.
 const { python: py, go } = resolveCode({ source, section, goSection, whole, pythonOnly });
+// The first tab is Python, or YAML for a data contract quoted as text.
+const first = sourceLang(source);
 const themes = { light: 'github-light', dark: 'github-dark' } as const;
 ---
 
 <div class="codetabs" data-codetabs>
   <div class="tabbar">
     <div class="tabs" role="tablist" aria-label="Language">
-      <button type="button" role="tab" data-lang="python" aria-selected="true" tabindex="0">Python</button>
+      <button type="button" role="tab" data-lang="python" aria-selected="true" tabindex="0">{first.label}</button>
       {
         go !== undefined && (
           <button type="button" role="tab" data-lang="go" aria-selected="false" tabindex="-1">
@@ -38,7 +40,7 @@ const themes = { light: 'github-light', dark: 'github-dark' } as const;
     <button type="button" class="copy" data-copy>Copy</button>
   </div>
   <div role="tabpanel" data-panel="python">
-    <Code code={py} lang="python" themes={themes} defaultColor={false} />
+    <Code code={py} lang={first.lang} themes={themes} defaultColor={false} />
   </div>
   {
     go !== undefined && (

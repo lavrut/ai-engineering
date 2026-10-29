@@ -1,0 +1,1502 @@
+{
+ "as_of": "2026-10-28",
+ "datasets": {
+  "agent-traces/desk-hand": {
+   "age_days": 0.0,
+   "contract": "agent-traces.v1",
+   "files": 26,
+   "ok": true,
+   "path": "agents/data/traces/desk-hand/*.json",
+   "verdicts": [
+    {
+     "detail": "26 files: all values in enum",
+     "field": "engine",
+     "ok": true,
+     "rule": "enum"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "approve",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "cost_usd",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "elicit",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "mode",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "model",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "output",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "paid_calls",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "set",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "spent",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: 0 days old (max 365)",
+     "field": null,
+     "ok": true,
+     "rule": "freshness"
+    },
+    {
+     "detail": "26 files: all values match",
+     "field": "desk",
+     "ok": true,
+     "rule": "pattern"
+    },
+    {
+     "detail": "26 files: all values match",
+     "field": "ticket",
+     "ok": true,
+     "rule": "pattern"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "desk",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "engine",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "errors",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "proxy_calls",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "ticket",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "trace",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: 1 row (min 1, max 1)",
+     "field": null,
+     "ok": true,
+     "rule": "row_count"
+    },
+    {
+     "detail": "26 files: all values are string",
+     "field": "desk",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are string",
+     "field": "engine",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are array",
+     "field": "errors",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are array",
+     "field": "proxy_calls",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are string",
+     "field": "ticket",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are array",
+     "field": "trace",
+     "ok": true,
+     "rule": "type"
+    }
+   ]
+  },
+  "agent-traces/desk-hand-go": {
+   "age_days": 0.0,
+   "contract": "agent-traces.v1",
+   "files": 26,
+   "ok": true,
+   "path": "agents/data/traces/desk-hand-go/*.json",
+   "verdicts": [
+    {
+     "detail": "26 files: all values in enum",
+     "field": "engine",
+     "ok": true,
+     "rule": "enum"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "approve",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "cost_usd",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "elicit",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "mode",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "model",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "output",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "paid_calls",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "set",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "spent",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: 0 days old (max 365)",
+     "field": null,
+     "ok": true,
+     "rule": "freshness"
+    },
+    {
+     "detail": "26 files: all values match",
+     "field": "desk",
+     "ok": true,
+     "rule": "pattern"
+    },
+    {
+     "detail": "26 files: all values match",
+     "field": "ticket",
+     "ok": true,
+     "rule": "pattern"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "desk",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "engine",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "errors",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "proxy_calls",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "ticket",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "trace",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: 1 row (min 1, max 1)",
+     "field": null,
+     "ok": true,
+     "rule": "row_count"
+    },
+    {
+     "detail": "26 files: all values are string",
+     "field": "desk",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are string",
+     "field": "engine",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are array",
+     "field": "errors",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are array",
+     "field": "proxy_calls",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are string",
+     "field": "ticket",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are array",
+     "field": "trace",
+     "ok": true,
+     "rule": "type"
+    }
+   ]
+  },
+  "agent-traces/desk-langgraph": {
+   "age_days": 0.0,
+   "contract": "agent-traces.v1",
+   "files": 26,
+   "ok": true,
+   "path": "agents/data/traces/desk-langgraph/*.json",
+   "verdicts": [
+    {
+     "detail": "26 files: all values in enum",
+     "field": "engine",
+     "ok": true,
+     "rule": "enum"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "approve",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "cost_usd",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "elicit",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "mode",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "model",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "output",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "paid_calls",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "set",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "spent",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: 0 days old (max 365)",
+     "field": null,
+     "ok": true,
+     "rule": "freshness"
+    },
+    {
+     "detail": "26 files: all values match",
+     "field": "desk",
+     "ok": true,
+     "rule": "pattern"
+    },
+    {
+     "detail": "26 files: all values match",
+     "field": "ticket",
+     "ok": true,
+     "rule": "pattern"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "desk",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "engine",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "errors",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "proxy_calls",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "ticket",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "trace",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: 1 row (min 1, max 1)",
+     "field": null,
+     "ok": true,
+     "rule": "row_count"
+    },
+    {
+     "detail": "26 files: all values are string",
+     "field": "desk",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are string",
+     "field": "engine",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are array",
+     "field": "errors",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are array",
+     "field": "proxy_calls",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are string",
+     "field": "ticket",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are array",
+     "field": "trace",
+     "ok": true,
+     "rule": "type"
+    }
+   ]
+  },
+  "agent-traces/desk-sdk": {
+   "age_days": 0.0,
+   "contract": "agent-traces.v1",
+   "files": 26,
+   "ok": true,
+   "path": "agents/data/traces/desk-sdk/*.json",
+   "verdicts": [
+    {
+     "detail": "26 files: all values in enum",
+     "field": "engine",
+     "ok": true,
+     "rule": "enum"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "approve",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "cost_usd",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "elicit",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "mode",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "model",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "output",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "paid_calls",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "set",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: not in schema (1 row)",
+     "field": "spent",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "26 files: 0 days old (max 365)",
+     "field": null,
+     "ok": true,
+     "rule": "freshness"
+    },
+    {
+     "detail": "26 files: all values match",
+     "field": "desk",
+     "ok": true,
+     "rule": "pattern"
+    },
+    {
+     "detail": "26 files: all values match",
+     "field": "ticket",
+     "ok": true,
+     "rule": "pattern"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "desk",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "engine",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "errors",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "proxy_calls",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "ticket",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: present in 1 row",
+     "field": "trace",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "26 files: 1 row (min 1, max 1)",
+     "field": null,
+     "ok": true,
+     "rule": "row_count"
+    },
+    {
+     "detail": "26 files: all values are string",
+     "field": "desk",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are string",
+     "field": "engine",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are array",
+     "field": "errors",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are array",
+     "field": "proxy_calls",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are string",
+     "field": "ticket",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "26 files: all values are array",
+     "field": "trace",
+     "ok": true,
+     "rule": "type"
+    }
+   ]
+  },
+  "agent-traces/patterns": {
+   "age_days": 0.0,
+   "contract": "agent-traces.v1",
+   "files": 15,
+   "ok": true,
+   "path": "agents/data/traces/patterns/*.json",
+   "verdicts": [
+    {
+     "detail": "15 files: all values in enum",
+     "field": "engine",
+     "ok": true,
+     "rule": "enum"
+    },
+    {
+     "detail": "15 files: not in schema (1 row)",
+     "field": "approve",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "15 files: not in schema (1 row)",
+     "field": "cost_usd",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "15 files: not in schema (1 row)",
+     "field": "elicit",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "15 files: not in schema (1 row)",
+     "field": "mode",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "15 files: not in schema (1 row)",
+     "field": "model",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "15 files: not in schema (1 row)",
+     "field": "output",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "15 files: not in schema (1 row)",
+     "field": "paid_calls",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "15 files: not in schema (1 row)",
+     "field": "set",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "15 files: not in schema (1 row)",
+     "field": "spent",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "15 files: 0 days old (max 365)",
+     "field": null,
+     "ok": true,
+     "rule": "freshness"
+    },
+    {
+     "detail": "15 files: all values match",
+     "field": "desk",
+     "ok": true,
+     "rule": "pattern"
+    },
+    {
+     "detail": "15 files: all values match",
+     "field": "ticket",
+     "ok": true,
+     "rule": "pattern"
+    },
+    {
+     "detail": "15 files: present in 1 row",
+     "field": "desk",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "15 files: present in 1 row",
+     "field": "engine",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "15 files: present in 1 row",
+     "field": "errors",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "15 files: present in 1 row",
+     "field": "proxy_calls",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "15 files: present in 1 row",
+     "field": "ticket",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "15 files: present in 1 row",
+     "field": "trace",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "15 files: 1 row (min 1, max 1)",
+     "field": null,
+     "ok": true,
+     "rule": "row_count"
+    },
+    {
+     "detail": "15 files: all values are string",
+     "field": "desk",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "15 files: all values are string",
+     "field": "engine",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "15 files: all values are array",
+     "field": "errors",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "15 files: all values are array",
+     "field": "proxy_calls",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "15 files: all values are string",
+     "field": "ticket",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "15 files: all values are array",
+     "field": "trace",
+     "ok": true,
+     "rule": "type"
+    }
+   ]
+  },
+  "agent-traces/patterns-go": {
+   "age_days": 0.0,
+   "contract": "agent-traces.v1",
+   "files": 15,
+   "ok": true,
+   "path": "agents/data/traces/patterns-go/*.json",
+   "verdicts": [
+    {
+     "detail": "15 files: all values in enum",
+     "field": "engine",
+     "ok": true,
+     "rule": "enum"
+    },
+    {
+     "detail": "15 files: not in schema (1 row)",
+     "field": "approve",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "15 files: not in schema (1 row)",
+     "field": "cost_usd",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "15 files: not in schema (1 row)",
+     "field": "elicit",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "15 files: not in schema (1 row)",
+     "field": "mode",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "15 files: not in schema (1 row)",
+     "field": "model",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "15 files: not in schema (1 row)",
+     "field": "output",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "15 files: not in schema (1 row)",
+     "field": "paid_calls",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "15 files: not in schema (1 row)",
+     "field": "set",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "15 files: not in schema (1 row)",
+     "field": "spent",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "15 files: 0 days old (max 365)",
+     "field": null,
+     "ok": true,
+     "rule": "freshness"
+    },
+    {
+     "detail": "15 files: all values match",
+     "field": "desk",
+     "ok": true,
+     "rule": "pattern"
+    },
+    {
+     "detail": "15 files: all values match",
+     "field": "ticket",
+     "ok": true,
+     "rule": "pattern"
+    },
+    {
+     "detail": "15 files: present in 1 row",
+     "field": "desk",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "15 files: present in 1 row",
+     "field": "engine",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "15 files: present in 1 row",
+     "field": "errors",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "15 files: present in 1 row",
+     "field": "proxy_calls",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "15 files: present in 1 row",
+     "field": "ticket",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "15 files: present in 1 row",
+     "field": "trace",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "15 files: 1 row (min 1, max 1)",
+     "field": null,
+     "ok": true,
+     "rule": "row_count"
+    },
+    {
+     "detail": "15 files: all values are string",
+     "field": "desk",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "15 files: all values are string",
+     "field": "engine",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "15 files: all values are array",
+     "field": "errors",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "15 files: all values are array",
+     "field": "proxy_calls",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "15 files: all values are string",
+     "field": "ticket",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "15 files: all values are array",
+     "field": "trace",
+     "ok": true,
+     "rule": "type"
+    }
+   ]
+  },
+  "complaints": {
+   "age_days": 1.8,
+   "contract": "complaints.v1",
+   "ok": true,
+   "path": "ml/data/complaints.jsonl",
+   "verdicts": [
+    {
+     "detail": "all values in enum",
+     "field": "product",
+     "ok": true,
+     "rule": "enum"
+    },
+    {
+     "detail": "all 6 values appear",
+     "field": "product",
+     "ok": true,
+     "rule": "enum_coverage"
+    },
+    {
+     "detail": "1.8 days old (max 365)",
+     "field": null,
+     "ok": true,
+     "rule": "freshness"
+    },
+    {
+     "detail": "all values match",
+     "field": "date",
+     "ok": true,
+     "rule": "pattern"
+    },
+    {
+     "detail": "all values match",
+     "field": "id",
+     "ok": true,
+     "rule": "pattern"
+    },
+    {
+     "detail": "present in 3600 rows",
+     "field": "date",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "present in 3600 rows",
+     "field": "id",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "present in 3600 rows",
+     "field": "narrative",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "present in 3600 rows",
+     "field": "product",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "present in 3600 rows",
+     "field": "product_raw",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "3600 rows (min 3600, max 3600)",
+     "field": null,
+     "ok": true,
+     "rule": "row_count"
+    },
+    {
+     "detail": "all values are string",
+     "field": "date",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are string",
+     "field": "id",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are string",
+     "field": "narrative",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are string",
+     "field": "product",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are string",
+     "field": "product_raw",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "3600 rows, no duplicates",
+     "field": "id",
+     "ok": true,
+     "rule": "unique"
+    }
+   ]
+  },
+  "tickets": {
+   "age_days": 2.0,
+   "contract": "tickets.v1",
+   "ok": true,
+   "path": "llms/data/tickets.jsonl",
+   "verdicts": [
+    {
+     "detail": "all values in enum",
+     "field": "category",
+     "ok": true,
+     "rule": "enum"
+    },
+    {
+     "detail": "all values in enum",
+     "field": "priority",
+     "ok": true,
+     "rule": "enum"
+    },
+    {
+     "detail": "all values in enum",
+     "field": "split",
+     "ok": true,
+     "rule": "enum"
+    },
+    {
+     "detail": "all 6 values appear",
+     "field": "category",
+     "ok": true,
+     "rule": "enum_coverage"
+    },
+    {
+     "detail": "all 4 values appear",
+     "field": "priority",
+     "ok": true,
+     "rule": "enum_coverage"
+    },
+    {
+     "detail": "2 days old (max 365)",
+     "field": null,
+     "ok": true,
+     "rule": "freshness"
+    },
+    {
+     "detail": "all values match",
+     "field": "id",
+     "ok": true,
+     "rule": "pattern"
+    },
+    {
+     "detail": "present in 60 rows",
+     "field": "category",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "present in 60 rows",
+     "field": "id",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "present in 60 rows",
+     "field": "priority",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "present in 60 rows",
+     "field": "split",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "present in 60 rows",
+     "field": "tags",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "present in 60 rows",
+     "field": "text",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "60 rows (min 60, max 60)",
+     "field": null,
+     "ok": true,
+     "rule": "row_count"
+    },
+    {
+     "detail": "all values are string",
+     "field": "category",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are string",
+     "field": "id",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are string",
+     "field": "priority",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are string",
+     "field": "split",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are array",
+     "field": "tags",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are string",
+     "field": "text",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "60 rows, no duplicates",
+     "field": "id",
+     "ok": true,
+     "rule": "unique"
+    }
+   ]
+  },
+  "tickets-v2": {
+   "age_days": 2.0,
+   "contract": "tickets.v2",
+   "ok": true,
+   "path": "data/data/tickets.v2.jsonl",
+   "verdicts": [
+    {
+     "detail": "all values in enum",
+     "field": "category",
+     "ok": true,
+     "rule": "enum"
+    },
+    {
+     "detail": "all values in enum",
+     "field": "split",
+     "ok": true,
+     "rule": "enum"
+    },
+    {
+     "detail": "all values in enum",
+     "field": "urgency",
+     "ok": true,
+     "rule": "enum"
+    },
+    {
+     "detail": "all 4 values appear",
+     "field": "urgency",
+     "ok": true,
+     "rule": "enum_coverage"
+    },
+    {
+     "detail": "2 days old (max 365)",
+     "field": null,
+     "ok": true,
+     "rule": "freshness"
+    },
+    {
+     "detail": "all values match",
+     "field": "id",
+     "ok": true,
+     "rule": "pattern"
+    },
+    {
+     "detail": "present in 60 rows",
+     "field": "category",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "present in 60 rows",
+     "field": "id",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "present in 60 rows",
+     "field": "split",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "present in 60 rows",
+     "field": "tags",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "present in 60 rows",
+     "field": "text",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "present in 60 rows",
+     "field": "urgency",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "60 rows (min 60, max 60)",
+     "field": null,
+     "ok": true,
+     "rule": "row_count"
+    },
+    {
+     "detail": "all values are string",
+     "field": "category",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are string",
+     "field": "id",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are string",
+     "field": "split",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are array",
+     "field": "tags",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are string",
+     "field": "text",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are string",
+     "field": "urgency",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "60 rows, no duplicates",
+     "field": "id",
+     "ok": true,
+     "rule": "unique"
+    }
+   ]
+  },
+  "tickets-v2-before": {
+   "age_days": 2.0,
+   "contract": "tickets.v2",
+   "expect": "fail",
+   "ok": false,
+   "path": "llms/data/tickets.jsonl",
+   "verdicts": [
+    {
+     "detail": "all values in enum",
+     "field": "category",
+     "ok": true,
+     "rule": "enum"
+    },
+    {
+     "detail": "all values in enum",
+     "field": "split",
+     "ok": true,
+     "rule": "enum"
+    },
+    {
+     "detail": "all values in enum",
+     "field": "urgency",
+     "ok": true,
+     "rule": "enum"
+    },
+    {
+     "detail": "missing values: \"low\", \"normal\", \"high\", \"urgent\"",
+     "field": "urgency",
+     "ok": false,
+     "rule": "enum_coverage"
+    },
+    {
+     "detail": "not in schema (60 rows)",
+     "field": "priority",
+     "ok": true,
+     "rule": "extra_field"
+    },
+    {
+     "detail": "2 days old (max 365)",
+     "field": null,
+     "ok": true,
+     "rule": "freshness"
+    },
+    {
+     "detail": "all values match",
+     "field": "id",
+     "ok": true,
+     "rule": "pattern"
+    },
+    {
+     "detail": "present in 60 rows",
+     "field": "category",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "present in 60 rows",
+     "field": "id",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "present in 60 rows",
+     "field": "split",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "present in 60 rows",
+     "field": "tags",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "present in 60 rows",
+     "field": "text",
+     "ok": true,
+     "rule": "required"
+    },
+    {
+     "detail": "row 1: missing (+59 more)",
+     "field": "urgency",
+     "ok": false,
+     "rule": "required"
+    },
+    {
+     "detail": "60 rows (min 60, max 60)",
+     "field": null,
+     "ok": true,
+     "rule": "row_count"
+    },
+    {
+     "detail": "all values are string",
+     "field": "category",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are string",
+     "field": "id",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are string",
+     "field": "split",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are array",
+     "field": "tags",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are string",
+     "field": "text",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "all values are string",
+     "field": "urgency",
+     "ok": true,
+     "rule": "type"
+    },
+    {
+     "detail": "60 rows, no duplicates",
+     "field": "id",
+     "ok": true,
+     "rule": "unique"
+    }
+   ]
+  }
+ }
+}

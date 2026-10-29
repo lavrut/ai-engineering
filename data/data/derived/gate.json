@@ -1,0 +1,46 @@
+{
+ "consumers": [
+  {
+   "contract_exists": true,
+   "declared": "agent-traces.v1",
+   "name": "agents-eval",
+   "sunset": null,
+   "verdicts_ok": true,
+   "warning": false
+  },
+  {
+   "contract_exists": true,
+   "declared": "complaints.v1",
+   "name": "mcp-read-server",
+   "sunset": null,
+   "verdicts_ok": true,
+   "warning": false
+  },
+  {
+   "contract_exists": true,
+   "declared": "tickets.v1",
+   "name": "mcp-read-server",
+   "sunset": "2027-01-31",
+   "verdicts_ok": true,
+   "warning": false
+  },
+  {
+   "contract_exists": true,
+   "declared": "tickets.v1",
+   "name": "agents-eval",
+   "sunset": "2027-01-31",
+   "verdicts_ok": true,
+   "warning": false
+  },
+  {
+   "contract_exists": true,
+   "declared": "tickets.v2",
+   "name": "agents-eval-v2",
+   "sunset": null,
+   "verdicts_ok": true,
+   "warning": false
+  }
+ ],
+ "ok": true,
+ "reason": "every consumer is green on the version it declares (5 of 5)"
+}

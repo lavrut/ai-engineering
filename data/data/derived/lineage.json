@@ -1,0 +1,328 @@
+{
+ "edges": [
+  {
+   "contract": null,
+   "from": "agents",
+   "to": "agents_derived",
+   "version": null
+  },
+  {
+   "contract": "agent-traces.v1",
+   "from": "agents",
+   "to": "agents_traces",
+   "version": "1"
+  },
+  {
+   "contract": null,
+   "from": "agents_derived",
+   "to": "app-lessons",
+   "version": null
+  },
+  {
+   "contract": "agent-traces.v1",
+   "from": "agents_traces",
+   "to": "agents-eval",
+   "version": "1"
+  },
+  {
+   "contract": null,
+   "from": "category_map",
+   "to": "app-lessons",
+   "version": null
+  },
+  {
+   "contract": null,
+   "from": "category_map",
+   "to": "ml-fetch-sample",
+   "version": null
+  },
+  {
+   "contract": "complaints.v1",
+   "from": "complaints",
+   "to": "mcp-read-server",
+   "version": "1"
+  },
+  {
+   "contract": "tickets.v2",
+   "from": "data",
+   "to": "tickets_v2",
+   "version": "2"
+  },
+  {
+   "contract": null,
+   "from": "llms",
+   "to": "model_responses",
+   "version": null
+  },
+  {
+   "contract": null,
+   "from": "llms",
+   "to": "reply_labels",
+   "version": null
+  },
+  {
+   "contract": "tickets.v1",
+   "from": "llms",
+   "to": "tickets",
+   "version": "1"
+  },
+  {
+   "contract": null,
+   "from": "mcp",
+   "to": "mcp_derived",
+   "version": null
+  },
+  {
+   "contract": null,
+   "from": "mcp",
+   "to": "mcp_recordings",
+   "version": null
+  },
+  {
+   "contract": null,
+   "from": "mcp_derived",
+   "to": "app-lessons",
+   "version": null
+  },
+  {
+   "contract": null,
+   "from": "mcp_recordings",
+   "to": "agents-run",
+   "version": null
+  },
+  {
+   "contract": null,
+   "from": "mcp_recordings",
+   "to": "mcp-replay",
+   "version": null
+  },
+  {
+   "contract": null,
+   "from": "ml",
+   "to": "category_map",
+   "version": null
+  },
+  {
+   "contract": "complaints.v1",
+   "from": "ml",
+   "to": "complaints",
+   "version": "1"
+  },
+  {
+   "contract": null,
+   "from": "ml",
+   "to": "ml_registry",
+   "version": null
+  },
+  {
+   "contract": null,
+   "from": "ml",
+   "to": "ml_reports",
+   "version": null
+  },
+  {
+   "contract": null,
+   "from": "ml_registry",
+   "to": "mcp-read-server",
+   "version": null
+  },
+  {
+   "contract": null,
+   "from": "ml_registry",
+   "to": "ml-serve",
+   "version": null
+  },
+  {
+   "contract": null,
+   "from": "ml_reports",
+   "to": "app-lessons",
+   "version": null
+  },
+  {
+   "contract": null,
+   "from": "ml_reports",
+   "to": "mcp-read-server",
+   "version": null
+  },
+  {
+   "contract": null,
+   "from": "model_responses",
+   "to": "app-lessons",
+   "version": null
+  },
+  {
+   "contract": null,
+   "from": "model_responses",
+   "to": "llms-replay",
+   "version": null
+  },
+  {
+   "contract": null,
+   "from": "reply_labels",
+   "to": "app-lessons",
+   "version": null
+  },
+  {
+   "contract": null,
+   "from": "reply_labels",
+   "to": "llms-triage-lab",
+   "version": null
+  },
+  {
+   "contract": "tickets.v1",
+   "from": "tickets",
+   "to": "agents-eval",
+   "version": "1"
+  },
+  {
+   "contract": "tickets.v1",
+   "from": "tickets",
+   "to": "mcp-read-server",
+   "version": "1"
+  },
+  {
+   "contract": "tickets.v1",
+   "from": "tickets",
+   "to": "tickets_v2",
+   "version": "1"
+  },
+  {
+   "contract": "tickets.v2",
+   "from": "tickets_v2",
+   "to": "agents-eval-v2",
+   "version": "2"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "agents",
+   "kind": "track"
+  },
+  {
+   "id": "agents-eval",
+   "kind": "consumer",
+   "track": "agents"
+  },
+  {
+   "id": "agents-eval-v2",
+   "kind": "consumer",
+   "track": "agents"
+  },
+  {
+   "id": "agents-run",
+   "kind": "consumer",
+   "track": "agents"
+  },
+  {
+   "id": "agents_derived",
+   "kind": "dataset",
+   "missing": false
+  },
+  {
+   "id": "agents_traces",
+   "kind": "dataset",
+   "missing": false
+  },
+  {
+   "id": "app-lessons",
+   "kind": "consumer",
+   "track": "app"
+  },
+  {
+   "id": "category_map",
+   "kind": "dataset",
+   "missing": false
+  },
+  {
+   "id": "complaints",
+   "kind": "dataset",
+   "missing": false
+  },
+  {
+   "id": "data",
+   "kind": "track"
+  },
+  {
+   "id": "llms",
+   "kind": "track"
+  },
+  {
+   "id": "llms-replay",
+   "kind": "consumer",
+   "track": "llms"
+  },
+  {
+   "id": "llms-triage-lab",
+   "kind": "consumer",
+   "track": "llms"
+  },
+  {
+   "id": "mcp",
+   "kind": "track"
+  },
+  {
+   "id": "mcp-read-server",
+   "kind": "consumer",
+   "track": "mcp"
+  },
+  {
+   "id": "mcp-replay",
+   "kind": "consumer",
+   "track": "mcp"
+  },
+  {
+   "id": "mcp_derived",
+   "kind": "dataset",
+   "missing": false
+  },
+  {
+   "id": "mcp_recordings",
+   "kind": "dataset",
+   "missing": false
+  },
+  {
+   "id": "ml",
+   "kind": "track"
+  },
+  {
+   "id": "ml-fetch-sample",
+   "kind": "consumer",
+   "track": "ml"
+  },
+  {
+   "id": "ml-serve",
+   "kind": "consumer",
+   "track": "ml"
+  },
+  {
+   "id": "ml_registry",
+   "kind": "dataset",
+   "missing": false
+  },
+  {
+   "id": "ml_reports",
+   "kind": "dataset",
+   "missing": false
+  },
+  {
+   "id": "model_responses",
+   "kind": "dataset",
+   "missing": false
+  },
+  {
+   "id": "reply_labels",
+   "kind": "dataset",
+   "missing": false
+  },
+  {
+   "id": "tickets",
+   "kind": "dataset",
+   "missing": false
+  },
+  {
+   "id": "tickets_v2",
+   "kind": "dataset",
+   "missing": false
+  }
+ ]
+}

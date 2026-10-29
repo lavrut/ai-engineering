@@ -361,7 +361,7 @@ describe('recording sets (lesson 7)', () => {
 // under src/, agents/data/derived/ or astro.config.mjs, the setup runs `astro build` first (about 5 s).
 const APP = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PAGE = join(APP, 'dist', 'index.html');
-const SOURCES = [join(APP, 'src'), resolve(APP, '../agents/data/derived'), join(APP, 'astro.config.mjs')];
+const SOURCES = [join(APP, 'src'), resolve(APP, '../agents/data/derived'), resolve(APP, '../data/data/derived'), resolve(APP, '../data/contracts'), join(APP, 'astro.config.mjs')];
 const AIDS = ['PatternStepper', 'AgentTrace', 'CostCompare', 'EngineScorecard'];
 const AGENTS_VIEWS = [
   'agents-workflows', 'agents-chain-route', 'agents-parallel', 'agents-evaluator', 'agents-multi-agent', 'agents-more-agents',
@@ -392,12 +392,12 @@ function ensureBuilt(): void {
 
 type Island = { component: string; bytes: number };
 
-/** Every agents lesson's islands, in page order: lesson n is the n-th agents view. */
-function shippedIslands(html: string): { lesson: string; islands: Island[] }[] {
+/** Every lesson's islands of one track, in page order: lesson n is the n-th view of that track. */
+function shippedIslands(html: string, track = 'agents'): { lesson: string; islands: Island[] }[] {
   const views = html.split(/(?=<section data-view=")/).slice(1);
   return views
     .map((chunk) => ({ view: /^<section data-view="([^"]+)"/.exec(chunk)![1], chunk }))
-    .filter(({ view }) => view.startsWith('agents-'))
+    .filter(({ view }) => view.startsWith(`${track}-`))
     .map(({ view, chunk }, i) => {
       const islands = [...chunk.matchAll(/<astro-island\b((?:[^>"]|"[^"]*")*)>/g)].map(([, attrs]) => {
         const component = /component-url="[^"]*\/([A-Za-z]+)\.[^"/]*\.js"/.exec(attrs)?.[1] ?? '?';
@@ -417,12 +417,52 @@ describe('page budget', () => {
   });
 
   let lessons: { lesson: string; islands: Island[] }[] = [];
+  let dataLessons: { lesson: string; islands: Island[] }[] = [];
   const bytes = (l: { islands: Island[] }) => l.islands.filter((x) => AIDS.includes(x.component)).reduce((a, x) => a + x.bytes, 0);
 
   beforeAll(() => {
     ensureBuilt();
-    lessons = shippedIslands(readFileSync(PAGE, 'utf8'));
+    const html = readFileSync(PAGE, 'utf8');
+    lessons = shippedIslands(html);
+    dataLessons = shippedIslands(html, 'data');
   }, 180_000);
+
+  // The Data Fabric & Data Contracts track, measured the same way: the props of its four aids over its lessons.
+  // The test is bound to the content: it lists src/content/lessons/data/*.mdx, requires the six lessons spec §5
+  // names, one data-* view per file in the built page, and each lesson to carry the aid spec §5 names for it. A
+  // lesson file whose slug has no aid in DATA_LESSON_AIDS fails here, so a new lesson cannot slip past the check.
+  const DATA_DIR = join(APP, 'src', 'content', 'lessons', 'data');
+  const DATA_FILES = existsSync(DATA_DIR) ? readdirSync(DATA_DIR).filter((f) => f.endsWith('.mdx')).sort() : [];
+  const DATA_AIDS = ['CatalogExplorer', 'QualityReport', 'ContractViewer', 'LineageDiff'];
+  // spec §5: the aid each data lesson shows, by slug.
+  const DATA_LESSON_AIDS: Record<string, string> = {
+    fabric: 'FlowDiagram', catalog: 'CatalogExplorer', quality: 'QualityReport', contract: 'ContractViewer', enforce: 'ContractViewer', capstone: 'LineageDiff',
+  };
+
+  it('finds the six data lessons spec §5 names, each slug mapped to its aid', () => {
+    const slugs = DATA_FILES.map((f) => f.replace(/^\d+-/, '').replace(/\.mdx$/, ''));
+    expect(slugs).toEqual(['fabric', 'catalog', 'quality', 'contract', 'enforce', 'capstone']);
+    expect(slugs.filter((s) => !Object.hasOwn(DATA_LESSON_AIDS, s)), 'a data lesson slug with no aid in DATA_LESSON_AIDS').toEqual([]);
+  });
+
+  it(
+    'keeps the props the data aids ship, as the built page carries them, under 200 KB',
+    () => {
+      const slugs = DATA_FILES.map((f) => f.replace(/^\d+-/, '').replace(/\.mdx$/, ''));
+      expect(dataLessons.map((l) => l.lesson.replace(/^lesson \d+ \((.*)\)$/, '$1'))).toEqual(slugs.map((s) => `data-${s}`));
+      dataLessons.forEach((l, i) => {
+        const want = DATA_LESSON_AIDS[slugs[i]];
+        expect(want, `${l.lesson}: no aid mapped for slug "${slugs[i]}"`).toBeDefined();
+        expect(l.islands.map((x) => x.component), l.lesson).toContain(want);
+      });
+      const shipped = dataLessons.flatMap((l) => l.islands).filter((x) => DATA_AIDS.includes(x.component));
+      expect(shipped.length).toBeGreaterThan(0);
+      expect(shipped.every((x) => x.bytes > 500)).toBe(true);
+      const sizes = dataLessons.map((l) => [l.lesson, l.islands.filter((x) => DATA_AIDS.includes(x.component)).reduce((a, x) => a + x.bytes, 0)] as const);
+      const total = sizes.reduce((a, [, n]) => a + n, 0);
+      expect(total, `the data aids ship ${total} bytes of props: ${sizes.map(([name, n]) => `${name} ${n}`).join(', ')}`).toBeLessThan(200_000);
+    },
+  );
 
   it('finds every agents lesson and its aids in the built page', () => {
     expect(lessons.map((l) => l.lesson.replace(/^lesson \d+ \((.*)\)$/, '$1'))).toEqual(AGENTS_VIEWS);

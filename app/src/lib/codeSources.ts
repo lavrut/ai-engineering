@@ -47,11 +47,23 @@ export type CodeSourceId =
   | 'agents-sdk'
   | 'agents-evals'
   | 'agents-run-evals'
-  | 'agents-judge-set';
+  | 'agents-judge-set'
+  | 'data-contract'
+  | 'data-catalog'
+  | 'data-quality'
+  | 'data-gate'
+  | 'data-migrate'
+  | 'data-contract-tickets'
+  | 'data-contract-tickets-v2'
+  | 'data-contract-complaints'
+  | 'data-contract-traces';
 
 export type CodeSourceInfo = {
-  /** Repo-relative path of the Python file. */
+  /** Repo-relative path of the Python file (or, with lang: 'yaml', of the YAML file quoted as text). */
   python: string;
+  /** The first file's language when it is not Python: a data contract is YAML, quoted by its `# ── N.`
+   *  comment sections like any source. CodeTabs names the tab and highlights the code by it. */
+  lang?: 'yaml';
   /** Repo-relative path of the Go file; none means Python only. */
   go?: string;
   /** More Go files whose text follows `go`, so one source reads as one file (lumen-read keeps sections 1-5 in
@@ -107,6 +119,24 @@ export const CODE_SOURCES: Record<CodeSourceId, CodeSourceInfo> = {
   'agents-evals': { python: 'agents/evals/scorers.py' }, // the scorers, 1-7
   'agents-run-evals': { python: 'agents/evals/run_evals.py' }, // scoring every engine, the judge, the gate (6), 1-7
   'agents-judge-set': { python: 'agents/evals/judge_set.py' }, // the judge set: estimate and record, 1
+  // Data Fabric & Data Contracts track. The validator is contract.py (1-5) and its Go twin, three files that number
+  // 1-9 between them (contract.go 1-5, rules.go 6-8, main.go 9), so a quote gives goSection: the rules are Python 3
+  // and Go 7. The Go files join in section order (ruling D14), so a whole quote reads 1-9. gate.py and
+  // migrate_tickets.py both number 1-4, so each is its own source. The contracts are YAML.
+  'data-contract': {
+    python: 'data/python/contract.py',
+    go: 'data/go/validate/contract.go',
+    goMore: ['data/go/validate/rules.go', 'data/go/validate/main.go'],
+    goSections: 'own',
+  }, // contract files, rows, rules, verdicts, command line: 1-5 (Go 1-9)
+  'data-catalog': { python: 'data/python/catalog.py' }, // the datasets, files and git, the catalogue, lineage, the JSON, command line: 1-6
+  'data-quality': { python: 'data/python/quality.py' }, // the datasets, freshness, trace sets, verdicts.json, command line: 1-5
+  'data-gate': { python: 'data/python/gate.py' }, // paths, the gate, gate.json, command line: 1-4
+  'data-migrate': { python: 'data/python/migrate_tickets.py' }, // paths, one row, the file, command line: 1-4
+  'data-contract-tickets': { python: 'data/contracts/tickets.v1.yaml', lang: 'yaml' }, // info, schema, quality, servicing, consumers: 1-5
+  'data-contract-tickets-v2': { python: 'data/contracts/tickets.v2.yaml', lang: 'yaml' },
+  'data-contract-complaints': { python: 'data/contracts/complaints.v1.yaml', lang: 'yaml' },
+  'data-contract-traces': { python: 'data/contracts/agent-traces.v1.yaml', lang: 'yaml' },
 };
 
 export const isSource = (id: string): id is CodeSourceId => Object.hasOwn(CODE_SOURCES, id);
@@ -114,6 +144,11 @@ export const isSource = (id: string): id is CodeSourceId => Object.hasOwn(CODE_S
 /** The file name a tab or code panel shows ("server.py", "drift.go"); undefined for a missing Go file. */
 export function fileName(source: CodeSourceId, lang: 'python' | 'go'): string | undefined {
   return CODE_SOURCES[source][lang]?.split('/').pop();
+}
+
+/** The first tab's language: what CodeTabs highlights it as, and the tab's name. */
+export function sourceLang(source: CodeSourceId): { lang: 'python' | 'yaml'; label: 'Python' | 'YAML' } {
+  return CODE_SOURCES[source].lang === 'yaml' ? { lang: 'yaml', label: 'YAML' } : { lang: 'python', label: 'Python' };
 }
 
 /** What a CodeTabs tag (or a diagram step's code link) asks for. */

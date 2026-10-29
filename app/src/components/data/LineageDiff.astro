@@ -1,0 +1,16 @@
+---
+// Build-time wrapper: two versions of one contract (lesson 6: from="tickets.v1" to="tickets.v2"): each version's
+// status, sunset, dataset and consumers, the migration edge from lineage.json, the schema changes, and gate.json's
+// rows for both versions with the gate's verdict verbatim.
+import LineageDiffIsland from './LineageDiff.tsx';
+import { lineageDiffProps, loadDataData } from '../../lib/dataData';
+
+interface Props {
+  from: string;
+  to: string;
+}
+
+const props = lineageDiffProps(loadDataData(), Astro.props);
+---
+
+<LineageDiffIsland client:visible {...props} />
