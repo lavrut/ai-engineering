@@ -3,7 +3,8 @@
 // 2026-10-29-demo-video-design.md §6); this file pins what can be checked without a browser.
 import { describe, expect, it } from 'vitest';
 import { BEATS, PHONE, TEST_COUNT_NOTE, VIEWPORT } from '../scripts/demo/beats.mjs';
-import { formatTime, toSrt } from '../scripts/demo/srt.mjs';
+import { formatTime, timingsToCues, toSrt } from '../scripts/demo/srt.mjs';
+import { CAPTION_CSS } from '../scripts/demo/caption.mjs';
 
 const KINDS = new Set(['goto', 'scrollTo', 'click', 'clickUntilDisabled', 'select', 'wait', 'resize', 'caption']);
 const STEPPING = /\.mc-btn-primary|Next/;
@@ -56,5 +57,40 @@ describe('the srt formatter', () => {
       '1\n00:00:00,000 --> 00:00:01,000\na\n\n2\n00:00:01,000 --> 00:00:02,500\nb\nc\n',
     );
     expect(() => toSrt([{ start: 0, end: 1000, text: 'a' }, { start: 900, end: 2000, text: 'b' }])).toThrow('overlapping cues at 2');
+  });
+
+  it('turns the recorder timings into abutting cues', () => {
+    const timings = [
+      { beat: 'home', caption: 'a', start: 0, end: 4000 },
+      { beat: 'home', caption: 'b', start: 4000, end: 10000 },
+      { beat: 'anatomy', caption: 'c', start: 10000, end: 30000 },
+    ];
+    expect(timingsToCues(timings)).toEqual([
+      { start: 0, end: 4000, text: 'a' },
+      { start: 4000, end: 10000, text: 'b' },
+      { start: 10000, end: 30000, text: 'c' },
+    ]);
+    expect(() => toSrt(timingsToCues(timings))).not.toThrow();
+  });
+});
+
+describe('the recorder', () => {
+  it('rejects a beat whose selector is missing, naming the beat and the selector', async () => {
+    const { runBeat } = await import('../scripts/demo/record.mjs');
+    const page = {
+      evaluate: async () => undefined,
+      waitForTimeout: async () => undefined,
+      locator: () => ({ first: () => ({ waitFor: async () => { throw new Error('timeout'); } }) }),
+    };
+    const beat = { id: 'bogus', captions: ['x'], actions: [{ kind: 'scrollTo', selector: '#nothing-here', ms: 10 }] };
+    await expect(runBeat(page as any, beat as any, { dry: true, t0: Date.now(), timings: [] })).rejects.toThrow('beat bogus: missing #nothing-here');
+  });
+});
+
+describe('the caption strip', () => {
+  it('is a fixed strip that keeps caption line breaks', () => {
+    expect(CAPTION_CSS).toContain('#demo-caption');
+    expect(CAPTION_CSS).toContain('position: fixed');
+    expect(CAPTION_CSS).toContain('white-space: pre-line');
   });
 });

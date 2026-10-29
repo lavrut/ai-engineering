@@ -1,0 +1,169 @@
+#!/usr/bin/env node
+// Records the demo video: serves app/publish on a loopback port, drives Chromium through the beats
+// with Playwright's video recording on, draws the captions in the page and writes the caption
+// timings. Output: <out>/raw.webm and <out>/timings.json. `--dry` runs the beats without recording
+// (waits capped at 100 ms) and fails on the first missing element.
+//
+//   node scripts/demo/record.mjs [--dry] [--out DIR]      (from app/; run `npm run package` first)
+import { createServer } from 'node:http';
+import { createReadStream, existsSync, mkdirSync, statSync } from 'node:fs';
+import { copyFile, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { extname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright';
+import { BEATS, VIEWPORT } from './beats.mjs';
+import { installCaption, showCaption } from './caption.mjs';
+
+const APP = resolve(fileURLToPath(new URL('../../', import.meta.url)));
+const PUBLISH = join(APP, 'publish');
+const DIST = join(APP, 'dist');
+const SELECTOR_TIMEOUT = 5000;
+const DRY_WAIT = 100;
+const TYPES = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css',
+  '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2',
+  '.woff': 'font/woff', '.ico': 'image/x-icon', '.txt': 'text/plain',
+};
+
+// ── 1. The static server ─────────────────────────────────────────────────────
+/** Serve `dir` on a loopback free port. */
+export function serve(dir) {
+  return new Promise((ok) => {
+    const server = createServer((req, res) => {
+      const path = decodeURIComponent(new URL(req.url, 'http://127.0.0.1').pathname);
+      const file = join(dir, path === '/' ? 'index.html' : path);
+      if (!file.startsWith(dir) || !existsSync(file) || statSync(file).isDirectory()) {
+        res.writeHead(404); res.end('not found'); return;
+      }
+      res.writeHead(200, { 'content-type': TYPES[extname(file)] || 'application/octet-stream' });
+      createReadStream(file).pipe(res);
+    });
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address();
+      ok({ url: `http://127.0.0.1:${port}`, close: () => new Promise((done) => server.close(done)) });
+    });
+  });
+}
+
+// ── 2. Actions ───────────────────────────────────────────────────────────────
+function locate(page, beat, selector) {
+  return page.locator(selector).first().waitFor({ timeout: SELECTOR_TIMEOUT }).then(
+    () => page.locator(selector).first(),
+    () => { throw new Error(`beat ${beat.id}: missing ${selector}`); },
+  );
+}
+
+async function runAction(page, beat, action, ctx) {
+  const wait = (ms) => page.waitForTimeout(ctx.dry ? Math.min(ms, DRY_WAIT) : ms);
+  switch (action.kind) {
+    case 'goto':
+      await page.evaluate((h) => { location.hash = h; window.scrollTo(0, 0); }, action.hash);
+      await wait(300);
+      return;
+    case 'scrollTo': {
+      const el = await locate(page, beat, action.selector);
+      await el.evaluate((node) => node.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      await wait(action.ms);
+      return;
+    }
+    case 'click':
+      await (await locate(page, beat, action.selector)).click();
+      return;
+    case 'clickUntilDisabled': {
+      const el = await locate(page, beat, action.selector);
+      for (let i = 0; i < action.max; i++) {
+        if (await el.isDisabled()) break;
+        await el.click();
+        await wait(action.waitMs);
+      }
+      return;
+    }
+    case 'select':
+      await (await locate(page, beat, action.selector)).selectOption(action.value);
+      return;
+    case 'wait':
+      await wait(action.ms);
+      return;
+    case 'resize':
+      await page.setViewportSize({ width: action.width, height: action.height });
+      await wait(500);
+      return;
+    case 'caption':
+      await caption(page, beat, beat.captions[action.index], ctx);
+      return;
+    default:
+      throw new Error(`beat ${beat.id}: unknown action ${action.kind}`);
+  }
+}
+
+async function caption(page, beat, text, ctx) {
+  const now = Date.now() - ctx.t0;
+  const last = ctx.timings[ctx.timings.length - 1];
+  if (last && last.end === null) last.end = now;
+  ctx.timings.push({ beat: beat.id, caption: text, start: now, end: null });
+  await showCaption(page, text);
+}
+
+/** Run one beat: its first caption, then its actions in order. */
+export async function runBeat(page, beat, ctx) {
+  await caption(page, beat, beat.captions[0], ctx);
+  for (const action of beat.actions) await runAction(page, beat, action, ctx);
+}
+
+// ── 3. The run ───────────────────────────────────────────────────────────────
+function checkPublish() {
+  const index = join(PUBLISH, 'index.html');
+  if (!existsSync(index)) return 'app/publish/index.html is missing: run `npm run package` first';
+  const dist = join(DIST, 'index.html');
+  if (existsSync(dist) && statSync(dist).mtimeMs > statSync(index).mtimeMs + 1000) {
+    return 'app/publish is older than app/dist: run `npm run package` first';
+  }
+  return null;
+}
+
+export async function main(argv = process.argv.slice(2)) {
+  const dry = argv.includes('--dry');
+  const outArg = argv[argv.indexOf('--out') + 1];
+  const out = argv.includes('--out') && outArg ? resolve(outArg) : join(APP, 'demo');
+  const problem = checkPublish();
+  if (problem) { console.error(problem); return 2; }
+  mkdirSync(out, { recursive: true });
+  const videoDir = dry ? null : await mkdtemp(join(tmpdir(), 'demo-video-'));
+  const server = await serve(PUBLISH);
+  const browser = await chromium.launch();
+  const ctx = { dry, t0: 0, timings: [] };
+  try {
+    const context = await browser.newContext({
+      viewport: VIEWPORT, colorScheme: 'dark', deviceScaleFactor: 1,
+      ...(dry ? {} : { recordVideo: { dir: videoDir, size: VIEWPORT } }),
+    });
+    const page = await context.newPage();
+    ctx.t0 = Date.now();
+    await page.goto(`${server.url}/index.html#home`, { waitUntil: 'load' });
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+    await installCaption(page);
+    await page.waitForTimeout(dry ? DRY_WAIT : 800);
+    for (const beat of BEATS) await runBeat(page, beat, ctx);
+    await showCaption(page, '');
+    await page.waitForTimeout(dry ? DRY_WAIT : 1000);
+    const end = Date.now() - ctx.t0;
+    const last = ctx.timings[ctx.timings.length - 1];
+    if (last && last.end === null) last.end = end;
+    const video = dry ? null : page.video();
+    await context.close();
+    if (dry) { console.log(`dry run ok: ${BEATS.length} beats`); return 0; }
+    await copyFile(await video.path(), join(out, 'raw.webm'));
+    await writeFile(join(out, 'timings.json'), JSON.stringify(ctx.timings, null, 1) + '\n');
+    console.log(`recorded ${BEATS.length} beats, ${ctx.timings.length} captions, ${(end / 1000).toFixed(1)} s → ${join(out, 'raw.webm')}`);
+    return 0;
+  } finally {
+    await browser.close();
+    await server.close();
+    if (videoDir) await rm(videoDir, { recursive: true, force: true });
+  }
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().then((code) => process.exit(code), (err) => { console.error(err.message); process.exit(1); });
+}

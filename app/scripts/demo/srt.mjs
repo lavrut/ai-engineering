@@ -11,6 +11,11 @@ export function formatTime(ms) {
   return `${two(h)}:${two(m)}:${two(s)},${String(f).padStart(3, '0')}`;
 }
 
+/** The recorder's timings `[{beat, caption, start, end}]` → cues, one per caption, in order. */
+export function timingsToCues(timings) {
+  return timings.map((t) => ({ start: t.start, end: t.end, text: t.caption }));
+}
+
 /** Cues `{start, end, text}` (ms) → the .srt text. A cue that starts before the previous one ends is a bug. */
 export function toSrt(cues) {
   let out = '';
