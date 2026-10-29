@@ -56,6 +56,7 @@ export const dataFabric: Diagram = {
     edge('p-agents', 'agents_derived'),
     edge('tickets', 'tickets_v2', 'tickets.v1, migrated'),
     edge('tickets', 'c-mcp', 'tickets.v1'),
+    edge('tickets', 'c-agents', 'tickets.v1'),
     edge('tickets_v2', 'c-agents', 'tickets.v2'),
     edge('model_responses', 'c-llms'),
     edge('model_responses', 'c-app'),
@@ -90,9 +91,9 @@ export const dataFabric: Diagram = {
     },
     {
       n: 3,
-      highlight: ['p-llms', 'e-p-llms-tickets', 'tickets', 'e-tickets-c-mcp', 'c-mcp'],
+      highlight: ['p-llms', 'e-p-llms-tickets', 'tickets', 'e-tickets-c-mcp', 'c-mcp', 'e-tickets-c-agents', 'c-agents'],
       caption:
-        'A contract rides on the edge: tickets.v1 is what llms promises and what the MCP read server relies on. The consumer is named inside the contract, in its consumers section, so the producer knows whom a change would break. In the code: section 5.',
+        'A contract rides on the edge: tickets.v1 is what llms promises and what the MCP read server and the agents eval rely on. The consumer is named inside the contract, in its consumers section, so the producer knows whom a change would break. In the code: section 5.',
       code: { file: 'python', section: 5, source: 'data-contract-tickets' },
     },
     {
@@ -113,9 +114,10 @@ export const dataFabric: Diagram = {
       n: 6,
       highlight: [
         'tickets', 'e-tickets-tickets_v2', 'tickets_v2', 'e-p-data-tickets_v2', 'p-data', 'e-tickets_v2-c-agents', 'c-agents', 'e-tickets-c-mcp', 'c-mcp',
+        'e-tickets-c-agents',
       ],
       caption:
-        'A breaking change: tickets.v2 renames priority to urgency. The v1 file stays, and a migration writes the v2 file beside it. The MCP read server stays on v1 until its sunset, 2027-01-31; the agents eval moves to v2. The gate is green only when every consumer passes the version it declares. In the code: section 2.',
+        'A breaking change: tickets.v2 renames priority to urgency. The v1 file stays, and a migration writes the v2 file beside it. The MCP read server and the agents eval have not moved: both stay on v1 until its sunset, 2027-01-31. A shim reads the v2 file to show what that move will look like for the agents eval. The gate is green only when every consumer passes the version it declares. In the code: section 2.',
       code: { file: 'python', section: 2, source: 'data-gate' },
     },
   ],

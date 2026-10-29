@@ -171,6 +171,12 @@
   {
    "contract": "tickets.v1",
    "from": "tickets",
+   "to": "agents-eval",
+   "version": "1"
+  },
+  {
+   "contract": "tickets.v1",
+   "from": "tickets",
    "to": "mcp-read-server",
    "version": "1"
   },
@@ -183,7 +189,7 @@
   {
    "contract": "tickets.v2",
    "from": "tickets_v2",
-   "to": "agents-eval",
+   "to": "agents-eval-v2",
    "version": "2"
   }
  ],
@@ -194,6 +200,11 @@
   },
   {
    "id": "agents-eval",
+   "kind": "consumer",
+   "track": "agents"
+  },
+  {
+   "id": "agents-eval-v2",
    "kind": "consumer",
    "track": "agents"
   },

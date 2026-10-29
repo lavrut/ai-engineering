@@ -6,8 +6,9 @@ A breaking change is safe to ship when no reader is left behind: each consumer
 names the version it reads (in the `consumers` section of that version's
 contract), that version's contract file exists, and the data it governs passes
 it. During the capstone the tickets readers sit on two majors at once (the MCP
-read server on tickets.v1 until its sunset, the agents eval on tickets.v2), and
-the gate is green only if both are. It writes gate.json for the app.
+read server and the agents eval's own loader on tickets.v1 until its sunset, the
+shim that stands in for the agents eval's move, agents-eval-v2, on tickets.v2),
+and the gate is green only if all of them are. It writes gate.json for the app.
 
 Run (from the repo root):
     .venv-data/bin/python data/python/gate.py           # rewrite gate.json; exit 1 when the gate is red

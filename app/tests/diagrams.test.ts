@@ -288,11 +288,12 @@ describe('diagram data', () => {
       const got = dataFabric.edges.map((e) => `${e.from} -> ${e.to} [${/^([a-z-]+\.v\d+)/.exec(e.label ?? '')?.[1] ?? ''}]`);
       expect(new Set(got).size).toBe(got.length);
       expect(new Set(got)).toEqual(want);
-      expect(got).toHaveLength(31);
+      expect(got).toHaveLength(32);
       for (const e of dataFabric.edges) expect(e.id).toBe(`e-${e.from}-${e.to}`);
       // Only an edge with a contract is labelled, and the migration edge says what it is.
       expect(dataFabric.edges.filter((e) => e.label).map((e) => e.label)).toEqual([
-        'tickets.v1', 'tickets.v2', 'complaints.v1', 'agent-traces.v1', 'tickets.v1, migrated', 'tickets.v1', 'tickets.v2', 'complaints.v1', 'agent-traces.v1',
+        'tickets.v1', 'tickets.v2', 'complaints.v1', 'agent-traces.v1', 'tickets.v1, migrated', 'tickets.v1', 'tickets.v1', 'tickets.v2', 'complaints.v1',
+        'agent-traces.v1',
       ]);
     });
 

@@ -1,6 +1,8 @@
 # tickets.v1 — the 60 Lumen support tickets the LLMs track wrote, as the MCP read
-# server reads them. Deprecated by tickets.v2 (priority renamed urgency); the agents
-# eval has moved to v2, and the MCP read server stays here until the sunset. Validate:
+# server and the agents eval read them. Deprecated by tickets.v2 (priority renamed
+# urgency). Neither reader has migrated yet: the agents track's own loader still reads
+# this file, and the data track's shim (agents-eval-v2 in tickets.v2) shows what its
+# move looks like. Both stay here until the sunset. Validate:
 #     .venv-data/bin/python data/python/contract.py data/contracts/tickets.v1.yaml llms/data/tickets.jsonl
 
 # ── 1. info ─────────────────────────────────────────────────────────────────
@@ -61,3 +63,6 @@ consumers:
   - name: mcp-read-server
     version: 1
     reads: llms/data/tickets.jsonl via mcp/core/python/lumen_core/tickets.py
+  - name: agents-eval
+    version: 1
+    reads: llms/data/tickets.jsonl via agents/desk/python/desk_core.py

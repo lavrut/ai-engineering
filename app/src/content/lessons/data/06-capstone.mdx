@@ -13,7 +13,7 @@ quiz:
       - The validators cannot read renamed fields
       - The MCP read server looks up `priority`. Renaming in place breaks it the moment the file changes, before anyone has moved. A new major beside the old one lets each reader move on its own schedule, by the sunset
     answer: 3
-    explanation: A breaking change is about readers, not files. With v1 kept and deprecated, no reader is surprised. The agents eval has a v2 reader ready (the shim), the MCP read server has until 2027-01-31, and the gate shows both green meanwhile.
+    explanation: A breaking change is about readers, not files. With v1 kept and deprecated, no reader is surprised. The agents eval has a v2 reader ready (the shim) but has not switched to it, the MCP read server has until 2027-01-31, and meanwhile the gate shows every reader green on the version it declares.
   - question: The gate re-validates each consumer's declared contract against its dataset itself, instead of reading the committed `verdicts.json`. What does that prevent?
     options:
       - Nothing; the two always agree
@@ -56,11 +56,11 @@ Before anything moves, judge the old file by the new contract. It fails exactly 
 
 The new category needs no migration. An enum that gains a value accepts every row it accepted before.
 
-### 4. Move one reader, keep the other
+### 4. Show the move, keep both readers
 
-The agents eval moves to v2. In a real migration the consumer's own code would change: its loader would open the v2 file and read `urgency`. This course never edits another track, so the agents track's own loader, `load_eval_tickets` in `agents/desk/python/desk_core.py`, still reads the v1 file. A <Term t="shim" /> stands in for the moved loader: `data/python/consumers/agents_eval_v2.py` reads the v2 file and renames `urgency` back to `priority` at the edge, so the eval's scorer would keep working unchanged. `data/python/tests/test_capstone.py` proves the shim returns the same 13 tickets as the agents track's loader, field for field. The contract and the gate treat the shim as the agents eval's v2 reader; switching the eval over to it is the agents track's step. The shim returns the eval's 13 tickets: 12 come from the v2 file, and the thirteenth, `t061`, is the prompt-injection canary from `mcp/data/injection.jsonl`. That file is outside every contract, so the shim takes it as is.
+The agents eval is the reader that can move first. In a real migration its own code would change: its loader would open the v2 file and read `urgency`. This course never edits another track, so the agents track's own loader, `load_eval_tickets` in `agents/desk/python/desk_core.py`, still reads the v1 file, and `tickets.v1` still names it as a consumer, `agents-eval`. The agents track has not migrated yet. A <Term t="shim" /> shows what its move looks like: `data/python/consumers/agents_eval_v2.py` reads the v2 file and renames `urgency` back to `priority` at the edge, so every row comes out in the v1 shape the agents code was written against. `tickets.v2` declares the shim as its consumer, `agents-eval-v2`. `data/python/tests/test_capstone.py` proves the shim returns the same 13 tickets as the agents track's loader, field for field. Switching the eval over to the shim, and then removing `agents-eval` from `tickets.v1`, is the agents track's step. The shim returns the eval's 13 tickets: 12 come from the v2 file, and the thirteenth, `t061`, is the prompt-injection canary from `mcp/data/injection.jsonl`. That file is outside every contract, so the shim takes it as is.
 
-The MCP read server stays on v1 until the sunset.
+The MCP read server and the agents eval's own loader stay on v1 until the sunset.
 
 ### 5. Gate it
 
@@ -74,7 +74,7 @@ v1 and v2 sit side by side. Look at each version's status, sunset and consumers.
 
 <LineageDiff from="tickets.v1" to="tickets.v2" />
 
-The diff shows `priority` only in v1, `urgency` only in v2, and `category` gaining `security`. The migration edge runs from `tickets` to `tickets_v2`, reading under `tickets.v1`. The MCP read server is green on v1, with its sunset still ahead as of 2026-10-28. The agents eval, read through the shim, is green on v2. The gate counts every consumer of every contract, 4 of 4, and is green.
+The diff shows `priority` only in v1, `urgency` only in v2, and `category` gaining `security`. The migration edge runs from `tickets` to `tickets_v2`, reading under `tickets.v1`. The MCP read server and the agents eval are green on v1, with its sunset still ahead as of 2026-10-28. The shim, `agents-eval-v2`, is green on v2. The gate counts every consumer of every contract, 5 of 5, and is green.
 
 ## The code
 
@@ -102,7 +102,7 @@ The gate is section 2 of `gate.py`.
 - `return {"consumers": rows, "ok": not problems, "reason": "; ".join(head + warnings)}` is what `gate.json` stores and the aid shows as written.
 
 <Callout kind="note" title="A test per consumer">
-  `data/python/tests/test_consumers.py` imports each real reader without editing it. It checks that the MCP read server's ticket loader opens the file `tickets.v1` governs, and that the shim opens the file `tickets.v2` governs. Then it validates what each one reads. If a reader moves to another file, or its file stops meeting the version it declares, that test fails before the gate does.
+  `data/python/tests/test_consumers.py` imports each real reader without editing it. It checks that the MCP read server's ticket loader and the agents eval's loader open the file `tickets.v1` governs, and that the shim opens the file `tickets.v2` governs. Then it validates what each one reads. If a reader moves to another file, or its file stops meeting the version it declares, that test fails before the gate does.
 </Callout>
 
 ## Try it
@@ -135,8 +135,9 @@ tickets.v2.jsonl matches
 OK  agents-eval on agent-traces.v1
 OK  mcp-read-server on complaints.v1
 OK  mcp-read-server on tickets.v1
-OK  agents-eval on tickets.v2
-gate: green: every consumer is green on the version it declares (4 of 4)
+OK  agents-eval on tickets.v1
+OK  agents-eval-v2 on tickets.v2
+gate: green: every consumer is green on the version it declares (5 of 5)
 wrote gate.json
 ```
 
@@ -159,7 +160,7 @@ You should see:
 t001 keys: id, text, category, priority, tags, split
 ```
 
-The rows came from the v2 file, which has `urgency`, and the scorer sees `priority`, in the same place. The shim worked.
+The rows came from the v2 file, which has `urgency`, and they come out with `priority`, in the same place: the v1 shape the agents code was written against. The shim worked.
 
 Last, move the clock past the sunset. This asks the gate as of 2027-02-01, using a temporary `verdicts.json` that holds only that date, and writes nothing:
 
@@ -177,7 +178,7 @@ print(gate.gate(verdicts=later)["reason"])
 You should see:
 
 ```text
-every consumer is green on the version it declares (4 of 4); warning: mcp-read-server is on tickets.v1, past its sunset 2027-01-31
+every consumer is green on the version it declares (5 of 5); warning: mcp-read-server is on tickets.v1, past its sunset 2027-01-31; warning: agents-eval is on tickets.v1, past its sunset 2027-01-31
 ```
 
-Still green, with a warning that names the reader that has not moved. The next steps belong to the other tracks: the agents track switches its eval to the v2 loader, and the MCP track moves its read server to v2, through its own shim or a change to its loader. Then `tickets.v1` has no consumers left and can be retired.
+Still green, with a warning for each reader that has not moved. The next steps belong to the other tracks: the agents track switches its eval to the v2 loader and removes `agents-eval` from `tickets.v1`, and the MCP track moves its read server to v2, through its own shim or a change to its loader. Then `tickets.v1` has no consumers left and can be retired.

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-migrate_tickets — writes the tickets dataset in its v2 shape, for consumers that moved to v2.
+migrate_tickets — writes the tickets dataset in its v2 shape, for consumers that move to v2.
 
 tickets.v2 renames `priority` to `urgency`. A rename breaks every reader that
 looks the old name up, so it is a new major version, and the v1 file cannot
-simply change under its readers: the MCP read server still reads v1 and will
-until v1's sunset (2027-01-31). So the v1 file stays exactly as the LLMs track
+simply change under its readers: the MCP read server and the agents eval's own
+loader still read v1 and may until v1's sunset (2027-01-31). So the v1 file stays exactly as the LLMs track
 wrote it, and this script derives the v2 file from it, row for row, renaming
 the one field and keeping everything else, key order included. The output is
 deterministic, so it is committed and --check proves it is still what the

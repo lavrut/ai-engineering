@@ -52,7 +52,7 @@ The course already works like a mesh. Each track owns its files and no other tra
 
 ### Contracts
 
-The fabric's key part is the <Term t="data contract" />: a file in which the <Term t="producer" /> of a dataset states what it promises its <Term t="consumer" />s. It gives the shape of each field and what the field means. It gives the quality and freshness the producer guarantees, who owns the data, and who reads it. A contract turns "the agents eval happens to work" into "the agents eval reads `tickets.v2`, and here is what `tickets.v2` guarantees".
+The fabric's key part is the <Term t="data contract" />: a file in which the <Term t="producer" /> of a dataset states what it promises its <Term t="consumer" />s. It gives the shape of each field and what the field means. It gives the quality and freshness the producer guarantees, who owns the data, and who reads it. A contract turns "the agents eval happens to work" into "the agents eval reads `tickets.v1`, and here is what `tickets.v1` guarantees".
 
 The reference form is the <Term t="Open Data Contract Standard" /> (ODCS), an open YAML format maintained by the Bitol project under the Linux Foundation. The contracts in this track are in the shape of ODCS, a small subset in five sections. The section names are the course's own, not the standard's, so here is what each one corresponds to in ODCS:
 
@@ -91,7 +91,7 @@ The diagram is the course as a fabric. Step through it and watch the middle colu
 
 <FlowDiagram diagram="data-fabric" />
 
-The 12 datasets are written by 5 tracks, and the lines between them are the 31 edges in `lineage.json`. Only a few lines carry a contract label. Most of the course's data still crosses track boundaries on trust, and lesson 2's catalogue shows which.
+The 12 datasets are written by 5 tracks, and the lines between them are the 32 edges in `lineage.json`. Only a few lines carry a contract label. Most of the course's data still crosses track boundaries on trust, and lesson 2's catalogue shows which.
 
 ## The code
 

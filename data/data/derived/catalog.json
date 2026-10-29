@@ -231,6 +231,7 @@
  "tickets": {
   "bytes": 16705,
   "consumers": [
+   "agents",
    "mcp"
   ],
   "contract": "tickets.v1",

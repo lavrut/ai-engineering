@@ -56,7 +56,7 @@ describe('contract viewer data', () => {
       'Section 2 of 5: schema. 6 fields, 6 required.',
       'Section 3 of 5: quality. 3 rules: enum_coverage, row_count, unique.',
       'Section 4 of 5: servicing. Freshness: at most 365 days old.',
-      'Section 5 of 5: consumers. 1 consumer: mcp-read-server on version 1.',
+      'Section 5 of 5: consumers. 2 consumers: mcp-read-server on version 1, agents-eval on version 1.',
     ]);
     expect(sectionSummary(data.contracts['tickets.v2'], 0)).toBe('Section 1 of 5: info. tickets.v2, version 2, active.');
     expect(sectionSummary(data.contracts['complaints.v1'], 1)).toBe('Section 2 of 5: schema. 5 fields, 5 required.');
@@ -100,7 +100,7 @@ describe('ContractViewer', () => {
     expect(live()).toBe('Section 3 of 5: quality. 3 rules: enum_coverage, row_count, unique.');
     fireEvent.keyDown(screen.getByRole('group', { name: 'Sections' }), { key: 'ArrowRight' });
     fireEvent.keyDown(screen.getByRole('group', { name: 'Sections' }), { key: 'ArrowRight' });
-    expect(live()).toBe('Section 5 of 5: consumers. 1 consumer: mcp-read-server on version 1.');
+    expect(live()).toBe('Section 5 of 5: consumers. 2 consumers: mcp-read-server on version 1, agents-eval on version 1.');
     fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
     expect(screen.getByRole('table', { name: 'servicing of tickets.v1' }).textContent).toBe('PromiseValuefreshnessat most 365 days old');
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
@@ -141,11 +141,14 @@ describe('lineage diff data', () => {
   it('puts the two versions side by side, with their datasets and consumers', () => {
     expect(p.from).toEqual({
       id: 'tickets.v1', version: '1', status: 'deprecated', sunset: '2027-01-31', path: 'llms/data/tickets.jsonl', dataset: 'tickets',
-      consumers: [{ name: 'mcp-read-server', reads: 'llms/data/tickets.jsonl via mcp/core/python/lumen_core/tickets.py' }],
+      consumers: [
+        { name: 'mcp-read-server', reads: 'llms/data/tickets.jsonl via mcp/core/python/lumen_core/tickets.py' },
+        { name: 'agents-eval', reads: 'llms/data/tickets.jsonl via agents/desk/python/desk_core.py' },
+      ],
     });
     expect(p.to).toEqual({
       id: 'tickets.v2', version: '2', status: 'active', sunset: null, path: 'data/data/tickets.v2.jsonl', dataset: 'tickets_v2',
-      consumers: [{ name: 'agents-eval', reads: 'data/data/tickets.v2.jsonl via data/python/consumers/agents_eval_v2.py' }],
+      consumers: [{ name: 'agents-eval-v2', reads: 'data/data/tickets.v2.jsonl via data/python/consumers/agents_eval_v2.py' }],
     });
     expect(p.asOf).toBe('2026-10-28');
   });
@@ -165,17 +168,18 @@ describe('lineage diff data', () => {
   });
 
   it("carries the gate's rows for both versions and its verdict verbatim", () => {
-    expect(p.gate).toEqual({ ok: true, reason: 'every consumer is green on the version it declares (4 of 4)' });
+    expect(p.gate).toEqual({ ok: true, reason: 'every consumer is green on the version it declares (5 of 5)' });
     expect(gateHeadline(p.gate)).toBe('Gate: green');
     expect(gateHeadline({ ok: false, reason: 'x' })).toBe('Gate: red');
     expect(p.consumers).toEqual([
       { name: 'mcp-read-server', declared: 'tickets.v1', green: true, sunset: '2027-01-31', warning: false },
-      { name: 'agents-eval', declared: 'tickets.v2', green: true, sunset: null, warning: false },
+      { name: 'agents-eval', declared: 'tickets.v1', green: true, sunset: '2027-01-31', warning: false },
+      { name: 'agents-eval-v2', declared: 'tickets.v2', green: true, sunset: null, warning: false },
     ]);
     expect(consumerText(p.consumers[0], p.asOf)).toBe(
       'mcp-read-server reads tickets.v1: OK. Sunset 2027-01-31; as of 2026-10-28 that is still ahead, so no warning yet.',
     );
-    expect(consumerText(p.consumers[1], p.asOf)).toBe('agents-eval reads tickets.v2: OK.');
+    expect(consumerText(p.consumers[2], p.asOf)).toBe('agents-eval-v2 reads tickets.v2: OK.');
     expect(consumerText({ name: 'x', declared: 'tickets.v1', green: false, sunset: '2027-01-31', warning: true }, '2027-02-01')).toBe(
       'x reads tickets.v1: FAIL. Past its sunset 2027-01-31: a warning, not a failure.',
     );
@@ -198,9 +202,10 @@ describe('LineageDiff', () => {
     expect(v1.textContent).toContain('deprecated');
     expect(v1.textContent).toContain('Sunset: 2027-01-31');
     expect(v1.textContent).toContain('✓ OK mcp-read-server');
+    expect(v1.textContent).toContain('✓ OK agents-eval');
     const v2 = screen.getByRole('region', { name: 'tickets.v2' });
     expect(v2.textContent).toContain('active');
-    expect(v2.textContent).toContain('✓ OK agents-eval');
+    expect(v2.textContent).toContain('✓ OK agents-eval-v2');
     expect(screen.getByText('tickets → tickets_v2, reading tickets.v1')).toBeTruthy();
     expect(screen.getByText(/priority is renamed urgency/)).toBeTruthy();
     const changes = within(screen.getByRole('table', { name: 'What changed from tickets.v1 to tickets.v2' })).getAllByRole('row').slice(1);
@@ -209,14 +214,16 @@ describe('LineageDiff', () => {
     expect(gate.getAttribute('aria-live')).toBe('off'); // one announcement per change: the live line only
     expect(v1.textContent).toContain('No warning: as of 2026-10-28 the sunset is still ahead.');
     expect(gate.textContent).toContain('Gate: green');
-    expect(gate.textContent).toContain('every consumer is green on the version it declares (4 of 4)');
+    expect(gate.textContent).toContain('every consumer is green on the version it declares (5 of 5)');
   });
 
   it('announces the consumer picked', () => {
     render(<LineageDiff {...lineageDiffProps(data, { from: 'tickets.v1', to: 'tickets.v2' })} />);
     expect(live()).toBe('mcp-read-server reads tickets.v1: OK. Sunset 2027-01-31; as of 2026-10-28 that is still ahead, so no warning yet.');
-    fireEvent.change(select('Consumer'), { target: { value: 'agents-eval on tickets.v2' } });
-    expect(live()).toBe('agents-eval reads tickets.v2: OK.');
+    fireEvent.change(select('Consumer'), { target: { value: 'agents-eval-v2 on tickets.v2' } });
+    expect(live()).toBe('agents-eval-v2 reads tickets.v2: OK.');
+    fireEvent.change(select('Consumer'), { target: { value: 'agents-eval on tickets.v1' } });
+    expect(live()).toBe('agents-eval reads tickets.v1: OK. Sunset 2027-01-31; as of 2026-10-28 that is still ahead, so no warning yet.');
   });
 });
 

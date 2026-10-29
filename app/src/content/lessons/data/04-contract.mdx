@@ -72,7 +72,7 @@ Step through `tickets.v1` one section at a time. In **schema**, look at the Rule
 
 <ContractViewer contract="tickets.v1" />
 
-The schema has 6 fields, all required. Three have an enum: 6 categories, 4 priorities and 2 splits. One, `id`, has a pattern. `tags` is an array whose items the contract does not check. The quality section asks for exactly 60 rows, a unique `id`, and every category and priority to appear at least once. There is one consumer, the MCP read server, on version 1.
+The schema has 6 fields, all required. Three have an enum: 6 categories, 4 priorities and 2 splits. One, `id`, has a pattern. `tags` is an array whose items the contract does not check. The quality section asks for exactly 60 rows, a unique `id`, and every category and priority to appear at least once. There are two consumers, both on version 1: the MCP read server and the agents eval.
 
 ## The code
 

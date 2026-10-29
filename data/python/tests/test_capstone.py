@@ -2,9 +2,10 @@
 
 tickets.v2 renames `priority` to `urgency` and adds the category `security`. A
 rename is a breaking change, so it is a new major: the v1 rows fail v2, the
-migration script writes a v2 file that passes, the agents eval moves to v2
-through a shim, the MCP read server stays on the deprecated v1 until its sunset,
-and the gate says whether every consumer is green on the version it declares.
+migration script writes a v2 file that passes, and a shim (agents-eval-v2) shows
+what the agents eval's move to v2 looks like. The agents track's own loader and the
+MCP read server have not moved: both stay on the deprecated v1 until its sunset,
+and the gate says whether every consumer is green on the version it declares (ruling D19).
 """
 import importlib
 import json
@@ -92,7 +93,8 @@ def test_migrate_check(capsys, tmp_path):
 def test_v1_is_deprecated_with_a_sunset():
     t = contract(1)
     assert t["info"]["status"] == "deprecated" and t["info"]["sunset"] == "2027-01-31"
-    assert [(c["name"], c["version"]) for c in t["consumers"]] == [("mcp-read-server", "1")]
+    assert [(c["name"], c["version"]) for c in t["consumers"]] == [("mcp-read-server", "1"), ("agents-eval", "1")]
+    assert t["consumers"][1]["reads"] == "llms/data/tickets.jsonl via agents/desk/python/desk_core.py"
 
 
 def test_v2_contract_values():
@@ -106,7 +108,7 @@ def test_v2_contract_values():
     assert fields["category"]["enum"] == contract(1)["schema"]["fields"][2]["enum"] + ["security"]
     # no ticket is labelled security yet, so category's coverage is not promised in v2
     assert t["quality"] == {"row_count": {"min": 60, "max": 60}, "unique": ["id"], "enum_coverage": ["urgency"]}
-    assert [(c["name"], c["version"]) for c in t["consumers"]] == [("agents-eval", "2")]
+    assert [(c["name"], c["version"]) for c in t["consumers"]] == [("agents-eval-v2", "2")]
     assert t["consumers"][0]["reads"].split(" via ")[0] == "data/data/tickets.v2.jsonl"
 
 
@@ -176,20 +178,22 @@ def test_verdicts_record_before_and_after():
 
 
 def test_lineage_shows_both_files_and_both_versions():
-    """Ruling D13: the migrated file is a dataset of its own; each reader hangs off the file it reads."""
+    """Rulings D13, D19: the migrated file is a dataset of its own; each reader hangs off the file it reads."""
     lin = json.loads(K.LINEAGE.read_text(encoding="utf-8"))
     governed = {(e["from"], e["to"]): (e["contract"], e["version"]) for e in lin["edges"]}
     assert governed[("llms", "tickets")] == ("tickets.v1", "1")
     assert governed[("tickets", "mcp-read-server")] == ("tickets.v1", "1")
     assert governed[("tickets", "tickets_v2")] == ("tickets.v1", "1")  # the migration reads the v1 file
     assert governed[("data", "tickets_v2")] == ("tickets.v2", "2")
-    assert governed[("tickets_v2", "agents-eval")] == ("tickets.v2", "2")
-    assert ("tickets", "agents-eval") not in governed and ("tickets_v2", "mcp-read-server") not in governed
+    assert governed[("tickets", "agents-eval")] == ("tickets.v1", "1")  # the agents track has not moved
+    assert governed[("tickets_v2", "agents-eval-v2")] == ("tickets.v2", "2")  # the shim that shows the move
+    assert ("tickets_v2", "agents-eval") not in governed and ("tickets_v2", "mcp-read-server") not in governed
+    assert len(lin["edges"]) == 32
     cat = json.loads(K.CATALOG.read_text(encoding="utf-8"))
     v2 = cat["tickets_v2"]
     assert (v2["path"], v2["producer"], v2["contract"], v2["consumers"], v2["rows"]) == (
         "data/data/tickets.v2.jsonl", "data", "tickets.v2", ["agents"], 60)
-    assert cat["tickets"]["consumers"] == ["mcp"]
+    assert cat["tickets"]["consumers"] == ["agents", "mcp"]
 
 
 def test_contracts_name_the_dataset_they_govern():
@@ -235,10 +239,16 @@ def test_gate_green_with_both_versions():
     assert rows[("mcp-read-server", "tickets.v1")] == {
         "name": "mcp-read-server", "declared": "tickets.v1", "contract_exists": True, "verdicts_ok": True,
         "sunset": "2027-01-31", "warning": False}
-    assert rows[("agents-eval", "tickets.v2")] == {
-        "name": "agents-eval", "declared": "tickets.v2", "contract_exists": True, "verdicts_ok": True,
+    assert rows[("agents-eval", "tickets.v1")] == {
+        "name": "agents-eval", "declared": "tickets.v1", "contract_exists": True, "verdicts_ok": True,
+        "sunset": "2027-01-31", "warning": False}
+    assert rows[("agents-eval-v2", "tickets.v2")] == {
+        "name": "agents-eval-v2", "declared": "tickets.v2", "contract_exists": True, "verdicts_ok": True,
         "sunset": None, "warning": False}
-    assert g["reason"] == "every consumer is green on the version it declares (4 of 4)"
+    assert [(c["name"], c["declared"]) for c in g["consumers"]] == [
+        ("agents-eval", "agent-traces.v1"), ("mcp-read-server", "complaints.v1"), ("mcp-read-server", "tickets.v1"),
+        ("agents-eval", "tickets.v1"), ("agents-eval-v2", "tickets.v2")]
+    assert g["reason"] == "every consumer is green on the version it declares (5 of 5)"
 
 
 def test_gate_ignores_a_hand_edited_verdicts_json(tmp_path):
@@ -256,7 +266,7 @@ def test_gate_red_when_the_governed_file_fails(tmp_path):
     assert g["ok"] is False
     row = next(c for c in g["consumers"] if c["declared"] == "tickets.v2")
     assert row["contract_exists"] is True and row["verdicts_ok"] is False
-    assert g["reason"] == ("agents-eval declares tickets.v2, which fails on llms/data/tickets.jsonl: "
+    assert g["reason"] == ("agents-eval-v2 declares tickets.v2, which fails on llms/data/tickets.jsonl: "
                            "enum_coverage urgency: missing values: \"low\", \"normal\", \"high\", \"urgent\" (+1 more failed)")
 
 
@@ -265,28 +275,29 @@ def test_gate_red_when_the_governed_file_is_missing(tmp_path):
                                "  dataset: data/data/nowhere.jsonl")
     g = G.gate(contracts)
     assert g["ok"] is False
-    assert g["reason"] == "agents-eval declares tickets.v2, but data/data/nowhere.jsonl has no files"
+    assert g["reason"] == "agents-eval-v2 declares tickets.v2, but data/data/nowhere.jsonl has no files"
 
 
 def test_gate_red_when_a_consumer_declares_a_missing_version(tmp_path):
-    contracts = copy_contracts(tmp_path, "tickets.v2.yaml", "  - name: agents-eval\n    version: 2",
-                               "  - name: agents-eval\n    version: 3")
+    contracts = copy_contracts(tmp_path, "tickets.v2.yaml", "  - name: agents-eval-v2\n    version: 2",
+                               "  - name: agents-eval-v2\n    version: 3")
     g = G.gate(contracts)
     assert g["ok"] is False
     row = next(c for c in g["consumers"] if c["declared"] == "tickets.v3")
-    assert row == {"name": "agents-eval", "declared": "tickets.v3", "contract_exists": False, "verdicts_ok": False,
+    assert row == {"name": "agents-eval-v2", "declared": "tickets.v3", "contract_exists": False, "verdicts_ok": False,
                    "sunset": None, "warning": False}
-    assert g["reason"] == "agents-eval declares tickets.v3, which has no contract file"
+    assert g["reason"] == "agents-eval-v2 declares tickets.v3, which has no contract file"
 
 
 def test_gate_warns_past_a_sunset_but_stays_green(tmp_path):
     g = G.gate(verdicts=pinned(tmp_path, "2027-02-01"))
     assert g["ok"] is True, g["reason"]
-    row = next(c for c in g["consumers"] if c["declared"] == "tickets.v1")
-    assert row["warning"] is True and row["verdicts_ok"] is True and row["sunset"] == "2027-01-31"
-    assert [c["declared"] for c in g["consumers"] if c["warning"]] == ["tickets.v1"]
-    assert g["reason"] == ("every consumer is green on the version it declares (4 of 4); "
-                           "warning: mcp-read-server is on tickets.v1, past its sunset 2027-01-31")
+    for row in (c for c in g["consumers"] if c["declared"] == "tickets.v1"):
+        assert row["warning"] is True and row["verdicts_ok"] is True and row["sunset"] == "2027-01-31"
+    assert [c["name"] for c in g["consumers"] if c["warning"]] == ["mcp-read-server", "agents-eval"]
+    assert g["reason"] == ("every consumer is green on the version it declares (5 of 5); "
+                           "warning: mcp-read-server is on tickets.v1, past its sunset 2027-01-31; "
+                           "warning: agents-eval is on tickets.v1, past its sunset 2027-01-31")
     on_the_day = G.gate(verdicts=pinned(tmp_path, "2027-01-31"))
     assert not any(c["warning"] for c in on_the_day["consumers"])
 

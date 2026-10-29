@@ -63,7 +63,7 @@ def test_contract_values():
     assert t["quality"] == {"row_count": {"min": 60, "max": 60}, "unique": ["id"],
                             "enum_coverage": ["category", "priority"]}
     assert t["info"]["owner"] == "llms"
-    assert [(c["name"], c["version"]) for c in t["consumers"]] == [("mcp-read-server", "1")]  # agents-eval moved to v2
+    assert [(c["name"], c["version"]) for c in t["consumers"]] == [("mcp-read-server", "1"), ("agents-eval", "1")]  # neither has moved (D19)
     assert t["info"]["status"] == "deprecated" and t["info"]["sunset"] == "2027-01-31"
     c = C.load_contract(CONTRACTS / "complaints.v1.yaml")
     assert c["info"]["owner"] == "ml" and c["quality"]["row_count"] == {"min": 3600, "max": 3600}

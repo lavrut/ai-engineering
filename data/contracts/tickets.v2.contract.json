@@ -1,7 +1,7 @@
 {
  "consumers": [
   {
-   "name": "agents-eval",
+   "name": "agents-eval-v2",
    "reads": "data/data/tickets.v2.jsonl via data/python/consumers/agents_eval_v2.py",
    "version": "2"
   }

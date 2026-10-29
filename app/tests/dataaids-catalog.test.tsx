@@ -112,13 +112,13 @@ describe('formats and shared text', () => {
 describe('the derived data', () => {
   it('loads the four derived files and the four exported contracts', () => {
     expect(Object.keys(data.catalog)).toHaveLength(12);
-    expect(data.lineage.edges).toHaveLength(31);
+    expect(data.lineage.edges).toHaveLength(32);
     expect(data.verdicts.as_of).toBe('2026-10-28');
     expect(Object.keys(data.verdicts.datasets)).toEqual([
       'agent-traces/desk-hand', 'agent-traces/desk-hand-go', 'agent-traces/desk-langgraph', 'agent-traces/desk-sdk', 'agent-traces/patterns',
       'agent-traces/patterns-go', 'complaints', 'tickets', 'tickets-v2', 'tickets-v2-before',
     ]);
-    expect(data.gate.consumers).toHaveLength(4);
+    expect(data.gate.consumers).toHaveLength(5);
     expect(Object.keys(data.contracts).sort()).toEqual(['agent-traces.v1', 'complaints.v1', 'tickets.v1', 'tickets.v2']);
   });
 });
@@ -175,7 +175,7 @@ describe('catalogue explorer data', () => {
 describe('CatalogExplorer', () => {
   it('shows the picked dataset: path, files, rows, size, producer, consumers, contract, last commit and schema', () => {
     render(<CatalogExplorer {...catalogExplorerProps(data.catalog, { initial: 'tickets' })} />);
-    expect(live()).toBe('tickets: 60 rows in 1 file, written by llms, read by mcp, under contract tickets.v1.');
+    expect(live()).toBe('tickets: 60 rows in 1 file, written by llms, read by agents and mcp, under contract tickets.v1.');
     const facts = screen.getByRole('list', { name: 'About tickets' });
     for (const text of ['llms/data/tickets.jsonl', '16,705 bytes', '19296f8', 'tickets.v1']) expect(facts.textContent).toContain(text);
     // catalog.json stores the full sha (ruling D18); the aid shows its first 7 characters

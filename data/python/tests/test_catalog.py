@@ -215,7 +215,7 @@ def test_live_catalog_has_nothing_missing():
     assert [i for i, e in cat.items() if e["missing"]] == []
     assert cat["tickets"]["rows"] == 60 and cat["tickets"]["contract"] == "tickets.v1"
     assert cat["complaints"]["rows"] == 3600
-    assert cat["tickets"]["consumers"] == ["mcp"]  # the agents eval reads tickets_v2 (ruling D13)
+    assert cat["tickets"]["consumers"] == ["agents", "mcp"]  # the agents eval has not moved (ruling D19)
     assert cat["tickets_v2"]["consumers"] == ["agents"]
     assert any("triage__Qwen" in f for f in K.files(ROOT, K.by_id("model_responses")["path"]))
 
@@ -224,7 +224,8 @@ def test_live_lineage_carries_the_contract_versions():
     lin = json.loads((K.LINEAGE).read_text(encoding="utf-8"))
     governed = {(e["from"], e["to"]): (e["contract"], e["version"]) for e in lin["edges"]}
     assert governed[("tickets", "mcp-read-server")] == ("tickets.v1", "1")
-    assert governed[("tickets_v2", "agents-eval")] == ("tickets.v2", "2")  # moved in the capstone
+    assert governed[("tickets", "agents-eval")] == ("tickets.v1", "1")  # the agents track's own loader
+    assert governed[("tickets_v2", "agents-eval-v2")] == ("tickets.v2", "2")  # the capstone's shim
     assert governed[("complaints", "mcp-read-server")] == ("complaints.v1", "1")
     assert governed[("agents_traces", "agents-eval")] == ("agent-traces.v1", "1")
 

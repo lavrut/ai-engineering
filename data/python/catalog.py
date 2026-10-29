@@ -82,7 +82,8 @@ DATASETS = [
 
 # Every consumer the lineage names, and the track it belongs to.
 CONSUMER_TRACKS = {
-    "mcp-read-server": "mcp", "mcp-replay": "mcp", "agents-eval": "agents", "agents-run": "agents",
+    "mcp-read-server": "mcp", "mcp-replay": "mcp", "agents-eval": "agents", "agents-eval-v2": "agents",
+    "agents-run": "agents",
     "ml-fetch-sample": "ml", "ml-serve": "ml", "llms-triage-lab": "llms", "llms-replay": "llms",
     "app-lessons": "app",
 }

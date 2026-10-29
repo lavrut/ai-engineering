@@ -29,7 +29,7 @@ quiz:
       - Who owns the v2 contract
       - If the v1 tickets change, the migrated v2 file and everything that reads it are downstream of the change
     answer: 3
-    explanation: Lineage is a graph of reads and writes. Following edges forward from a dataset lists everything a change could reach. The migration edge means the v2 file is derived from the v1 file, so the agents eval that reads v2 depends on v1 too.
+    explanation: Lineage is a graph of reads and writes. Following edges forward from a dataset lists everything a change could reach. The migration edge means the v2 file is derived from the v1 file, so the shim that reads v2, `agents-eval-v2`, depends on v1 too, and so does everything downstream of it.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
 import CatalogExplorer from '../../../components/data/CatalogExplorer.astro';
@@ -61,7 +61,7 @@ A schema sketch is not a contract. The sketch describes the rows that exist toda
 
 Lineage is the same facts drawn as a graph: tracks write datasets, and consumers read them. Each edge carries the contract it travels under and the version, when there is one. Follow the edges forward from a dataset and you have the list of everything a change to it could reach.
 
-Lineage also records derivation. The capstone writes `tickets_v2` from `tickets`, so lineage has an edge from one dataset to the other. A change to the v1 tickets reaches the agents eval through the v2 file, even though the eval never opens the v1 file.
+Lineage also records derivation. The capstone writes `tickets_v2` from `tickets`, so lineage has an edge from one dataset to the other. A change to the v1 tickets reaches `agents-eval-v2`, the shim that shows what the agents eval's move to v2 will look like, through the v2 file, even though the shim never opens the v1 file. The agents eval itself has not moved yet: its own loader still opens the v1 file, so lineage also has a direct edge from `tickets` to `agents-eval`. Following the edges forward from `tickets` finds both.
 
 ## See it
 
@@ -89,10 +89,10 @@ Section 4 turns the catalogue into lineage.
 
 - `edges.append({"from": producer, "to": ds_id, "contract": cid, ...})` is the write edge, from the track to its dataset.
 - `if ds_id in sources:` adds the derivation edge. For `tickets_v2` it runs from `tickets`, carrying `tickets.v1`, the contract the migration reads under.
-- `readers = [(c["name"], cid, c["version"]) for c in governing["consumers"]]` makes one read edge per consumer, carrying the version that consumer declares. During the capstone, two readers of the tickets sit on two versions, and lineage shows both.
+- `readers = [(c["name"], cid, c["version"]) for c in governing["consumers"]]` makes one read edge per consumer, carrying the version that consumer declares. During the capstone, the readers of the tickets sit on two versions, and lineage shows both.
 
 <Callout kind="note" title="One ticket is outside every contract">
-  The agents eval scores 13 tickets. Twelve come from the Lumen tickets, which `tickets.v2` governs. The thirteenth, `t061`, is a prompt-injection canary that the MCP track planted on purpose in `mcp/data/injection.jsonl`. That file is in no contract and not in the catalogue. The eval reads it as is, and the consumer tests leave it out of every contract check.
+  The agents eval scores 13 tickets. Twelve come from the Lumen tickets, which `tickets.v1` governs (and `tickets.v2` governs the shim's copy). The thirteenth, `t061`, is a prompt-injection canary that the MCP track planted on purpose in `mcp/data/injection.jsonl`. That file is in no contract and not in the catalogue. The eval reads it as is, and the consumer tests leave it out of every contract check.
 </Callout>
 
 ## Try it
@@ -106,7 +106,7 @@ Rebuild the catalogue and lineage from the files. It writes the same two files t
 You should see:
 
 ```text
-tickets: 1 files, 60 rows, 16705 bytes (llms -> mcp)
+tickets: 1 files, 60 rows, 16705 bytes (llms -> agents, mcp)
 tickets_v2: 1 files, 60 rows, 16645 bytes (data -> agents)
 complaints: 1 files, 3600 rows, 4609144 bytes (ml -> mcp)
 category_map: 1 files, 1 rows, 3279 bytes (ml -> app, ml)
@@ -118,7 +118,7 @@ mcp_recordings: 8 files, 16 rows, 22090 bytes (mcp -> agents, mcp)
 mcp_derived: 6 files, 6 rows, 35827 bytes (mcp -> app)
 agents_traces: 134 files, 134 rows, 1052892 bytes (agents -> agents)
 agents_derived: 5 files, 5 rows, 224155 bytes (agents -> app)
-wrote catalog.json (12 datasets), lineage.json (31 edges)
+wrote catalog.json (12 datasets), lineage.json (32 edges)
 ```
 
 Now ask lineage the capstone's question: which edges touch the tickets?
@@ -132,9 +132,10 @@ You should see:
 ```text
 data -> tickets_v2 tickets.v2 2
 llms -> tickets tickets.v1 1
+tickets -> agents-eval tickets.v1 1
 tickets -> mcp-read-server tickets.v1 1
 tickets -> tickets_v2 tickets.v1 1
-tickets_v2 -> agents-eval tickets.v2 2
+tickets_v2 -> agents-eval-v2 tickets.v2 2
 ```
 
-Read it from the top of the graph down: `llms` writes `tickets` under v1, and the MCP read server reads it under v1. The migration reads `tickets` under v1, and `data` writes `tickets_v2` under v2, which the agents eval reads under v2.
+Read it from the top of the graph down: `llms` writes `tickets` under v1, and the agents eval and the MCP read server read it under v1. The migration reads `tickets` under v1, and `data` writes `tickets_v2` under v2, which the shim `agents-eval-v2` reads under v2. Neither real reader has moved yet; the shim shows what the agents eval's move will look like.

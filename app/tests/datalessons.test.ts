@@ -80,12 +80,12 @@ const CLAIMS: Claim[] = [
     expect(v1.map((c) => c.info.version)).toEqual(['1', '1', '1']);
     expect(v1.map((c) => c.info.owner)).toEqual(['llms', 'ml', 'agents']);
     // the three the lesson names: the tickets, the complaints and the agent traces, each with a declared reader
-    expect(v1.map((c) => c.consumers.map((x: { name: string }) => x.name))).toEqual([['mcp-read-server'], ['mcp-read-server'], ['agents-eval']]);
+    expect(v1.map((c) => c.consumers.map((x: { name: string }) => x.name))).toEqual([['mcp-read-server', 'agents-eval'], ['mcp-read-server'], ['agents-eval']]);
   }],
   ['01-fabric', 'a small subset in five sections', () => expect(Object.keys(contract('tickets.v1')).sort()).toEqual(['consumers', 'info', 'quality', 'schema', 'servicing'])],
-  ['01-fabric', 'The 12 datasets are written by 5 tracks, and the lines between them are the 31 edges in `lineage.json`', () => {
+  ['01-fabric', 'The 12 datasets are written by 5 tracks, and the lines between them are the 32 edges in `lineage.json`', () => {
     expect(new Set(Object.values(catalog).map((e) => (e as { producer: string }).producer))).toEqual(new Set(['llms', 'data', 'ml', 'mcp', 'agents']));
-    expect(lineage.edges).toHaveLength(31);
+    expect(lineage.edges).toHaveLength(32);
   }],
   ['01-fabric', '`sunset: 2027-01-31`', () => expect(contract('tickets.v1').info).toMatchObject({ status: 'deprecated', sunset: '2027-01-31' })],
   ['01-fabric', '`version: 1`', () => expect(contract('tickets.v1').consumers[0]).toMatchObject({ name: 'mcp-read-server', version: '1' })],
@@ -161,7 +161,8 @@ const CLAIMS: Claim[] = [
     expect(f.filter((x) => x.pattern).map((x) => x.name)).toEqual(['id']);
   }],
   ['04-contract', 'The quality section asks for exactly 60 rows', () => expect(contract('tickets.v1').quality.row_count).toEqual({ min: 60, max: 60 })],
-  ['04-contract', 'There is one consumer, the MCP read server, on version 1', () => expect(contract('tickets.v1').consumers).toEqual([expect.objectContaining({ name: 'mcp-read-server', version: '1' })])],
+  ['04-contract', 'There are two consumers, both on version 1: the MCP read server and the agents eval', () => expect(contract('tickets.v1').consumers).toEqual([
+    expect.objectContaining({ name: 'mcp-read-server', version: '1' }), expect.objectContaining({ name: 'agents-eval', version: '1' })])],
   ['04-contract', "`pattern: '^t\\d{3}$'`", () => expect(text('data/contracts/tickets.v1.yaml')).toContain("pattern: '^t\\d{3}$'")],
   ['04-contract', '`row_count: {min: 60, max: 60}`', () => expect(text('data/contracts/tickets.v1.yaml')).toContain('row_count: {min: 60, max: 60}')],
   ['04-contract', '`max_age_days: 365`', () => expect(text('data/contracts/tickets.v1.yaml')).toContain('max_age_days: 365')],
@@ -245,20 +246,23 @@ const CLAIMS: Claim[] = [
   ['06-capstone', 'with its sunset still ahead as of 2026-10-28', () => {
     expect(verdicts.as_of).toBe('2026-10-28');
     expect(verdicts.as_of < contract('tickets.v1').info.sunset).toBe(true);
-    expect(gate.consumers.find((c: { declared: string }) => c.declared === 'tickets.v1')).toMatchObject({ name: 'mcp-read-server', sunset: '2027-01-31', warning: false, verdicts_ok: true });
+    const onV1 = gate.consumers.filter((c: { declared: string }) => c.declared === 'tickets.v1');
+    expect(onV1.map((c: { name: string }) => c.name)).toEqual(['mcp-read-server', 'agents-eval']);
+    for (const c of onV1) expect(c).toMatchObject({ sunset: '2027-01-31', warning: false, verdicts_ok: true });
   }],
-  ['06-capstone', 'The gate counts every consumer of every contract, 4 of 4, and is green', () => {
-    expect(gate.consumers).toHaveLength(4);
+  ['06-capstone', 'The gate counts every consumer of every contract, 5 of 5, and is green', () => {
+    expect(gate.consumers).toHaveLength(5);
     expect(gate.ok).toBe(true);
-    expect(gate.reason).toBe('every consumer is green on the version it declares (4 of 4)');
+    expect(gate.reason).toBe('every consumer is green on the version it declares (5 of 5)');
   }],
   ['06-capstone', '`sunset: 2027-01-31`', () => expect(text('data/contracts/tickets.v1.yaml')).toContain('sunset: 2027-01-31')],
-  ['06-capstone', 'The agents eval has a v2 reader ready (the shim), the MCP read server has until 2027-01-31', () => {
-    expect(contract('tickets.v2').consumers.map((c: { name: string }) => c.name)).toEqual(['agents-eval']);
+  ['06-capstone', 'The agents eval has a v2 reader ready (the shim) but has not switched to it, the MCP read server has until 2027-01-31', () => {
+    expect(contract('tickets.v2').consumers.map((c: { name: string }) => c.name)).toEqual(['agents-eval-v2']);
+    expect(contract('tickets.v1').consumers.map((c: { name: string }) => c.name)).toEqual(['mcp-read-server', 'agents-eval']);
     expect(contract('tickets.v1').info.sunset).toBe('2027-01-31');
   }],
   ['06-capstone', '`data/python/tests/test_capstone.py` proves the shim returns the same 13 tickets as the agents track\'s loader, field for field', () => {
-    // the agents track's own loader still reads the v1 file; the shim stands in for the moved loader (review I2)
+    // the agents track's own loader still reads the v1 file, as tickets.v1's consumer agents-eval (ruling D19)
     expect(text('agents/desk/python/desk_core.py')).toContain('LUMEN_TICKETS = REPO / "llms" / "data" / "tickets.jsonl"');
     expect(text('data/python/tests/test_capstone.py')).toContain('assert [t["id"] for t in v2] == [t["id"] for t in v1] and len(v2) == 13');
   }],

@@ -63,6 +63,6 @@ servicing:
 
 # ── 5. consumers ────────────────────────────────────────────────────────────
 consumers:
-  - name: agents-eval
+  - name: agents-eval-v2
     version: 2
     reads: data/data/tickets.v2.jsonl via data/python/consumers/agents_eval_v2.py

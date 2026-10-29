@@ -4,6 +4,11 @@
    "name": "mcp-read-server",
    "reads": "llms/data/tickets.jsonl via mcp/core/python/lumen_core/tickets.py",
    "version": "1"
+  },
+  {
+   "name": "agents-eval",
+   "reads": "llms/data/tickets.jsonl via agents/desk/python/desk_core.py",
+   "version": "1"
   }
  ],
  "info": {

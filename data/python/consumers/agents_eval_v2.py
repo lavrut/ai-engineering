@@ -1,13 +1,16 @@
 """
-agents_eval_v2 — the agents eval's ticket loader, moved to tickets.v2 through a shim.
+agents_eval_v2 — what the agents eval's ticket loader looks like on tickets.v2: a shim.
 
 The agents eval (agents/desk/python/desk_core.py) scores the desk on 13 tickets:
-2 per Lumen category plus the injection canary t061. It was written against
-tickets.v1 and its scorer reads `priority`. tickets.v2 renamed that field
-`urgency`, so this loader reads the v2 file and maps `urgency` back to
-`priority` at the edge (the shim): the scorer keeps working unchanged while the
-data it reads is governed by v2. The agents track is never edited; its own
-loader stays as it is, and the capstone test proves the two agree.
+2 per Lumen category plus the injection canary t061. Its loader reads the v1 file
+and hands on whole rows in the v1 shape it was written against (the eval scores
+`category`; `priority` rides along). The agents track has not migrated: desk_core
+is still a declared tickets.v1 consumer (`agents-eval`). This module is the
+stand-in for its move, declared in tickets.v2 as `agents-eval-v2`: it reads the
+v2 file and maps `urgency` back to `priority` at the edge (the shim), so every
+row comes out in the v1 shape. The agents track is never edited; the capstone
+test proves the two loaders agree, and the gate shows both green on the version
+each declares.
 
 Which 13 tickets: the ids in agents/evals/tickets.jsonl, the eval set the agents
 track committed, in its order. t061 comes from mcp/data/injection.jsonl, as it
@@ -25,7 +28,7 @@ SOURCE = ROOT / "data" / "data" / "tickets.v2.jsonl"  # governed by tickets.v2
 EVAL_IDS = ROOT / "agents" / "evals" / "tickets.jsonl"  # which tickets, and in what order
 INJECTION = ROOT / "mcp" / "data" / "injection.jsonl"  # t061, outside any contract
 INJECTION_ID = "t061"
-SHIM = {"urgency": "priority"}  # v2 name -> the name the v1 scorer reads
+SHIM = {"urgency": "priority"}  # v2 name -> the v1 name the agents code was written against
 
 
 def _rows(path: Path) -> list[dict]:
@@ -34,12 +37,12 @@ def _rows(path: Path) -> list[dict]:
 
 # ── 2. The shim ─────────────────────────────────────────────────────────────
 def to_v1_shape(row: dict) -> dict:
-    """A v2 row as the v1 scorer reads it: `urgency` back to `priority`, in the same place."""
+    """A v2 row in the v1 shape: `urgency` back to `priority`, in the same place."""
     return {SHIM.get(k, k): v for k, v in row.items()}
 
 
 def load_eval_tickets_v2() -> list[dict]:
-    """The 13 eval tickets, read from tickets.v2 and shimmed to the shape the scorer reads."""
+    """The 13 eval tickets, read from tickets.v2 and shimmed to the v1 shape desk_core returns."""
     ids = [t["id"] for t in _rows(EVAL_IDS)]
     v2 = {t["id"]: t for t in _rows(SOURCE)}
     injection = [t for t in _rows(INJECTION) if t["id"] == INJECTION_ID]
