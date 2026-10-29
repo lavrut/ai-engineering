@@ -103,16 +103,26 @@ def read_jsonl(path: Path) -> list[dict]:
 
 
 def open_for_append(path: Path):
-    """Open a JSONL file for appending. If a crash left a last line with no newline, cut that fragment
-    off first (read_jsonl already skips it with a warning), so the new row starts on its own line and
-    the old fragment never becomes a mid-file error."""
+    """Open a JSONL file for appending. If the last line has no newline: when it parses as a JSON
+    object (read_jsonl keeps it) a newline is written so the new row starts on its own line; when it
+    does not parse it is a crash fragment (read_jsonl skips it with a warning) and is cut off, so it
+    never becomes a mid-file error."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and path.stat().st_size:
         data = path.read_bytes()
         if not data.endswith(b"\n"):
+            cut = data.rfind(b"\n") + 1
+            try:
+                ok = isinstance(json.loads(data[cut:]), dict)
+            except ValueError:
+                ok = False
             with path.open("r+b") as f:
-                f.truncate(data.rfind(b"\n") + 1)
+                if ok:
+                    f.seek(0, 2)
+                    f.write(b"\n")
+                else:
+                    f.truncate(cut)
     return path.open("a", encoding="utf-8")
 
 

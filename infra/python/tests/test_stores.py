@@ -131,3 +131,17 @@ def test_trace_write_after_half_written_line_keeps_the_new_row(tmp_traces, capsy
     store.write(trace("b"))
     store.write(trace("c"))
     assert [t["id"] for t in store.read()] == ["a", "b", "c"]
+
+
+def test_complete_last_row_without_newline_is_kept_on_append(tmp_path, tmp_traces):
+    p = tmp_path / "l.jsonl"
+    p.write_text(json.dumps(row(tag="a")) + "\n" + json.dumps(row(tag="b")))
+    led = ledger.Ledger(p)
+    assert [r["tag"] for r in led.rows()] == ["a", "b"]
+    led.append(row(tag="c"))
+    assert [r["tag"] for r in ledger.Ledger(p).rows()] == ["a", "b", "c"]
+    store = traces.TraceStore(tmp_traces, "r")
+    store.path.write_text(json.dumps(trace("a")) + "\n" + json.dumps(trace("b")))
+    assert [t["id"] for t in store.read()] == ["a", "b"]
+    store.write(trace("c"))
+    assert [t["id"] for t in store.read()] == ["a", "b", "c"]
