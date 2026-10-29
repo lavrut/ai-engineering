@@ -1,6 +1,6 @@
 # AI Engineering
 
-An interactive masterclass on AI engineering, with Python and Go side by side. Six tracks are live: **Agent Harness** (build the loop, tools, context handling and guardrails around a model), **LLMs** (evaluate, judge and tune an LLM feature), **Machine Learning** (train a classic text classifier on real complaints, then track, register, serve, monitor and retrain it), **MCP** (build, connect, secure and ship Model Context Protocol servers and clients), **AI Agents** (design agent workflows and a multi-agent desk, rebuild it in LangGraph and the Claude Agent SDK, record and replay every engine, and evaluate them fairly) and **Data Fabric & Data Contracts** (catalogue the datasets the tracks share, write contracts for them, enforce them in Python and Go, and ship a breaking change under contract).
+An interactive masterclass on AI engineering, with Python and Go side by side. Seven tracks are live: **Agent Harness** (build the loop, tools, context handling and guardrails around a model), **LLMs** (evaluate, judge and tune an LLM feature), **Machine Learning** (train a classic text classifier on real complaints, then track, register, serve, monitor and retrain it), **MCP** (build, connect, secure and ship Model Context Protocol servers and clients), **AI Agents** (design agent workflows and a multi-agent desk, rebuild it in LangGraph and the Claude Agent SDK, record and replay every engine, and evaluate them fairly) **Data Fabric & Data Contracts** (catalogue the datasets the tracks share, write contracts for them, enforce them in Python and Go, and ship a breaking change under contract) and **Ontology** (write Lumen's facts once as an ontology, generate the prompt definitions, schema and tool from it, validate the saved model outputs against it, and audit every other artefact for drift).
 
 Hosted page: https://claude.ai/artifact/MH9ZBPk8GC1duTWc4Ke5cw (private until shared from the page's Share menu)
 
@@ -14,7 +14,8 @@ Hosted page: https://claude.ai/artifact/MH9ZBPk8GC1duTWc4Ke5cw (private until sh
 - `mcp/` — the MCP track: `mcp/core/` (the shared ticket, classifier and label code, Python and Go), `mcp/python/` (`read_server.py`, `ops_server.py`, `client.py` with `client_connect.py` and `client_calls.py`, `auth_server.py`, `agent.py` with `agent_config.py`, `agent_host.py` and `agent_model.py`, `simulate.py`, `derive.py`, the App in `app/`), `mcp/go/` (`readserver`, `opsserver`, `client`, `auth`), the shared contract in `mcp/fixtures/`, and the recordings, simulated transcripts and derived lesson data in `mcp/data/`; see [mcp/fixtures/README.md](mcp/fixtures/README.md) and [mcp/data/recordings/README.md](mcp/data/recordings/README.md).
 - `agents/` — the AI Agents track: `agents/proxy/` (the record/replay proxy: `proxy.py` with `proxy_cost.py`, `proxy_handler.py` and `proxy_server.py`), `agents/desk/python/` and `agents/desk/go/` (the five patterns and the supervisor desk, matching numbered sections), `agents/frameworks/` (`langgraph_desk.py`, `sdk_desk.py`), `agents/evals/` (`scorers.py`, `run_evals.py` with `judge_set.py`, the 13 eval tickets), `agents/run.py` (runs any engine through the proxy, with `run_sets.py`, `run_engines.py` and `run_traces.py`), `agents/derive.py` (the lesson data, with `derive_read.py`), the shared contract in `agents/fixtures/`, and the recordings, traces and derived data in `agents/data/`; see [agents/data/recordings/README.md](agents/data/recordings/README.md).
 - `data/` — the Data Fabric & Data Contracts track: `data/contracts/` (four contracts in YAML and their JSON exports), `data/python/` (`contract.py` the validator, `catalog.py`, `quality.py`, `gate.py`, `migrate_tickets.py`, and in `consumers/` the shim that shows the agents eval's move to v2), `data/go/validate/` (the Go twin validator), the shared validator cases in `data/fixtures/`, and the migrated tickets and derived lesson data in `data/data/`; see [data/fixtures/README.md](data/fixtures/README.md).
-- `app/` — the Astro site that teaches all six tracks (lessons, diagrams, simulators, quizzes).
+- `ontology/` — the Ontology track (Python only): `ontology/lumen.yaml` (the ontology, in five numbered sections), `ontology/python/` (`ontology.py` the loader, checker and validator, `generate.py`, `grounding.py`, `audit.py`) and the derived lesson data in `ontology/data/derived/`.
+- `app/` — the Astro site that teaches all seven tracks (lessons, diagrams, simulators, quizzes).
 
 ## Run a harness
 
@@ -405,6 +406,50 @@ The catalogue and the verdicts read the other tracks' data in place, so a commit
 The pytest suite includes the twin test (both command lines on every fixture case, byte for byte) and runs every lesson's Try-it command once (`data/python/tests/test_lesson_tryits.py`). It leaves every committed file as it found it.
 
 Commit dates need the full git history. In a shallow clone (CI's default checkout) or a zip or `git archive` copy, `catalog.py --check` and `quality.py --check` compare everything except the commit-derived fields (`last_commit`, the ages and the freshness detail) and print `no git history: commit dates not compared`, and the tests that measure real commit dates skip with `needs full git history: run git fetch --unshallow`. In CI, check out with `fetch-depth: 0` to run them.
+
+## Run the Ontology track
+
+Lumen's ontology, `ontology/lumen.yaml`: the classes, properties, relations, individuals and constraints a support ticket's labels rely on, quoted from the labelling guide and the ML category map. The scripts load and check it, generate the prompt definitions, the triage JSON schema and the `label_ticket` tool from it, validate every saved model answer and agents tool call against it, and audit the guide, the prompts, the category map and the data contracts for disagreement. Everything reads the other tracks' files in place and never writes to them. Nothing in this track calls a model, so every command below is free. Python only: there is no Go twin.
+
+### Setup
+
+```sh
+python3 -m venv .venv-ontology && .venv-ontology/bin/pip install -r ontology/requirements.txt
+```
+
+- Python 3.12 or later, in the `.venv-ontology/` virtual environment at the repo root (git-ignored). `ontology/requirements.txt` holds `pyyaml==6.0.3` and `pytest>=8`; the rest is the standard library.
+
+### Check and validate
+
+```sh
+.venv-ontology/bin/python ontology/python/ontology.py check                                    # consistency findings; exit 1 on any error
+.venv-ontology/bin/python ontology/python/ontology.py validate Ticket llms/data/tickets.jsonl   # errors and warnings, then a count
+```
+
+`validate` prints one line per error or warning, `level rule subject: detail`, then `N records, N errors, N warnings, N manual`, and exits 1 when any record has an error. `--partial` checks a model's answer, which carries only some fields; `--manual` also prints the rules left to a person.
+
+### Generate, ground and audit
+
+```sh
+.venv-ontology/bin/python ontology/python/ontology.py export   # ontology.json for the app
+.venv-ontology/bin/python ontology/python/generate.py          # generated.json: definitions, schema, tool, and the diff with the hand-written ones
+.venv-ontology/bin/python ontology/python/grounding.py         # validation.json: the saved model outputs, per source and per violation type
+.venv-ontology/bin/python ontology/python/audit.py             # audit.json: one row per artefact per fact, and the gate
+```
+
+Each writes its file under `ontology/data/derived/` and prints what it found. `audit.py` prints the gate, `ok` or `RED`, with every disagreement, and exits 0 either way; a pipeline that should stop on a disagreement reads `gate.ok` from `audit.json`. The scripts read the other tracks' files in place, so a change to the labelling guide, the prompts, a saved response, a trace, the category map or a contract makes the matching `--check` fail until you rerun the script and commit what it writes.
+
+### Test the ontology code
+
+```sh
+.venv-ontology/bin/python -m pytest ontology -q
+.venv-ontology/bin/python ontology/python/ontology.py export --check   # ontology.json matches lumen.yaml
+.venv-ontology/bin/python ontology/python/generate.py --check          # generated.json matches
+.venv-ontology/bin/python ontology/python/grounding.py --check         # validation.json matches the saved outputs
+.venv-ontology/bin/python ontology/python/audit.py --check             # audit.json matches the artefacts
+```
+
+Each `--check` catches drift in its file and nothing else: `audit.py --check` passes while the gate inside `audit.json` is red. The pytest suite runs every lesson's Try-it command once (`ontology/python/tests/test_lesson_tryits.py`) and leaves every committed file as it found it.
 
 ## The site
 

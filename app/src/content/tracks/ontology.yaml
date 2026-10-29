@@ -1,0 +1,6 @@
+id: ontology
+title: Ontology
+order: 7
+status: live
+summary: "Write the facts a support system relies on once, as an ontology, generate the prompt definitions, schema and tool from it, check model outputs against it, and audit every other artefact for drift."
+subsections: ["Ontology", "Grounding"]

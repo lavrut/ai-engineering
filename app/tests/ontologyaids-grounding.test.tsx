@@ -251,7 +251,7 @@ describe('AuditTable', () => {
 // What the lessons plan to ship (spec §5: OntologyBrowser in lesson 2, GroundingReport in 3, AuditTable in 4),
 // taken at its largest: every class, both GroundingReport views, every audit row; serialised and escaped by
 // Astro's own code as the built page carries them. The built page itself is measured beside the agents budget in
-// agentsaids-evals.test.tsx, and counts the ontology lessons once Task 6 adds them.
+// agentsaids-evals.test.tsx, over the four ontology lessons.
 const shipped = (props: object) => Buffer.byteLength(escapeHTML(serializeProps(props, {} as never)), 'utf8');
 
 describe('page budget', () => {

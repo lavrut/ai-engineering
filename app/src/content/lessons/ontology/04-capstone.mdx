@@ -1,0 +1,168 @@
+---
+track: ontology
+order: 4
+slug: capstone
+title: "Capstone: one source of truth"
+goal: Audit every artefact that states the ontology's facts, read the gate's verdict, and decide for a disagreement which side must change and who owns that change.
+minutes: 25
+quiz:
+  - question: The audit finds that tickets.v2 allows a category, security, that the ontology lacks. The gate is red. What should happen next?
+    options:
+      - Edit the audit to ignore contracts
+      - Add security to the ontology right away, so the gate turns green
+      - Nothing; contracts are allowed to differ
+      - Decide which side is wrong. A value with no definition, no guide rule and no place in the decision order should not be in a contract yet, so either its owner writes that meaning into the ontology first, or the data track takes it out of v2. The gate stays red until one of them does
+    answer: 3
+    explanation: Turning the gate green by adding a bare id to the ontology would copy the problem, not solve it. The ontology is where meaning lives, so a value enters it with a definition, a rule and an order, and the prompts, the schema and the tool follow from it. If nobody can write that yet, the contract changes instead, and that is the data track's change to make.
+  - question: audit.py prints the gate RED, and audit.py with the check flag passes. Why is that not a contradiction?
+    options:
+      - The check flag has a bug
+      - The check flag only compares audit.json with a fresh run. It catches drift, a stale or hand-edited file, and says nothing about the verdict inside it
+      - The check flag ignores contracts
+      - A red gate is only a warning
+    answer: 1
+    explanation: Two questions, two answers. Is the committed file what the audit would write today? Yes, so the check passes. Does every artefact agree with the ontology? No, so the gate is red. A pipeline that should stop on disagreement reads the gate's own verdict, ok, from the file.
+  - question: The audit compares the guide's priority bullets with the ontology's manual constraints, word for word after normalising, even though no program can check those rules. Why compare them at all?
+    options:
+      - Because a manual rule is still a fact the ontology states. If the guide's wording changes and the ontology's does not, people labelling from one and models prompted from the other apply different rules
+      - To make the audit longer
+      - Because the validator evaluates manual rules
+      - Because the guide is generated from the ontology
+    answer: 0
+    explanation: Manual means a person applies the rule, not that the rule may drift. The audit holds the text of every rule to the guide, so the ontology stays a faithful copy of what labellers read.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import AuditTable from '../../../components/ontology/AuditTable.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+Lesson 3 generated new artefacts from the ontology. The course already has old ones, written by hand in other tracks, and each states some of the same facts. The capstone makes the ontology the <Term t="single source of truth" />: `audit.py` checks every artefact that states one of its facts, one fact at a time, and a gate says whether any of them disagrees.
+
+### What the audit compares
+
+- **The labelling guide**, `llms/data/labeling_guide.md`: every guide rule id the ontology cites is in the guide; each category's definition is worded alike; each priority bullet is worded alike, matched after normalising markdown, case and spacing.
+- **The two prompts that state rules**, `v2_rules` and `v3_examples` in `llms/data/prompts.json`: each names every category and every priority, and states the checkable rule, by its guide id or a phrase the ontology lists for it. `v1_basic` states no rules, so it states none of these facts; lesson 3 showed what that cost.
+- **The ML category map**, `ml/data/category_map.json`: every product individual is one of its categories.
+- **The data contracts**, `data/contracts/*.yaml`: each enum for `category`, `priority`, `urgency` or `product` holds exactly the ontology's values.
+
+Each comparison is a row: an artefact, a fact, a status and a detail. The status is one of three:
+
+- `agree`: the artefact states the fact as the ontology does.
+- `disagree`: it states something else. A guide bullet the ontology lacks is a disagreement too.
+- `missing`: the artefact does not state the fact, or cannot be read. A rule id the ontology cites and the guide lacks is missing.
+
+The gate is green when no row disagrees. A missing row is counted and allowed: an artefact that is silent about a fact has not contradicted it.
+
+### The result
+
+The audit writes 71 rows across 7 artefacts: 38 for the guide, 11 for each prompt, 6 for the category map and 5 for the contracts. 70 agree, 1 disagrees, and none is missing. The gate's verdict, as `audit.py` wrote it:
+
+`red: 1 disagree (data/contracts/tickets.v2.yaml enum:category); 0 missing`
+
+The row's detail is `extra value the ontology lacks: security`. The data track's capstone added `security` to the category enum in `tickets.v2`, for tickets no team has labelled yet. The ontology has six categories, and `security` is not one of them.
+
+### Who must change
+
+A disagreement says two artefacts contradict each other. It does not say which one is wrong, so someone has to decide. There are two ways to turn this row green.
+
+**The ontology adds `security`.** A category is more than an id. It needs a definition, a guide rule that says when a ticket is `security`, and a place in the decision order. Does it come before `outage`, or after `account`? And how does it sit beside rule U2, which already treats signs of unauthorized access as a priority, not a category? The labelling guide belongs to the LLMs track, so that track writes the rule. Then the ontology quotes it, `generate.py` puts it in the prompts, the schema and the tool, and someone checks the 60 gold labels against it. Adding a bare `security` individual to make the gate green would copy the contract's gap into the source of truth.
+
+**The contract drops `security`.** `tickets.v2` is the data track's file, so this is the data track's change. Its own versioning rule asks one question: does an existing reader break? Adding the value broke none: an enum that gains a value accepts every row it accepted before. Taking it out renames, removes or retypes no field, and none of the 60 rows in `tickets.v2.jsonl` carries `security`. So every row v2 accepts today it still accepts, and by that rule the change stays on version 2, with a note in its migration text.
+
+The ontology is where meaning lives, so a value should enter it with its meaning, and a contract should follow. Until someone can write what `security` means, the contract is ahead of the ontology, and the change belongs in the contract. That is a decision for the data track, the contract's owner, made with the LLMs track, which owns the guide. This course never edits another track's files, so the row stays red here. That is the gate doing its job: it names the artefact and the fact, and it will not go green on its own.
+
+### A drift check is not a gate
+
+Every script in the track has `--check`. It rebuilds its file in memory and compares the bytes with the committed one, so it catches drift: a stale file, or one edited by hand. It says nothing about what the file holds. `audit.py --check` passes while the gate inside `audit.json` is red, and `audit.py` itself exits with 0 after printing `RED`. A pipeline that should stop on a disagreement reads the gate's verdict, `gate.ok`, from the file. The last Try-it command does that.
+
+## See it
+
+Every row of the audit, with the gate's verdict at the top as `audit.py` wrote it. Read the summary per artefact first. Then press "Show disagreements only" and read the one row left.
+
+<AuditTable />
+
+The guide agrees on every rule id it is asked about, every category definition and every priority bullet. Both prompts name every value and state the rule. The category map holds every product. Of the contracts, `tickets.v1` and `complaints.v1` agree, and `tickets.v2` agrees on `urgency` and disagrees on `category`.
+
+## The code
+
+The contracts' rows come from section 5 of `audit.py`.
+
+<CodeTabs source="ontology-audit" section={5} />
+
+- `extra = [str(v) for v in enum if v not in want]` collects the values a contract allows and the ontology lacks; `lacking` is the other way round. Either one makes the row `disagree`.
+- `parts.append(f"extra value{'s' if len(extra) > 1 else ''} the ontology lacks: {', '.join(extra)}")` writes the detail the table shows.
+- `want["product"] = [onto.individuals[p].get("label", p) for p in _ids(onto, "Product")]` compares products by label, the names the complaints carry.
+
+The gate is section 6.
+
+<CodeTabs source="ontology-audit" section={6} />
+
+- `bad = [f"{r['artefact']} {r['fact']}" for r in rows if r["status"] == "disagree"]` names each disagreement by artefact and fact, so the verdict says where to look.
+- `missing = sum(r["status"] == "missing" for r in rows)` counts the silent rows without failing on them.
+- `return {"ok": not bad, "disagree": len(bad), "missing": missing, "reason": reason}` is what `audit.json` stores and the aid shows as written.
+
+<Callout kind="note" title="What the audit cannot see">
+  The audit compares facts that are written down. Whether a model follows a rule is lesson 3's validation, and whether a label is right is the LLMs track's eval. A green gate means every artefact says what the ontology says, nothing more.
+</Callout>
+
+## Try it
+
+Run the audit into a scratch file. It prints the gate and every disagreement, and calls nothing:
+
+```bash
+.venv-ontology/bin/python ontology/python/audit.py --out /tmp/audit.json
+```
+
+You should see:
+
+```text
+wrote audit.json: 71 rows
+gate: RED (1 disagree, 0 missing)
+  disagree data/contracts/tickets.v2.yaml enum:category:
+    extra value the ontology lacks: security
+```
+
+Check the committed file. It passes, with the gate still red inside it:
+
+```bash
+.venv-ontology/bin/python ontology/python/audit.py --check
+```
+
+You should see:
+
+```text
+audit.json: up to date
+```
+
+Confirm that no ticket in the v2 file uses `security`:
+
+```bash
+grep -c '"category": "security"' data/data/tickets.v2.jsonl || true
+```
+
+You should see:
+
+```text
+0
+```
+
+Now use the gate as a gate. This reads the verdict from `audit.json`, prints it, and exits with status 1 because it is red:
+
+```bash
+.venv-ontology/bin/python -c '
+import json, sys
+gate = json.load(open("ontology/data/derived/audit.json"))["gate"]
+print(gate["reason"])
+sys.exit(0 if gate["ok"] else 1)
+'
+```
+
+You should see:
+
+```text
+red: 1 disagree (data/contracts/tickets.v2.yaml enum:category); 0 missing
+```
+
+A pipeline that runs this stops until the data track and the LLMs track settle what `security` means, or take it out. That is the track: one file that says what the words mean, artefacts generated from it, answers checked against it, and an audit that will not let the rest drift away.

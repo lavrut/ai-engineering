@@ -266,6 +266,32 @@ export const glossary = {
     'A thin piece of code at the edge that translates data from a new shape to the shape an unchanged reader expects.',
   'consumer gate':
     'A check that passes only when every consumer is green on the contract version it declares. In this course, gate.py.',
+  taxonomy:
+    'A controlled vocabulary: the names of things, perhaps sorted into a hierarchy, with nothing about what they mean or how they relate.',
+  schema:
+    'A description of a record’s fields and their types, and which are required. It says what shape the data has, not what it means.',
+  ontology:
+    'A shared description of a domain’s meaning: classes with definitions, their properties and relations, named individuals and the rules that hold between them.',
+  'knowledge graph':
+    'The facts themselves, stored as things and the typed links between them. An ontology says which kinds of thing and link may exist; the graph holds the ones that do.',
+  RDFS:
+    'RDF Schema, a W3C standard for describing classes and properties in RDF, including subclasses and each property’s domain and range.',
+  OWL:
+    'The Web Ontology Language, a W3C standard for ontologies that adds richer class definitions, cardinality and logic a reasoner can infer from.',
+  SKOS:
+    'Simple Knowledge Organization System, a W3C standard for vocabularies: concepts with preferred labels, definitions and broader or narrower links.',
+  SHACL:
+    'Shapes Constraint Language, a W3C standard for the rules data must meet, written as shapes a validator checks a graph against.',
+  individual:
+    'A named member of a class in an ontology, such as the category outage or the priority urgent, with its own definition.',
+  'checkable constraint':
+    'An ontology rule written as an expression over a record’s fields, so a program can evaluate it on every record.',
+  'manual constraint':
+    'An ontology rule that needs a person to read the record, such as one about amounts or user counts that are only in the text. It is listed, never pretended to be checked.',
+  grounding:
+    'Tying an AI system to a source of meaning: its prompts, schemas and tools come from it, and its outputs are checked against it.',
+  'single source of truth':
+    'The one place a fact is written. Every other artefact that states the fact is generated from it or audited against it.',
 } as const satisfies Record<string, string>;
 
 export type GlossaryKey = keyof typeof glossary;
