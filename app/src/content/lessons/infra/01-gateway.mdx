@@ -152,7 +152,7 @@ In a third terminal, send the patterns set through it. The driver tags each call
 .venv-infra/bin/python infra/python/replay.py --gateway http://127.0.0.1:8790 --sets patterns --out /tmp/infra-run --gate
 ```
 
-You should see:
+The refusal count, the cost and the p95 latency below depend on the wall clock: in a run you start by hand the limiter runs on real time, so these figures are pinned nowhere and yours will differ. What to look for are the gate's four lines, `ledger`, `budgets`, `stages` and `figures`, each followed by `ok` or `FAILED`. You should see something like:
 
 ```text
 replayed 60 calls: 0 cache hits, 17 refusals, $0.010939

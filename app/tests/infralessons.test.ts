@@ -119,6 +119,11 @@ const CLAIMS: Claim[] = [
     expect(fixtureConfig.untagged).toBe('refuse');
   }],
   ['01-gateway', 'some calls come back 429', () => chainReturns(429)],
+  ['01-gateway', 'The refusal count, the cost and the p95 latency below depend on the wall clock', () => {
+    expect(capstone.all.p95_ms).toBeTypeOf('number');
+    expect(capstone.gate.lines.map((l: [string]) => l[0])).toEqual(['ledger', 'budgets', 'stages', 'figures']);
+    expect(text('infra/python/replay.py')).toContain("'ok' if ok else 'FAILED'");
+  }],
   ['01-gateway', 'Section 1 is the handler', () => expect(hasSection(gatewayPy, 1, 'Handler')).toBe(true)],
   ['01-gateway', 'Section 3 holds the state and books every call', () => expect(hasSection(gatewayPy, 3, 'Server')).toBe(true)],
   // ── lesson 2 ──
