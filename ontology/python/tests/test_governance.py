@@ -51,7 +51,8 @@ def test_conditions_are_met_missed_or_half_met():
     data = fixture()
     w = cell(data, "supervisor", "write")
     assert (w["rule"], w["conditions"], w["events"]) == ("conditional", ["review_passed", "human_confirmed"], 3)
-    # t002: accepted, last good review passed -> permitted; planted: declined -> conditional; t003: review failed
+    # t002: accepted, last good review passed -> permitted; planted: declined -> conditional; t003: review failed,
+    # the attempt refused -> conditional
     assert w["verdicts"] == {"permitted": 1, "conditional": 2, "not_permitted": 0}
     assert w["unmet"] == {"human_confirmed": 1, "review_passed": 1}
     s = cell(data, "single", "write")
@@ -64,7 +65,9 @@ def test_handoffs_are_escalations_and_each_run_has_one_approval():
     assert cell(data, "human", "approve")["events"] == 4
     assert data["approvals"] == {"accept": 2, "decline": 2}
     assert data["totals"] == {"traces": 5, "desk_runs": 4, "skipped": 1, "unreadable": 0, "events": 18,
-                              "permitted": 13, "conditional": 3, "not_permitted": 2}
+                              "permitted": 13, "conditional": 3, "not_permitted": 2, "writes_landed": 1}
+    assert [cell(data, r, "write")["landed"] for r in ("single", "supervisor", "research")] == [0, 1, 0]
+    assert "landed" not in cell(data, "single", "read")
     assert data["by_engine"] == {"test": {
         "single": {"events": 4, "permitted": 2, "conditional": 1, "not_permitted": 1},
         "supervisor": {"events": 14, "permitted": 11, "conditional": 2, "not_permitted": 1}}}
@@ -88,13 +91,16 @@ def test_matrix_is_every_role_by_every_action_with_the_rule_word():
 
 
 # ── Edge cases: never an exception, never a silent pass ─────────────────────
-def test_unknown_condition_source_is_conditional_never_a_pass(tmp_path):
-    y = LUMEN.read_text().replace("evaluated_from: approve", "evaluated_from: a_signature")
+def test_unknown_condition_source_is_never_a_pass(tmp_path):
+    y = LUMEN.read_text().replace("evaluated_from: [approve, elicit]", "evaluated_from: [approve, a_signature]")
     (tmp_path / "lumen.yaml").write_text(y)
     data = G.build(O.load(tmp_path / "lumen.yaml"), FIX)
     w = cell(data, "supervisor", "write")
-    assert w["verdicts"]["permitted"] == 0
-    assert w["unmet"]["human_confirmed"] == 3
+    # t002's write landed, so an unevaluable condition makes it not permitted; the two refused ones stay conditional
+    assert w["verdicts"] == {"permitted": 0, "conditional": 2, "not_permitted": 1}
+    assert w["unmet"]["human_confirmed"] == 2
+    assert {"file": "desk-test/test-supervisor-t002.json", "role": "supervisor", "tool": "label_ticket", "action": "write",
+            "detail": "landed without human_confirmed"} in data["violations"]
 
 
 def test_unreadable_trace_is_skipped_and_turns_the_gate_red(tmp_path):
@@ -143,3 +149,43 @@ def test_write_is_deterministic(tmp_path):
     G.main(["--out", str(a)])
     G.main(["--out", str(b)])
     assert a.read_bytes() == b.read_bytes() == G.GOVERNANCE.read_bytes()
+
+
+# ── Writes that landed, and the two confirmations (rulings A7, A8) ──────────
+def one_run(tmp_path, approve: str, elicit: str, is_error: bool) -> dict:
+    run = {"engine": "test", "desk": "single", "approve": approve, "elicit": elicit,
+           "output": {"tool_calls": [{"agent": "single", "tool": "label_ticket", "args": {"id": "t009", "label": "bug"},
+                                      "is_error": is_error}], "handoffs": []}}
+    d = tmp_path / "agents" / "data" / "traces" / "desk-test"
+    d.mkdir(parents=True)
+    (d / "run.json").write_text(json.dumps(run))
+    return G.build(onto(), tmp_path)
+
+
+def test_a_write_that_landed_without_a_yes_is_not_permitted_and_turns_the_gate_red(tmp_path):
+    data = one_run(tmp_path, "decline", "decline", is_error=False)
+    assert data["violations"] == [{"file": "desk-test/run.json", "role": "single", "tool": "label_ticket", "action": "write",
+                                   "detail": "landed without human_confirmed"}]
+    assert data["totals"]["writes_landed"] == 1 and cell(data, "single", "write")["landed"] == 1
+    assert data["gate"]["ok"] is False
+    assert data["gate"]["reason"].startswith("red: 1 not permitted (single write)")
+
+
+def test_a_refused_write_without_a_yes_is_conditional_and_the_gate_stays_green(tmp_path):
+    data = one_run(tmp_path, "decline", "decline", is_error=True)
+    assert cell(data, "single", "write")["verdicts"] == {"permitted": 0, "conditional": 1, "not_permitted": 0}
+    assert data["totals"]["writes_landed"] == 0
+    assert data["gate"]["ok"] is True
+
+
+def test_human_confirmed_needs_both_the_person_and_the_server(tmp_path):
+    data = one_run(tmp_path, "accept", "decline", is_error=True)
+    w = cell(data, "single", "write")
+    assert w["verdicts"]["conditional"] == 1 and w["unmet"] == {"human_confirmed": 1}
+    assert [c["evaluated_from"] for c in data["conditions"]] == [["approve", "elicit"], "handoffs.review"]
+
+
+def test_both_yeses_and_a_landed_write_is_permitted(tmp_path):
+    data = one_run(tmp_path, "accept", "accept", is_error=False)
+    assert cell(data, "single", "write")["verdicts"] == {"permitted": 1, "conditional": 0, "not_permitted": 0}
+    assert data["gate"]["ok"] is True

@@ -2,9 +2,12 @@
   "actions": {
     "conditions": [
       {
-        "evaluated_from": "approve",
+        "evaluated_from": [
+          "approve",
+          "elicit"
+        ],
         "id": "human_confirmed",
-        "text": "A person said yes to the write. The desk asks before label_ticket reaches lumen-ops, and the trace records the answer as approve; the server then asks for its own confirmation."
+        "text": "A person said yes to the write, and so did the lumen-ops server. The desk asks the person before label_ticket reaches lumen-ops (the trace's approve); the server then asks for its own confirmation (elicit). Both must be yes, as the agents track's scorer requires."
       },
       {
         "evaluated_from": "handoffs.review",

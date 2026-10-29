@@ -68,9 +68,12 @@
   },
   "conditions": [
     {
-      "evaluated_from": "approve",
+      "evaluated_from": [
+        "approve",
+        "elicit"
+      ],
       "id": "human_confirmed",
-      "text": "A person said yes to the write. The desk asks before label_ticket reaches lumen-ops, and the trace records the answer as approve; the server then asks for its own confirmation."
+      "text": "A person said yes to the write, and so did the lumen-ops server. The desk asks the person before label_ticket reaches lumen-ops (the trace's approve); the server then asks for its own confirmation (elicit). Both must be yes, as the agents track's scorer requires."
     },
     {
       "evaluated_from": "handoffs.review",
@@ -154,6 +157,7 @@
         "human_confirmed"
       ],
       "events": 18,
+      "landed": 0,
       "role": "single",
       "rule": "conditional",
       "unmet": {
@@ -312,6 +316,7 @@
       },
       "conditions": [],
       "events": 0,
+      "landed": 0,
       "role": "triage",
       "rule": "no",
       "unmet": {},
@@ -468,6 +473,7 @@
       },
       "conditions": [],
       "events": 0,
+      "landed": 0,
       "role": "research",
       "rule": "no",
       "unmet": {},
@@ -624,6 +630,7 @@
       },
       "conditions": [],
       "events": 0,
+      "landed": 0,
       "role": "drafter",
       "rule": "no",
       "unmet": {},
@@ -780,6 +787,7 @@
       },
       "conditions": [],
       "events": 0,
+      "landed": 0,
       "role": "reviewer",
       "rule": "no",
       "unmet": {},
@@ -939,6 +947,7 @@
         "human_confirmed"
       ],
       "events": 42,
+      "landed": 0,
       "role": "supervisor",
       "rule": "conditional",
       "unmet": {
@@ -1097,6 +1106,7 @@
       },
       "conditions": [],
       "events": 0,
+      "landed": 0,
       "role": "human",
       "rule": "no",
       "unmet": {},
@@ -1332,7 +1342,8 @@
     "permitted": 561,
     "skipped": 30,
     "traces": 134,
-    "unreadable": 0
+    "unreadable": 0,
+    "writes_landed": 0
   },
   "violations": []
 }

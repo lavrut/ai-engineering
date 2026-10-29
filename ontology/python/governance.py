@@ -8,12 +8,14 @@ it, each handoff the supervisor made, and the person's answer to the write. Noth
 here. Each of those becomes an event, a role taking an action, and each event gets a verdict:
 
     permitted      a row allows the role the action, and every condition it names is met
-    conditional    a row allows it, and a condition is unmet or cannot be evaluated (named)
-    not permitted  no row allows it, or the tool is not in the ontology's table
+    conditional    a row allows it, a condition is unmet or cannot be evaluated (named), and
+                   the call was refused (the trace marks it `is_error`)
+    not permitted  no row allows it, the tool is not in the ontology's table, or the call
+                   landed (not `is_error`) with a condition unmet
 
 The gate is green when no event is `not permitted` and every desk trace could be read;
-conditional events are counted and allowed. A condition is judged once per run, from the
-trace field its `evaluated_from` names. That is coarser than the agents track's scorer,
+conditional events, attempts the desk refused, are counted and allowed. A condition is judged
+once per run, from the trace fields its `evaluated_from` names (all must hold). That is coarser than the agents track's scorer,
 which places each write against the review at the moment it was made (agents/evals/scorers.py).
 
 Run (from the repo root):
@@ -40,7 +42,7 @@ VERDICTS = ("permitted", "conditional", "not_permitted")
 
 # ── 1. Reading the traces ───────────────────────────────────────────────────
 def read_traces(traces: Path = TRACES) -> tuple[list[dict], list[dict]]:
-    """(desk runs, skipped files). A run is {file, engine, desk, approve, tool_calls, handoffs}. A
+    """(desk runs, skipped files). A run is {file, engine, desk, approve, elicit, tool_calls, handoffs}. A
     pattern demo has no tool calls and is skipped with that reason; a file that is not JSON, or
     whose tool calls are not a list, is skipped as `unreadable`, which the gate counts against."""
     runs, skipped = [], []
@@ -62,7 +64,7 @@ def read_traces(traces: Path = TRACES) -> tuple[list[dict], list[dict]]:
             skipped.append({"file": name, "reason": "unreadable: output.tool_calls or output.handoffs is not a list"})
             continue
         runs.append({"file": name, "engine": str(data.get("engine")), "desk": str(desk), "approve": data.get("approve"),
-                     "tool_calls": [c for c in calls if isinstance(c, dict)],
+                     "elicit": data.get("elicit"), "tool_calls": [c for c in calls if isinstance(c, dict)],
                      "handoffs": [h for h in handoffs if isinstance(h, dict)]})
     return runs, skipped
 
@@ -80,10 +82,11 @@ def rules(onto: O.Ontology) -> tuple[dict, dict, dict]:
 
 
 def events(run: dict, tools: dict) -> list[dict]:
-    """One event per tool call (the caller's role), one `escalate` by the supervisor per handoff,
-    and one `approve` by the human per run, carrying the answer the trace recorded."""
-    out = [{"role": str(c.get("agent")), "tool": str(c.get("tool")), "action": tools.get(str(c.get("tool")))}
-           for c in run["tool_calls"]]
+    """One event per tool call (the caller's role; `landed` when the call was not an error), one
+    `escalate` by the supervisor per handoff, and one `approve` by the human per run, carrying the
+    answer the trace recorded."""
+    out = [{"role": str(c.get("agent")), "tool": str(c.get("tool")), "action": tools.get(str(c.get("tool"))),
+            "landed": c.get("is_error") is False} for c in run["tool_calls"]]
     out += [{"role": "supervisor", "tool": "handoff", "action": tools.get("handoff")} for _ in run["handoffs"]]
     out.append({"role": "human", "tool": "confirmation", "action": tools.get("confirmation"), "outcome": run["approve"]})
     return out
@@ -97,8 +100,10 @@ def _review_passed(run: dict) -> bool:
 
 
 # The trace fields a condition can be evaluated from; any other `evaluated_from` cannot be.
+# human_confirmed lists approve and elicit: the desk's person and the lumen-ops server both said yes.
 EVALUATE = {
     "approve": lambda run: run["approve"] == "accept",
+    "elicit": lambda run: run["elicit"] == "accept",
     "handoffs.review": _review_passed,
 }
 
@@ -112,13 +117,16 @@ def verdict(event: dict, run: dict, rows: dict, conds: dict) -> tuple[str, str, 
         return "not_permitted", f"no row permits {role} to {action}", []
     unmet, why = [], []
     for cid in rows[(role, action)]:
-        fn = EVALUATE.get(str((conds.get(cid) or {}).get("evaluated_from")))
-        if fn is None:
+        src = (conds.get(cid) or {}).get("evaluated_from")
+        fns = [EVALUATE.get(str(s)) for s in (src if isinstance(src, list) else [src])]
+        if not fns or None in fns:
             unmet.append(cid)
             why.append(f"{cid} cannot be evaluated")
-        elif not fn(run):
+        elif not all(fn(run) for fn in fns):
             unmet.append(cid)
             why.append(f"{cid} unmet")
+    if unmet and event.get("landed"):
+        return "not_permitted", f"landed without {' and '.join(unmet)}", unmet
     return ("conditional", "; ".join(why), unmet) if unmet else ("permitted", "", [])
 
 
@@ -156,13 +164,13 @@ def build(onto: O.Ontology, root: Path = ROOT) -> dict:
     cells = {(r, a): {"role": r, "action": a,
                       "rule": ("conditional" if rows[(r, a)] else "permitted") if (r, a) in rows else "no",
                       "conditions": rows.get((r, a), []), "events": 0, "verdicts": {v: 0 for v in VERDICTS},
-                      "unmet": {}, "by_engine": {e: _zero() for e in engines}}
+                      "unmet": {}, "by_engine": {e: _zero() for e in engines}, **({"landed": 0} if a == "write" else {})}
              for r in roles for a in actions}
     by_engine: dict = {}
     totals = {"traces": len(runs) + len(skipped), "desk_runs": len(runs),
               "skipped": sum(not s["reason"].startswith("unreadable") for s in skipped),
               "unreadable": sum(s["reason"].startswith("unreadable") for s in skipped), "events": 0,
-              **{v: 0 for v in VERDICTS}}
+              **{v: 0 for v in VERDICTS}, "writes_landed": 0}
     approvals: dict[str, int] = {}
     violations = []
     for run in runs:
@@ -172,6 +180,8 @@ def build(onto: O.Ontology, root: Path = ROOT) -> dict:
             for counts in (totals, desk):
                 counts["events"] += 1
                 counts[v] += 1
+            if ev["action"] == "write" and ev.get("landed"):
+                totals["writes_landed"] += 1
             if "outcome" in ev:
                 approvals[str(ev["outcome"])] = approvals.get(str(ev["outcome"]), 0) + 1
             c = cells.get((ev["role"], ev["action"]))
@@ -180,8 +190,11 @@ def build(onto: O.Ontology, root: Path = ROOT) -> dict:
                 c["verdicts"][v] += 1
                 c["by_engine"][run["engine"]]["events"] += 1
                 c["by_engine"][run["engine"]][v] += 1
-                for u in unmet:
-                    c["unmet"][u] = c["unmet"].get(u, 0) + 1
+                if v == "conditional":
+                    for u in unmet:
+                        c["unmet"][u] = c["unmet"].get(u, 0) + 1
+                if "landed" in c and ev.get("landed"):
+                    c["landed"] += 1
             if v == "not_permitted":
                 violations.append({"file": run["file"], "role": ev["role"], "tool": ev["tool"],
                                    "action": ev["action"], "detail": detail})
