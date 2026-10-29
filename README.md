@@ -29,8 +29,6 @@ Every lesson follows the same shape: the concept, a stepping diagram or an inter
 
 ## The demo
 
-![The agents track's replay, stepping through a recorded supervisor run](docs/media/demo-poster.png)
-
 ![Eight seconds of the course: a lesson's diagram stepping through its mechanism](docs/media/demo-teaser.gif)
 
 The full captioned demo (about two and a half minutes, 1080p, silent) is produced from the packaged site by `cd app && npm run demo`; the poster and the teaser above come from `node scripts/demo/media.mjs`. See [docs/site.md](docs/site.md).
