@@ -372,3 +372,30 @@ def test_negative_age_days_is_a_usage_error(tmp_path):
 def test_bad_age_days_is_a_usage_error(age):
     with pytest.raises(SystemExit):
         C.main(["a.yaml", "b.jsonl", "--age-days", age])
+
+
+# ── D16: parse caps ─────────────────────────────────────────────────────────
+def test_deep_nesting_is_a_parse_problem_not_a_recursion_error():
+    rows = C.parse_rows('{"a": ' + "[" * 10000 + "]" * 10000 + "}\n")
+    assert rows.problems == ["row 1: nesting deeper than 64"]
+    whole = C.parse_rows("[" + "{\"a\": " * 10000 + "1" + "}" * 10000 + "]")
+    assert whole.problems == ["row 1: nesting deeper than 64"]
+
+
+def test_depth_64_parses_and_65_does_not():
+    ok = C.parse_rows('{"a": ' + "[" * 63 + "]" * 63 + "}")  # the row's braces are level 1
+    assert ok.problems == [] and len(ok) == 1
+    assert C.parse_rows('{"a": ' + "[" * 64 + "]" * 64 + "}").problems == ["row 1: nesting deeper than 64"]
+    in_array = C.parse_rows('[{"a": 1}, {"a": ' + "[" * 63 + "]" * 63 + "}]")  # the array's bracket is not
+    assert in_array.problems == [] and len(in_array) == 2
+
+
+def test_lone_surrogate_escape_is_refused_before_decoding(tmp_path, capsys):
+    data = tmp_path / "d.jsonl"
+    data.write_text('{"id": 1, "s": "\\ud800"}\n{"id": 2, "s": "\\ud83d\\ude00"}\n', encoding="utf-8")
+    rows = C.read_rows(data)
+    assert rows.problems == ["row 1: invalid unicode escape"]
+    assert [r["id"] for r in rows] == [2]
+    yaml_path = HERE.parents[1] / "contracts" / "tickets.v1.yaml"
+    assert C.main([str(yaml_path), str(data)]) == 1  # prints, never raises UnicodeEncodeError
+    assert "FAIL parse -: row 1: invalid unicode escape" in capsys.readouterr().out

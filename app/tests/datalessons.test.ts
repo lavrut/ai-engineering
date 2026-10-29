@@ -172,8 +172,13 @@ const CLAIMS: Claim[] = [
     expect(goSrc('contract.go')).toContain('"string", "integer", "number", "boolean", "object", "array"');
   }],
   // ── lesson 5 ──
-  ['05-enforce', '`data/fixtures/cases.jsonl` holds 25 cases', () => expect(cases).toHaveLength(25)],
-  ['05-enforce', '`validate_test.go` runs the 25 fixture cases in Go as well', () => expect(goSrc('validate_test.go')).toContain('func TestCasesMatchFixtures(')],
+  ['05-enforce', '`data/fixtures/cases.jsonl` holds 28 cases', () => expect(cases).toHaveLength(28)],
+  ['05-enforce', '`validate_test.go` runs the 28 fixture cases in Go as well', () => expect(goSrc('validate_test.go')).toContain('func TestCasesMatchFixtures(')],
+  ['05-enforce', 'nesting deeper than 64 and a lone surrogate escape', () => {
+    expect(py('contract.py')).toContain('MAX_DEPTH = 64');
+    expect(goSrc('rules.go')).toContain('const MaxDepth = 64');
+    expect(cases.map((c) => c.name)).toEqual(expect.arrayContaining(['nesting-deeper-than-64', 'lone-surrogate-escape']));
+  }],
   ['05-enforce', 'with counts capped at 1000', () => {
     expect(py('contract.py')).toContain('_MAX_REPEAT = 1000');
     expect(goSrc('contract.go')).toMatch(/maxRepeat\s+= 1000/);

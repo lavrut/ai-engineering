@@ -155,6 +155,15 @@ EDGES = D7_PROBES + [
     {"name": "lookahead-pattern", "contract": BAD % ('"(?!x)y"', "{}"), "age_days": None, "rows": [{"id": "y"}]},
     {"name": "non-string-pattern", "contract": BAD % ("3", "{}"), "age_days": None, "rows": []},
     {"name": "unknown-quality-name", "contract": BAD % ('"y"', '{"unique": ["it\'s"]}'), "age_days": None, "rows": []},
+    # ruling D16: CPython's recursion limit and Go's U+FFFD no longer decide what a row says
+    {"name": "nesting-10000-deep", "contract": contract([fld("s")]), "age_days": None,
+     "dataset": '{"s": "a"}\n{"s": ' + "[" * 10000 + "]" * 10000 + '}\n'},
+    {"name": "nesting-10000-deep-whole", "contract": contract([fld("s")]), "age_days": None,
+     "dataset": '{\n "s": ' + "{\"a\": " * 10000 + "1" + "}" * 10000 + "\n}"},
+    {"name": "lone-surrogates", "contract": contract([fld("s")]), "age_days": None,
+     "dataset": '{"s": "\\ud800\\u0041"}\n{"s": "\\udfff"}\n{"s": "\\ud800"\n["\\ud800"]\n'},
+    {"name": "lone-surrogate-in-array", "contract": contract([fld("s")]), "age_days": None,
+     "dataset": '[{"s": "ok"},\n {"s": "\\ud800"}]'},
     {"name": "row-count-min-above-max", "contract": BAD % ('"y"', '{"row_count": {"max": 1, "min": 2}}'),
      "age_days": None, "rows": []},
 ]

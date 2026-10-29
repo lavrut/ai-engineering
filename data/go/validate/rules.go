@@ -46,36 +46,124 @@ func splitLines(s string) []string {
 	return out
 }
 
+// MaxDepth is ruling D16's nesting cap, the same number in contract.py.
+const MaxDepth = 64
+
+func scanHex4(s string, i int) (int, bool) {
+	if i+4 > len(s) {
+		return 0, false
+	}
+	n := 0
+	for _, c := range []byte(s[i : i+4]) {
+		switch {
+		case c >= '0' && c <= '9':
+			n = n*16 + int(c-'0')
+		case c >= 'a' && c <= 'f':
+			n = n*16 + int(c-'a') + 10
+		case c >= 'A' && c <= 'F':
+			n = n*16 + int(c-'A') + 10
+		default:
+			return 0, false
+		}
+	}
+	return n, true
+}
+
+// scan finds, before decoding, what contract.py's _scan finds (ruling D16): brackets
+// outside strings deeper than MaxDepth (an array's own bracket does not count), or a
+// surrogate escape that is not a high one followed by a low one. The decoder would turn
+// that into U+FFFD, so it is caught here. It returns the row (the array item, or 1).
+func scan(text string, array bool) (int, string, bool) {
+	depth, row, i, n := 0, 1, 0, len(text)
+	limit := MaxDepth
+	if array {
+		limit++
+	}
+	for i < n {
+		switch c := text[i]; {
+		case c == '"':
+			i++
+			for i < n && text[i] != '"' {
+				if text[i] != '\\' {
+					i++
+					continue
+				}
+				hi, ok := 0, false
+				if i+1 < n && text[i+1] == 'u' {
+					hi, ok = scanHex4(text, i+2)
+				}
+				if ok && hi >= 0xd800 && hi <= 0xdfff {
+					lo, lok := 0, false
+					if hi < 0xdc00 && strings.HasPrefix(text[min(i+6, n):], `\u`) {
+						lo, lok = scanHex4(text, i+8)
+					}
+					if !lok || lo < 0xdc00 || lo > 0xdfff {
+						return row, "invalid unicode escape", true
+					}
+					i += 12
+					continue
+				}
+				i += 2
+			}
+		case c == '[' || c == '{':
+			depth++
+			if depth > limit {
+				return row, fmt.Sprintf("nesting deeper than %d", MaxDepth), true
+			}
+		case c == ']' || c == '}':
+			depth--
+		case c == ',' && array && depth == 1:
+			row++
+		}
+		i++
+	}
+	return 0, "", false
+}
+
 // ParseRows reads dataset text as contract.py's parse_rows does: a JSON array, one JSON
-// object (one row), or JSONL. Row numbers count parsed rows from 1.
+// object (one row), or JSONL. Row numbers count parsed rows from 1; a problem found before
+// decoding names its row: the item in an array, the line in JSONL.
 func ParseRows(text string) Rows {
 	stripped := strings.TrimFunc(text, pyIsSpace)
 	if stripped == "" {
 		return Rows{}
 	}
-	if whole, err := ParseJSON(stripped); err == nil {
-		switch x := whole.(type) {
-		case *Object:
-			return Rows{Items: []*Object{x}}
-		case []any:
-			var rows Rows
-			for i, item := range x {
-				if o, ok := item.(*Object); ok {
-					rows.Items = append(rows.Items, o)
-				} else {
-					rows.Problems = append(rows.Problems, fmt.Sprintf("item %d: expected object, got %s", i+1, jsonType(item)))
-				}
-			}
-			return rows
+	isArray := strings.HasPrefix(stripped, "[")
+	if isArray {
+		if row, problem, bad := scan(stripped, true); bad {
+			return Rows{Problems: []string{fmt.Sprintf("row %d: %s", row, problem)}}
 		}
-		return Rows{Problems: []string{"expected object or array, got " + jsonType(whole)}}
 	}
-	if strings.HasPrefix(stripped, "[") {
+	_, _, bad := scan(stripped, false)
+	if isArray || !bad {
+		if whole, err := ParseJSON(stripped); err == nil {
+			switch x := whole.(type) {
+			case *Object:
+				return Rows{Items: []*Object{x}}
+			case []any:
+				var rows Rows
+				for i, item := range x {
+					if o, ok := item.(*Object); ok {
+						rows.Items = append(rows.Items, o)
+					} else {
+						rows.Problems = append(rows.Problems, fmt.Sprintf("item %d: expected object, got %s", i+1, jsonType(item)))
+					}
+				}
+				return rows
+			}
+			return Rows{Problems: []string{"expected object or array, got " + jsonType(whole)}}
+		}
+	}
+	if isArray {
 		return Rows{Problems: []string{"invalid JSON array"}}
 	}
 	var rows Rows
 	for n, line := range splitLines(text) {
 		if strings.TrimFunc(line, pyIsSpace) == "" {
+			continue
+		}
+		if _, problem, bad := scan(line, false); bad {
+			rows.Problems = append(rows.Problems, fmt.Sprintf("row %d: %s", n+1, problem))
 			continue
 		}
 		v, err := ParseJSON(line)

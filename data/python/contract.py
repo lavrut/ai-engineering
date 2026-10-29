@@ -444,21 +444,75 @@ def _json_type(x: Any) -> str:
     return "object"
 
 
+MAX_DEPTH = 64  # ruling D16: one cap in both languages, not CPython's C stack
+_HEX = frozenset("0123456789abcdefABCDEF")
+
+
+def _hex4(s: str, i: int) -> int | None:
+    h = s[i:i + 4]
+    return int(h, 16) if len(h) == 4 and all(c in _HEX for c in h) else None
+
+
+def _scan(text: str, array: bool = False) -> tuple[int, str] | None:
+    """What json.loads must never see, found before decoding (ruling D16).
+
+    A lexical pass: brackets outside strings count depth (a row's own braces are
+    level 1; an array's items are rows, so its bracket does not count), and a
+    `\\u` escape for a surrogate must be a high one followed by a low one.
+    Returns (row, problem), the row being the array item, or 1 for one line.
+    """
+    depth, row, i, n = 0, 1, 0, len(text)
+    limit = MAX_DEPTH + (1 if array else 0)
+    while i < n:
+        c = text[i]
+        if c == '"':
+            i += 1
+            while i < n and text[i] != '"':
+                if text[i] != "\\":
+                    i += 1
+                    continue
+                hi = _hex4(text, i + 2) if text[i + 1:i + 2] == "u" else None
+                if hi is not None and 0xD800 <= hi <= 0xDFFF:
+                    lo = _hex4(text, i + 8) if hi < 0xDC00 and text[i + 6:i + 8] == "\\u" else None
+                    if lo is None or not 0xDC00 <= lo <= 0xDFFF:
+                        return row, "invalid unicode escape"
+                    i += 12
+                    continue
+                i += 2
+        elif c in "[{":
+            depth += 1
+            if depth > limit:
+                return row, f"nesting deeper than {MAX_DEPTH}"
+        elif c in "]}":
+            depth -= 1
+        elif c == "," and array and depth == 1:
+            row += 1
+        i += 1
+    return None
+
+
 def parse_rows(text: str) -> Rows:
     """Parse dataset text: a JSON array, one JSON object (one row), or JSONL.
 
     Row numbers count parsed rows from 1; a bad line is a problem, not a row.
+    A problem found before decoding (ruling D16) names its row: the item in an
+    array, the line in JSONL (a single object is line 1).
     """
     stripped = text.strip()
     if not stripped:
         return Rows()
-    try:
-        whole = json.loads(stripped)
-    except ValueError:
-        whole = None
-        is_whole = False
-    else:
-        is_whole = True
+    if stripped.startswith("["):
+        bad = _scan(stripped, array=True)
+        if bad:
+            return Rows(problems=[f"row {bad[0]}: {bad[1]}"])
+    is_whole = False
+    if stripped.startswith("[") or _scan(stripped) is None:
+        try:
+            whole = json.loads(stripped)
+        except (ValueError, RecursionError):
+            pass
+        else:
+            is_whole = True
     if is_whole and isinstance(whole, dict):
         return Rows([whole])
     if is_whole and isinstance(whole, list):
@@ -477,9 +531,13 @@ def parse_rows(text: str) -> Rows:
     for n, line in enumerate(text.splitlines(), start=1):
         if not line.strip():
             continue
+        bad = _scan(line)
+        if bad:
+            problems.append(f"row {n}: {bad[1]}")
+            continue
         try:
             obj = json.loads(line)
-        except ValueError:
+        except (ValueError, RecursionError):
             problems.append(f"line {n}: invalid JSON")
             continue
         if isinstance(obj, dict):

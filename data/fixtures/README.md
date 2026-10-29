@@ -17,6 +17,17 @@ One JSON object per line:
 Row numbers in details are 1-based and count parsed rows.
 A case whose contract fails to load expects a single `contract` verdict (`ok: false`), which is what both command lines print.
 
+## Parse caps (ruling D16)
+
+Before decoding, both validators make one lexical pass over each row (`_scan` in Python, `scan` in Go) and refuse two things with a `parse` problem, never an exception:
+
+| Problem | Detail |
+|---|---|
+| brackets nested more than 64 levels (a row's own braces are level 1; an array's own bracket does not count) | `row N: nesting deeper than 64` |
+| a `\u` escape for a surrogate that is not a high one followed by a low one | `row N: invalid unicode escape` |
+
+`N` is the line in JSONL (a single object is line 1) and the item in a JSON array. The cap is the same number in both languages, so CPython's recursion limit never decides a verdict, and Go never prints the U+FFFD its decoder would substitute.
+
 ## Pattern grammar (ruling D7)
 
 A contract `pattern` is a full match (`re.fullmatch` in Python, `^(?:…)$` in Go).

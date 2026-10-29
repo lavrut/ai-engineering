@@ -176,6 +176,22 @@ def cases() -> list[dict]:
              [FRESH, v("parse", None, False, "item 2: expected object, got string"),
               v("required", "id", True, "present in 1 row"), v("type", "id", True, "all values are integer")],
              dataset='[{"id": 1}, "x"]'),
+        # ruling D16: both validators refuse, before decoding, nesting past 64 and a lone surrogate escape
+        case("nesting-deeper-than-64", contract([field("id", "integer", True), field("x", "array")]),
+             [FRESH, v("parse", None, False, "row 2: nesting deeper than 64"),
+              v("required", "id", True, "present in 2 rows"),
+              v("type", "id", True, "all values are integer"), v("type", "x", True, "all values are array")],
+             dataset='{"id": 1}\n{"id": 2, "x": ' + "[" * 64 + "]" * 64 + '}\n{"id": 3, "x": ' + "[" * 63 + "]" * 63 + '}\n'),
+        case("array-nesting-deeper-than-64", contract(ID),
+             [FRESH, v("parse", None, False, "row 2: nesting deeper than 64"),
+              v("required", "id", True, "no rows"), v("type", "id", True, "no rows")],
+             dataset='[{"id": 1}, {"id": ' + "[" * 64 + "]" * 64 + '}]'),
+        case("lone-surrogate-escape", contract([field("id", "integer", True), field("name")]),
+             [FRESH, v("parse", None, False, "row 1: invalid unicode escape (+1 more)"),
+              v("required", "id", True, "present in 2 rows"),
+              v("type", "id", True, "all values are integer"), v("type", "name", True, "all values are string")],
+             dataset='{"id": 1, "name": "\\ud800"}\n{"id": 2, "name": "\\ud83d\\ude00"}\n'
+                     '{"id": 3, "name": "\\udc00x"}\n{"id": 4, "name": "\\\\ud800"}\n'),
     ]
 
 
