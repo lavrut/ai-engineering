@@ -49,14 +49,14 @@
       "id": "billing_beats_how_to",
       "kind": "manual",
       "source": "C2",
-      "text": "A question about money, charges, plans or payment methods is billing, not how_to."
+      "text": "Money, charges, refunds, invoices, plans, discounts or payment methods: billing. This beats how_to: \"how do I update my billing address\" is billing."
     },
     {
       "class": "Ticket",
       "id": "change_x_is_account",
       "kind": "manual",
       "source": "C3",
-      "text": "\"How do I change X\" is account when X is sign-in, password, two-factor, account email, display name or membership, and how_to otherwise."
+      "text": "A \"how do I change X\" question is account when X is on the C3 list (sign-in, password, two-factor, the account email, the profile/display name, deleting, merging or adding accounts, workspace admin and membership) and how_to otherwise (language, notifications, themes, sorting)."
     },
     {
       "class": "Ticket",
@@ -146,7 +146,7 @@
       "id": "ignore_tone",
       "kind": "manual",
       "source": "R0",
-      "text": "Ignore tone. Anger, sarcasm, capital letters, threats and words like \"ASAP\" never raise or lower priority. Only the facts in the ticket count."
+      "text": "Ignore tone. Anger, sarcasm, capital letters, threats (\"I will dispute this\", \"I'll cancel\") and words like \"ASAP\" never raise or lower priority. Only the facts in the ticket count."
     },
     {
       "class": "Ticket",
@@ -160,7 +160,7 @@
       "id": "multi_issue_order",
       "kind": "manual",
       "source": "R0",
-      "text": "Multi-issue tickets: give each issue its priority; the main issue is the one with the highest priority (on a tie, the one mentioned first); the ticket gets the main issue's category and priority."
+      "text": "Multi-issue tickets, in this order. (1) Split the ticket into issues and give each one its priority under the rules below. (2) The main issue is the one with the highest priority. On a tie, it's the one mentioned first. (3) Apply the category table to the main issue only. The ticket gets the main issue's category and priority."
     },
     {
       "class": "Ticket",
@@ -181,7 +181,7 @@
       "id": "only_what_ticket_says",
       "kind": "manual",
       "source": "R0",
-      "text": "Use only what the ticket says. Don't guess at impact, user counts, deadlines or causes that the ticket doesn't state. Two problems the customer lists are two issues."
+      "text": "Use only what the ticket says. Don't guess at impact, user counts, deadlines or causes that the ticket doesn't state. If the customer lists two problems (\"…and also…\"), treat them as two issues, even if one might have caused the other."
     },
     {
       "class": "Ticket",

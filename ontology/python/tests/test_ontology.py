@@ -115,6 +115,55 @@ def test_malformed_yaml_is_finding_not_exception():
     assert rules(missing) == ["malformed"] and missing[0]["subject"] == "no_such_file.yaml"
 
 
+def test_ids_written_as_lists_are_findings_not_exceptions():
+    """Fix round 1 (I1): a list where an id belongs, in each of the seven places an id is read."""
+    onto = O.load(FIX / "malformed_ids.yaml")
+    findings = O.check(onto)  # must not raise
+    malformed = {(f["subject"], f["detail"].split(" ")[0]) for f in findings if f["rule"] == "malformed"}
+    assert malformed == {("B", "subclass_of"), ("p1", "domain"), ("p2", "range"), ("r1", "range"),
+                         ("i1", "class"), ("k1", "class"), ("k2", "then[0].property")}
+    assert all(f["level"] == "error" for f in findings if f["rule"] == "malformed")
+    assert all("list" in f["detail"] for f in findings if f["rule"] == "malformed")
+    # each bad field is reported once, as malformed, not again as a dangling reference
+    assert [f for f in findings if f["subject"] in {"B", "p1", "p2", "r1", "i1", "k1", "k2"}
+            and f["rule"] != "malformed"] == []
+    # validating against it does not raise either
+    for cls in ("A", "B"):
+        for f in O.validate(onto, {"id": "x", "p1": "v", "p3": "w"}, cls):
+            assert set(f) == {"level", "rule", "subject", "detail"}
+
+
+def test_unexpected_exception_is_a_finding(monkeypatch):
+    """The generic guard: a check or validation that raises becomes an `internal` finding."""
+    onto = O.load(LUMEN)
+
+    def boom(*a, **k):
+        raise TypeError("unhashable type: 'list'")
+    monkeypatch.setattr(O, "_check_constraint", boom)
+    monkeypatch.setattr(O, "class_properties", boom)
+    for found in (O.check(onto), O.validate(onto, {"id": "t001"}, "Ticket")):
+        assert [(f["level"], f["rule"]) for f in found] == [("error", "internal")]
+        assert "unhashable" in found[0]["detail"]
+
+
+def test_in_with_string_value_is_malformed_not_substring():
+    """Fix round 1 (M1): `in`/`not_in` need a list; a string value is never a substring match."""
+    onto = O.load(FIX / "in_string_value.yaml")
+    assert [(f["rule"], f["subject"]) for f in O.check(onto)] == [("constraint_malformed", "b_in_xyz")]
+    found = O.validate(onto, {"b": "x"}, "T")
+    assert [(f["level"], f["rule"]) for f in found] == [("manual", "b_in_xyz")]
+    assert found[0]["detail"].startswith("not evaluated")
+
+
+def test_missing_source_has_its_own_rule(tmp_path):
+    """Fix round 1 (M2): a missing source is not counted as a missing definition."""
+    f = tmp_path / "o.yaml"
+    f.write_text("classes: [{id: C, definition: c}]\nproperties: []\nrelations: []\n"
+                 "individuals: [{id: i, class: C, definition: d}, {id: j, class: C, source: X1}]\nconstraints: []\n")
+    found = {(f["rule"], f["subject"]) for f in O.check(O.load(f))}
+    assert found == {("missing_source", "i"), ("missing_definition", "j")}
+
+
 # ── Validation ──────────────────────────────────────────────────────────────
 def test_validate_ticket_ok():
     onto = O.load(LUMEN)
@@ -216,6 +265,11 @@ def test_findings_sorted_exact_shape():
             assert f["level"] in ("error", "warning", "manual")
             assert all(isinstance(v, str) for v in f.values())
         assert findings == sorted(findings, key=lambda f: (f["level"], f["rule"], f["subject"]))
+    # ties on (level, rule, subject) are ordered by detail (fix round 1, M5)
+    tied = [f for f in O.validate(onto, {"id": "t001", "tags": [1, "x", 2.5]}, "Ticket", partial=True)
+            if f["rule"] == "type"]
+    assert len(tied) == 2 and {f["subject"] for f in tied} == {"t001.tags"}
+    assert [f["detail"] for f in tied] == sorted(f["detail"] for f in tied)
 
 
 def test_all_60_tickets_validate():

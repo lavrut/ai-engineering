@@ -45,6 +45,18 @@ KINDS = ("checkable", "manual")
 OPS = ("eq", "ne", "in", "not_in", "gt", "lt", "gte", "lte", "present", "absent")
 LEVELS = ("error", "warning", "manual")
 
+# The fields whose value is the id of another entry, per section. load() reports any
+# non-string value in them as `malformed`, so the checks below can look ids up safely;
+# a new id-valued field goes here. Property ranges and constraint clauses, which hold
+# ids inside structures, are checked by _malformed_refs as well.
+REF_FIELDS = {
+    "classes": ("subclass_of",),
+    "properties": ("domain",),
+    "relations": ("domain", "range"),
+    "individuals": ("class",),
+    "constraints": ("class",),
+}
+
 
 @dataclass
 class Ontology:
@@ -64,6 +76,54 @@ class Ontology:
 
 def finding(level: str, rule: str, subject: str, detail: str) -> dict:
     return {"level": level, "rule": rule, "subject": str(subject), "detail": detail}
+
+
+def _is_id(v) -> bool:
+    """An id is a non-empty string; anything else (a list, a mapping, a number) is not."""
+    return isinstance(v, str) and bool(v)
+
+
+def _bad(field_name: str, v) -> str:
+    return f"{field_name} must be an id (a string), got {type(v).__name__} {v!r}"
+
+
+def _malformed_refs(section: str, eid: str, entry: dict) -> list[dict]:
+    """A `malformed` finding for each id-valued field that holds something else."""
+    out = []
+    for key in REF_FIELDS.get(section, ()):
+        if key in entry and entry[key] is not None and not _is_id(entry[key]):
+            out.append(finding("error", "malformed", eid, _bad(key, entry[key])))
+    if section == "properties" and "range" in entry:
+        rng = entry["range"]
+        if isinstance(rng, dict):
+            for kind, members in rng.items():
+                for m in members if isinstance(members, list) else []:
+                    if not _is_id(m):
+                        out.append(finding("error", "malformed", eid, _bad(f"range {kind} member", m)))
+        elif not _is_id(rng):
+            out.append(finding("error", "malformed", eid, _bad("range", rng)))
+    if section == "constraints":
+        for part in ("when", "then"):
+            clauses = entry.get(part)
+            for i, cl in enumerate(clauses if isinstance(clauses, list) else []):
+                if isinstance(cl, dict) and "property" in cl and not _is_id(cl["property"]):
+                    out.append(finding("error", "malformed", eid, _bad(f"{part}[{i}].property", cl["property"])))
+    return out
+
+
+def _guarded(fn):
+    """The generic guard: a check or validation that still raises on some shape nobody
+    foresaw becomes one `internal` finding instead of a traceback that hides the rest."""
+    import functools
+
+    @functools.wraps(fn)
+    def run(onto, *args, **kwargs):
+        try:
+            return fn(onto, *args, **kwargs)
+        except Exception as e:  # noqa: BLE001 - the point is that nothing escapes
+            subject = getattr(getattr(onto, "source", None), "name", "ontology")
+            return [finding("error", "internal", subject, f"{fn.__name__} raised {type(e).__name__}: {e}")]
+    return run
 
 
 def _sorted(findings: list) -> list:
@@ -110,6 +170,7 @@ def load(path: Path) -> Ontology:
                 continue
             seen[eid] = name
             section[eid] = entry
+            onto.findings += _malformed_refs(name, eid, entry)
     return onto
 
 
@@ -117,7 +178,7 @@ def load(path: Path) -> Ontology:
 def ancestors(onto: Ontology, cls: str) -> list[str]:
     """cls and its superclasses, nearest first; stops at a cycle or an unknown class."""
     out: list[str] = []
-    while cls in onto.classes and cls not in out:
+    while _is_id(cls) and cls in onto.classes and cls not in out:
         out.append(cls)
         cls = onto.classes[cls].get("subclass_of")
     return out
@@ -126,7 +187,7 @@ def ancestors(onto: Ontology, cls: str) -> list[str]:
 def class_properties(onto: Ontology, cls: str) -> dict:
     """The properties a record of cls may carry: its own and its superclasses'."""
     chain = set(ancestors(onto, cls))
-    return {pid: p for pid, p in onto.properties.items() if p.get("domain") in chain}
+    return {pid: p for pid, p in onto.properties.items() if _is_id(p.get("domain")) and p["domain"] in chain}
 
 
 def _cycles(onto: Ontology) -> list[list[str]]:
@@ -134,10 +195,10 @@ def _cycles(onto: Ontology) -> list[list[str]]:
     found: dict[frozenset, list[str]] = {}
     for start in onto.classes:
         path, cls = [], start
-        while cls in onto.classes and cls not in path:
+        while _is_id(cls) and cls in onto.classes and cls not in path:
             path.append(cls)
             cls = onto.classes[cls].get("subclass_of")
-        if cls in path:
+        if _is_id(cls) and cls in path:
             loop = path[path.index(cls):]
             key = frozenset(loop)
             if key not in found:
@@ -148,6 +209,8 @@ def _cycles(onto: Ontology) -> list[list[str]]:
 
 
 def _check_range(onto: Ontology, pid: str, rng) -> list[dict]:
+    if rng is not None and not isinstance(rng, (str, dict)):
+        return []  # load() reported it as malformed
     if isinstance(rng, str):
         if rng in LITERALS or rng in onto.classes:
             return []
@@ -157,6 +220,8 @@ def _check_range(onto: Ontology, pid: str, rng) -> list[dict]:
         if kind == "values":
             return [] if members else [finding("error", "dangling_range", pid, "empty enumeration")]
         if kind == "individuals":
+            if not all(_is_id(m) for m in members):
+                return []  # load() reported the member as malformed
             unknown = [m for m in members if m not in onto.individuals]
             if unknown:
                 return [finding("error", "dangling_range", pid, f"unknown individuals: {', '.join(map(str, unknown))}")]
@@ -173,6 +238,8 @@ def _check_constraint(onto: Ontology, cid: str, c: dict) -> list[dict]:
         if not c.get(key):
             out.append(finding("error", "constraint_malformed", cid, f"{key} missing"))
     cls = c.get("class")
+    if cls is not None and not _is_id(cls):
+        return out  # load() reported it as malformed
     if cls not in onto.classes:
         out.append(finding("error", "constraint_unknown_class", cid, f"class {cls!r} is not defined"))
         return out
@@ -194,6 +261,8 @@ def _check_constraint(onto: Ontology, cid: str, c: dict) -> list[dict]:
             out.append(finding("error", "constraint_malformed", cid, f"clause {clause!r} is not a mapping"))
             continue
         prop, op = clause.get("property"), clause.get("op")
+        if "property" in clause and not _is_id(prop):
+            continue  # load() reported it as malformed
         if prop not in props:
             out.append(finding("error", "constraint_unknown_property", cid, f"{cls} has no property {prop!r}"))
             continue
@@ -225,10 +294,13 @@ def _enumeration(rng) -> list | None:
     return None
 
 
+@_guarded
 def check(onto: Ontology) -> list[dict]:
     """Consistency findings: whatever loading found, then dangling references, subclass
     cycles, unknown ranges, constraints over unknown classes or properties, individuals
-    of undefined classes and required properties with no domain."""
+    of undefined classes and required properties with no domain. An id-valued field that
+    holds a non-id was reported `malformed` by load(), so it is skipped here, not
+    reported twice."""
     out = list(onto.findings)
     if any(f["rule"] == "malformed" and f["subject"] == onto.source.name for f in out):
         return _sorted(out)  # nothing loaded; the parse error is the whole story
@@ -237,7 +309,7 @@ def check(onto: Ontology) -> list[dict]:
         if not c.get("definition"):
             out.append(finding("warning", "missing_definition", cid, "class has no definition"))
         parent = c.get("subclass_of")
-        if parent is not None and parent not in onto.classes:
+        if parent is not None and _is_id(parent) and parent not in onto.classes:
             out.append(finding("error", "dangling_reference", cid, f"subclass_of {parent!r} is not a class"))
     for ring in _cycles(onto):
         out.append(finding("error", "subclass_cycle", ring[0], "subclass_of loops: " + " -> ".join(ring)))
@@ -247,7 +319,7 @@ def check(onto: Ontology) -> list[dict]:
         if domain is None:
             if p.get("required"):
                 out.append(finding("error", "required_without_domain", pid, "a required property needs a domain class"))
-        elif domain not in onto.classes:
+        elif _is_id(domain) and domain not in onto.classes:
             out.append(finding("error", "dangling_reference", pid, f"domain {domain!r} is not a class"))
         out += _check_range(onto, pid, p.get("range"))
         if p.get("cardinality", "one") not in CARDINALITIES:
@@ -260,19 +332,20 @@ def check(onto: Ontology) -> list[dict]:
 
     for rid, r in onto.relations.items():
         for end in ("domain", "range"):
-            if r.get(end) not in onto.classes:
+            v = r.get(end)
+            if v is None or (_is_id(v) and v not in onto.classes):
                 out.append(finding("error", "dangling_reference", rid, f"{end} {r.get(end)!r} is not a class"))
 
     orders: dict[tuple, str] = {}
     for iid, ind in onto.individuals.items():
         cls = ind.get("class")
-        if cls not in onto.classes:
+        if cls is None or (_is_id(cls) and cls not in onto.classes):
             out.append(finding("error", "individual_class_undefined", iid, f"class {cls!r} is not defined"))
         for key in ("definition", "source"):
             if not ind.get(key):
-                out.append(finding("warning", "missing_definition", iid, f"individual has no {key}"))
+                out.append(finding("warning", f"missing_{key}", iid, f"individual has no {key}"))
         order = ind.get("order")
-        if order is not None:
+        if order is not None and (cls is None or _is_id(cls)):
             if not isinstance(order, int) or isinstance(order, bool):
                 out.append(finding("error", "bad_order", iid, f"order must be an integer, got {order!r}"))
             elif (cls, order) in orders:
@@ -313,6 +386,14 @@ def clause_holds(clause: dict, record: dict) -> bool:
         raise NotEvaluable(f"cannot compare {have!r} {op} {want!r}") from e
 
 
+def _clause_well_formed(cl) -> bool:
+    """The shape check() demands, repeated here so a malformed clause is never run:
+    a mapping with an id property and a known op; in/not_in take a list (a string
+    value would otherwise run as a substring match)."""
+    return (isinstance(cl, dict) and _is_id(cl.get("property")) and cl.get("op") in OPS
+            and (cl["op"] not in ("in", "not_in") or isinstance(cl.get("value"), list)))
+
+
 def evaluate(c: dict, record: dict, subject: str, known: set | None = None, invalid: set | None = None) -> list[dict]:
     """A checkable constraint on one record: an error when every `when` clause holds and
     any `then` clause fails. Not evaluable is a `manual` finding saying why, never a silent
@@ -321,7 +402,7 @@ def evaluate(c: dict, record: dict, subject: str, known: set | None = None, inva
     check, so judging the rule on it would count one mistake twice)."""
     clauses = _clauses(c)
     rule = f"{c.get('source')}: {c['text']}"
-    if not c.get("then") or not all(isinstance(cl, dict) and cl.get("op") in OPS and "property" in cl for cl in clauses) \
+    if not c.get("then") or not all(_clause_well_formed(cl) for cl in clauses) \
             or (known is not None and any(cl["property"] not in known for cl in clauses)):
         return [finding("manual", c["id"], subject, f"not evaluated: the constraint is malformed (see check). {rule}")]
     absent = sorted({cl["property"] for cl in clauses
@@ -390,6 +471,7 @@ def _check_value(onto: Ontology, pid: str, p: dict, v, subject: str) -> list[dic
     return [finding("error", "range", subject, f"{pid} has a range the ontology cannot check (see check())")]
 
 
+@_guarded
 def validate(onto: Ontology, record: dict, cls: str, partial: bool = False) -> list[dict]:
     """Findings for one record read as an instance of cls: required properties present,
     cardinality, types, patterns, ranges and enumerations, then the checkable constraints
@@ -401,7 +483,7 @@ def validate(onto: Ontology, record: dict, cls: str, partial: bool = False) -> l
     """
     rid = record.get("id") if isinstance(record, dict) else None
     rid = rid if isinstance(rid, str) and rid else "<record>"
-    if cls not in onto.classes:
+    if not _is_id(cls) or cls not in onto.classes:
         return [finding("error", "unknown_class", rid, f"{cls!r} is not a class of the ontology")]
     if not isinstance(record, dict):
         return [finding("error", "type", rid, "a record must be a mapping")]
@@ -434,7 +516,7 @@ def validate(onto: Ontology, record: dict, cls: str, partial: bool = False) -> l
 
     chain = set(ancestors(onto, cls))
     for cid, c in onto.constraints.items():
-        if c.get("class") not in chain:
+        if not _is_id(c.get("class")) or c["class"] not in chain:
             continue
         if c.get("kind") == "manual":
             out.append(finding("manual", cid, rid, f"{c.get('source')}: {' '.join(str(c.get('text', '')).split())}"))

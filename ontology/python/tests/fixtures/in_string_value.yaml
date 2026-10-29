@@ -1,0 +1,14 @@
+# An `in` clause whose value is a string: it must not run as a substring match.
+classes:
+  - {id: T, definition: A thing.}
+properties:
+  - {id: b, domain: T, range: string, cardinality: one, required: true}
+relations: []
+individuals: []
+constraints:
+  - id: b_in_xyz
+    kind: checkable
+    class: T
+    source: X1
+    text: b is one of x, y, z.
+    then: [{property: b, op: in, value: "xyz"}]
