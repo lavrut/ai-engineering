@@ -1,14 +1,13 @@
 // stages: the Go twin of infra/python/stages.py, the gateway's chain, one function per stage,
 // run in order on every request: tag -> budget -> cache -> route -> limit -> retry/upstream.
-// The sections carry stages.py's numbers, so a lesson's goSection equals its Python section.
+// Sections 1-7 carry stages.py's numbers, so a lesson's goSection equals its Python section;
+// 8 The chain and 9 Cases are in main.go, the body, price and JSON helpers in responses.go,
+// ledger.go and json.go, as in the Python layout.
 // The verdict strings, the budget maths, the token bucket and the backoff bounds are the same;
 // the twin test (infra/python/tests/test_twin.py) holds both to the same lines on cases.json.
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand/v2"
@@ -141,61 +140,7 @@ func Tag(req *Request) Decision {
 	return Decision{Stage: "tag", Verdict: team, Detail: fmt.Sprintf("team from %s; tag %s from %s", who, t, src), Tag: t}
 }
 
-// messagesText is the messages' text in order: string contents and text blocks.
-func messagesText(body *Object) string {
-	var parts []string
-	ms, _ := body.MustGet("messages").([]any)
-	for _, m := range ms {
-		mo, ok := m.(*Object)
-		if !ok {
-			continue
-		}
-		switch c := mo.MustGet("content").(type) {
-		case string:
-			parts = append(parts, c)
-		case []any:
-			for _, b := range c {
-				if bo, ok := b.(*Object); ok {
-					if s, ok := bo.MustGet("text").(string); ok {
-						parts = append(parts, s)
-					}
-				}
-			}
-		}
-	}
-	return strings.Join(parts, "\n")
-}
-
 // ── 3. Budget ───────────────────────────────────────────────────────────────
-
-// LabPrices is the LLMs lab's table, dollars per million tokens (input, output), copied from
-// llms/python/triage_lab.py lines 47-52 (PRICES): Go cannot import Python, and the price
-// "lab" in the config means this table. Python reads it from the lab; the twins must agree.
-func LabPrices() map[string][2]float64 {
-	return map[string][2]float64{
-		"claude-haiku-5-5":  {0.10, 0.50},
-		"claude-sonnet-5-5": {2.00, 10.00},
-		"claude-opus-5-5":   {4.00, 20.00},
-	}
-}
-
-// ResolvePrices is ledger.resolve_prices: "lab" becomes the lab's pair; a model priced lab
-// that the lab does not list is an error naming it.
-func ResolvePrices(cfg Config) (map[string][2]float64, error) {
-	lab, out := LabPrices(), map[string][2]float64{}
-	for n, m := range cfg.Models {
-		if !m.Lab {
-			out[n] = m.Price
-			continue
-		}
-		p, ok := lab[n]
-		if !ok {
-			return nil, fmt.Errorf("models.%s.price is lab, but the lab's table has no %s", n, n)
-		}
-		out[n] = p
-	}
-	return out, nil
-}
 
 // WorstCaseTokens is (input, output): about four characters a token over the canonical JSON
 // (code points, as Python's len), plus one; output is max_tokens, or 0 when the request sets
@@ -207,15 +152,6 @@ func WorstCaseTokens(req *Request) (int, int) {
 		out = int(n.Float())
 	}
 	return utf8.RuneCountInString(Dumps(body, true))/4 + 1, out
-}
-
-// WorstCaseUSD is ledger.worst_case_usd: no caching, every output token; 0 for an unpriced model.
-func WorstCaseUSD(model string, in, out int, prices map[string][2]float64) float64 {
-	p, ok := prices[model]
-	if !ok {
-		return 0
-	}
-	return (float64(in)*p[0] + float64(out)*p[1]) / 1_000_000
 }
 
 // Budget: spend so far plus this request's worst case against the team's limit: allow, warn
@@ -257,14 +193,6 @@ func Budget(req *Request, team string, state *State, cfg Config, prices map[stri
 }
 
 // ── 4. Cache ────────────────────────────────────────────────────────────────
-
-// CacheKey is the sha256 hex of the path, a newline and the body bytes as received.
-func CacheKey(path string, body []byte) string {
-	h := sha256.New()
-	h.Write([]byte(path + "\n"))
-	h.Write(body)
-	return hex.EncodeToString(h.Sum(nil))
-}
 
 // CacheLookup: hit (a fresh end_turn answer is stored), miss, or skip (not a Messages call, or
 // it carries tools while skip_tools is on). The key hashes the path and the body bytes.
@@ -379,20 +307,6 @@ func RetryPlan(cfg Config, attempt int, rng *rand.Rand) int {
 	return min(cfg.Retry.MaxMs, w) + rng.IntN(cfg.Retry.BaseMs)
 }
 
-// retryAfterMs is an answer's retry-after (seconds) in ms; 0 when absent or unreadable.
-func retryAfterMs(headers map[string]string) int {
-	for k, v := range headers {
-		if strings.ToLower(k) == "retry-after" {
-			f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
-			if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
-				return 0
-			}
-			return max(0, int(f*1000))
-		}
-	}
-	return 0
-}
-
 // Send is the upstream call; Sleep waits seconds (injected so tests never wait).
 type Send func(model string, req *Request) Upstream
 type Sleep func(seconds float64)
@@ -436,183 +350,4 @@ func Forward(req *Request, targets []string, state *State, cfg Config, send Send
 	}
 	return nil, Decision{Stage: "retry", Verdict: "fail", Attempts: len(attempts),
 		Detail: fmt.Sprintf("%d tries over %s failed: %s", len(attempts), strings.Join(targets, ", "), strings.Join(what, ", "))}, attempts
-}
-
-// ── 8. The chain ────────────────────────────────────────────────────────────
-
-var usageFields = []string{"input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens"}
-
-func jsonBody(body []byte) *Object {
-	v, err := ParseJSON(body)
-	if err != nil {
-		return nil
-	}
-	o, _ := v.(*Object)
-	return o
-}
-
-func errorBody(kind, message string) []byte {
-	b, _ := json.Marshal(map[string]any{"type": "error", "error": map[string]string{"type": kind, "message": message}})
-	return b
-}
-
-// responseUsage is the four usage fields of a JSON answer (a missing one is 0), or nil. The
-// twin reads JSON answers only: the fixture cases never stream.
-func responseUsage(body []byte) map[string]int {
-	d := jsonBody(body)
-	if d == nil {
-		return nil
-	}
-	u, ok := d.MustGet("usage").(*Object)
-	if !ok {
-		return nil
-	}
-	out := map[string]int{}
-	for _, k := range usageFields {
-		if n, ok := u.MustGet(k).(Number); ok {
-			out[k] = int(n.Float())
-		} else {
-			out[k] = 0
-		}
-	}
-	return out
-}
-
-func stopReason(body []byte) string {
-	if d := jsonBody(body); d != nil {
-		s, _ := d.MustGet("stop_reason").(string)
-		return s
-	}
-	return ""
-}
-
-// costOf is ledger.cost_of: cache writes at 1.25x the input price, reads at 0.10x.
-func costOf(model string, u map[string]int, prices map[string][2]float64) *float64 {
-	p, ok := prices[model]
-	if !ok {
-		return nil
-	}
-	c := (float64(u["input_tokens"])*p[0] + float64(u["cache_creation_input_tokens"])*1.25*p[0] +
-		float64(u["cache_read_input_tokens"])*0.10*p[0] + float64(u["output_tokens"])*p[1]) / 1_000_000
-	return &c
-}
-
-// RunChain: parse -> tag -> budget -> cache -> route -> limit -> retry/upstream -> usage and cost.
-// The first refusal stops it: 400 parse, 402 budget, 404 deny, 429 limit, 502 upstream.
-func RunChain(req *Request, state *State, cfg Config, send Send, sleep Sleep) Outcome {
-	t0 := state.Clock()
-	out := Outcome{Status: 500, Headers: copyHeaders(jsonHeaders), Team: "untagged", Tag: "none"}
-	finish := func(status int, body []byte, headers map[string]string) Outcome {
-		out.Status, out.Body = status, body
-		for k, v := range headers {
-			out.Headers[k] = v
-		}
-		out.Ms = (state.Clock() - t0) * 1000
-		return out
-	}
-
-	body := req.JSON
-	if _, ok := body.getString("model"); !ok {
-		why := "the body names no model"
-		if body == nil {
-			why = "the body is not a JSON object"
-		}
-		out.Decisions = append(out.Decisions, Decision{Stage: "parse", Verdict: "refuse", Detail: why})
-		return finish(400, errorBody("invalid_request_error", why), nil)
-	}
-
-	d := Tag(req)
-	out.Decisions = append(out.Decisions, d)
-	out.Team, out.Tag = d.Verdict, d.Tag
-
-	prices, err := ResolvePrices(cfg)
-	if err != nil { // Python's resolve_prices raises inside the budget stage: a 500 naming it
-		out.Decisions = append(out.Decisions, Decision{Stage: "budget", Verdict: "error", Detail: "ValueError"})
-		return finish(500, errorBody("api_error", "gateway stage budget failed: ValueError"), nil)
-	}
-	d = Budget(req, out.Team, state, cfg, prices)
-	out.Decisions = append(out.Decisions, d)
-	booked := d.Team
-	if d.Verdict == "refuse" {
-		lim := ""
-		if d.LimitUSD != nil {
-			lim = fmt.Sprintf(" of $%.2f", *d.LimitUSD)
-		}
-		return finish(402, errorBody("budget_exceeded", fmt.Sprintf("team %s: budget%s refused: %s", booked, lim, d.Detail)), nil)
-	}
-
-	d = CacheLookup(req, state, cfg)
-	out.Decisions = append(out.Decisions, d)
-	key, cacheVerdict := d.Key, d.Verdict
-	if cacheVerdict == "hit" {
-		e := state.Cache[key]
-		zero := 0.0
-		out.Cached, out.Usage, out.CostUSD = true, responseUsage(e.Body), &zero
-		h := copyHeaders(e.Headers)
-		h["x-cache"] = "hit"
-		return finish(e.Status, e.Body, h)
-	}
-
-	r := Route(req, cfg)
-	out.Decisions = append(out.Decisions, r)
-	if r.Verdict == "deny" {
-		return finish(404, errorBody("not_found_error", r.Detail), nil)
-	}
-
-	in, outTok := WorstCaseTokens(req)
-	d = Limit(r.To, in+outTok, state, cfg)
-	out.Decisions = append(out.Decisions, d)
-	if d.Verdict == "refuse" {
-		after := strconv.Itoa(max(1, int(math.Ceil(float64(d.WaitMs)/1000))))
-		return finish(429, errorBody("rate_limit_error", d.Detail), map[string]string{"retry-after": after})
-	}
-	if d.Verdict == "wait" {
-		sleep(float64(d.WaitMs) / 1000)
-	}
-
-	up, d, attempts := Forward(req, append([]string{r.To}, r.Fallback...), state, cfg, send, sleep)
-	out.Attempts = attempts
-	out.Decisions = append(out.Decisions, d)
-	if d.Verdict == "fail" {
-		said := ""
-		if up != nil {
-			s := strings.ToValidUTF8(string(up.Body), "�")
-			if utf8.RuneCountInString(s) > 500 {
-				s = string([]rune(s)[:500])
-			}
-			said = ": " + s
-		}
-		return finish(502, errorBody("upstream_error", d.Detail+said), nil)
-	}
-
-	out.Usage = responseUsage(up.Body)
-	if out.Usage != nil {
-		out.CostUSD = costOf(d.To, out.Usage, prices)
-	}
-	if out.CostUSD != nil {
-		state.Spend[booked] += *out.CostUSD
-	}
-	if cacheVerdict == "miss" && up.Status == 200 && stopReason(up.Body) == "end_turn" {
-		state.Cache[key] = &CacheEntry{200, copyHeaders(up.Headers), up.Body, "end_turn", state.Clock(), false}
-	}
-	h := copyHeaders(up.Headers)
-	h["x-cache"] = cacheVerdict
-	out.Headers = map[string]string{}
-	return finish(up.Status, up.Body, h)
-}
-
-func copyHeaders(h map[string]string) map[string]string {
-	out := map[string]string{}
-	for k, v := range h {
-		out[k] = v
-	}
-	return out
-}
-
-func (o *Object) getString(k string) (string, bool) {
-	if o == nil {
-		return "", false
-	}
-	s, ok := o.MustGet(k).(string)
-	return s, ok
 }
