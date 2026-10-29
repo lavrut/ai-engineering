@@ -54,7 +54,7 @@ describe('code source registry', () => {
         'agents-proxy', 'agents-proxy-cost', 'agents-proxy-handler', 'agents-proxy-server', 'agents-patterns', 'agents-supervisor', 'agents-langgraph', 'agents-sdk', 'agents-evals', 'agents-run-evals', 'agents-judge-set',
         'data-contract', 'data-catalog', 'data-quality', 'data-gate', 'data-migrate',
         'data-contract-tickets', 'data-contract-tickets-v2', 'data-contract-complaints', 'data-contract-traces',
-        'ontology-core', 'ontology-generate', 'ontology-grounding', 'ontology-audit', 'ontology-lumen',
+        'ontology-core', 'ontology-generate', 'ontology-grounding', 'ontology-audit', 'ontology-governance', 'ontology-lumen',
       ].sort(),
     );
     expect(CODE_SOURCES['ml-serve']).toMatchObject({ python: 'ml/serve/server.py', go: 'ml/go/main.go' });
@@ -310,8 +310,8 @@ describe('code source registry', () => {
     });
   });
 
-  // The Ontology track: Python only. ontology.py (1-6), generate.py (1-5), grounding.py (1-3) and audit.py (1-7)
-  // each number their own sections, so each is its own source; Lumen's ontology is YAML, quoted by its five
+  // The Ontology track: Python only. ontology.py (1-6), generate.py (1-5), grounding.py (1-3), audit.py (1-7) and
+  // governance.py (1-3) each number their own sections, so each is its own source; Lumen's ontology is YAML, quoted by its six
   // `# ── N.` sections as the data contracts are.
   describe('ontology sources', () => {
     const titles = (t: string | undefined) => listSections(t ?? '').map((x) => `${x.n}. ${x.title}`);
@@ -325,7 +325,8 @@ describe('code source registry', () => {
         'ontology/python/audit.py',
         ['1. Rows and helpers', '2. The labelling guide', '3. The prompts', '4. The ML category map', '5. The data contracts', '6. The audit and the gate', '7. Write, check, command line'],
       ],
-      ['ontology-lumen', 'ontology/lumen.yaml', ['1. Classes', '2. Properties', '3. Relations', '4. Individuals', '5. Constraints']],
+      ['ontology-governance', 'ontology/python/governance.py', ['1. Reading the traces', '2. Rules, events and verdicts', '3. Build, write, check']],
+      ['ontology-lumen', 'ontology/lumen.yaml', ['1. Classes', '2. Properties', '3. Relations', '4. Individuals', '5. Constraints', '6. Actions']],
     ] as const)('%s quotes %s by its numbered sections, Python only', (id, file, sections) => {
       expect(CODE_SOURCES[id].python).toBe(file);
       expect(CODE_SOURCES[id].go).toBeUndefined();
@@ -337,7 +338,7 @@ describe('code source registry', () => {
     it('quotes the ontology as YAML, one section per part of the file', () => {
       expect(CODE_SOURCES['ontology-lumen'].lang).toBe('yaml');
       expect(sourceLang('ontology-lumen')).toEqual({ lang: 'yaml', label: 'YAML' });
-      for (const id of ['ontology-core', 'ontology-generate', 'ontology-grounding', 'ontology-audit'] as const) {
+      for (const id of ['ontology-core', 'ontology-generate', 'ontology-grounding', 'ontology-audit', 'ontology-governance'] as const) {
         expect(sourceLang(id), id).toEqual({ lang: 'python', label: 'Python' });
       }
       const classes = resolveCode({ source: 'ontology-lumen', section: 1 }).python;
@@ -345,6 +346,8 @@ describe('code source registry', () => {
       expect(classes).toContain('Ticket');
       expect(classes).not.toContain('# ── 2.');
       expect(resolveCode({ source: 'ontology-lumen', section: 5 }).python).toContain('feature_request_never_above_normal');
+      expect(resolveCode({ source: 'ontology-lumen', section: 5 }).python).not.toContain('actions:');
+      expect(resolveCode({ source: 'ontology-lumen', section: 6 }).python).toContain('permitted:');
       expect(fileName('ontology-lumen', 'python')).toBe('lumen.yaml');
       expect(fileName('ontology-core', 'python')).toBe('ontology.py');
     });

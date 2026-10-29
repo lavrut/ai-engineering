@@ -1,4 +1,4 @@
-// The Ontology track's aids: the shapes of the four files they read (ontology/data/derived/*.json), the commands
+// The Ontology track's aids: the shapes of the five files they read (ontology/data/derived/*.json), the commands
 // that rewrite them, and the number formats every aid shares. Pure and browser-safe; ontologyData.ts reads the
 // files at build time. Re-exported by ontologyAids.ts.
 export { count, listText, plural } from './dataAidsTypes';
@@ -22,6 +22,12 @@ export type ConstraintJson = {
   then?: ConditionJson[];
   when?: ConditionJson[];
 };
+/** Section 6: the conditions a permission may name, the tool -> action table, and the permitted rows. */
+export type ActionsJson = {
+  conditions: { evaluated_from: string; id: string; text: string }[];
+  tools: Record<string, string>;
+  permitted: { action: string; conditions?: string[]; role: string }[];
+};
 export type OntologyJson = {
   source: string;
   classes: ClassJson[];
@@ -29,6 +35,7 @@ export type OntologyJson = {
   relations: RelationJson[];
   individuals: IndividualJson[];
   constraints: ConstraintJson[];
+  actions?: ActionsJson;
 };
 
 // ── generated.json (generate.py) ────────────────────────────────────────────
@@ -50,7 +57,38 @@ export type AuditRowJson = { artefact: string; detail: string; fact: string; sta
 export type AuditGateJson = { disagree: number; missing: number; ok: boolean; reason: string };
 export type AuditJson = { gate: AuditGateJson; rows: AuditRowJson[] };
 
-export type OntologyData = { ontology: OntologyJson; generated: GeneratedJson; validation: ValidationJson; audit: AuditJson };
+// ── governance.json (governance.py) ─────────────────────────────────────────
+export type VerdictCounts = { conditional: number; not_permitted: number; permitted: number };
+export type EventCounts = VerdictCounts & { events: number };
+export type MatrixRule = 'permitted' | 'conditional' | 'no';
+/** One role x action cell: the rule section 6 gives it, the conditions it names, and the recorded events it judged,
+ *  in all and per engine; `unmet` counts the conditional events per condition that was not met. */
+export type MatrixCellJson = {
+  action: string;
+  by_engine: Record<string, EventCounts>;
+  conditions: string[];
+  events: number;
+  role: string;
+  rule: MatrixRule;
+  unmet: Record<string, number>;
+  verdicts: VerdictCounts;
+};
+export type GovernanceGateJson = { ok: boolean; reason: string };
+export type GovernanceJson = {
+  actions: string[];
+  approvals: Record<string, number>;
+  by_engine: Record<string, Record<string, EventCounts>>;
+  conditions: { evaluated_from: string; id: string; text: string }[];
+  gate: GovernanceGateJson;
+  matrix: MatrixCellJson[];
+  roles: string[];
+  skipped: { file: string; reason: string }[];
+  tools: Record<string, string>;
+  totals: { conditional: number; desk_runs: number; events: number; not_permitted: number; permitted: number; skipped: number; traces: number; unreadable: number };
+  violations: { action: string | null; detail: string; file: string; role: string; tool: string }[];
+};
+
+export type OntologyData = { ontology: OntologyJson; generated: GeneratedJson; validation: ValidationJson; audit: AuditJson; governance: GovernanceJson };
 
 /** What rewrites each derived file (named when a file is missing). */
 export const ONTOLOGY_COMMANDS = {
@@ -58,6 +96,7 @@ export const ONTOLOGY_COMMANDS = {
   generated: '.venv-ontology/bin/python ontology/python/generate.py',
   validation: '.venv-ontology/bin/python ontology/python/grounding.py',
   audit: '.venv-ontology/bin/python ontology/python/audit.py',
+  governance: '.venv-ontology/bin/python ontology/python/governance.py',
 } as const;
 
 // ── Marks ───────────────────────────────────────────────────────────────────

@@ -7,15 +7,20 @@
 // (b) GroundingReport: each artefact rebuilds its generated.json compare entry (a JSON artefact back from its
 //     pretty-printed text); each source rebuilds its validation.json entry.
 // (c) AuditTable: the rows are audit.json's rows, in order, and the gate is audit.json's gate.
+// (d) ActionMatrix: the cells rebuild governance.json's matrix, cell by cell and engine by engine; the tools,
+//     conditions, totals and gate are governance.json's.
 import { describe, expect, it } from 'vitest';
 import { loadOntologyData } from '../src/lib/ontologyData';
 import {
+  ALL_ENGINES,
+  actionMatrixProps,
   auditTableProps,
   groundingReportProps,
   ontologyBrowserProps,
   type ConstraintJson,
   type GeneratedReportProps,
   type IndividualJson,
+  type MatrixCellJson,
   type OntologyJson,
   type PropertyJson,
   type RangeJson,
@@ -133,5 +138,34 @@ describe('AuditTable round trip', () => {
     const p = auditTableProps(data.audit);
     expect(p.rows).toEqual(data.audit.rows);
     expect(p.gate).toEqual(data.audit.gate);
+  });
+});
+
+describe('ActionMatrix round trip', () => {
+  it("rebuilds governance.json's matrix from the cells", () => {
+    const g = data.governance;
+    const p = actionMatrixProps(g);
+    const back = p.cells.map((c): MatrixCellJson => {
+      const { events, ...verdicts } = c.counts[ALL_ENGINES];
+      return {
+        action: c.action,
+        by_engine: Object.fromEntries(p.engines.map((e) => [e, c.counts[e]])),
+        conditions: c.conditions,
+        events,
+        role: c.role,
+        rule: c.rule,
+        unmet: c.unmet,
+        verdicts,
+      };
+    });
+    expect(back).toEqual(g.matrix);
+    expect(Object.fromEntries(p.tools)).toEqual(g.tools);
+    expect(p.conditions).toEqual(g.conditions.map(({ id, text }) => ({ id, text })));
+    expect(p.gate).toEqual(g.gate);
+    expect(p.deskRuns).toBe(g.totals.desk_runs);
+    for (const e of p.engines) {
+      const desks = Object.values(g.by_engine[e]);
+      expect(p.totals[e].events, e).toBe(desks.reduce((a, d) => a + d.events, 0));
+    }
   });
 });

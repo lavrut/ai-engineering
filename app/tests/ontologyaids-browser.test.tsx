@@ -26,16 +26,16 @@ const live = () => document.querySelector('[aria-live="polite"]')?.textContent;
 afterEach(() => cleanup());
 
 // ── The modules ─────────────────────────────────────────────────────────────
-const ONTOLOGY_LIB = ['ontologyAids.ts', 'ontologyAidsTypes.ts', 'ontologyAidsBrowser.ts', 'ontologyAidsGrounding.ts', 'ontologyAidsAudit.ts', 'ontologyData.ts'];
-const ISLANDS = ['OntologyBrowser.tsx', 'GroundingReport.tsx', 'AuditTable.tsx'];
-const WRAPPERS = ['OntologyBrowser.astro', 'GroundingReport.astro', 'AuditTable.astro'];
+const ONTOLOGY_LIB = ['ontologyAids.ts', 'ontologyAidsTypes.ts', 'ontologyAidsBrowser.ts', 'ontologyAidsGrounding.ts', 'ontologyAidsAudit.ts', 'ontologyAidsActions.ts', 'ontologyData.ts'];
+const ISLANDS = ['OntologyBrowser.tsx', 'GroundingReport.tsx', 'AuditTable.tsx', 'ActionMatrix.tsx'];
+const WRAPPERS = ['OntologyBrowser.astro', 'GroundingReport.astro', 'AuditTable.astro', 'ActionMatrix.astro'];
 const comp = (f: string) => readFileSync(join(here, '../src/components/ontology', f), 'utf8');
 
 describe('ontology aid modules', () => {
   it('are split per aid, each under 400 lines, and ontologyAids.ts only re-exports them', () => {
     for (const f of ONTOLOGY_LIB) expect(readFileSync(join(here, '../src/lib', f), 'utf8').split('\n').length, f).toBeLessThan(400);
     const barrel = readFileSync(join(here, '../src/lib/ontologyAids.ts'), 'utf8');
-    expect(barrel.match(/^export \* from '\.\/ontologyAids\w+';$/gm)).toHaveLength(4);
+    expect(barrel.match(/^export \* from '\.\/ontologyAids\w+';$/gm)).toHaveLength(5);
   });
 
   it('islands import only the browser-safe barrel, never the build-time loader, and each has a live region', () => {
@@ -75,20 +75,23 @@ describe('ontology aid modules', () => {
       generated: '.venv-ontology/bin/python ontology/python/generate.py',
       validation: '.venv-ontology/bin/python ontology/python/grounding.py',
       audit: '.venv-ontology/bin/python ontology/python/audit.py',
+      governance: '.venv-ontology/bin/python ontology/python/governance.py',
     });
   });
 });
 
 describe('the derived data', () => {
-  it('loads the four derived files', () => {
+  it('loads the five derived files', () => {
     expect(data.ontology.source).toBe('ontology/lumen.yaml');
-    expect([data.ontology.classes.length, data.ontology.properties.length, data.ontology.relations.length]).toEqual([7, 6, 5]);
-    expect([data.ontology.individuals.length, data.ontology.constraints.length]).toEqual([16, 25]);
+    expect([data.ontology.classes.length, data.ontology.properties.length, data.ontology.relations.length]).toEqual([9, 6, 5]);
+    expect([data.ontology.individuals.length, data.ontology.constraints.length]).toEqual([27, 25]);
+    expect(data.ontology.actions!.permitted).toHaveLength(11);
     expect(Object.keys(data.generated.compare)).toEqual(['definitions', 'schema', 'tool']);
     expect(data.validation.totals).toEqual({ records: 700, violations: { feature_request_never_above_normal: 7 } });
     expect(Object.keys(data.validation.sources)).toHaveLength(16);
     expect(data.audit.rows).toHaveLength(82);
     expect(data.audit.gate).toEqual({ disagree: 1, missing: 0, ok: false, reason: 'red: 1 disagree (data/contracts/tickets.v2.yaml enum:category); 0 missing' });
+    expect(data.governance.gate).toEqual({ ok: true, reason: 'green: 0 not permitted; 60 conditional, 561 permitted, of 621 events' });
   });
 });
 
@@ -98,12 +101,12 @@ describe('ontology browser data', () => {
   const cls = (id: string) => all.classes.find((c) => c.id === id)!;
 
   it('shows every class in the file order, the first one by default', () => {
-    expect(all.classes.map((c) => c.id)).toEqual(['Category', 'Complaint', 'Customer', 'Priority', 'Product', 'Reply', 'Ticket']);
-    expect(all.initial).toBe('Category');
+    expect(all.classes.map((c) => c.id)).toEqual(['Action', 'AgentRole', 'Category', 'Complaint', 'Customer', 'Priority', 'Product', 'Reply', 'Ticket']);
+    expect(all.initial).toBe('Action');
     expect(all.source).toBe('ontology/lumen.yaml');
     expect(ontologyBrowserProps(data.ontology, { cls: 'Ticket' }).initial).toBe('Ticket');
     expect(() => ontologyBrowserProps(data.ontology, { cls: 'Nope' })).toThrow(
-      /OntologyBrowser: unknown class "Nope" \(known: Category, Complaint, Customer, Priority, Product, Reply, Ticket\)/,
+      /OntologyBrowser: unknown class "Nope" \(known: Action, AgentRole, Category, Complaint, Customer, Priority, Product, Reply, Ticket\)/,
     );
   });
 
@@ -112,6 +115,8 @@ describe('ontology browser data', () => {
       const c = cls(id);
       return [c.properties.length, c.out.map((r) => r.id), c.in.map((r) => r.id), c.individuals.length, c.constraints.length];
     };
+    expect(shape('Action')).toEqual([0, [], [], 4, 0]);
+    expect(shape('AgentRole')).toEqual([0, [], [], 7, 0]);
     expect(shape('Category')).toEqual([0, [], ['has_category'], 6, 0]);
     expect(shape('Complaint')).toEqual([0, ['about'], [], 0, 0]);
     expect(shape('Customer')).toEqual([0, [], ['raised_by'], 0, 0]);
@@ -126,6 +131,7 @@ describe('ontology browser data', () => {
       '1 outage C1', '2 billing C2', '3 account C3', '4 feature_request C4', '5 bug C5', '6 how_to C6',
     ]);
     expect(cls('Priority').individuals.map((i) => `${i.order} ${i.id} ${i.source}`)).toEqual(['1 urgent U1-U4', '2 high H1-H4', '3 low L1-L3', '4 normal N']);
+    expect(cls('AgentRole').individuals.map((i) => i.id)).toEqual(['single', 'triage', 'research', 'drafter', 'reviewer', 'supervisor', 'human']);
     expect(cls('Product').individuals[0]).toMatchObject({ id: 'credit_reporting', order: 1, source: 'category_map', label: 'Credit reporting or other personal consumer reports' });
   });
 
@@ -159,18 +165,26 @@ describe('ontology browser data', () => {
     const ids = all.classes.map((c) => c.id);
     expect(neighbour(ids, 'Category', 'ArrowRight')).toBe('Complaint');
     expect(neighbour(ids, 'Category', 'ArrowDown')).toBe('Complaint');
-    expect(neighbour(ids, 'Category', 'ArrowLeft')).toBe('Ticket');
-    expect(neighbour(ids, 'Ticket', 'ArrowRight')).toBe('Category');
+    expect(neighbour(ids, 'Category', 'ArrowLeft')).toBe('AgentRole');
+    expect(neighbour(ids, 'Action', 'ArrowLeft')).toBe('Ticket');
+    expect(neighbour(ids, 'Ticket', 'ArrowRight')).toBe('Action');
     expect(neighbour(ids, 'Reply', 'ArrowUp')).toBe('Product');
-    expect(neighbour(ids, 'Reply', 'Home')).toBe('Category');
+    expect(neighbour(ids, 'Reply', 'Home')).toBe('Action');
     expect(neighbour(ids, 'Category', 'End')).toBe('Ticket');
     expect(neighbour(ids, 'Category', 'Enter')).toBeNull();
   });
 });
 
 describe('OntologyBrowser', () => {
-  it('shows the first class by default: its definition, relation in and individuals with order and definition', () => {
+  it('shows the first class by default, Action, with its individuals in order', () => {
     render(<OntologyBrowser {...ontologyBrowserProps(data.ontology)} />);
+    expect(live()).toBe('Action: 0 properties, 0 relations out, 0 relations in, 4 individuals, 0 constraints.');
+    const acts = within(screen.getByRole('table', { name: 'Individuals of Action' })).getAllByRole('row').slice(1);
+    expect(acts.map((r) => r.textContent!.split(/lumen|agents/)[0])).toEqual(['1read', '2write', '3approve', '4escalate']);
+  });
+
+  it('shows Category: its definition, relation in and individuals with order and definition', () => {
+    render(<OntologyBrowser {...ontologyBrowserProps(data.ontology, { cls: 'Category' })} />);
     expect(live()).toBe('Category: 0 properties, 0 relations out, 1 relation in, 6 individuals, 0 constraints.');
     expect(screen.getByRole('tab', { name: 'Category' }).getAttribute('aria-selected')).toBe('true');
     const panel = screen.getByRole('tabpanel');
@@ -208,7 +222,7 @@ describe('OntologyBrowser', () => {
 
   it('moves between classes with the arrow keys and announces the new class', () => {
     render(<OntologyBrowser {...ontologyBrowserProps(data.ontology)} />);
-    const first = screen.getByRole('tab', { name: 'Category' });
+    const first = screen.getByRole('tab', { name: 'Action' });
     expect(first.getAttribute('tabindex')).toBe('0');
     expect(screen.getByRole('tab', { name: 'Ticket' }).getAttribute('tabindex')).toBe('-1');
     fireEvent.keyDown(first, { key: 'ArrowLeft' });
@@ -216,6 +230,8 @@ describe('OntologyBrowser', () => {
     expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Ticket' }));
     expect(live()).toMatch(/^Ticket: 6 properties/);
     fireEvent.keyDown(screen.getByRole('tab', { name: 'Ticket' }), { key: 'Home' });
+    expect(live()).toMatch(/^Action:/);
+    fireEvent.click(screen.getByRole('tab', { name: 'Category' }));
     expect(live()).toMatch(/^Category:/);
     fireEvent.keyDown(screen.getByRole('tab', { name: 'Category' }), { key: 'ArrowRight' });
     expect(live()).toBe('Complaint: 0 properties, 1 relation out, 0 relations in, 0 individuals, 0 constraints.');
