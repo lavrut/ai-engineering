@@ -91,3 +91,29 @@ def test_validation_json_check():
     assert any(k.startswith("agents/") for k in data["sources"])
     assert data["totals"]["records"] == sum(s["records"] for s in data["sources"].values())
     assert G.VALIDATION.read_text() == O.dumps(G.build(O.load(O.LUMEN)))
+
+
+def test_unreadable_trace_is_counted_through_run(tmp_path):
+    root = tmp_path / "repo"
+    r = root / "llms/data/responses"
+    r.mkdir(parents=True)
+    (r / "triage__m__v1__default.jsonl").write_text("\n".join([
+        _line("t001", {"category": "billing", "priority": "high", "reply": "x"}),
+        _line("t002", {"category": "billing", "reply": "x"}),
+        _line("t003", None, error="boom"),
+    ]) + "\n")
+    t = root / "agents/data/traces/desk-x"
+    t.mkdir(parents=True)
+    ok = [{"tool": "label_ticket", "args": {"id": "t001", "label": "billing"}}]
+    (t / "a-single-t001.json").write_text(json.dumps({"output": {"tool_calls": ok}}))
+    (t / "a-single-t002.json").write_text('{"output": {"tool_ca')  # truncated
+    (t / "a-single-t003.json").write_text(json.dumps({"output": {"tool_calls": [{"tool": "label_ticket"}]}}))
+    (t / "a-chain-t004.json").write_text(json.dumps({"output": {"calls": [], "result": "x"}}))
+    out = tmp_path / "validation.json"
+    data = G.run(out, root)
+    assert json.loads(out.read_text()) == data
+    assert data["sources"]["triage__m__v1__default"]["violations"] == {"missing_field": 1, "response_error": 1}
+    s = data["sources"]["agents/desk-x"]
+    assert s["records"] == 3 and s["violations"] == {"unreadable_trace": 2}
+    assert s["violating"] == ["a-single-t002.json", "a-single-t003.json"]
+    assert data["totals"]["violations"] == {"missing_field": 1, "response_error": 1, "unreadable_trace": 2}

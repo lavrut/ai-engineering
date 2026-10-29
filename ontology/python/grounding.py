@@ -34,8 +34,8 @@ def _response_files(responses: Path) -> list[Path]:
 
 
 def triage_records(responses: Path = RESPONSES) -> list[dict]:
-    """One record per saved triage line: `triage__*.jsonl` and the files inside a `triage__*/`
-    subfolder (the fine-tuned Qwen run). A line with an
+    """One record per saved triage line: `triage__*.jsonl` and the files inside a
+    `triage__*/` subfolder (the fine-tuned Qwen run). A line with an
     `error`, or without an output or a field, still yields a record (None fields), so the
     validation counts it instead of skipping it."""
     out = []
@@ -62,35 +62,55 @@ def triage_records(responses: Path = RESPONSES) -> list[dict]:
 
 def agent_label_calls(traces: Path = TRACES) -> list[dict]:
     """Every `label_ticket` call in the agents traces: `{source, set, ticket, label}`. A trace
-    whose output has no `tool_calls` (the chain patterns) simply has no label call."""
+    is never dropped silently: a file that is not JSON, whose output is not a mapping, whose
+    `tool_calls` is not a list (and that has no chain `calls` either), or a label call without
+    `args`, yields a record with `unreadable: True` (ticket = the file name). A chain trace
+    (`output.calls`, no `tool_calls`) is readable and has no label call; a set with no label
+    call has no source."""
     out = []
+
+    def bad(f: Path) -> dict:
+        return {"source": f"{f.parent.name}/{f.stem}", "set": f.parent.name,
+                "ticket": f.name, "label": None, "unreadable": True}
+
     for f in sorted(traces.glob("*/*.json")):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            out.append(bad(f))
             continue
         o = data.get("output") if isinstance(data, dict) else None
-        calls = o.get("tool_calls") if isinstance(o, dict) else None
-        for c in calls if isinstance(calls, list) else []:
-            if isinstance(c, dict) and c.get("tool") == "label_ticket":
-                a = c.get("args") if isinstance(c.get("args"), dict) else {}
-                out.append({"source": f"{f.parent.name}/{f.stem}", "set": f.parent.name,
-                            "ticket": a.get("id"), "label": a.get("label")})
+        if not isinstance(o, dict) or not isinstance(o.get("tool_calls", o.get("calls")), list):
+            out.append(bad(f))
+            continue
+        for c in o.get("tool_calls") or []:
+            if not isinstance(c, dict) or c.get("tool") != "label_ticket":
+                continue
+            a = c.get("args")
+            if not isinstance(a, dict):
+                out.append(bad(f))
+                continue
+            out.append({"source": f"{f.parent.name}/{f.stem}", "set": f.parent.name,
+                        "ticket": a.get("id"), "label": a.get("label")})
     return out
 
 
 def agent_sources(calls: list[dict]) -> dict[str, list[dict]]:
-    """Group label calls per trace set, as Ticket records: the label is a category."""
+    """Group label calls per trace set as records; `kind: "label"` tells `_violations` that
+    only a category is expected (a label_ticket call carries no priority)."""
     out: dict[str, list[dict]] = {}
     for c in calls:
         out.setdefault(f"agents/{c['set']}", []).append(
-            {"case_id": c["ticket"], "category": c["label"], "kind": "label"})
+            {"case_id": c["ticket"], "category": c["label"], "kind": "label",
+             "unreadable": bool(c.get("unreadable"))})
     return out
 
 
 # ── 2. Validation ───────────────────────────────────────────────────────────
 def _violations(onto: O.Ontology, rec: dict) -> tuple[list[str], list[str]]:
     """(violated rules, manual constraint ids) for one record."""
+    if rec.get("unreadable"):
+        return ["unreadable_trace"], []
     if rec.get("error"):
         return ["response_error"], []
     rules = []
@@ -128,16 +148,17 @@ def validate_sources(onto: O.Ontology, sources: dict[str, list[dict]]) -> dict:
 
 
 # ── 3. Build, write, check ──────────────────────────────────────────────────
-def build(onto: O.Ontology) -> dict:
+def build(onto: O.Ontology, root: Path = ROOT) -> dict:
+    """Validate every saved output under `root` (the repo, or a fixture tree with the same layout)."""
     sources: dict[str, list[dict]] = {}
-    for r in triage_records():
+    for r in triage_records(root / "llms" / "data" / "responses"):
         sources.setdefault(r["source"], []).append(r)
-    sources.update(agent_sources(agent_label_calls()))
+    sources.update(agent_sources(agent_label_calls(root / "agents" / "data" / "traces")))
     return validate_sources(onto, sources)
 
 
-def run(out: Path = VALIDATION) -> dict:
-    data = build(O.load(O.LUMEN))
+def run(out: Path = VALIDATION, root: Path = ROOT) -> dict:
+    data = build(O.load(O.LUMEN), root)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(O.dumps(data), encoding="utf-8")
     return data
