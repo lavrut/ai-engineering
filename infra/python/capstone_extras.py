@@ -39,6 +39,9 @@ CAPSTONE_ABOUT = {
             "so the limiter and the cache ttl see the recorded pace; nothing sleeps",
     "cost": "cost_usd is the gateway's ledger: the recorded usage priced with the LLMs lab's table; a cache hit books "
             "$0; prompt_cache_* are the recorded prompt-cache tokens of the calls that reached the upstream",
+    "cache": "all 20 hits are cross-set repeats of a tool-free end_turn call an earlier set made first (19 in "
+             "patterns-go from patterns, 1 in desk-hand-go from desk-hand); the 6 within-set pattern repeats carry "
+             "tools, so the cache skips them",
     "counts": "retries: traces with more than one upstream attempt; refusals: status 400, 402, 404 or 429",
     "all": "the figures over every call; sets and teams split them",
     "cases": "infra/data/fixtures/cases.json through stages.run_cases: each case's decisions and status",
@@ -132,12 +135,17 @@ def capped(x, n: int = 200):
 
 
 def sample(cap: "replay.Capstone", flaky: dict | None, demo: dict | None) -> dict:
-    """traces.sample.json: three whole traces the lessons quote, picked by a stable rule."""
+    """traces.sample.json: three whole traces the lessons quote, picked by a stable rule. The random id,
+    the wall-clock ts and the gateway's own ms are replaced so a fresh run writes the same bytes: id is
+    the label, ts is 0, ms is the recorded ms for the capstone hit and 0 for the injector and demo."""
     first_hit = next((t for t in cap.traces if t["outcome"] == "cached"), None)
-    picks = (("cached", "capstone", first_hit), ("retried", "flaky", flaky), ("refused", "demo", demo))
+    hit_ms = next((r.call.recorded_ms for r in cap.results if first_hit and r.trace_id == first_hit["id"]), 0)
+    picks = (("cached", "capstone", first_hit, hit_ms), ("retried", "flaky", flaky, 0), ("refused", "demo", demo, 0))
     return {"about": {"pick": "cached: the capstone run's first cache hit in file order; retried: the flaky injector "
                               "request; refused: the first 402 of the demo run (the patterns set replayed alone with "
                               f"budgets.patterns.limit_usd {DEMO_LIMIT_USD})",
-                      "volatile": "id, ts and ms (the gateway's own clock) change every run; --check ignores them",
+                      "stable": "id is the label and ts is 0 (a run's own are random and wall time); ms is the "
+                                "recorded ms for the capstone hit (P6) and 0 for the injector and demo traces",
                       "bodies": "a trace carries no request or response body; any string is capped at 200 characters"},
-            "traces": [{"label": label, "run": run, "trace": capped(t)} for label, run, t in picks if t is not None]}
+            "traces": [{"label": label, "run": run, "trace": capped({**t, "id": label, "ts": 0, "ms": ms})}
+                       for label, run, t, ms in picks if t is not None]}

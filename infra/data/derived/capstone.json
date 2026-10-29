@@ -4,6 +4,7 @@
   "latency": "P6: p50_ms and p95_ms are nearest-rank percentiles over each call's recorded wall clock (upstream.ms in agents/data/recordings), joined by the driver; a trace's ms is the gateway's own clock (about a millisecond in replay) and is not used for them",
   "time": "replay time: the gateway's clock starts at 0 and moves by each call's recorded ms and any limiter wait, so the limiter and the cache ttl see the recorded pace; nothing sleeps",
   "cost": "cost_usd is the gateway's ledger: the recorded usage priced with the LLMs lab's table; a cache hit books $0; prompt_cache_* are the recorded prompt-cache tokens of the calls that reached the upstream",
+  "cache": "all 20 hits are cross-set repeats of a tool-free end_turn call an earlier set made first (19 in patterns-go from patterns, 1 in desk-hand-go from desk-hand); the 6 within-set pattern repeats carry tools, so the cache skips them",
   "counts": "retries: traces with more than one upstream attempt; refusals: status 400, 402, 404 or 429",
   "all": "the figures over every call; sets and teams split them",
   "cases": "infra/data/fixtures/cases.json through stages.run_cases: each case's decisions and status",

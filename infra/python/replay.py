@@ -260,7 +260,6 @@ def gate(cap: Capstone, agents_root: Path = ROOT) -> list[tuple[str, bool, str]]
 # ── 4. Derived files ────────────────────────────────────────────────────────
 FIGURES = ("calls", "cache_hits", "hit_rate", "retries", "refusals", "cost_usd", "p50_ms", "p95_ms",
            "prompt_cache_read_tokens", "prompt_cache_write_tokens")
-VOLATILE = ("id", "ts", "ms")   # a sample trace's random id and the gateway's own clock: not compared
 
 
 def percentile(values: list[int], p: float) -> int:
@@ -312,21 +311,14 @@ def write_files(files: dict[str, dict], d: Path) -> None:
         (d / name).write_text(json.dumps(obj, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def comparable(name: str, obj):
-    if name != "traces.sample.json" or not isinstance(obj, dict):
-        return obj
-    return {**obj, "traces": [{**x, "trace": {k: v for k, v in x["trace"].items() if k not in VOLATILE}}
-                              for x in obj.get("traces", [])]}
-
-
 def drift(files: dict[str, dict], d: Path) -> list[str]:
-    """The names of the files under d that differ from these (a sample trace's id, ts and ms aside)."""
+    """The names of the files under d that differ from these."""
     def old(name: str):
         try:
             return json.loads((d / name).read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return None
-    return [n for n, obj in files.items() if old(n) is None or comparable(n, old(n)) != comparable(n, json.loads(json.dumps(obj)))]
+    return [n for n, obj in files.items() if old(n) is None or old(n) != json.loads(json.dumps(obj))]
 
 
 def produce(cfg_path: Path, out_dir: Path, sets: tuple[str, ...] = SETS) -> tuple[Capstone, dict[str, dict]]:

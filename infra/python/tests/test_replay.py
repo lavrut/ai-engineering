@@ -188,18 +188,33 @@ def test_check_detects_drift(full, tmp_path):
     assert replay.drift(files, tmp_path) == ["capstone.json"]
 
 
-def test_sample_drift_ignores_the_gateway_clock_and_ids(full, tmp_path):
+def test_sample_drift_compares_every_key(full, tmp_path):
     files = copy.deepcopy(full[1])
     replay.write_files(files, tmp_path)
-    for x in files["traces.sample.json"]["traces"]:
-        x["trace"].update(id="0" * 16, ts=1.0, ms=99.9)
     assert replay.drift(files, tmp_path) == []
-    files["traces.sample.json"]["traces"][0]["trace"]["status"] = 500
+    files["traces.sample.json"]["traces"][0]["trace"]["ms"] = 99.9
     assert replay.drift(files, tmp_path) == ["traces.sample.json"]
 
 
-def test_committed_derived_files_are_up_to_date(full):
+def test_sample_is_deterministic(full, tmp_path):
+    _, again = replay.produce(config.GATEWAY_YAML, tmp_path)
+    one, two = tmp_path / "one", tmp_path / "two"
+    replay.write_files(full[1], one)
+    replay.write_files(again, two)
+    for name in full[1]:
+        assert (one / name).read_bytes() == (two / name).read_bytes(), name
+    s = again["traces.sample.json"]["traces"]
+    assert [x["trace"]["id"] for x in s] == ["cached", "retried", "refused"]
+    assert [x["trace"]["ts"] for x in s] == [0, 0, 0]
+    hit = next(r for r in full[0].results if r.cache == "hit")
+    assert [x["trace"]["ms"] for x in s] == [hit.call.recorded_ms, 0, 0]
+
+
+def test_committed_derived_files_are_up_to_date(full, tmp_path):
     assert replay.drift(full[1], DERIVED) == []
+    replay.write_files(full[1], tmp_path)
+    for name in full[1]:
+        assert (tmp_path / name).read_bytes() == (DERIVED / name).read_bytes(), name
 
 
 # ── Command line ────────────────────────────────────────────────────────────

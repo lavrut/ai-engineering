@@ -1,7 +1,7 @@
 {
  "about": {
   "pick": "cached: the capstone run's first cache hit in file order; retried: the flaky injector request; refused: the first 402 of the demo run (the patterns set replayed alone with budgets.patterns.limit_usd 0.01)",
-  "volatile": "id, ts and ms (the gateway's own clock) change every run; --check ignores them",
+  "stable": "id is the label and ts is 0 (a run's own are random and wall time); ms is the recorded ms for the capstone hit (P6) and 0 for the injector and demo traces",
   "bodies": "a trace carries no request or response body; any string is capped at 200 characters"
  },
  "traces": [
@@ -9,9 +9,9 @@
    "label": "cached",
    "run": "capstone",
    "trace": {
-    "id": "c71fb88eae961c1a",
+    "id": "cached",
     "parent_id": null,
-    "ts": 1793255489.5789802,
+    "ts": 0,
     "team": "desk",
     "tag": "t001",
     "model": "claude-haiku-5-5",
@@ -51,7 +51,7 @@
       "detail": "capstone.jsonl"
      }
     ],
-    "ms": 0.1,
+    "ms": 1057,
     "usage": {
      "input_tokens": 1394,
      "cache_creation_input_tokens": 0,
@@ -68,9 +68,9 @@
    "label": "retried",
    "run": "flaky",
    "trace": {
-    "id": "305f6b4161f7a214",
+    "id": "retried",
     "parent_id": null,
-    "ts": 1793255491.457781,
+    "ts": 0,
     "team": "desk",
     "tag": "t008",
     "model": "claude-haiku-5-5",
@@ -130,7 +130,7 @@
       "detail": "injector-flaky.jsonl"
      }
     ],
-    "ms": 4.8,
+    "ms": 0,
     "usage": {
      "input_tokens": 10,
      "cache_creation_input_tokens": 0,
@@ -166,9 +166,9 @@
    "label": "refused",
    "run": "demo",
    "trace": {
-    "id": "ec244f24889c3b6c",
+    "id": "refused",
     "parent_id": null,
-    "ts": 1793255491.868917,
+    "ts": 0,
     "team": "patterns",
     "tag": "t007",
     "model": "claude-haiku-5-5",
@@ -191,7 +191,7 @@
       "limit_usd": 0.01
      }
     ],
-    "ms": 0.0,
+    "ms": 0,
     "usage": null,
     "cost_usd": null,
     "cached": false,
