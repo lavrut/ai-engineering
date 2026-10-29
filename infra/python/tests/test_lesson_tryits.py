@@ -22,7 +22,8 @@ Comparison, read from the prose around each text block:
 - the paragraph directly before it says "first lines": the output starts with those lines;
 - the paragraph directly before it says "the last line it prints": the last line of stdout and stderr;
 - the paragraph after it says the ids "will differ": trace ids, and the fifth field of a trace line (the gateway's
-  own milliseconds), are masked; when it also says the "waits" differ, every number is masked;
+  own milliseconds), are masked; when it also says the "waits" differ, each `'backoff_ms'` value is masked too
+  (and must be a whole number), while statuses, costs, models and outcomes stay exact;
 - everything else line for line.
 A ```yaml block is an edit the lesson asks for: the test makes it, replacing that top-level section of the file the
 lesson last copied with `cp`.
@@ -66,6 +67,7 @@ PORTS = {"gateway": 8790, "proxy": 8791, "injector": 8793}
 ENV_NAMES = {"gateway": "INFRA_GATEWAY_PORT", "proxy": "INFRA_PROXY_PORT", "injector": "INFRA_INJECTOR_PORT"}
 TRACE_LINE = re.compile(r"^(?P<id>[0-9a-f]{16}|<id>) (?P<status>\d{3}) \S+ \S+ (?P<ms>\d+) \S+ \S+$")
 HEX_ID = re.compile(r"\b[0-9a-f]{16}\b")
+BACKOFF = re.compile(r"'backoff_ms': ([^,}]+)")
 WATCHED = [ROOT / "infra", ROOT / "agents" / "data", ROOT / "llms" / "data"]
 SKIP_PARTS = {"__pycache__", ".pytest_cache"}
 
@@ -91,7 +93,7 @@ class Step:
         if "last line it prints" in self.before_out:
             return "last"
         if "will differ" in self.after_out:
-            return "digits" if "waits" in self.after_out else "ids"
+            return "waits" if "waits" in self.after_out else "ids"
         return "exact"
 
 
@@ -330,11 +332,12 @@ def mask(text: str, mode: str) -> list[str]:
     out = []
     for line in text.splitlines():
         line = HEX_ID.sub("<id>", line)
-        if mode == "digits":
-            line = re.sub(r"\d+", "N", line)
-        elif mode == "ids":
-            m = TRACE_LINE.match(line)
-            line = line[:m.start("ms")] + "<ms>" + line[m.end("ms"):] if m else line
+        m = TRACE_LINE.match(line)
+        line = line[:m.start("ms")] + "<ms>" + line[m.end("ms"):] if m else line
+        if mode == "waits":                  # the jittered backoff, by its field name; statuses and costs stay exact
+            for w in BACKOFF.findall(line):
+                assert w.isdigit(), f"a wait that is not a whole number of ms: {w!r} in {line}"
+            line = BACKOFF.sub("'backoff_ms': <ms>", line)
         out.append(line)
     return out
 
