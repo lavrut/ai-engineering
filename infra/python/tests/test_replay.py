@@ -1,6 +1,7 @@
 """The replay driver, the capstone gate and the derived files (Task 6). Free and offline: the agents
 replay proxy and the gateway run in-process, on free ports, over the committed recordings."""
 import copy
+import dataclasses
 import json
 import time
 
@@ -95,6 +96,23 @@ def test_gate_goes_red_on_a_planted_overspend(full):
     cap.rows = [*cap.rows, planted]
     lines = {name: (ok, detail) for name, ok, detail in replay.gate(cap)}
     assert lines["budgets"][0] is False and "judge" in lines["budgets"][1]
+
+
+def test_gate_goes_red_on_an_upstream_failure(full):
+    """A judge-set call answered 502 after its last try is a failure, not a refusal: the stages line is red."""
+    cap = copy.copy(full[0])
+    i = next(i for i, r in enumerate(cap.results) if r.call.set == "judge")
+    tid = cap.results[i].trace_id
+    k = next(k for k, t in enumerate(cap.traces) if t["id"] == tid)
+    t = copy.deepcopy(cap.traces[k])
+    t["decisions"] = [d for d in t["decisions"] if d["stage"] not in ("retry", "ledger", "trace")]
+    t["decisions"].append({"stage": "retry", "verdict": "fail", "detail": "2 tries over claude-haiku-5-5 failed: 502"})
+    t.update(status=502, outcome="failed", usage=None, cost_usd=None)
+    cap.traces = [*cap.traces[:k], t, *cap.traces[k + 1:]]
+    cap.results = [*cap.results[:i], dataclasses.replace(cap.results[i], status=502), *cap.results[i + 1:]]
+    lines = {name: (ok, detail) for name, ok, detail in replay.gate(cap)}
+    assert lines["stages"][0] is False, lines["stages"][1]
+    assert "1 failed upstream or errored" in lines["stages"][1]
 
 
 def test_full_replay_gate_is_green_and_fast(full):

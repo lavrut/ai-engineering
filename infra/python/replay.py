@@ -41,6 +41,7 @@ TRACED_SETS = ("desk-hand", "desk-hand-go", "desk-langgraph", "desk-sdk", "patte
 SETS = (*TRACED_SETS, "judge")
 DESK_SETS = TRACED_SETS[:4]
 STAGES = ("tag", "budget", "cache", "route", "limit", "retry", "ledger", "trace")
+REFUSING = {("parse", "refuse"), ("budget", "refuse"), ("cap", "refuse"), ("route", "deny"), ("limit", "refuse")}
 
 
 @dataclass(frozen=True)
@@ -235,17 +236,21 @@ def gate(cap: Capstone, agents_root: Path = ROOT) -> list[tuple[str, bool, str]]
 
     expected = {"ok": list(STAGES), "cached": ["tag", "budget", "cache", "ledger", "trace"]}
     bad, counts = [], {"ok": 0, "cached": 0, "stopped": 0}
+    failed = sum(t["outcome"] in ("failed", "error") for t in cap.traces)   # a 502 or a 500 is no refusal
     for t in cap.traces:                  # a refusal stops at the stage that refused (parse alone, or a prefix)
         names, kind = [d["stage"] for d in t["decisions"]], t["outcome"] if t["outcome"] in expected else "stopped"
-        good = names == expected[kind] if kind in expected else names in (["parse"], list(STAGES[:len(names)]))
+        last = (t["decisions"][-1]["stage"], t["decisions"][-1]["verdict"]) if t["decisions"] else None
+        good = (names == expected[kind] if kind in expected else last in REFUSING
+                and names in (["parse"], ["cap"], list(STAGES[:len(names)])))
         counts[kind] += good
         bad += [] if good else [t["id"]]
     parents = [t["parent_id"] for t in cap.traces if t.get("parent_id")]
     orphans = [p for p in parents if p not in ids]
-    lines.append(("stages", not bad and not orphans and len(cap.traces) == len(cap.results),
+    lines.append(("stages", not bad and not failed and not orphans and len(cap.traces) == len(cap.results),
                   f"{len(cap.traces)} traces: {counts['ok']} answered with all eight stages, "
                   f"{counts['cached']} cache hits stop after cache, {counts['stopped']} refusals stop at the "
-                  f"refusing stage, {len(bad)} out of order; {len(parents)} parent ids named, {len(orphans)} missing"))
+                  f"refusing stage, {len(bad)} out of order; {len(parents)} parent ids named, {len(orphans)} missing"
+                  + (f"; {failed} failed upstream or errored" if failed else "")))
 
     figs = figures(cap.results, cap)
     hits = sum(t["outcome"] == "cached" for t in cap.traces)
