@@ -16,3 +16,14 @@ Date: 2026-10-29. Branch `feat/ontology-track`. Spec `docs/superpowers/specs/202
 - O12 (I1): ordered ops are allowed only on integer, number and date properties; `check()` rejects them on enumerations and strings with a `malformed` finding naming the property (the individuals' `order` is a decision order, not a rank, per O4) — cost if wrong: none
 - O13 (I2): every constraint whose `source` is a guide rule id gets a `rule-text:` audit row comparing its normalised text with the guide's text for that id (R0 bullets, C-rule tie-breakers, every priority bullet); the two shipped texts that differ are fixed to verbatim; lesson 3 says only the six category lines are the guide's own wording and the priority lines are the ontology's summaries; lesson 4's claim then becomes true — cost if wrong: a few more audit rows
 - O14: `ontology.py` (655) and `audit.py` (481) stay whole for this merge: the lessons quote both by section and the split is a refactor outside a fix wave; recorded as a deferred polish item like the Data track's — cost if wrong: a later split with re-pinning
+
+## Lesson 4, architectures (2026-10-29)
+
+Branch `feat/ontology-architectures`. The controller's rulings for the lesson "Three ways to give an agent meaning", the `actions` section and `governance.py`, copied from the build ledger; the implementer's are in the task report.
+
+- Ruling A1: AgentRole gains `supervisor`; the write permission is the supervisor's (conditions review_passed + human_confirmed) and the single agent's (human_confirmed) — the design text said "drafter path", the data says supervisor — cost if wrong: a role rename in YAML, lesson and pins
+- Ruling A2: governance reads `output.tool_calls`; pattern demos are listed as `skipped` with a reason, never counted — cost if wrong: a count changes, the pins catch it
+- Ruling A3: conditions `human_confirmed` (approve=="accept") and `review_passed` (last non-error reviewer handoff's changed.review.passed) evaluated coarsely; verdict permitted only when all met, else conditional naming the condition; not permitted when no row. The agents scorer's per-attempt placement (R58) stays in the agents track; the lesson says so — cost if wrong: numbers shift, pins catch it
+- Ruling A4: one escalate event (supervisor) per handoff entry; one approve event (human, outcome recorded) per desk run — cost if wrong: two counts
+- Ruling A5: governance.py reads traces, imports nothing from agents/ — cost: a coarser condition check, stated in the lesson
+- Ruling A6: Action/AgentRole classes in section 1, their individuals in section 4, section 6 `actions` = {conditions, tools, permitted}; `check` must not warn on it, `export` must carry it; dangling ids are error findings (placement of that check is the implementer's call, Try-it must run it) — cost if wrong: a loader change
