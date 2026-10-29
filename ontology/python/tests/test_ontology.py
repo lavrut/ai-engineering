@@ -309,3 +309,48 @@ def test_cli_check_and_validate(capsys):
     out = capsys.readouterr().out
     assert "60 records" in out and "0 errors" in out
     assert O.main(["check", "--file", str(FIX / "cycle.yaml")]) == 1
+
+
+# ── Final review I1: ordered ops only on ordered types (ruling O12) ─────────
+NEVER_ABOVE = "then: [{property: priority, op: in, value: [normal, low]}]"
+
+
+def _lumen_with(tmp_path, old, new):
+    text = LUMEN.read_text(encoding="utf-8")
+    assert old in text
+    f = tmp_path / "lumen.yaml"
+    f.write_text(text.replace(old, new, 1), encoding="utf-8")
+    return O.load(f)
+
+
+def test_ordered_op_on_enumeration_is_malformed(tmp_path):
+    """`priority lte normal` would compare strings alphabetically ('high' < 'normal'),
+    so check() rejects it and validate never runs it. `order` is a decision order, not
+    a rank (O4), so no ordering is derived from it."""
+    onto = _lumen_with(tmp_path, NEVER_ABOVE, "then: [{property: priority, op: lte, value: normal}]")
+    bad = [f for f in O.check(onto) if f["level"] == "error"]
+    assert [(f["rule"], f["subject"]) for f in bad] == [("constraint_malformed", "feature_request_never_above_normal")]
+    assert "lte" in bad[0]["detail"] and "priority" in bad[0]["detail"]
+    for prio in ("high", "urgent", "low"):
+        found = O.validate(onto, {"id": "t1", "category": "feature_request", "priority": prio}, "Ticket", partial=True)
+        fr = [f for f in found if f["rule"] == "feature_request_never_above_normal"]
+        assert [f["level"] for f in fr] == ["manual"], (prio, fr)
+        assert fr[0]["detail"].startswith("not evaluated: the constraint is malformed")
+
+
+def test_ordered_op_on_string_is_malformed_on_integer_is_not(tmp_path):
+    f = tmp_path / "o.yaml"
+    f.write_text(
+        "classes: [{id: T, definition: A thing.}]\n"
+        "properties:\n"
+        "  - {id: s, domain: T, range: string, cardinality: one}\n"
+        "  - {id: n, domain: T, range: integer, cardinality: one}\n"
+        "relations: []\nindividuals: []\n"
+        "constraints:\n"
+        "  - {id: s_gt, kind: checkable, class: T, source: X1, text: s above m., then: [{property: s, op: gt, value: m}]}\n"
+        "  - {id: n_lt, kind: checkable, class: T, source: X2, text: n below 5., then: [{property: n, op: lt, value: 5}]}\n",
+        encoding="utf-8")
+    onto = O.load(f)
+    assert [(x["rule"], x["subject"]) for x in O.check(onto)] == [("constraint_malformed", "s_gt")]
+    found = O.validate(onto, {"s": "z", "n": 7}, "T")
+    assert [(x["level"], x["rule"]) for x in found] == [("error", "n_lt"), ("manual", "s_gt")]

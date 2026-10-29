@@ -91,7 +91,7 @@ The validator runs a checkable constraint in section 3 of `ontology.py`.
 
 <CodeTabs source="ontology-core" section={3} />
 
-- `def clause_holds(clause: dict, record: dict) -> bool:` judges one clause, with the ops `eq`, `ne`, `in`, `not_in`, the comparisons, `present` and `absent`.
+- `def clause_holds(clause: dict, record: dict) -> bool:` judges one clause, with the ops `eq`, `ne`, `in`, `not_in`, `present`, `absent` and the comparisons, which `check()` allows only on integer, number and date properties: on a category or priority they would compare the words alphabetically.
 - `return [finding("manual", c["id"], subject, f"not evaluated: {', '.join(absent)} absent. {rule}")]` is the case a model's answer meets in lesson 3: a property the rule reads is missing, so the rule is reported `manual` with the reason, never passed.
 - `return [finding("error", c["id"], subject, f"{c['source']}: {c['text']} ({why})")]` is a violation, naming the guide rule and the value that failed.
 

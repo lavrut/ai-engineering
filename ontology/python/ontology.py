@@ -43,6 +43,11 @@ LITERALS = ("string", "integer", "number", "boolean", "date")
 CARDINALITIES = ("one", "many")
 KINDS = ("checkable", "manual")
 OPS = ("eq", "ne", "in", "not_in", "gt", "lt", "gte", "lte", "present", "absent")
+# Ruling O12: gt/lt/gte/lte only where the values have an order. On an enumeration or a
+# string they would compare text alphabetically ('high' < 'normal'); an individual's
+# `order` is a decision order, not a rank (O4), so no ordering is derived from it.
+ORDERED_OPS = ("gt", "lt", "gte", "lte")
+ORDERED_TYPES = ("integer", "number", "date")
 LEVELS = ("error", "warning", "manual")
 
 # The fields whose value is the id of another entry, per section. load() reports any
@@ -272,6 +277,11 @@ def _check_constraint(onto: Ontology, cid: str, c: dict) -> list[dict]:
         if op in ("in", "not_in") and not isinstance(clause.get("value"), list):
             out.append(finding("error", "constraint_malformed", cid, f"{op} on {prop} needs a list value"))
             continue
+        if not _ordered_ok(op, props[prop]):
+            out.append(finding("error", "constraint_malformed", cid,
+                               f"{op} on {prop} needs an {', '.join(ORDERED_TYPES[:-1])} or {ORDERED_TYPES[-1]} property; "
+                               f"{prop}'s range {props[prop].get('range')!r} has no order"))
+            continue
         # a value outside the property's enumeration is a typo the clause would never match
         allowed = _enumeration(props[prop].get("range"))
         if allowed is not None and op in ("eq", "ne", "in", "not_in"):
@@ -280,6 +290,11 @@ def _check_constraint(onto: Ontology, cid: str, c: dict) -> list[dict]:
             if bad:
                 out.append(finding("error", "constraint_unknown_value", cid, f"{prop} has no value {', '.join(map(str, bad))}"))
     return out
+
+
+def _ordered_ok(op, prop: dict) -> bool:
+    """Ruling O12: an ordered op needs an integer, number or date property."""
+    return op not in ORDERED_OPS or prop.get("range") in ORDERED_TYPES
 
 
 def _clauses(c: dict) -> list:
@@ -394,16 +409,19 @@ def _clause_well_formed(cl) -> bool:
             and (cl["op"] not in ("in", "not_in") or isinstance(cl.get("value"), list)))
 
 
-def evaluate(c: dict, record: dict, subject: str, known: set | None = None, invalid: set | None = None) -> list[dict]:
+def evaluate(c: dict, record: dict, subject: str, known: dict | None = None, invalid: set | None = None) -> list[dict]:
     """A checkable constraint on one record: an error when every `when` clause holds and
     any `then` clause fails. Not evaluable is a `manual` finding saying why, never a silent
-    pass: the constraint is malformed or names a property outside `known`, a property it
+    pass: the constraint is malformed, names a property outside `known` (the class's
+    properties by id) or uses an ordered op on one with no order (O12), a property it
     reads is absent, or is in `invalid` (its value already failed its own range or type
     check, so judging the rule on it would count one mistake twice)."""
     clauses = _clauses(c)
     rule = f"{c.get('source')}: {c['text']}"
-    if not c.get("then") or not all(_clause_well_formed(cl) for cl in clauses) \
-            or (known is not None and any(cl["property"] not in known for cl in clauses)):
+    if not c.get("then") \
+            or not all(_clause_well_formed(cl) for cl in clauses) \
+            or (known is not None and any(cl["property"] not in known or not _ordered_ok(cl["op"], known[cl["property"]])
+                                          for cl in clauses)):
         return [finding("manual", c["id"], subject, f"not evaluated: the constraint is malformed (see check). {rule}")]
     absent = sorted({cl["property"] for cl in clauses
                      if cl["op"] not in ("present", "absent") and record.get(cl["property"]) is None})
@@ -521,7 +539,7 @@ def validate(onto: Ontology, record: dict, cls: str, partial: bool = False) -> l
         if c.get("kind") == "manual":
             out.append(finding("manual", cid, rid, f"{c.get('source')}: {' '.join(str(c.get('text', '')).split())}"))
         elif c.get("kind") == "checkable":
-            out += evaluate({**c, "text": " ".join(str(c.get("text", "")).split())}, record, rid, set(props), invalid)
+            out += evaluate({**c, "text": " ".join(str(c.get("text", "")).split())}, record, rid, props, invalid)
     return _sorted(out)
 
 
