@@ -1,0 +1,6 @@
+# Valid YAML, wrong shape: a section that is not a list, an entry with no id, a missing section.
+classes: {Ticket: {definition: A support request.}}
+properties:
+  - {domain: Ticket, range: string}
+relations: []
+individuals: []

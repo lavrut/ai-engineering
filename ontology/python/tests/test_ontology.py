@@ -1,0 +1,257 @@
+"""Tests for ontology.py: Lumen's ontology loads clean, each defect in a fixture is
+found and named, and records (the 60 tickets among them) validate against it.
+
+The fixtures under fixtures/ are tiny ontologies with one kind of defect each, so a
+failing test points at one check. A malformed file is a finding, never an exception.
+"""
+import json
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+
+import ontology as O  # noqa: E402
+
+ROOT = HERE.parents[2]
+LUMEN = ROOT / "ontology" / "lumen.yaml"
+TICKETS = ROOT / "llms" / "data" / "tickets.jsonl"
+FIX = HERE / "fixtures"
+
+
+def tickets():
+    return [json.loads(line) for line in TICKETS.read_text().splitlines() if line.strip()]
+
+
+def rules(findings, level=None):
+    return [f["rule"] for f in findings if level is None or f["level"] == level]
+
+
+# ── Loading and checking ────────────────────────────────────────────────────
+def test_load_lumen_and_check_is_clean():
+    onto = O.load(LUMEN)
+    assert onto.source == LUMEN
+    assert O.check(onto) == []
+    assert set(onto.classes) == {"Ticket", "Category", "Priority", "Reply", "Complaint", "Product", "Customer"}
+    assert set(onto.properties) >= {"id", "text", "category", "priority", "tags", "split"}
+    assert {k: (r["domain"], r["range"]) for k, r in onto.relations.items()}.items() >= {
+        "has_category": ("Ticket", "Category"),
+        "has_priority": ("Ticket", "Priority"),
+        "answers": ("Reply", "Ticket"),
+        "about": ("Complaint", "Product"),
+    }.items()
+    cats = sorted((i for i in onto.individuals.values() if i["class"] == "Category"), key=lambda i: i["order"])
+    assert [c["id"] for c in cats] == ["outage", "billing", "account", "feature_request", "bug", "how_to"]
+    assert [c["source"] for c in cats] == ["C1", "C2", "C3", "C4", "C5", "C6"]
+    pris = sorted((i for i in onto.individuals.values() if i["class"] == "Priority"), key=lambda i: i["order"])
+    assert [p["id"] for p in pris] == ["urgent", "high", "low", "normal"]
+    products = {i["label"] for i in onto.individuals.values() if i["class"] == "Product"}
+    assert products == set(json.loads((ROOT / "ml" / "data" / "category_map.json").read_text())["categories"])
+    # every individual carries order, definition and source (ruling O1)
+    for ind in onto.individuals.values():
+        assert isinstance(ind["order"], int) and ind["definition"] and ind["source"], ind["id"]
+    # every constraint names its guide rule; the checkable ones say which phrases state them (ruling O3)
+    for c in onto.constraints.values():
+        assert c["source"] and c["text"], c["id"]
+    checkable = [c for c in onto.constraints.values() if c["kind"] == "checkable"]
+    assert {c["id"] for c in checkable} == {"feature_request_never_above_normal"}
+    assert all(c["phrases"] for c in checkable)
+    manual_sources = {c["source"] for c in onto.constraints.values() if c["kind"] == "manual"}
+    assert manual_sources >= {"R0", "C1", "C2", "C3", "C6", "U1", "U2", "U3", "U4",
+                              "H1", "H2", "H3", "H4", "L1", "L2", "L3", "N", "N-F"}
+
+
+def test_lumen_sections_have_numbered_headings():
+    text = LUMEN.read_text()
+    for n, name in enumerate(O.SECTIONS, 1):
+        assert f"# ── {n}. " in text, name
+        assert text.index(f"# ── {n}. ") < text.index(f"\n{name}:"), name
+
+
+def test_check_reports_cycle_once():
+    findings = O.check(O.load(FIX / "cycle.yaml"))
+    cycles = [f for f in findings if f["rule"] == "subclass_cycle"]
+    assert len(cycles) == 1
+    assert cycles[0]["level"] == "error"
+    assert cycles[0]["subject"] == "Animal"
+    assert "Animal -> Puppy -> Dog -> Animal" in cycles[0]["detail"]
+
+
+def test_check_dangling_range():
+    findings = O.check(O.load(FIX / "dangling_range.yaml"))
+    dangling = sorted((f["subject"], f["level"]) for f in findings if f["rule"] == "dangling_range")
+    assert dangling == [("colour", "error"), ("owner", "error")]
+    colour = next(f for f in findings if f["subject"] == "colour")
+    assert "blue" in colour["detail"] and "red" not in colour["detail"].split(":")[-1]
+
+
+def test_check_duplicate_id():
+    findings = O.check(O.load(FIX / "duplicate_id.yaml"))
+    dups = sorted(f["subject"] for f in findings if f["rule"] == "duplicate_id")
+    assert dups == ["Ticket", "text"]
+    assert all(f["level"] == "error" for f in findings if f["rule"] == "duplicate_id")
+
+
+def test_check_constraint_unknown_property():
+    findings = O.check(O.load(FIX / "constraint_unknown_property.yaml"))
+    assert [(f["subject"], f["level"]) for f in findings if f["rule"] == "constraint_unknown_property"] == [
+        ("needs_severity", "error")]
+    assert "severity" in next(f for f in findings if f["rule"] == "constraint_unknown_property")["detail"]
+    assert [f["subject"] for f in findings if f["rule"] == "constraint_unknown_class"] == ["about_widgets"]
+
+
+def test_malformed_yaml_is_finding_not_exception():
+    findings = O.check(O.load(FIX / "malformed.yaml"))
+    assert rules(findings) == ["malformed"]
+    assert findings[0]["level"] == "error" and findings[0]["subject"] == "malformed.yaml"
+    # valid YAML in the wrong shape: each problem named, still no exception
+    shape = O.check(O.load(FIX / "malformed_shape.yaml"))
+    subjects = {(f["rule"], f["subject"]) for f in shape}
+    assert ("malformed", "classes") in subjects        # a mapping where a list belongs
+    assert ("malformed", "properties[0]") in subjects  # an entry with no id
+    assert ("malformed", "constraints") in subjects    # a section missing
+    # a file that is not there at all
+    missing = O.check(O.load(FIX / "no_such_file.yaml"))
+    assert rules(missing) == ["malformed"] and missing[0]["subject"] == "no_such_file.yaml"
+
+
+# ── Validation ──────────────────────────────────────────────────────────────
+def test_validate_ticket_ok():
+    onto = O.load(LUMEN)
+    t001 = next(t for t in tickets() if t["id"] == "t001")
+    findings = O.validate(onto, t001, "Ticket")
+    assert rules(findings, "error") == [] and rules(findings, "warning") == []
+
+
+def test_validate_unknown_category():
+    onto = O.load(LUMEN)
+    rec = {"id": "t999", "text": "x", "category": "security", "priority": "high", "tags": [], "split": "dev"}
+    errors = [f for f in O.validate(onto, rec, "Ticket") if f["level"] == "error"]
+    assert [(f["rule"], f["subject"]) for f in errors] == [("range", "t999.category")]
+    assert "security" in errors[0]["detail"]
+
+
+def test_validate_feature_request_urgent_is_error():
+    """The Review Focus: the guide's 'A feature_request is never above normal' is enforced."""
+    onto = O.load(LUMEN)
+    base = {"id": "t999", "text": "please build dark mode", "category": "feature_request", "tags": [], "split": "dev"}
+    for pri, bad in (("urgent", True), ("high", True), ("normal", False), ("low", False)):
+        errors = [f for f in O.validate(onto, {**base, "priority": pri}, "Ticket") if f["level"] == "error"]
+        assert (rules(errors) == ["feature_request_never_above_normal"]) is bad, pri
+        if bad:
+            assert errors[0]["subject"] == "t999"
+    # other categories may be urgent
+    ok = O.validate(onto, {**base, "category": "bug", "priority": "urgent"}, "Ticket")
+    assert rules(ok, "error") == []
+
+
+def test_validate_partial_checks_only_present_values():
+    """Ruling O2: model outputs carry only some properties; missing ones are not errors."""
+    onto = O.load(LUMEN)
+    assert rules(O.validate(onto, {"id": "t001", "category": "billing"}, "Ticket", partial=True), "error") == []
+    full = O.validate(onto, {"id": "t001", "category": "billing"}, "Ticket")
+    assert sorted(f["subject"] for f in full if f["rule"] == "required") == [
+        "t001.priority", "t001.split", "t001.tags", "t001.text"]
+    bad = O.validate(onto, {"id": "t001", "category": "feature_request", "priority": "urgent"}, "Ticket", partial=True)
+    assert rules(bad, "error") == ["feature_request_never_above_normal"]
+    # a checkable constraint whose properties are absent is not evaluated, and says so
+    half = O.validate(onto, {"id": "t001", "category": "feature_request"}, "Ticket", partial=True)
+    assert [f["detail"] for f in half if f["rule"] == "feature_request_never_above_normal"][0].startswith("not evaluated")
+
+
+def test_validate_one_mistake_one_error():
+    """A value outside its range is one error; the constraints that read it are not
+    judged on it (they are listed as not evaluated), so a count never doubles."""
+    onto = O.load(LUMEN)
+    rec = {"id": "t001", "category": "feature_request", "priority": "critical"}
+    found = O.validate(onto, rec, "Ticket", partial=True)
+    assert [(f["rule"], f["subject"]) for f in found if f["level"] == "error"] == [("range", "t001.priority")]
+    fr = [f for f in found if f["rule"] == "feature_request_never_above_normal"]
+    assert fr[0]["level"] == "manual" and fr[0]["detail"].startswith("not evaluated: priority invalid")
+
+
+def test_validate_skips_constraint_check_rejects():
+    """A constraint check() rejects (it names a property the class lacks) is never
+    evaluated against a record: it is listed as not evaluated, not raised as an error."""
+    onto = O.load(FIX / "constraint_unknown_property.yaml")
+    found = O.validate(onto, {"text": "x"}, "Ticket")
+    assert [(f["level"], f["rule"]) for f in found] == [("manual", "needs_severity")]
+    assert "malformed" in found[0]["detail"]
+
+
+def test_validate_types_pattern_cardinality():
+    onto = O.load(LUMEN)
+    rec = {"id": "T1", "text": 5, "category": "bug", "priority": "low", "tags": "x", "split": "train", "extra": 1}
+    found = {(f["level"], f["rule"], f["subject"]) for f in O.validate(onto, rec, "Ticket")}
+    assert ("error", "pattern", "T1.id") in found
+    assert ("error", "type", "T1.text") in found
+    assert ("error", "cardinality", "T1.tags") in found
+    assert ("error", "range", "T1.split") in found
+    assert ("warning", "unknown_property", "T1.extra") in found
+    assert rules(O.validate(onto, rec, "Gadget"), "error") == ["unknown_class"]
+
+
+def test_validate_manual_constraints_listed_not_failed():
+    onto = O.load(LUMEN)
+    t001 = next(t for t in tickets() if t["id"] == "t001")
+    findings = O.validate(onto, t001, "Ticket")
+    manual = [f for f in findings if f["level"] == "manual"]
+    manual_ids = {c["id"] for c in onto.constraints.values() if c["kind"] == "manual"}
+    assert {f["rule"] for f in manual} == manual_ids
+    assert all(f["subject"] == "t001" for f in manual)
+    # each manual finding carries the guide rule id it encodes
+    for f in manual:
+        assert f["detail"].startswith(onto.constraints[f["rule"]]["source"] + ": ")
+    assert rules(findings, "error") == []
+
+
+def test_findings_sorted_exact_shape():
+    onto = O.load(LUMEN)
+    rec = {"id": "bad", "text": 1, "category": "feature_request", "priority": "urgent", "tags": [], "split": "x"}
+    for findings in (O.validate(onto, rec, "Ticket"), O.check(O.load(FIX / "duplicate_id.yaml")),
+                     O.check(O.load(FIX / "constraint_unknown_property.yaml"))):
+        assert findings
+        for f in findings:
+            assert set(f) == {"level", "rule", "subject", "detail"}
+            assert f["level"] in ("error", "warning", "manual")
+            assert all(isinstance(v, str) for v in f.values())
+        assert findings == sorted(findings, key=lambda f: (f["level"], f["rule"], f["subject"]))
+
+
+def test_all_60_tickets_validate():
+    onto = O.load(LUMEN)
+    ts = tickets()
+    assert len(ts) == 60
+    for t in ts:
+        assert [f for f in O.validate(onto, t, "Ticket") if f["level"] != "manual"] == [], t["id"]
+
+
+# ── Export and the command line ─────────────────────────────────────────────
+def test_export_deterministic_and_check(tmp_path, capsys):
+    onto = O.load(LUMEN)
+    a, b = tmp_path / "a.json", tmp_path / "b.json"
+    data = O.export(onto, a)
+    O.export(O.load(LUMEN), b)
+    assert a.read_bytes() == b.read_bytes()
+    text = a.read_text()
+    assert text.endswith("\n") and text == json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    assert set(data) >= set(O.SECTIONS)
+    for name in O.SECTIONS:
+        ids = [e["id"] for e in data[name]]
+        assert ids == sorted(ids), name
+    assert data["source"] == "ontology/lumen.yaml"
+    assert str(ROOT) not in text
+    # the committed file matches, and --check says so
+    assert O.main(["export", "--check"]) == 0
+    assert "ontology.json matches" in capsys.readouterr().out
+    # drift is named
+    assert O.main(["export", "--check", "--out", str(tmp_path / "missing.json")]) == 1
+    assert "missing.json" in capsys.readouterr().out
+
+
+def test_cli_check_and_validate(capsys):
+    assert O.main(["check"]) == 0
+    assert O.main(["validate", "Ticket", str(TICKETS)]) == 0
+    out = capsys.readouterr().out
+    assert "60 records" in out and "0 errors" in out
+    assert O.main(["check", "--file", str(FIX / "cycle.yaml")]) == 1

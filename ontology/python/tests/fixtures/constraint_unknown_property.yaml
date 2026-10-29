@@ -1,0 +1,20 @@
+# A checkable constraint over a property the class does not have, and one over an unknown class.
+classes:
+  - {id: Ticket, label: Ticket, definition: A support request.}
+properties:
+  - {id: text, domain: Ticket, range: string, cardinality: one, required: true}
+relations: []
+individuals: []
+constraints:
+  - id: needs_severity
+    kind: checkable
+    class: Ticket
+    source: X1
+    text: Every ticket has a severity.
+    when: []
+    then: [{property: severity, op: present}]
+  - id: about_widgets
+    kind: manual
+    class: Widget
+    source: X2
+    text: Widgets are judged by hand.
