@@ -90,7 +90,7 @@ describe('the ML lessons as a set', () => {
         expect(/^(python3?|pip3?|pytest|uvicorn) /.test(span), `${l}: inline \`${span}\``).toBe(false);
       }
     }
-    expect(src('README.md')).toContain('python3 -m venv .venv-ml && .venv-ml/bin/pip install -r ml/python/requirements.txt');
+    expect(src('docs/tracks/ml.md')).toContain('python3 -m venv .venv-ml && .venv-ml/bin/pip install -r ml/python/requirements.txt');
     expect(read('01-what')).toContain('python3 -m venv .venv-ml && .venv-ml/bin/pip install -r ml/python/requirements.txt\ncd ml/python\n');
   });
 });

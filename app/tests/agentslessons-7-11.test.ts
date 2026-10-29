@@ -238,7 +238,7 @@ describe('fix round 1: R71 and the review minors', () => {
     expect(runEvalsPy).toContain('print(f"  {JUDGE_RECORD}{\' --refresh\' if args.refresh else \'\'} --max-cost {args.max_cost:g}")');
     for (const s of Object.values(sets.sets) as Doc[]) expect(s.record).not.toContain('--yes');
     says('07-replay', 'It prints the estimate again and asks `y/N` before any call. `--yes` answers that question in advance; it exists for a scripted run after you have approved the estimate, and the printed command never carries it.');
-    expect(text('README.md').replace(/\s+/g, ' ')).toContain('`--yes` answers the question in advance: it exists for a scripted run after you have approved the estimate, and the dry runs never print it, so a pasted command always asks.');
+    expect(text('docs/tracks/agents.md').replace(/\s+/g, ' ')).toContain('`--yes` answers the question in advance: it exists for a scripted run after you have approved the estimate, and the dry runs never print it, so a pasted command always asks.');
     for (const l of LESSONS) expect(read(l), l).not.toMatch(/^[^\n]*--mode record[^\n]*--yes/m);
   });
 
