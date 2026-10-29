@@ -6,6 +6,7 @@ Run (from the repo root):
     python3 -m venv .venv-infra && .venv-infra/bin/pip install -r infra/requirements.txt
     .venv-infra/bin/python infra/python/config.py                 # validate gateway.yaml
     .venv-infra/bin/python infra/python/config.py --export        # rewrite infra/data/fixtures/config.json
+    .venv-infra/bin/python infra/python/config.py X.yaml --export --out X.json   # export elsewhere (the Go twin's test)
     .venv-infra/bin/python infra/python/config.py --check         # fail if config.json drifted
 Free and offline: no model calls.
 
@@ -282,6 +283,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("path", nargs="?", type=Path, default=GATEWAY_YAML)
     ap.add_argument("--live", action="store_true", help="allow a remote upstream")
     ap.add_argument("--export", action="store_true", help=f"write {CONFIG_JSON.relative_to(ROOT)}")
+    ap.add_argument("--out", type=Path, help=f"with --export: write here instead of {CONFIG_JSON.relative_to(ROOT)}")
     ap.add_argument("--check", action="store_true", help="fail if the export drifted from the yaml")
     a = ap.parse_args(argv)
     try:
@@ -291,9 +293,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     rel = CONFIG_JSON.relative_to(ROOT)
     if a.export:
-        CONFIG_JSON.parent.mkdir(parents=True, exist_ok=True)
-        CONFIG_JSON.write_text(export_text(a.path))
-        print(f"wrote {rel}")
+        out = a.out or CONFIG_JSON
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(export_text(a.path))
+        print(f"wrote {rel if a.out is None else out}")
     elif a.check:
         if not CONFIG_JSON.exists() or CONFIG_JSON.read_text() != export_text(a.path):
             print(f"{rel} has drifted from {a.path}; run --export", file=sys.stderr)
