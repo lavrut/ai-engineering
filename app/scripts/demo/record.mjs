@@ -92,6 +92,32 @@ async function runAction(page, beat, action, ctx) {
     case 'caption':
       await caption(page, beat, beat.captions[action.index], ctx);
       return;
+    case 'phoneFrame': {
+      // The page again, at phone size, in a centred frame over a dimmed backdrop; media queries apply
+      // inside the frame because its own viewport is the phone's.
+      const url = `${ctx.pageUrl}${action.hash}`;
+      await page.evaluate(({ url, width, height }) => {
+        const back = document.createElement('div');
+        back.id = 'demo-phone-back';
+        back.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;';
+        const frame = document.createElement('iframe');
+        frame.id = 'demo-phone';
+        frame.src = url;
+        frame.style.cssText = `position:fixed;left:50%;top:50%;width:${width}px;height:${height}px;transform:translate(-50%,-54%);border:10px solid #222;border-radius:28px;background:#000;z-index:9001;`;
+        document.body.append(back, frame);
+      }, { url, width: action.width, height: action.height });
+      const frame = page.frameLocator('#demo-phone');
+      await frame.locator('body').waitFor({ timeout: SELECTOR_TIMEOUT });
+      const inner = page.frames().find((f) => f.url().endsWith(action.hash));
+      if (inner) await inner.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+      await wait(1200);
+      const target = frame.locator(action.selector).first();
+      await target.waitFor({ timeout: SELECTOR_TIMEOUT }).catch(() => { throw new Error(`beat ${beat.id}: missing ${action.selector} in the phone frame`); });
+      await target.evaluate((node) => node.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      await wait(action.ms);
+      await page.evaluate(() => { document.getElementById('demo-phone')?.remove(); document.getElementById('demo-phone-back')?.remove(); });
+      return;
+    }
     default:
       throw new Error(`beat ${beat.id}: unknown action ${action.kind}`);
   }
@@ -132,7 +158,7 @@ export async function main(argv = process.argv.slice(2)) {
   const videoDir = dry ? null : await mkdtemp(join(tmpdir(), 'demo-video-'));
   const server = await serve(PUBLISH);
   const browser = await chromium.launch();
-  const ctx = { dry, t0: 0, timings: [] };
+  const ctx = { dry, t0: 0, timings: [], pageUrl: `${server.url}/index.html` };
   try {
     const context = await browser.newContext({
       viewport: VIEWPORT, colorScheme: 'dark', deviceScaleFactor: 1,

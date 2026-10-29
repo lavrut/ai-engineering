@@ -6,7 +6,7 @@ import { BEATS, PHONE, TEST_COUNT_NOTE, VIEWPORT } from '../scripts/demo/beats.m
 import { formatTime, timingsToCues, toSrt } from '../scripts/demo/srt.mjs';
 import { CAPTION_CSS } from '../scripts/demo/caption.mjs';
 
-const KINDS = new Set(['goto', 'scrollTo', 'click', 'clickUntilDisabled', 'select', 'wait', 'resize', 'caption']);
+const KINDS = new Set(['goto', 'scrollTo', 'click', 'clickUntilDisabled', 'select', 'wait', 'resize', 'caption', 'phoneFrame']);
 const STEPPING = /\.mc-btn-primary|Next/;
 type Action = Record<string, any> & { kind: string };
 const actionsOf = (b: { actions: unknown[] }) => b.actions as Action[];
@@ -37,15 +37,22 @@ describe('the beats', () => {
     }
   });
 
-  it('closes with a figure note and restores the viewport after the phone beat', () => {
+  it('closes with a figure note and shows the phone beat in a phone-sized frame', () => {
     expect(TEST_COUNT_NOTE).toContain('2026-10-29');
     expect(VIEWPORT).toEqual({ width: 1920, height: 1080 });
     expect(PHONE.width).toBeLessThan(VIEWPORT.width);
     const phone = BEATS.find((b) => b.id === 'phone')!;
-    const resizes = actionsOf(phone).filter((a) => a.kind === 'resize');
-    expect(resizes.length).toBe(2);
-    expect(resizes[0]).toMatchObject(PHONE);
-    expect(resizes[1]).toMatchObject(VIEWPORT);
+    const frames = actionsOf(phone).filter((a) => a.kind === 'phoneFrame');
+    expect(frames.length).toBe(1);
+    expect(frames[0]).toMatchObject(PHONE);
+    expect(frames[0].ms).toBeGreaterThanOrEqual(5000);
+    expect(actionsOf(phone).some((a) => a.kind === 'resize')).toBe(false);
+  });
+
+  it('counts the tracks the way the home page does', () => {
+    for (const c of BEATS.flatMap((b) => b.captions)) expect(c, c).not.toMatch(/Nine tracks/);
+    expect(BEATS[0].captions[1]).toMatch(/^Eight tracks/);
+    expect(BEATS[BEATS.length - 1].captions[0]).toMatch(/^Eight tracks/);
   });
 });
 
@@ -84,6 +91,30 @@ describe('the recorder', () => {
     };
     const beat = { id: 'bogus', captions: ['x'], actions: [{ kind: 'scrollTo', selector: '#nothing-here', ms: 10 }] };
     await expect(runBeat(page as any, beat as any, { dry: true, t0: Date.now(), timings: [] })).rejects.toThrow('beat bogus: missing #nothing-here');
+  });
+});
+
+describe('the encoder checks', () => {
+  it('picks one still time per beat, at the middle of the beat', async () => {
+    const { stillTimes } = await import('../scripts/demo/encode.mjs');
+    const timings = [
+      { beat: 'home', caption: 'a', start: 0, end: 4000 },
+      { beat: 'home', caption: 'b', start: 4000, end: 10000 },
+      { beat: 'anatomy', caption: 'c', start: 10000, end: 30000 },
+    ];
+    expect(stillTimes(timings)).toEqual([{ beat: 'home', seconds: 5 }, { beat: 'anatomy', seconds: 20 }]);
+  });
+
+  it('lists every violated bound of a probe, and none for a good one', async () => {
+    const { ffprobeOk } = await import('../scripts/demo/encode.mjs');
+    const good = { streams: [{ codec_name: 'h264', width: 1920, height: 1080, r_frame_rate: '30/1', pix_fmt: 'yuv420p' }], format: { duration: '150.2', size: '52000000' } };
+    expect(ffprobeOk(good)).toEqual([]);
+    const bad = { streams: [{ codec_name: 'vp9', width: 1280, height: 720, r_frame_rate: '25/1', pix_fmt: 'yuv444p' }], format: { duration: '99.0', size: '250000000' } };
+    expect(ffprobeOk(bad)).toEqual([
+      'codec vp9 (want h264)', 'size 1280x720 (want 1920x1080)', 'frame rate 25/1 (want 30/1)',
+      'pixel format yuv444p (want yuv420p)', 'duration 99.0 s (want 140-170)', 'file 250000000 bytes (want under 200 MB)',
+    ]);
+    expect(ffprobeOk({ streams: [], format: {} })).toEqual(['no video stream']);
   });
 });
 
