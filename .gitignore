@@ -36,3 +36,4 @@ agents/data/traces/*/proxy.log
 infra/data/traces/*.jsonl
 infra/data/cache.json
 infra/data/ledger.jsonl
+infra/data/derived/run/

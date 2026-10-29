@@ -1,0 +1,203 @@
+{
+ "about": {
+  "pick": "cached: the capstone run's first cache hit in file order; retried: the flaky injector request; refused: the first 402 of the demo run (the patterns set replayed alone with budgets.patterns.limit_usd 0.01)",
+  "volatile": "id, ts and ms (the gateway's own clock) change every run; --check ignores them",
+  "bodies": "a trace carries no request or response body; any string is capped at 200 characters"
+ },
+ "traces": [
+  {
+   "label": "cached",
+   "run": "capstone",
+   "trace": {
+    "id": "c71fb88eae961c1a",
+    "parent_id": null,
+    "ts": 1793255489.5789802,
+    "team": "desk",
+    "tag": "t001",
+    "model": "claude-haiku-5-5",
+    "path": "/v1/messages",
+    "status": 200,
+    "decisions": [
+     {
+      "stage": "tag",
+      "verdict": "desk",
+      "detail": "team from x-team; tag t001 from x-request-tag",
+      "tag": "t001"
+     },
+     {
+      "stage": "budget",
+      "verdict": "allow",
+      "detail": "$0.054740 spent + $0.002112 worst case within $1.00",
+      "team": "desk",
+      "worst_usd": 0.0021119,
+      "spent_usd": 0.05473990000000001,
+      "limit_usd": 1.0
+     },
+     {
+      "stage": "cache",
+      "verdict": "hit",
+      "detail": "stored 333s ago",
+      "key": "81910d4aa216170d008f7947837e9724760e8f1e9bec3669cf99bf1bfaba337c"
+     },
+     {
+      "stage": "ledger",
+      "verdict": "booked",
+      "detail": "$0.000000 to team desk",
+      "cost_usd": 0.0
+     },
+     {
+      "stage": "trace",
+      "verdict": "written",
+      "detail": "capstone.jsonl"
+     }
+    ],
+    "ms": 0.1,
+    "usage": {
+     "input_tokens": 1394,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "output_tokens": 139
+    },
+    "cost_usd": 0.0,
+    "cached": true,
+    "attempts": [],
+    "outcome": "cached"
+   }
+  },
+  {
+   "label": "retried",
+   "run": "flaky",
+   "trace": {
+    "id": "305f6b4161f7a214",
+    "parent_id": null,
+    "ts": 1793255491.457781,
+    "team": "desk",
+    "tag": "t008",
+    "model": "claude-haiku-5-5",
+    "path": "/v1/messages",
+    "status": 200,
+    "decisions": [
+     {
+      "stage": "tag",
+      "verdict": "desk",
+      "detail": "team from x-team; tag t008 from x-request-tag",
+      "tag": "t008"
+     },
+     {
+      "stage": "budget",
+      "verdict": "allow",
+      "detail": "$0.000000 spent + $0.000034 worst case within $1.00",
+      "team": "desk",
+      "worst_usd": 3.45e-05,
+      "spent_usd": 0.0,
+      "limit_usd": 1.0
+     },
+     {
+      "stage": "cache",
+      "verdict": "miss",
+      "detail": "not stored",
+      "key": "c31a3680bbc5c5fbc6346b9459ff1df38d1561201ae14f789afc607604df6988"
+     },
+     {
+      "stage": "route",
+      "verdict": "route",
+      "detail": "claude-haiku-5-5 -> claude-haiku-5-5",
+      "to": "claude-haiku-5-5",
+      "fallback": []
+     },
+     {
+      "stage": "limit",
+      "verdict": "allow",
+      "detail": "within 60 rpm and 200000 tpm",
+      "wait_ms": 0
+     },
+     {
+      "stage": "retry",
+      "verdict": "retried",
+      "detail": "claude-haiku-5-5 answered 200 on try 3",
+      "to": "claude-haiku-5-5",
+      "attempts": 3
+     },
+     {
+      "stage": "ledger",
+      "verdict": "booked",
+      "detail": "$0.000003 to team desk",
+      "cost_usd": 3.5e-06
+     },
+     {
+      "stage": "trace",
+      "verdict": "written",
+      "detail": "injector-flaky.jsonl"
+     }
+    ],
+    "ms": 4.8,
+    "usage": {
+     "input_tokens": 10,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "output_tokens": 5
+    },
+    "cost_usd": 3.5e-06,
+    "cached": false,
+    "attempts": [
+     {
+      "model": "claude-haiku-5-5",
+      "status": 429,
+      "error": null,
+      "backoff_ms": 1
+     },
+     {
+      "model": "claude-haiku-5-5",
+      "status": 500,
+      "error": null,
+      "backoff_ms": 2
+     },
+     {
+      "model": "claude-haiku-5-5",
+      "status": 200,
+      "error": null,
+      "backoff_ms": 0
+     }
+    ],
+    "outcome": "ok"
+   }
+  },
+  {
+   "label": "refused",
+   "run": "demo",
+   "trace": {
+    "id": "ec244f24889c3b6c",
+    "parent_id": null,
+    "ts": 1793255491.868917,
+    "team": "patterns",
+    "tag": "t007",
+    "model": "claude-haiku-5-5",
+    "path": "/v1/messages",
+    "status": 402,
+    "decisions": [
+     {
+      "stage": "tag",
+      "verdict": "patterns",
+      "detail": "team from x-team; tag t007 from x-request-tag",
+      "tag": "t007"
+     },
+     {
+      "stage": "budget",
+      "verdict": "refuse",
+      "detail": "$0.008291 spent + $0.002143 worst case > $0.01 limit",
+      "team": "patterns",
+      "worst_usd": 0.0021434,
+      "spent_usd": 0.0082909,
+      "limit_usd": 0.01
+     }
+    ],
+    "ms": 0.0,
+    "usage": null,
+    "cost_usd": null,
+    "cached": false,
+    "attempts": [],
+    "outcome": "refused"
+   }
+  }
+ ]
+}

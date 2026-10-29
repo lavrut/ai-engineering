@@ -1,0 +1,746 @@
+{
+ "about": {
+  "traffic": "each agents trace's proxy_calls in order (desk-hand, desk-hand-go, desk-langgraph, desk-sdk, patterns, patterns-go; repeats kept), then the judge set's recordings in file order: 957 calls, one at a time, with x-team (desk, patterns, judge) and x-request-tag (the ticket id in the messages, or none)",
+  "latency": "P6: p50_ms and p95_ms are nearest-rank percentiles over each call's recorded wall clock (upstream.ms in agents/data/recordings), joined by the driver; a trace's ms is the gateway's own clock (about a millisecond in replay) and is not used for them",
+  "time": "replay time: the gateway's clock starts at 0 and moves by each call's recorded ms and any limiter wait, so the limiter and the cache ttl see the recorded pace; nothing sleeps",
+  "cost": "cost_usd is the gateway's ledger: the recorded usage priced with the LLMs lab's table; a cache hit books $0; prompt_cache_* are the recorded prompt-cache tokens of the calls that reached the upstream",
+  "counts": "retries: traces with more than one upstream attempt; refusals: status 400, 402, 404 or 429",
+  "all": "the figures over every call; sets and teams split them",
+  "cases": "infra/data/fixtures/cases.json through stages.run_cases: each case's decisions and status",
+  "injector": "one request through the gateway against injector.make_server on each script in infra/data/fixtures/injector, retry.base_ms 1, rng Random(0): its status, outcome, decisions and attempts (model, status, backoff_ms)",
+  "gate": "replay.py --gate: ledger (per desk set, the gateway's ledger plus what its cache hits were recorded at equals the agents traces' cost within 1e-9), budgets, stages, figures"
+ },
+ "config": {
+  "upstream": "http://127.0.0.1:8791",
+  "models": {
+   "claude-haiku-5-5": {
+    "rpm": 60,
+    "tpm": 200000,
+    "price": "lab"
+   }
+  },
+  "routes": {
+   "claude-haiku-5-5": {
+    "to": "claude-haiku-5-5",
+    "fallback": []
+   }
+  },
+  "deny_unknown": true,
+  "cache": {
+   "ttl_s": 3600,
+   "skip_tools": true
+  },
+  "retry": {
+   "attempts": 3,
+   "base_ms": 200,
+   "max_ms": 2000
+  },
+  "limit": {
+   "max_wait_ms": 1000
+  },
+  "budgets": {
+   "desk": {
+    "limit_usd": 1.0,
+    "warn_usd": 0.8
+   },
+   "lab": {
+    "limit_usd": 0.5,
+    "warn_usd": null
+   },
+   "patterns": {
+    "limit_usd": 0.5,
+    "warn_usd": null
+   },
+   "judge": {
+    "limit_usd": 0.5,
+    "warn_usd": null
+   }
+  },
+  "untagged": "refuse",
+  "traces_dir": "infra/data/traces"
+ },
+ "calls": 957,
+ "all": {
+  "calls": 957,
+  "cache_hits": 20,
+  "hit_rate": 0.0209,
+  "retries": 0,
+  "refusals": 0,
+  "cost_usd": 0.2344254,
+  "p50_ms": 1730,
+  "p95_ms": 3471,
+  "prompt_cache_read_tokens": 502680,
+  "prompt_cache_write_tokens": 149144
+ },
+ "sets": {
+  "desk-hand": {
+   "calls": 183,
+   "cache_hits": 0,
+   "hit_rate": 0.0,
+   "retries": 0,
+   "refusals": 0,
+   "cost_usd": 0.0457416,
+   "p50_ms": 1576,
+   "p95_ms": 3188,
+   "prompt_cache_read_tokens": 0,
+   "prompt_cache_write_tokens": 0
+  },
+  "desk-hand-go": {
+   "calls": 188,
+   "cache_hits": 1,
+   "hit_rate": 0.0053,
+   "retries": 0,
+   "refusals": 0,
+   "cost_usd": 0.0458874,
+   "p50_ms": 1669,
+   "p95_ms": 3301,
+   "prompt_cache_read_tokens": 0,
+   "prompt_cache_write_tokens": 0
+  },
+  "desk-langgraph": {
+   "calls": 179,
+   "cache_hits": 0,
+   "hit_rate": 0.0,
+   "retries": 0,
+   "refusals": 0,
+   "cost_usd": 0.0442495,
+   "p50_ms": 1610,
+   "p95_ms": 3281,
+   "prompt_cache_read_tokens": 0,
+   "prompt_cache_write_tokens": 0
+  },
+  "desk-sdk": {
+   "calls": 190,
+   "cache_hits": 0,
+   "hit_rate": 0.0,
+   "retries": 0,
+   "refusals": 0,
+   "cost_usd": 0.0497478,
+   "p50_ms": 1699,
+   "p95_ms": 3296,
+   "prompt_cache_read_tokens": 502680,
+   "prompt_cache_write_tokens": 149144
+  },
+  "patterns": {
+   "calls": 60,
+   "cache_hits": 0,
+   "hit_rate": 0.0,
+   "retries": 0,
+   "refusals": 0,
+   "cost_usd": 0.0134697,
+   "p50_ms": 1878,
+   "p95_ms": 3760,
+   "prompt_cache_read_tokens": 0,
+   "prompt_cache_write_tokens": 0
+  },
+  "patterns-go": {
+   "calls": 56,
+   "cache_hits": 19,
+   "hit_rate": 0.3393,
+   "retries": 0,
+   "refusals": 0,
+   "cost_usd": 0.0097847,
+   "p50_ms": 1785,
+   "p95_ms": 4079,
+   "prompt_cache_read_tokens": 0,
+   "prompt_cache_write_tokens": 0
+  },
+  "judge": {
+   "calls": 101,
+   "cache_hits": 0,
+   "hit_rate": 0.0,
+   "retries": 0,
+   "refusals": 0,
+   "cost_usd": 0.0255447,
+   "p50_ms": 2167,
+   "p95_ms": 3940,
+   "prompt_cache_read_tokens": 0,
+   "prompt_cache_write_tokens": 0
+  }
+ },
+ "teams": {
+  "desk": {
+   "calls": 740,
+   "cache_hits": 1,
+   "hit_rate": 0.0014,
+   "retries": 0,
+   "refusals": 0,
+   "cost_usd": 0.1856263,
+   "p50_ms": 1655,
+   "p95_ms": 3271,
+   "prompt_cache_read_tokens": 502680,
+   "prompt_cache_write_tokens": 149144
+  },
+  "patterns": {
+   "calls": 116,
+   "cache_hits": 19,
+   "hit_rate": 0.1638,
+   "retries": 0,
+   "refusals": 0,
+   "cost_usd": 0.0232544,
+   "p50_ms": 1878,
+   "p95_ms": 3901,
+   "prompt_cache_read_tokens": 0,
+   "prompt_cache_write_tokens": 0
+  },
+  "judge": {
+   "calls": 101,
+   "cache_hits": 0,
+   "hit_rate": 0.0,
+   "retries": 0,
+   "refusals": 0,
+   "cost_usd": 0.0255447,
+   "p50_ms": 2167,
+   "p95_ms": 3940,
+   "prompt_cache_read_tokens": 0,
+   "prompt_cache_write_tokens": 0
+  }
+ },
+ "cases": [
+  {
+   "id": "cacheable_miss",
+   "decisions": [
+    {
+     "stage": "tag",
+     "verdict": "desk"
+    },
+    {
+     "stage": "budget",
+     "verdict": "allow"
+    },
+    {
+     "stage": "cache",
+     "verdict": "miss"
+    },
+    {
+     "stage": "route",
+     "verdict": "route"
+    },
+    {
+     "stage": "limit",
+     "verdict": "allow"
+    },
+    {
+     "stage": "retry",
+     "verdict": "ok"
+    }
+   ],
+   "status": 200
+  },
+  {
+   "id": "cacheable_hit",
+   "decisions": [
+    {
+     "stage": "tag",
+     "verdict": "desk"
+    },
+    {
+     "stage": "budget",
+     "verdict": "allow"
+    },
+    {
+     "stage": "cache",
+     "verdict": "hit"
+    }
+   ],
+   "status": 200
+  },
+  {
+   "id": "tool_call_skip",
+   "decisions": [
+    {
+     "stage": "tag",
+     "verdict": "desk"
+    },
+    {
+     "stage": "budget",
+     "verdict": "allow"
+    },
+    {
+     "stage": "cache",
+     "verdict": "skip"
+    },
+    {
+     "stage": "route",
+     "verdict": "route"
+    },
+    {
+     "stage": "limit",
+     "verdict": "allow"
+    },
+    {
+     "stage": "retry",
+     "verdict": "ok"
+    }
+   ],
+   "status": 200
+  },
+  {
+   "id": "unknown_model_deny",
+   "decisions": [
+    {
+     "stage": "tag",
+     "verdict": "desk"
+    },
+    {
+     "stage": "budget",
+     "verdict": "allow"
+    },
+    {
+     "stage": "cache",
+     "verdict": "miss"
+    },
+    {
+     "stage": "route",
+     "verdict": "deny"
+    }
+   ],
+   "status": 404
+  },
+  {
+   "id": "team_over_budget",
+   "decisions": [
+    {
+     "stage": "tag",
+     "verdict": "desk"
+    },
+    {
+     "stage": "budget",
+     "verdict": "refuse"
+    }
+   ],
+   "status": 402
+  },
+  {
+   "id": "team_warn",
+   "decisions": [
+    {
+     "stage": "tag",
+     "verdict": "desk"
+    },
+    {
+     "stage": "budget",
+     "verdict": "warn"
+    },
+    {
+     "stage": "cache",
+     "verdict": "miss"
+    },
+    {
+     "stage": "route",
+     "verdict": "route"
+    },
+    {
+     "stage": "limit",
+     "verdict": "allow"
+    },
+    {
+     "stage": "retry",
+     "verdict": "ok"
+    }
+   ],
+   "status": 200
+  },
+  {
+   "id": "no_team_refused",
+   "decisions": [
+    {
+     "stage": "tag",
+     "verdict": "untagged"
+    },
+    {
+     "stage": "budget",
+     "verdict": "refuse"
+    }
+   ],
+   "status": 402
+  },
+  {
+   "id": "limit_wait",
+   "decisions": [
+    {
+     "stage": "tag",
+     "verdict": "desk"
+    },
+    {
+     "stage": "budget",
+     "verdict": "allow"
+    },
+    {
+     "stage": "cache",
+     "verdict": "miss"
+    },
+    {
+     "stage": "route",
+     "verdict": "route"
+    },
+    {
+     "stage": "limit",
+     "verdict": "wait"
+    },
+    {
+     "stage": "retry",
+     "verdict": "ok"
+    }
+   ],
+   "status": 200
+  },
+  {
+   "id": "limit_refuse",
+   "decisions": [
+    {
+     "stage": "tag",
+     "verdict": "desk"
+    },
+    {
+     "stage": "budget",
+     "verdict": "allow"
+    },
+    {
+     "stage": "cache",
+     "verdict": "miss"
+    },
+    {
+     "stage": "route",
+     "verdict": "route"
+    },
+    {
+     "stage": "limit",
+     "verdict": "refuse"
+    }
+   ],
+   "status": 429
+  },
+  {
+   "id": "retry_then_ok",
+   "decisions": [
+    {
+     "stage": "tag",
+     "verdict": "desk"
+    },
+    {
+     "stage": "budget",
+     "verdict": "allow"
+    },
+    {
+     "stage": "cache",
+     "verdict": "miss"
+    },
+    {
+     "stage": "route",
+     "verdict": "route"
+    },
+    {
+     "stage": "limit",
+     "verdict": "allow"
+    },
+    {
+     "stage": "retry",
+     "verdict": "retried"
+    }
+   ],
+   "status": 200
+  },
+  {
+   "id": "fallback_after_attempts",
+   "decisions": [
+    {
+     "stage": "tag",
+     "verdict": "desk"
+    },
+    {
+     "stage": "budget",
+     "verdict": "allow"
+    },
+    {
+     "stage": "cache",
+     "verdict": "miss"
+    },
+    {
+     "stage": "route",
+     "verdict": "route"
+    },
+    {
+     "stage": "limit",
+     "verdict": "allow"
+    },
+    {
+     "stage": "retry",
+     "verdict": "fallback"
+    }
+   ],
+   "status": 200
+  },
+  {
+   "id": "all_fail_502",
+   "decisions": [
+    {
+     "stage": "tag",
+     "verdict": "desk"
+    },
+    {
+     "stage": "budget",
+     "verdict": "allow"
+    },
+    {
+     "stage": "cache",
+     "verdict": "miss"
+    },
+    {
+     "stage": "route",
+     "verdict": "route"
+    },
+    {
+     "stage": "limit",
+     "verdict": "allow"
+    },
+    {
+     "stage": "retry",
+     "verdict": "fail"
+    }
+   ],
+   "status": 502
+  },
+  {
+   "id": "dropped_connection_retry",
+   "decisions": [
+    {
+     "stage": "tag",
+     "verdict": "desk"
+    },
+    {
+     "stage": "budget",
+     "verdict": "allow"
+    },
+    {
+     "stage": "cache",
+     "verdict": "miss"
+    },
+    {
+     "stage": "route",
+     "verdict": "route"
+    },
+    {
+     "stage": "limit",
+     "verdict": "allow"
+    },
+    {
+     "stage": "retry",
+     "verdict": "retried"
+    }
+   ],
+   "status": 200
+  },
+  {
+   "id": "budget_refusal_beats_cache_hit",
+   "decisions": [
+    {
+     "stage": "tag",
+     "verdict": "desk"
+    },
+    {
+     "stage": "budget",
+     "verdict": "refuse"
+    }
+   ],
+   "status": 402
+  }
+ ],
+ "injector": {
+  "flaky": {
+   "script": [
+    429,
+    500,
+    200
+   ],
+   "status": 200,
+   "outcome": "ok",
+   "decisions": [
+    [
+     "tag",
+     "desk"
+    ],
+    [
+     "budget",
+     "allow"
+    ],
+    [
+     "cache",
+     "miss"
+    ],
+    [
+     "route",
+     "route"
+    ],
+    [
+     "limit",
+     "allow"
+    ],
+    [
+     "retry",
+     "retried"
+    ],
+    [
+     "ledger",
+     "booked"
+    ],
+    [
+     "trace",
+     "written"
+    ]
+   ],
+   "attempts": [
+    {
+     "model": "claude-haiku-5-5",
+     "status": 429,
+     "backoff_ms": 1
+    },
+    {
+     "model": "claude-haiku-5-5",
+     "status": 500,
+     "backoff_ms": 2
+    },
+    {
+     "model": "claude-haiku-5-5",
+     "status": 200,
+     "backoff_ms": 0
+    }
+   ]
+  },
+  "dead": {
+   "script": [
+    500
+   ],
+   "status": 502,
+   "outcome": "failed",
+   "decisions": [
+    [
+     "tag",
+     "desk"
+    ],
+    [
+     "budget",
+     "allow"
+    ],
+    [
+     "cache",
+     "miss"
+    ],
+    [
+     "route",
+     "route"
+    ],
+    [
+     "limit",
+     "allow"
+    ],
+    [
+     "retry",
+     "fail"
+    ]
+   ],
+   "attempts": [
+    {
+     "model": "claude-haiku-5-5",
+     "status": 500,
+     "backoff_ms": 1
+    },
+    {
+     "model": "claude-haiku-5-5",
+     "status": 500,
+     "backoff_ms": 2
+    },
+    {
+     "model": "claude-haiku-5-5",
+     "status": 500,
+     "backoff_ms": 0
+    }
+   ]
+  },
+  "ratelimited": {
+   "script": [
+    429,
+    429,
+    200
+   ],
+   "status": 200,
+   "outcome": "ok",
+   "decisions": [
+    [
+     "tag",
+     "desk"
+    ],
+    [
+     "budget",
+     "allow"
+    ],
+    [
+     "cache",
+     "miss"
+    ],
+    [
+     "route",
+     "route"
+    ],
+    [
+     "limit",
+     "allow"
+    ],
+    [
+     "retry",
+     "retried"
+    ],
+    [
+     "ledger",
+     "booked"
+    ],
+    [
+     "trace",
+     "written"
+    ]
+   ],
+   "attempts": [
+    {
+     "model": "claude-haiku-5-5",
+     "status": 429,
+     "backoff_ms": 1
+    },
+    {
+     "model": "claude-haiku-5-5",
+     "status": 429,
+     "backoff_ms": 2
+    },
+    {
+     "model": "claude-haiku-5-5",
+     "status": 200,
+     "backoff_ms": 0
+    }
+   ]
+  }
+ },
+ "gate": {
+  "ok": true,
+  "lines": [
+   [
+    "ledger",
+    true,
+    "desk-hand $0.0457416 = agents $0.0457416; desk-hand-go $0.0458874 + $0.0001919 for 1 cache hit = agents $0.0460793; desk-langgraph $0.0442495 = agents $0.0442495; desk-sdk $0.0497478 = agents $0.0497478"
+   ],
+   [
+    "budgets",
+    true,
+    "desk $0.1856 of $1.00, judge $0.0255 of $0.50, patterns $0.0233 of $0.50; 0 refusals, 0 traced"
+   ],
+   [
+    "stages",
+    true,
+    "957 traces: 937 answered with all eight stages, 20 cache hits stop after cache, 0 refusals stop at the refusing stage, 0 out of order; 0 parent ids named, 0 missing"
+   ],
+   [
+    "figures",
+    true,
+    "hit rate 0.0209 (20 of 957) and p95 3471 ms; from the traces and the recordings: 0.0209 and 3471 ms"
+   ]
+  ]
+ }
+}
