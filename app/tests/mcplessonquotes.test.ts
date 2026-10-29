@@ -7,7 +7,7 @@ import { parseCodeTabsTag, type CodeSourceId } from '../src/lib/codeSources';
 
 // A lesson's walkthrough bullets quote code. The quotes drifted from the source once
 // (`app = build_http_app()` after the code became `build_http_app(port=args.port)`), so this
-// checks them: in the MCP and AI Agents lessons, every backticked span in a bullet that follows a <CodeTabs>
+// checks them: in the MCP, AI Agents and Data Fabric lessons, every backticked span in a bullet that follows a <CodeTabs>
 // block and looks like code (contains "(" or "=") must appear in the source file that block quotes
 // (the whole file, since bullets often point just outside the shown section), in the Python or the Go text.
 //
@@ -82,6 +82,7 @@ describe('walkthrough quote helpers', () => {
 describe.each([
   { track: 'mcp', title: 'MCP', minFiles: 11, minSpans: 40 },
   { track: 'agents', title: 'AI Agents', minFiles: 6, minSpans: 30 },
+  { track: 'data', title: 'Data Fabric & Data Contracts', minFiles: 6, minSpans: 15 },
 ])('$title lesson walkthrough quotes', ({ track, minFiles, minSpans }) => {
   const dir = join(lessonsDir, track);
   const files = readdirSync(dir).filter((f) => f.endsWith('.mdx')).sort();

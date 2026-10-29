@@ -230,6 +230,42 @@ export const glossary = {
     'Your code that a framework calls at a fixed point in a run, such as just before a tool runs. It can let the call through, change it or refuse it.',
   trajectory:
     'The path an agent took in one run: which tools and agents it called, in what order, and with which arguments.',
+  'data warehouse':
+    'One central store that data from many sources is copied into, in one agreed schema, usually run by one team. Readers query the copy.',
+  'data mesh':
+    'A way to organise data ownership: each domain team owns its datasets as products and answers for them to the teams that read them. There is no central copy.',
+  'data fabric':
+    'A layer of metadata over data that stays where its owners keep it: a catalogue of what exists, lineage of who reads what, and checks that run in place.',
+  lineage:
+    'The record of which producer writes each dataset, which consumer reads it, and which dataset is derived from which, kept as a graph.',
+  'data contract':
+    'A file in which the producer of a dataset states what it promises its consumers: the shape and meaning of each field, quality, freshness, the owner and the readers.',
+  producer:
+    'The team or track that writes a dataset and answers for it. In this course, the owner named in a contract.',
+  consumer:
+    'A program or team that reads a dataset. A contract names each consumer and the version it declares.',
+  'Open Data Contract Standard':
+    'An open YAML format for data contracts (ODCS), maintained by the Bitol project under the Linux Foundation. The contracts in this course borrow its shape.',
+  sunset:
+    'The date by which readers of a deprecated contract version must have moved to the new one. Until then the old version stays valid.',
+  'data catalogue':
+    'A list of datasets with what a reader needs before opening one: where it lives, its size, its fields, who writes it, who reads it and when it last changed.',
+  'schema sketch':
+    'The field names and JSON types read from a sample of a dataset’s rows. It describes the data as it is; a contract promises what it will be.',
+  verdict:
+    'One rule’s result for one field or for the whole dataset: the rule, the field, ok or not, and a detail. Both validators print one line per verdict.',
+  'composite key':
+    'A key made of several fields together. With the key desk and ticket, two rows repeat only when both fields match.',
+  freshness:
+    'How old a dataset is, measured from when it was last written. A contract promises a maximum age.',
+  'breaking change':
+    'A change that makes an existing reader fail, such as renaming, removing or retyping a field. It needs a new major version.',
+  'twin validator':
+    'A second implementation of the same validator in another language, held to print identical verdicts by shared fixtures and a byte-for-byte test.',
+  shim:
+    'A thin piece of code at the edge that translates data from a new shape to the shape an unchanged reader expects.',
+  'consumer gate':
+    'A check that passes only when every consumer is green on the contract version it declares. In this course, gate.py.',
 } as const satisfies Record<string, string>;
 
 export type GlossaryKey = keyof typeof glossary;

@@ -14,7 +14,10 @@ const NOT_YET_REBALANCED = new Set<string>([]);
 const tracks = readdirSync(lessons, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
 
 describe('quiz answers are spread over the option positions', () => {
-  it('finds the tracks', () => expect(tracks.length).toBeGreaterThan(0));
+  it('finds the tracks, the data track among them', () => {
+    expect(tracks.length).toBeGreaterThan(0);
+    expect(tracks).toContain('data');
+  });
   it('leaves no track waiting to be rebalanced (P13: NOT_YET_REBALANCED stays empty)', () => {
     expect([...NOT_YET_REBALANCED]).toEqual([]);
   });

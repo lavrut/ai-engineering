@@ -1,0 +1,167 @@
+---
+track: data
+order: 4
+slug: contract
+title: Writing a data contract
+goal: Write a data contract in five sections, give each field a type, a rule and a meaning, and decide whether a change needs a new major version.
+minutes: 20
+quiz:
+  - question: The LLMs track wants to add a `language` field to every ticket. Under the versioning rule, what happens to tickets.v1?
+    options:
+      - It stays on the same major. An added field breaks no reader, and the validator reports an unknown field as extra_field without failing
+      - It needs tickets.v2, because the schema changed
+      - Every consumer must be updated first
+      - The field cannot be added while v1 has consumers
+    answer: 0
+    explanation: Additive changes keep the major. A reader that never asked for `language` keeps working. Renames, removals and type changes are different. A reader that looks up the old name or type breaks, so those get a new major.
+  - question: Why does every field in the contract carry a `meaning` line, when the validator never reads it?
+    options:
+      - The YAML parser requires it
+      - The Go twin uses it to name its variables
+      - A type says what a value looks like, not what it is for. The meaning is what a new reader needs, for instance that `split` keeps dev and test tickets apart and they must never mix
+      - It is optional and could be left out
+    answer: 2
+    explanation: The contract is documentation that is checked. The checkable parts (type, enum, pattern) keep the data honest. The meaning keeps readers from misusing honest data, and the loader still refuses a field without one.
+  - question: tickets.v1 is `deprecated`. A contract author deletes its `sunset` line. What does the validator do?
+    options:
+      - Nothing; sunset is optional
+      - It refuses the contract itself (info.sunset is required when info.status is deprecated), so no dataset is checked against it
+      - It sets the sunset to a year from today
+      - It marks every verdict failed
+    answer: 1
+    explanation: A deprecated version without a date is a promise with no deadline. Its readers cannot plan a move. The loader checks the contract before it checks any data, and a malformed contract is one failed `contract` verdict.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import ContractViewer from '../../../components/data/ContractViewer.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+A data contract is a file a producer writes for its consumers. It answers the questions a reader would otherwise ask in a chat thread, or learn from an outage: what is in each field, which values are allowed, how many rows to expect, how fresh the data is, who owns it and who else depends on it.
+
+### Five sections
+
+Every contract in `data/contracts/` has exactly five sections, in the shape of the Open Data Contract Standard.
+
+1. `info`: id, version, status (`active` or `deprecated`), owner (a track), description, the dataset's path, and a `sunset` date when the version is deprecated.
+2. `schema`: one entry per field, with a name, a type, whether it is required, an `enum` or a `pattern` where one applies, and a one-line meaning.
+3. `quality`: the dataset-level rules: `row_count`, `unique` and `enum_coverage`.
+4. `servicing`: the freshness promise, `max_age_days`.
+5. `consumers`: who reads the dataset, the version each one declares, and how it reads it.
+
+The types are the six JSON types: `string`, `integer`, `number`, `boolean`, `object` and `array`. They are the same in both validators, so nothing depends on how one language names its types.
+
+### The contract is checked too
+
+Before any row is read, the loader checks the contract itself. A misspelled type, a seventh section, an `enum_coverage` on a field with no enum, a deprecated version with no sunset: each one is refused. The result is a single failed verdict, `contract`, naming the section and the field. A contract that does not parse cannot promise anything.
+
+### Versions
+
+The version is a promise about change. The rule is short:
+
+- **Same major for additive changes.** A new field keeps the major. Readers that never asked for it keep working, and the validator reports it as `extra_field` until the contract lists it.
+- **A new major for <Term t="breaking change" />s.** Renaming a field, removing one or changing its type breaks every reader that looks it up. So the change ships as a new file, `tickets.v2.yaml`, beside the old one.
+- **A deprecated version keeps a sunset date.** The old version stays valid, and its readers stay green, until the date. Then they must have moved.
+
+Lesson 6 runs that rule end to end.
+
+## See it
+
+Step through `tickets.v1` one section at a time. In **schema**, look at the Rule column: which fields have an enum, and which a pattern. In **consumers**, look at who would notice a change.
+
+<ContractViewer contract="tickets.v1" />
+
+The schema has 6 fields, all required. Three have an enum: 6 categories, 4 priorities and 2 splits. One, `id`, has a pattern. `tags` is an array whose items the contract does not check. The quality section asks for exactly 60 rows, a unique `id`, and every category and priority to appear at least once. There is one consumer, the MCP read server, on version 1.
+
+## The code
+
+The schema section, field by field.
+
+<CodeTabs source="data-contract-tickets" section={2} />
+
+- `pattern: '^t\d{3}$'` says an id is `t` and three digits. The match is always on the whole value, and lesson 5 explains the small pattern language both validators share.
+- `enum: [billing, bug, account, feature_request, how_to, outage]` lists the six categories. A seventh value is a breach, not a surprise for the classifier to meet in production.
+- `meaning: dev tickets tune prompts, test tickets score them; never mixed` is for people. The validator never reads it, but the loader refuses a field that has none.
+- `type: array` on `tags` checks that the value is a list. Its items are free-form, and the meaning says so.
+
+The quality and servicing sections are short.
+
+<CodeTabs source="data-contract-tickets" section={3} />
+
+- `row_count: {min: 60, max: 60}` pins the size. A file that grows or shrinks by one row fails, which is right for a fixed evaluation set and wrong for a log. Choose the bounds to match the data.
+- `unique: [id]` is the key. Lesson 3 showed what one duplicated row does to it.
+- `enum_coverage: [category, priority]` promises that every listed value is used. A promise of `urgent` tickets means some ticket is `urgent`.
+
+<CodeTabs source="data-contract-tickets" section={4} />
+
+- `max_age_days: 365` is the freshness promise lesson 3 checked.
+
+<Callout kind="go" title="Go reads the JSON export">
+  Go's standard library has no YAML parser, and the Go twin uses only the standard library. So `contract.py --export` writes each contract's machine form beside it, such as `tickets.v1.contract.json`, with sorted keys. The YAML stays the source. `contract.py --export --check` fails when an export is out of date, so the two cannot drift.
+</Callout>
+
+## Try it
+
+Validate the tickets against their contract:
+
+```bash
+.venv-data/bin/python data/python/contract.py data/contracts/tickets.v1.yaml llms/data/tickets.jsonl
+```
+
+You should see:
+
+```text
+OK  enum category: all values in enum
+OK  enum priority: all values in enum
+OK  enum split: all values in enum
+OK  enum_coverage category: all 6 values appear
+OK  enum_coverage priority: all 4 values appear
+OK  freshness -: unknown: no git date
+OK  pattern id: all values match
+OK  required category: present in 60 rows
+OK  required id: present in 60 rows
+OK  required priority: present in 60 rows
+OK  required split: present in 60 rows
+OK  required tags: present in 60 rows
+OK  required text: present in 60 rows
+OK  row_count -: 60 rows (min 60, max 60)
+OK  type category: all values are string
+OK  type id: all values are string
+OK  type priority: all values are string
+OK  type split: all values are string
+OK  type tags: all values are array
+OK  type text: all values are string
+OK  unique id: 60 rows, no duplicates
+verdicts: 21 ok, 0 failed
+```
+
+One line per rule and field, sorted by rule. Freshness reads "unknown" because the command line was not given an age; `quality.py` passes one from git.
+
+Now break the contract, not the data. Copy it with `array` misspelled as `list`, and validate the same file. The command exits with status 1:
+
+```bash
+sed 's/type: array/type: list/' data/contracts/tickets.v1.yaml > /tmp/tickets.bad.yaml && .venv-data/bin/python data/python/contract.py /tmp/tickets.bad.yaml llms/data/tickets.jsonl
+```
+
+You should see:
+
+```text
+FAIL contract -: schema.fields[4].type must be one of string, integer, number, boolean, object, array
+verdicts: 0 ok, 1 failed
+```
+
+Then delete the sunset from the deprecated version. This also exits with status 1:
+
+```bash
+sed '/^  sunset:/d' data/contracts/tickets.v1.yaml > /tmp/tickets.nosunset.yaml && .venv-data/bin/python data/python/contract.py /tmp/tickets.nosunset.yaml llms/data/tickets.jsonl
+```
+
+You should see:
+
+```text
+FAIL contract -: info.sunset is required when info.status is deprecated
+verdicts: 0 ok, 1 failed
+```
+
+Neither run read a single row. A contract is checked before it is trusted.

@@ -1,0 +1,140 @@
+---
+track: data
+order: 2
+slug: catalog
+title: Cataloguing and lineage
+goal: Build a catalogue of shared datasets from a fixed list, read its schema sketches, and use lineage to say which readers a change to one dataset would reach.
+minutes: 20
+quiz:
+  - question: catalog.py reads a fixed list of dataset paths instead of walking the repo for data files. What does that buy?
+    options:
+      - Speed; walking a repo is slow
+      - Nothing; a crawl finds the same datasets
+      - Every catalogued dataset is one somebody chose to share, and a listed dataset that disappears is recorded as missing instead of quietly dropping out
+      - It lets the catalogue skip git
+    answer: 2
+    explanation: A crawl catalogues whatever happens to be lying around, including scratch files, and cannot notice that something is gone. A fixed list is a statement of what is shared, so a missing file is news, flagged `missing` in the catalogue.
+  - question: The catalogue's schema sketch for tickets says `priority` is a string. The tickets contract also says `priority` is a string. How do the two differ?
+    options:
+      - They are the same thing written twice
+      - The sketch is read from the rows that exist today; the contract is the producer's promise about rows to come. When the two disagree, one of them needs a decision
+      - The sketch is more reliable because it reads real data
+      - The contract is generated from the sketch
+    answer: 1
+    explanation: A sketch only describes. It reads the first 50 rows and reports what it saw, so it cannot tell a rule from an accident. The contract is written by a person and promises the type, the allowed values and the meaning.
+  - question: Lineage shows an edge from tickets to tickets_v2 under tickets.v1. What question does that edge answer?
+    options:
+      - Which model wrote the tickets
+      - How large the v2 file is
+      - Who owns the v2 contract
+      - If the v1 tickets change, the migrated v2 file and everything that reads it are downstream of the change
+    answer: 3
+    explanation: Lineage is a graph of reads and writes. Following edges forward from a dataset lists everything a change could reach. The migration edge means the v2 file is derived from the v1 file, so the agents eval that reads v2 depends on v1 too.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import CatalogExplorer from '../../../components/data/CatalogExplorer.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+A fabric starts with knowing what exists. A <Term t="data catalogue" /> is a list of datasets with the facts a reader needs before opening one: where it lives, how big it is, what its rows look like, who writes it, who reads it, and when it last changed.
+
+### A fixed list, never a crawl
+
+`catalog.py` catalogues 12 datasets from a list written in the code. It never walks the repo looking for data files. Being in the list is a decision: this dataset is shared, and a reader may depend on it. Because the list is fixed, a dataset that goes missing is recorded as `missing`, not silently dropped.
+
+Each dataset is a path or a glob from the repo root. Some datasets are one file, such as the tickets. Others are many: the agents traces are 134 files, one recorded run per file.
+
+### What it records
+
+For each dataset the catalogue records:
+
+- the files, their total size, and the number of rows (a JSONL line, or a whole JSON file where one file is one record);
+- a <Term t="schema sketch" />: each field name and the JSON type its values have, read from the first 50 rows of the first file;
+- the producer track, and the consumer tracks;
+- the contract it is under, if any, and the short hash of the last commit that changed its files.
+
+A schema sketch is not a contract. The sketch describes the rows that exist today. A contract promises what rows will look like, and says what each field means. The sketch is how you find a dataset worth a contract; the contract is what a reader can rely on.
+
+### Lineage
+
+Lineage is the same facts drawn as a graph: tracks write datasets, and consumers read them. Each edge carries the contract it travels under and the version, when there is one. Follow the edges forward from a dataset and you have the list of everything a change to it could reach.
+
+Lineage also records derivation. The capstone writes `tickets_v2` from `tickets`, so lineage has an edge from one dataset to the other. A change to the v1 tickets reaches the agents eval through the v2 file, even though the eval never opens the v1 file.
+
+## See it
+
+Pick `tickets`, then `complaints`, then `agents_traces`. Watch three things: the size, who reads it, and the Contract line. Then pick `model_responses` and compare.
+
+<CatalogExplorer />
+
+The tickets are 60 rows in 16,705 bytes. The complaints are 3,600 rows in one file of 4,609,144 bytes. `agents_traces` is 134 files of one row each. Four datasets are under a contract: `tickets`, `tickets_v2`, `complaints` and `agents_traces`. The other 8, such as `model_responses` with its 743 rows in 14 files, are read across tracks with no written promise at all. That is normal for a young fabric: contracts go first where a break would hurt most.
+
+## The code
+
+Section 3 builds the catalogue.
+
+<CodeTabs source="data-catalog" section={3} />
+
+- `for row in rows[:SAMPLE_ROWS]:` reads at most `SAMPLE_ROWS = 50` rows for the sketch. It is a sketch, not a census.
+- `if set(kinds) == {"integer", "number"}:` reports a field holding both `1` and `1.5` as `number`, the contract type that accepts both.
+- `found = files(root, ds["path"])` expands the dataset's glob. `files` also drops anything git ignores, because a fresh clone would not have it.
+- `names = [c["name"] for c in C.load_contract(_contract_file(contracts, ds["contract"]))["consumers"]]` takes a contracted dataset's readers from its contract, so the contract is the one place they are written. A dataset without a contract takes the readers listed beside it in section 1.
+- `"missing": not found` is the flag for a listed dataset with no files.
+
+Section 4 turns the catalogue into lineage.
+
+<CodeTabs source="data-catalog" section={4} />
+
+- `edges.append({"from": producer, "to": ds_id, "contract": cid, ...})` is the write edge, from the track to its dataset.
+- `if ds_id in sources:` adds the derivation edge. For `tickets_v2` it runs from `tickets`, carrying `tickets.v1`, the contract the migration reads under.
+- `readers = [(c["name"], cid, c["version"]) for c in governing["consumers"]]` makes one read edge per consumer, carrying the version that consumer declares. During the capstone, two readers of the tickets sit on two versions, and lineage shows both.
+
+<Callout kind="note" title="One ticket is outside every contract">
+  The agents eval scores 13 tickets. Twelve come from the Lumen tickets, which `tickets.v2` governs. The thirteenth, `t061`, is a prompt-injection canary that the MCP track planted on purpose in `mcp/data/injection.jsonl`. That file is in no contract and not in the catalogue. The eval reads it as is, and the consumer tests leave it out of every contract check.
+</Callout>
+
+## Try it
+
+Rebuild the catalogue and lineage from the files. It writes the same two files that are committed:
+
+```bash
+.venv-data/bin/python data/python/catalog.py
+```
+
+You should see:
+
+```text
+tickets: 1 files, 60 rows, 16705 bytes (llms -> mcp)
+tickets_v2: 1 files, 60 rows, 16645 bytes (data -> agents)
+complaints: 1 files, 3600 rows, 4609144 bytes (ml -> mcp)
+category_map: 1 files, 1 rows, 3279 bytes (ml -> app, ml)
+reply_labels: 1 files, 30 rows, 8664 bytes (llms -> app, llms)
+model_responses: 14 files, 743 rows, 562737 bytes (llms -> app, llms)
+ml_reports: 6 files, 6 rows, 72281 bytes (ml -> app, mcp)
+ml_registry: 1 files, 1 rows, 2608 bytes (ml -> mcp, ml)
+mcp_recordings: 8 files, 16 rows, 22090 bytes (mcp -> agents, mcp)
+mcp_derived: 6 files, 6 rows, 35827 bytes (mcp -> app)
+agents_traces: 134 files, 134 rows, 1052892 bytes (agents -> agents)
+agents_derived: 5 files, 5 rows, 224155 bytes (agents -> app)
+wrote catalog.json (12 datasets), lineage.json (31 edges)
+```
+
+Now ask lineage the capstone's question: which edges touch the tickets?
+
+```bash
+.venv-data/bin/python -c 'import json; l = json.load(open("data/data/derived/lineage.json")); [print(e["from"], "->", e["to"], e["contract"], e["version"]) for e in l["edges"] if "tickets" in e["from"] + e["to"]]'
+```
+
+You should see:
+
+```text
+data -> tickets_v2 tickets.v2 2
+llms -> tickets tickets.v1 1
+tickets -> mcp-read-server tickets.v1 1
+tickets -> tickets_v2 tickets.v1 1
+tickets_v2 -> agents-eval tickets.v2 2
+```
+
+Read it from the top of the graph down: `llms` writes `tickets` under v1, and the MCP read server reads it under v1. The migration reads `tickets` under v1, and `data` writes `tickets_v2` under v2, which the agents eval reads under v2.

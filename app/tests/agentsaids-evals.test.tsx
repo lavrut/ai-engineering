@@ -428,11 +428,9 @@ describe('page budget', () => {
   }, 180_000);
 
   // The Data Fabric & Data Contracts track, measured the same way: the props of its four aids over its lessons.
-  // The test is bound to the content: it lists src/content/lessons/data/*.mdx, requires one data-* view per file in
-  // the built page, and each lesson to carry the aid spec §5 names for it. Until Task 7 adds the lessons there is
-  // nothing to measure, so the budget test is skipped (its name says why) rather than passing on an empty sum;
-  // tests/dataaids-contract.test.tsx meanwhile measures the largest props the lessons could ship.
-  // Task 7 removes the skipIf when it adds lessons/data/*.mdx: from then on the test must run and pass.
+  // The test is bound to the content: it lists src/content/lessons/data/*.mdx, requires the six lessons spec §5
+  // names, one data-* view per file in the built page, and each lesson to carry the aid spec §5 names for it. A
+  // lesson file whose slug has no aid in DATA_LESSON_AIDS fails here, so a new lesson cannot slip past the check.
   const DATA_DIR = join(APP, 'src', 'content', 'lessons', 'data');
   const DATA_FILES = existsSync(DATA_DIR) ? readdirSync(DATA_DIR).filter((f) => f.endsWith('.mdx')).sort() : [];
   const DATA_AIDS = ['CatalogExplorer', 'QualityReport', 'ContractViewer', 'LineageDiff'];
@@ -441,20 +439,21 @@ describe('page budget', () => {
     fabric: 'FlowDiagram', catalog: 'CatalogExplorer', quality: 'QualityReport', contract: 'ContractViewer', enforce: 'ContractViewer', capstone: 'LineageDiff',
   };
 
-  it('finds no data-* view in the built page while there is no data lesson file', () => {
-    if (DATA_FILES.length > 0) return; // covered by the next test once the lessons exist
-    console.warn('page budget: no data lessons yet (src/content/lessons/data/*.mdx); the data props budget test is skipped');
-    expect(dataLessons).toEqual([]);
+  it('finds the six data lessons spec §5 names, each slug mapped to its aid', () => {
+    const slugs = DATA_FILES.map((f) => f.replace(/^\d+-/, '').replace(/\.mdx$/, ''));
+    expect(slugs).toEqual(['fabric', 'catalog', 'quality', 'contract', 'enforce', 'capstone']);
+    expect(slugs.filter((s) => !Object.hasOwn(DATA_LESSON_AIDS, s)), 'a data lesson slug with no aid in DATA_LESSON_AIDS').toEqual([]);
   });
 
-  it.skipIf(DATA_FILES.length === 0)(
-    `keeps the props the data aids ship, as the built page carries them, under 200 KB${DATA_FILES.length === 0 ? ' (skipped: no data lessons yet)' : ''}`,
+  it(
+    'keeps the props the data aids ship, as the built page carries them, under 200 KB',
     () => {
       const slugs = DATA_FILES.map((f) => f.replace(/^\d+-/, '').replace(/\.mdx$/, ''));
       expect(dataLessons.map((l) => l.lesson.replace(/^lesson \d+ \((.*)\)$/, '$1'))).toEqual(slugs.map((s) => `data-${s}`));
       dataLessons.forEach((l, i) => {
         const want = DATA_LESSON_AIDS[slugs[i]];
-        if (want) expect(l.islands.map((x) => x.component), l.lesson).toContain(want);
+        expect(want, `${l.lesson}: no aid mapped for slug "${slugs[i]}"`).toBeDefined();
+        expect(l.islands.map((x) => x.component), l.lesson).toContain(want);
       });
       const shipped = dataLessons.flatMap((l) => l.islands).filter((x) => DATA_AIDS.includes(x.component));
       expect(shipped.length).toBeGreaterThan(0);

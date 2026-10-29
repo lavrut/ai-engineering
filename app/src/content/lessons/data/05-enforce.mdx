@@ -1,0 +1,197 @@
+---
+track: data
+order: 5
+slug: enforce
+title: Enforcing it in two languages
+goal: Enforce one contract with a Python validator and its Go twin, prove they print identical verdicts from shared fixtures, and explain why contract patterns use a small grammar both regex engines read the same way.
+minutes: 25
+quiz:
+  - question: Python's `re` accepts the pattern `^t(?=\d{3}$)\d+$`, and it matches `t001`. Why does the contract loader refuse it?
+    options:
+      - The pattern is too long
+      - Lookarounds are slow
+      - Go's regexp (RE2) has no lookarounds and refuses it. A pattern only one validator can run would give different verdicts in the two languages, so the shared grammar refuses `(?=` in both, before any engine sees it
+      - Python's `re` would also refuse it under a full match
+    answer: 2
+    explanation: The grammar is an allow-list of what both engines read the same way. Anything outside it is refused with the same detail in both languages, naming the token `(?=`. Then a contract never means one thing in Python and another in Go.
+  - question: The fixture expectations in `data/fixtures/cases.jsonl` are written by hand in `gen_cases.py`, not computed by running the Python validator. Why does that matter?
+    options:
+      - Computed expectations would be faster to update
+      - Hand-written expectations are a third opinion. If both validators shared a bug, expectations computed from one of them would bless it; written ones catch it
+      - The Go validator cannot read computed files
+      - It does not matter
+    answer: 1
+    explanation: Twins that only agree with each other can agree on a mistake. The fixtures pin what the verdicts should be, and both languages must reproduce them. The twin test then compares the two command lines byte for byte on every case.
+  - question: In the rules, a value fails a pattern only when it is a string that does not match. A row whose `id` is a JSON number, not a string, is checked against `^t\d{3}$`. What happens?
+    options:
+      - The `type` rule fails it (expected string, got integer), and the pattern rule skips it, so one mistake is reported once, under the rule it breaks
+      - The pattern rule fails it
+      - Both type and pattern fail it
+      - The validator crashes
+    answer: 0
+    explanation: Each rule checks one thing. The type rule catches a non-string, and the pattern rule only reads strings. That keeps the report readable when a field is wrong in one way.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import ContractViewer from '../../../components/data/ContractViewer.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+A contract is only as good as the code that enforces it. The readers of these datasets run in Python and in Go: the MCP track has a Go server, and the agents track a Go desk. So the contract has two enforcers, `data/python/contract.py` and its <Term t="twin validator" /> in `data/go/validate`. If they ever disagreed on a verdict, the same file would have two contracts.
+
+### What "identical" means
+
+Both validators take a contract and a dataset and return the same verdicts, in the same order: sorted by rule, then by field. Both print one line per verdict, `OK  rule field: detail` or `FAIL rule field: detail`, then `verdicts: N ok, M failed`, and both exit with 1 when any verdict failed. Identical means byte for byte: the same spacing, the same quoting of a value, and the same `400 days old` rather than `400.0`.
+
+Two things hold them to it.
+
+- **Shared fixtures.** `data/fixtures/cases.jsonl` holds 25 cases: a small contract, a few rows and the verdicts expected, written by hand. Both validators must reproduce every case. The cases cover each rule passing and failing, the three file forms (JSON Lines, a JSON array, one object), a bad line, an empty file, a composite key and a stale file.
+- **The twin test.** `data/python/tests/test_twin.py` runs both command lines on every case and on edge cases the fixtures leave open, and compares their output and exit codes byte for byte.
+
+### Patterns mean the same thing in both
+
+Regular expressions are where two languages disagree most. Python's `re` and Go's `regexp` (the RE2 engine) differ in what they accept and in what `\d` means: Python's `\d` also matches Arabic-Indic digits. So a contract `pattern` is not handed straight to either engine. Both validators first run the same small tokenizer, which accepts only this grammar:
+
+- literal characters, and `.` for any character except a newline;
+- the escaped metacharacters `\. \* \+ \? \( \) \[ \] \{ \} \| \^ \$ \\ \-`;
+- the six ASCII classes `\d \D \w \W \s \S`, which both rewrite to explicit classes such as `[0-9]` before compiling;
+- bracket classes `[...]` and `[^...]` with literals, ranges and those six classes;
+- groups `(...)` and `(?:...)`, and alternation `|`;
+- the quantifiers `* + ? {n} {n,} {n,m}`, with counts capped at 1000 and no counted repeat applied to a group that already holds one;
+- `^` and `$` only at the very start and end.
+
+Anything else is refused when the contract loads, in both languages, with the same detail: `invalid pattern:` and the first token outside the grammar. The match is always a full match, so `^` and `$` add nothing and are dropped.
+
+Each rule in the grammar has a reason. The class rewrite makes `\d` mean `0-9` in both. The cap of 1000 exists because RE2 refuses a nested repeat such as `((a{1000}){1000}){1000}` that Python compiles. Lookarounds such as `(?=...)` are refused because RE2 has none.
+
+## See it
+
+This is the complaints contract with its verdicts. Step to **schema**: the verdicts table below it lists the verdicts that section's rules produced on `ml/data/complaints.jsonl`. Then step to **quality**.
+
+<ContractViewer contract="complaints.v1" verdicts={true} />
+
+The schema has two patterns, `^\d+$` on `id` and `^\d{4}-\d{2}-\d{2}$` on `date`, and every one of the 3,600 rows matches both. The product enum has 6 values, and the quality section checks that each appears at least once. All 17 verdicts pass. The Go twin prints the same 17 lines, as the Try it below shows.
+
+## The code
+
+Section 3 holds the rules. The Go tab shows the same rules in `rules.go`, section 7.
+
+<CodeTabs source="data-contract" section={3} goSection={7} />
+
+- `fails = [f"row {i}: missing" for i, r in enumerate(rows, 1) if not _present(r, name)]` collects every failing row, numbered from 1. `_present` treats a null like a missing field.
+- `return False, fails[0] + more` in `_first` reports the first failure and how many more, so a broken column is one line, not 3,600.
+- `if _present(r, name) and not _type_ok(r[name], kind)` skips missing values, since `required` already reported them. Each mistake is reported once, under the rule it breaks.
+- `if isinstance(r.get(name), str) and not rx.fullmatch(r[name])` applies a pattern only to strings, and always to the whole string.
+- `key = _show([r[n] for n in key_fields])` builds the composite key for `unique` from the key fields' JSON text, so `1` and `"1"` are different keys in both languages.
+- `return _verdict("freshness", None, True, "unknown: no git date")` passes an unknown age with a note. A missing git history is not stale data.
+
+Section 4 puts the verdicts in order and prints them.
+
+<CodeTabs source="data-contract" section={4} goSection={8} />
+
+- `return sorted(out, key=lambda x: (x["rule"], x["field"] or ""))` sorts by rule, then field, with no field first. Go sorts with the same key.
+- `if x["rule"] not in ("row_count", "freshness", "parse"):` turns every other rule into "no rows" on an empty file. Nothing to check is not a failure; `row_count` alone says whether empty is allowed.
+- `lines.append(f"verdicts: {len(verdicts) - bad} ok, {bad} failed")` is the summary line both languages end with.
+
+## How Go does it
+
+The Go twin is three files: `contract.go` (sections 1 to 5), `rules.go` (6 to 8) and `main.go` (9). Section 7 above is Python's section 3, rule for rule: `fieldRules`, `extraFields`, `qualityVerdicts` and `freshness`. The work is in making Go produce Python's bytes.
+
+- **It parses JSON itself.** Go's `encoding/json` loses the order of an object's keys and the text of a number, and both show up in details: `extra_field` lists fields in the order they appear, and an enum detail prints `1.0` differently from `1`. So `contract.go` section 1 parses JSON the way Python's `json` does, into an `Object` that keeps `Keys` in order and a `Number` that keeps its text.
+- **It prints values as Python does.** `Show` renders a value as `json.dumps(x, ensure_ascii=False)` would, and `num` is Python's `f"{x:g}"`, so an age prints as `1.8` and a limit as `365` in both.
+- **The pattern grammar is a second copy of the same tokenizer.** `patternTokens` in section 4 accepts and refuses exactly what Python's `pattern_tokens` does. Both test files hold the same tables of allowed and refused patterns, and `(?=` is in both.
+- **The composite key joins with a separator.** Python compares the JSON text of the list of key values. Go joins each value's JSON text with `"\x00"`, a byte no JSON text contains, so two different keys never join to the same string.
+- **It reads the JSON export.** The Go standard library has no YAML, so the twin reads `tickets.v1.contract.json`, which `contract.py --export` writes, and `--export --check` keeps it current.
+
+`validate_test.go` runs the 25 fixture cases in Go as well, and checks the pattern tables and the command line's output and exit code.
+
+## Try it
+
+Run both validators on the complaints, with the same age, and compare their output:
+
+```bash
+.venv-data/bin/python data/python/contract.py data/contracts/complaints.v1.yaml ml/data/complaints.jsonl --age-days 1.8 > /tmp/py.txt
+(cd data/go && go run ./validate ../contracts/complaints.v1.contract.json ../../ml/data/complaints.jsonl -age-days 1.8) > /tmp/go.txt
+diff /tmp/py.txt /tmp/go.txt && echo identical
+```
+
+You should see:
+
+```text
+identical
+```
+
+Run the twin test, which does the same for every fixture case and the edge cases:
+
+```bash
+.venv-data/bin/python -m pytest data/python/tests/test_twin.py -q
+```
+
+The last line begins:
+
+```text
+54 passed
+```
+
+Then the Go tests:
+
+```bash
+(cd data/go && go test ./...)
+```
+
+The last line begins:
+
+```text
+ok lumen-data/validate
+```
+
+Now give Python a pattern the grammar refuses. Python's own `re` accepts it and matches `t001`:
+
+```bash
+.venv-data/bin/python -c '
+import re, sys
+sys.path.insert(0, "data/python")
+import contract
+p = r"^t(?=\d{3}$)\d+$"
+print("Python re matches t001:", re.fullmatch(p, "t001") is not None)
+try:
+    contract.pattern_tokens(p)
+except contract.ContractError as e:
+    print("the contract grammar refuses it:", e)
+'
+```
+
+You should see:
+
+```text
+Python re matches t001: True
+the contract grammar refuses it: invalid pattern: (?=
+```
+
+And this is why. Ask Go's regexp to compile the same pattern:
+
+```bash
+mkdir -p /tmp/re2 && cat > /tmp/re2/main.go <<'EOF'
+package main
+
+import (
+	"fmt"
+	"regexp"
+)
+
+func main() {
+	_, err := regexp.Compile(`^t(?=\d{3}$)\d+$`)
+	fmt.Println("Go regexp:", err)
+}
+EOF
+go run /tmp/re2/main.go
+```
+
+You should see:
+
+```text
+Go regexp: error parsing regexp: invalid or unsupported Perl syntax: `(?=`
+```
+
+Without the grammar, this contract would pass `t001` in Python and fail to load in Go. With it, both refuse the contract with the same line.
