@@ -166,7 +166,7 @@ describe('the LLMs lessons as a set', () => {
         expect(/(^|[\s(;&|'<])(python3?|pip3?|pytest|inspect)\s/.exec(rest), `${l}: ${line}`).toBeNull();
       }
     }
-    expect(src('README.md')).toContain('python3 -m venv .venv-llms && .venv-llms/bin/pip install -r llms/python/requirements.txt');
+    expect(src('docs/tracks/llms.md')).toContain('python3 -m venv .venv-llms && .venv-llms/bin/pip install -r llms/python/requirements.txt');
     expect(read('01-what')).toContain('python3 -m venv .venv-llms && .venv-llms/bin/pip install -r llms/python/requirements.txt\ncd llms/python\n');
   });
 
@@ -176,8 +176,8 @@ describe('the LLMs lessons as a set', () => {
     expect(inspect).toContain('LIVE_OK = "LUMEN_LIVE_OK"');
     expect(l).toContain('.venv-inspect/bin/python llms/inspect/summarize.py --estimate');
     expect(l).toContain('LUMEN_LIVE_OK=1 .venv-inspect/bin/inspect eval llms/inspect/triage_inspect.py@triage --model anthropic/claude-haiku-5-5');
-    expect(src('README.md')).toContain('.venv-inspect/bin/python llms/inspect/summarize.py --estimate');
-    expect(src('README.md')).toContain('unless `LUMEN_LIVE_OK=1` is set');
+    expect(src('docs/tracks/llms.md')).toContain('.venv-inspect/bin/python llms/inspect/summarize.py --estimate');
+    expect(src('docs/tracks/llms.md')).toContain('unless `LUMEN_LIVE_OK=1` is set');
   });
 });
 

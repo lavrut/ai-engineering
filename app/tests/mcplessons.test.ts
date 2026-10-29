@@ -71,7 +71,7 @@ describe('the MCP lessons as a set', () => {
         expect(bare, `${l}: ${line}`).toBeNull();
       }
     }
-    expect(src('README.md')).toContain('python3 -m venv .venv-mcp && .venv-mcp/bin/pip install -r mcp/requirements.txt');
+    expect(src('docs/tracks/mcp.md')).toContain('python3 -m venv .venv-mcp && .venv-mcp/bin/pip install -r mcp/requirements.txt');
   });
 
   it('keep the learner\'s files in ~/.lumen, never at a fixed name in /tmp that another user could plant first', () => {

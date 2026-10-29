@@ -22,7 +22,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 LESSONS = ROOT / "app" / "src" / "content" / "lessons" / "ontology"
-README = ROOT / "README.md"
+README = ROOT / "docs" / "tracks" / "ontology.md"   # the track's commands page (moved out of README.md on 2026-10-29)
 
 SETUP = "python3 -m venv .venv-ontology && .venv-ontology/bin/pip install -r ontology/requirements.txt"
 BLOCK = re.compile(r"```(\w*)\n(.*?)```", re.S)

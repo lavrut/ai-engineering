@@ -55,7 +55,7 @@ sys.path.insert(0, str(HERE.parent))
 import gateway  # noqa: E402
 
 LESSONS = ROOT / "app" / "src" / "content" / "lessons" / "infra"
-README = ROOT / "README.md"
+README = ROOT / "docs" / "tracks" / "infra.md"   # the track's commands page (moved out of README.md on 2026-10-29)
 SETUP = "python3 -m venv .venv-infra && .venv-infra/bin/pip install -r infra/requirements.txt"
 BLOCK = re.compile(r"```(\w*)\n(.*?)```", re.S)
 PAID = re.compile(r"--live|--mode record|--record|ANTHROPIC_API_KEY|agents/run\.py|triage_lab\.py|harness\.py|"
