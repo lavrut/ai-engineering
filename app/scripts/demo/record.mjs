@@ -103,7 +103,7 @@ async function runAction(page, beat, action, ctx) {
         const frame = document.createElement('iframe');
         frame.id = 'demo-phone';
         frame.src = url;
-        frame.style.cssText = `position:fixed;left:50%;top:50%;width:${width}px;height:${height}px;transform:translate(-50%,-54%);border:10px solid #222;border-radius:28px;background:#000;z-index:9001;`;
+        frame.style.cssText = `position:fixed;left:50%;top:50%;width:${width}px;height:${height}px;transform:translate(-50%,-60%);border:10px solid #222;border-radius:28px;background:#000;z-index:9001;`;
         document.body.append(back, frame);
       }, { url, width: action.width, height: action.height });
       const frame = page.frameLocator('#demo-phone');

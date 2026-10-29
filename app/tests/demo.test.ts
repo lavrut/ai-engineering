@@ -2,7 +2,7 @@
 // SRT formatter. The recorder and encoder are exercised by running them (see docs/superpowers/specs/
 // 2026-10-29-demo-video-design.md §6); this file pins what can be checked without a browser.
 import { describe, expect, it } from 'vitest';
-import { BEATS, PHONE, TEST_COUNT_NOTE, VIEWPORT } from '../scripts/demo/beats.mjs';
+import { BEATS, PHONE, TEST_COUNT_NOTE, VIEWPORT, plannedMs } from '../scripts/demo/beats.mjs';
 import { formatTime, timingsToCues, toSrt } from '../scripts/demo/srt.mjs';
 import { CAPTION_CSS } from '../scripts/demo/caption.mjs';
 
@@ -47,6 +47,14 @@ describe('the beats', () => {
     expect(frames[0]).toMatchObject(PHONE);
     expect(frames[0].ms).toBeGreaterThanOrEqual(5000);
     expect(actionsOf(phone).some((a) => a.kind === 'resize')).toBe(false);
+  });
+
+  it('plans enough fixed waiting to clear the 140 s minimum with a margin', () => {
+    // The recording's length is the fixed waits plus the replay beat's stepping; the fixed part alone must
+    // leave a margin above the encoder's 140 s floor so a faster machine cannot fail the encode.
+    // Fixed waits of about 118 s plus roughly 30 s of stepping and overheads land near 150 s, inside 140–170.
+    expect(plannedMs(BEATS)).toBeGreaterThanOrEqual(118000);
+    expect(plannedMs(BEATS)).toBeLessThanOrEqual(130000);
   });
 
   it('counts the tracks the way the home page does', () => {
@@ -123,5 +131,25 @@ describe('the caption strip', () => {
     expect(CAPTION_CSS).toContain('#demo-caption');
     expect(CAPTION_CSS).toContain('position: fixed');
     expect(CAPTION_CSS).toContain('white-space: pre-line');
+  });
+
+  it('is centred by its margins so it can grow to 72% of the width', () => {
+    expect(CAPTION_CSS).toContain('width: fit-content');
+    expect(CAPTION_CSS).toContain('max-width: 72%');
+    expect(CAPTION_CSS).toContain('margin-inline: auto');
+    expect(CAPTION_CSS).not.toContain('left: 50%');
+  });
+});
+
+describe('the demo command', () => {
+  it('runs record then encode, and only record for a dry run, with the same arguments', async () => {
+    const { plan } = await import('../scripts/demo/run.mjs');
+    expect(plan(['--out', 'x'])).toEqual([['record', ['--out', 'x']], ['encode', ['--out', 'x']]]);
+    expect(plan(['--dry'])).toEqual([['record', ['--dry']]]);
+  });
+
+  it('is what npm run demo calls', async () => {
+    const pkg = JSON.parse((await import('node:fs')).readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    expect(pkg.scripts.demo).toBe('node scripts/demo/run.mjs');
   });
 });

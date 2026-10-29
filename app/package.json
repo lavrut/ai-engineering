@@ -12,7 +12,7 @@
     "preview": "astro preview",
     "test": "vitest run",
     "package": "node scripts/package.mjs",
-    "demo": "node scripts/demo/record.mjs && node scripts/demo/encode.mjs",
+    "demo": "node scripts/demo/run.mjs",
     "new:lesson": "node scripts/new-lesson.mjs",
     "astro": "astro"
   },

@@ -17,6 +17,12 @@ export const PHONE = { width: 390, height: 844 };
 // note together.
 export const TEST_COUNT_NOTE = 'eight tracks; over 4,000 tests: app 2,484 + Python 1,628 + Go, counted 2026-10-29 at main 35ceb8c';
 
+/** The fixed waiting the beats plan, in ms (waits, scroll holds and the phone frame's hold); the replay
+ *  beat's stepping and the page's own load times come on top. */
+export function plannedMs(beats) {
+  return beats.flatMap((b) => b.actions).reduce((sum, a) => sum + (a.kind === 'wait' || a.kind === 'scrollTo' || a.kind === 'phoneFrame' ? a.ms : 0), 0);
+}
+
 const view = (id) => `section[data-view="${id}"]`;
 const goto = (hash) => ({ kind: 'goto', hash });
 const scrollTo = (selector, ms) => ({ kind: 'scrollTo', selector, ms });
@@ -39,7 +45,7 @@ export const BEATS = [
   {
     id: 'home',
     captions: ['AI Engineering: a hands-on course with real, runnable code.', 'Eight tracks, from the harness to the gateway.'],
-    actions: [goto('#home'), wait(1500), scrollTo(LAST_TRACK, 4000), caption(1), wait(4500)],
+    actions: [goto('#home'), wait(1500), scrollTo(LAST_TRACK, 4000), caption(1), wait(6000)],
   },
   {
     id: 'anatomy',
@@ -81,7 +87,7 @@ export const BEATS = [
       goto('#infra-capstone'), wait(1500), scrollTo(`${CAPSTONE} select`, 2500),
       { kind: 'select', selector: `${CAPSTONE} select >> nth=2`, value: 'cached' }, wait(1500),
       click(`${CAPSTONE} table tbody tr`), wait(3000),
-      scrollTo(`${CAPSTONE} ol`, 3000), wait(3500),
+      scrollTo(`${CAPSTONE} ol`, 3000), wait(4500),
     ],
   },
   {
@@ -91,7 +97,7 @@ export const BEATS = [
       goto('#ontology-what'), wait(1500), scrollTo(`${WHAT} .quiz`, 2500),
       ...QUIZ_PICKS.flatMap((o, q) => [click(option(q, o)), wait(900)]),
       scrollTo(`${WHAT} .quiz`, 1200),
-      click(`${WHAT} .quiz .btn-primary`), wait(6000),
+      click(`${WHAT} .quiz .btn-primary`), wait(7000),
     ],
   },
   {
@@ -107,13 +113,13 @@ export const BEATS = [
     captions: ['Works at phone width. No horizontal scroll.'],
     actions: [
       goto('#home'), wait(500),
-      { kind: 'phoneFrame', hash: '#infra-capstone', selector: `${CAPSTONE} .mc-scroll`, ms: 9000, ...PHONE },
+      { kind: 'phoneFrame', hash: '#infra-capstone', selector: `${CAPSTONE} .mc-scroll`, ms: 10500, ...PHONE },
       wait(500),
     ],
   },
   {
     id: 'close',
     captions: ['Eight tracks. Over 4,000 tests. Zero invented numbers.'],
-    actions: [goto('#home'), wait(1500), scrollTo(LAST_TRACK, 3000), wait(8000)],
+    actions: [goto('#home'), wait(1500), scrollTo(LAST_TRACK, 3000), wait(10000)],
   },
 ];

@@ -7,9 +7,11 @@ export const CAPTION_ID = 'demo-caption';
 export const CAPTION_CSS = `
 #${CAPTION_ID} {
   position: fixed;
-  left: 50%;
+  left: 0;
+  right: 0;
   bottom: 9%;
-  transform: translateX(-50%);
+  margin-inline: auto;
+  width: fit-content;
   max-width: 72%;
   padding: 0.6em 1.1em;
   border-radius: 12px;
