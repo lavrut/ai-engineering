@@ -59,15 +59,23 @@ function locate(page, beat, selector) {
 
 const setTheme = (theme) => `document.documentElement.setAttribute('data-theme', ${JSON.stringify(theme)})`;
 
+/** A view change fades only when the hash changes; an empty hash is the home view. */
+export function needsTransition(currentHash, target) {
+  return (currentHash || '#home') !== target;
+}
+
 async function runAction(page, beat, action, ctx) {
   const wait = (ms) => page.waitForTimeout(ctx.dry ? Math.min(ms, DRY_WAIT) : ms);
   switch (action.kind) {
-    case 'goto':
+    case 'goto': {
+      const current = await page.evaluate(() => location.hash);
+      if (!needsTransition(current, action.hash)) { await page.evaluate(() => window.scrollTo(0, 0)); return; }
       await overlay(page, true, wait);
       await page.evaluate((h) => { location.hash = h; window.scrollTo(0, 0); }, action.hash);
       await wait(150);
       await overlay(page, false, wait);
       return;
+    }
     case 'scrollTo': {
       const el = await locate(page, beat, action.selector);
       await scrollToLocator(page, el, ctx.dry ? DRY_WAIT : SCROLL_MS);
@@ -198,6 +206,7 @@ export async function main(argv = process.argv.slice(2)) {
     const page = await context.newPage();
     ctx.t0 = Date.now();
     await page.goto(`${server.url}/index.html#home`, { waitUntil: 'load' });
+    await page.evaluate(() => document.fonts.ready);   // no font swap in the first second of the recording
     await page.evaluate(setTheme(theme));
     await installCaption(page);
     await installOverlay(page);
