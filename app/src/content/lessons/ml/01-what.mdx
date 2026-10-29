@@ -22,7 +22,7 @@ quiz:
       - The training majority class, flagged low_confidence, with scores equal to softmax of the intercepts
     answer: 3
     explanation: Unknown words are skipped, so every feature is 0 and each category's score is just its intercept. score() then returns majority_class, credit reporting, and sets low_confidence to true, so a caller knows the answer rests on no evidence.
-  - question: Why does the export set `created` to the last complaint date the model saw (2021-12-31) instead of the time you ran it?
+  - question: Why does the export set created to the last complaint date the model saw (2021-12-31) instead of the time you ran it?
     options:
       - The clock on a laptop is unreliable
       - Because JSON cannot store a time of day

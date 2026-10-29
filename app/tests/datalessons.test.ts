@@ -135,8 +135,8 @@ const CLAIMS: Claim[] = [
     for (const id of ['tickets.v1', 'tickets.v2', 'complaints.v1', 'agent-traces.v1']) expect(contract(id).servicing.freshness.max_age_days, id).toBe(365);
   }],
   ['03-quality', 'the same command fails on freshness and exits with 1', () => expect(py('quality.py')).toContain('return 0 if ok else 1')],
-  ['03-quality', '`verdicts.json` says the tickets are 2 days old as of 2026-10-28', () => expect([ds.tickets.age_days, verdicts.as_of]).toEqual([2.0, '2026-10-28'])],
-  ['03-quality', 'A dataset is checked with `--age-days 400` against a contract whose `max_age_days` is 365', () => {
+  ['03-quality', 'verdicts.json says the tickets are 2 days old as of 2026-10-28', () => expect([ds.tickets.age_days, verdicts.as_of]).toEqual([2.0, '2026-10-28'])],
+  ['03-quality', 'A dataset is checked with --age-days 400 against a contract whose max_age_days is 365', () => {
     expect(contract('tickets.v1').servicing.freshness.max_age_days).toBe(365);
   }],
   ['03-quality', 'the producer promised data no older than 365 days', () => expect(contract('tickets.v1').servicing.freshness.max_age_days).toBe(365)],
@@ -199,7 +199,8 @@ const CLAIMS: Claim[] = [
     expect(py('contract.py')).toContain('return 1 if any(not x["ok"] for x in verdicts) else 0');
     expect(goSrc('main.go')).toContain('return 1');
   }],
-  ['05-enforce', "Python's `re` accepts the pattern `^t(?=\\d{3}$)\\d+$`, and it matches `t001`", () => {
+  ['05-enforce', 'is checked against ^t\\d{3}$. What happens?', () => expect(text('data/contracts/tickets.v1.yaml')).toContain("pattern: '^t\\d{3}$'")],
+  ['05-enforce', "Python's re accepts the pattern ^t(?=\\d{3}$)\\d+$, and it matches t001", () => {
     // the Try-it block runs it (test_lesson_tryits.py); both validators' tables refuse `(?=`
     expect(read('05-enforce')).toContain('p = r"^t(?=\\d{3}$)\\d+$"');
     expect(text('data/python/tests/test_contract.py')).toContain('("(?=x)", "(?=")');
@@ -377,5 +378,18 @@ describe('data lessons: every number is pinned', () => {
       .replace(/\btickets_v2\b/g, ' ')
       .replace(/\bRE2\b/g, ' '); // the engine's name
     expect(t.match(/.{0,40}\d.{0,20}/g) ?? [], `${lesson}: an unpinned number`).toEqual([]);
+  });
+});
+
+describe('quiz text is plain text', () => {
+  // Quiz.tsx renders questions, options and explanations as plain text, so a backtick would show on the page.
+  it('no lesson in any track has a backtick in its quiz frontmatter', () => {
+    const root = join(__dirname, '..', 'src', 'content', 'lessons');
+    const files = readdirSync(root, { recursive: true, withFileTypes: false }).map(String).filter((f) => f.endsWith('.mdx'));
+    expect(files.length).toBeGreaterThan(30);
+    for (const f of files) {
+      const quiz = matter(readFileSync(join(root, f), 'utf8')).data.quiz ?? [];
+      expect(JSON.stringify(quiz), `${f}: backtick in quiz`).not.toContain('`');
+    }
   });
 });

@@ -6,30 +6,30 @@ title: Writing a data contract
 goal: Write a data contract in five sections, give each field a type, a rule and a meaning, and decide whether a change needs a new major version.
 minutes: 20
 quiz:
-  - question: The LLMs track wants to add a `language` field to every ticket. Under the versioning rule, what happens to `tickets.v1`?
+  - question: The LLMs track wants to add a language field to every ticket. Under the versioning rule, what happens to tickets.v1?
     options:
       - It stays on the same major. An added field breaks no reader, and the validator reports an unknown field as extra_field without failing
-      - It needs `tickets.v2`, because the schema changed
+      - It needs tickets.v2, because the schema changed
       - Every consumer must be updated first
       - The field cannot be added while v1 has consumers
     answer: 0
-    explanation: Additive changes keep the major. A reader that never asked for `language` keeps working. Renames, removals and type changes are different. A reader that looks up the old name or type breaks, so those get a new major.
-  - question: Why does every field in the contract carry a `meaning` line, when the validator never reads it?
+    explanation: Additive changes keep the major. A reader that never asked for language keeps working. Renames, removals and type changes are different. A reader that looks up the old name or type breaks, so those get a new major.
+  - question: Why does every field in the contract carry a meaning line, when the validator never reads it?
     options:
       - The YAML parser requires it
       - The Go twin uses it to name its variables
-      - A type says what a value looks like, not what it is for. The meaning is what a new reader needs, for instance that `split` keeps dev and test tickets apart and they must never mix
+      - A type says what a value looks like, not what it is for. The meaning is what a new reader needs, for instance that split keeps dev and test tickets apart and they must never mix
       - It is optional and could be left out
     answer: 2
     explanation: The contract is documentation that is checked. The checkable parts (type, enum, pattern) keep the data honest. The meaning keeps readers from misusing honest data, and the loader still refuses a field without one.
-  - question: '`tickets.v1` is `deprecated`. A contract author deletes its `sunset` line. What does the validator do?'
+  - question: 'tickets.v1 is deprecated. A contract author deletes its sunset line. What does the validator do?'
     options:
       - Nothing; sunset is optional
       - It refuses the contract itself (info.sunset is required when info.status is deprecated), so no dataset is checked against it
       - It sets the sunset to a year from today
       - It marks every verdict failed
     answer: 1
-    explanation: A deprecated version without a date is a promise with no deadline. Its readers cannot plan a move. The loader checks the contract before it checks any data, and a malformed contract is one failed `contract` verdict.
+    explanation: A deprecated version without a date is a promise with no deadline. Its readers cannot plan a move. The loader checks the contract before it checks any data, and a malformed contract is one failed contract verdict.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
 import ContractViewer from '../../../components/data/ContractViewer.astro';

@@ -6,23 +6,23 @@ title: "Capstone: a breaking change under contract"
 goal: Carry a breaking change through a new major version, a migration, a sunset date and a consumer shim, and show with a gate that every reader is green on the version it declares.
 minutes: 25
 quiz:
-  - question: '`tickets.v2` renames `priority` to `urgency`. Why not just rename the field in the v1 file, since both readers are in the same repo?'
+  - question: 'tickets.v2 renames priority to urgency. Why not just rename the field in the v1 file, since both readers are in the same repo?'
     options:
       - The JSON Lines format cannot rename a field
       - Renaming in place would be fine if done in one commit
       - The validators cannot read renamed fields
-      - The MCP read server looks up `priority`. Renaming in place breaks it the moment the file changes, before anyone has moved. A new major beside the old one lets each reader move on its own schedule, by the sunset
+      - The MCP read server looks up priority. Renaming in place breaks it the moment the file changes, before anyone has moved. A new major beside the old one lets each reader move on its own schedule, by the sunset
     answer: 3
     explanation: A breaking change is about readers, not files. With v1 kept and deprecated, no reader is surprised. The agents eval has a v2 reader ready (the shim) but has not switched to it, the MCP read server has until 2027-01-31, and meanwhile the gate shows every reader green on the version it declares.
-  - question: The gate re-validates each consumer's declared contract against its dataset itself, instead of reading the committed `verdicts.json`. What does that prevent?
+  - question: The gate re-validates each consumer's declared contract against its dataset itself, instead of reading the committed verdicts.json. What does that prevent?
     options:
       - Nothing; the two always agree
       - Slow runs
-      - A hand-edited or stale `verdicts.json` turning the gate green. The gate only trusts a verdict it computed, and takes just the pinned date from that file
+      - A hand-edited or stale verdicts.json turning the gate green. The gate only trusts a verdict it computed, and takes just the pinned date from that file
       - It lets the gate skip freshness
     answer: 2
     explanation: A gate that reads someone else's verdicts is only as good as that file. Recomputing is cheap here, and it removes the question. The pinned as_of keeps its ages equal to quality.py's.
-  - question: The sunset date has passed, and the MCP read server is still on `tickets.v1`. What does the gate report, and why that and not a failure?
+  - question: The sunset date has passed, and the MCP read server is still on tickets.v1. What does the gate report, and why that and not a failure?
     options:
       - A warning naming the consumer and the sunset, while the gate stays green. The data still meets v1, so nothing is broken. The warning shows who has not kept the promise to move
       - A failure, because the date has passed

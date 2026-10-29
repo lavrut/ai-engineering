@@ -6,15 +6,15 @@ title: Cataloguing and lineage
 goal: Build a catalogue of shared datasets from a fixed list, read its schema sketches, and use lineage to say which readers a change to one dataset would reach.
 minutes: 20
 quiz:
-  - question: '`catalog.py` reads a fixed list of dataset paths instead of walking the repo for data files. What does that buy?'
+  - question: 'catalog.py reads a fixed list of dataset paths instead of walking the repo for data files. What does that buy?'
     options:
       - Speed; walking a repo is slow
       - Nothing; a crawl finds the same datasets
       - Every catalogued dataset is one somebody chose to share, and a listed dataset that disappears is recorded as missing instead of quietly dropping out
       - It lets the catalogue skip git
     answer: 2
-    explanation: A crawl catalogues whatever happens to be lying around, including scratch files, and cannot notice that something is gone. A fixed list is a statement of what is shared, so a missing file is news, flagged `missing` in the catalogue.
-  - question: The catalogue's schema sketch for tickets says `priority` is a string. The tickets contract also says `priority` is a string. How do the two differ?
+    explanation: A crawl catalogues whatever happens to be lying around, including scratch files, and cannot notice that something is gone. A fixed list is a statement of what is shared, so a missing file is news, flagged missing in the catalogue.
+  - question: The catalogue's schema sketch for tickets says priority is a string. The tickets contract also says priority is a string. How do the two differ?
     options:
       - They are the same thing written twice
       - The sketch is read from the rows that exist today; the contract is the producer's promise about rows to come. When the two disagree, one of them needs a decision
@@ -22,14 +22,14 @@ quiz:
       - The contract is generated from the sketch
     answer: 1
     explanation: A sketch only describes. It reads the first 50 rows and reports what it saw, so it cannot tell a rule from an accident. The contract is written by a person and promises the type, the allowed values and the meaning.
-  - question: Lineage shows an edge from `tickets` to `tickets_v2` under `tickets.v1`. What question does that edge answer?
+  - question: Lineage shows an edge from tickets to tickets_v2 under tickets.v1. What question does that edge answer?
     options:
       - Which model wrote the tickets
       - How large the v2 file is
       - Who owns the v2 contract
       - If the v1 tickets change, the migrated v2 file and everything that reads it are downstream of the change
     answer: 3
-    explanation: Lineage is a graph of reads and writes. Following edges forward from a dataset lists everything a change could reach. The migration edge means the v2 file is derived from the v1 file, so the shim that reads v2, `agents-eval-v2`, depends on v1 too, and so does everything downstream of it.
+    explanation: Lineage is a graph of reads and writes. Following edges forward from a dataset lists everything a change could reach. The migration edge means the v2 file is derived from the v1 file, so the shim that reads v2, agents-eval-v2, depends on v1 too, and so does everything downstream of it.
 ---
 import CodeTabs from '../../../components/CodeTabs.astro';
 import CatalogExplorer from '../../../components/data/CatalogExplorer.astro';

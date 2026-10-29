@@ -6,15 +6,15 @@ title: Enforcing it in two languages
 goal: Enforce one contract with a Python validator and its Go twin, prove they print identical verdicts from shared fixtures, and explain why contract patterns use a small grammar both regex engines read the same way.
 minutes: 25
 quiz:
-  - question: Python's `re` accepts the pattern `^t(?=\d{3}$)\d+$`, and it matches `t001`. Why does the contract loader refuse it?
+  - question: Python's re accepts the pattern ^t(?=\d{3}$)\d+$, and it matches t001. Why does the contract loader refuse it?
     options:
       - The pattern is too long
       - Lookarounds are slow
-      - Go's regexp (RE2) has no lookarounds and refuses it. A pattern only one validator can run would give different verdicts in the two languages, so the shared grammar refuses `(?=` in both, before any engine sees it
-      - Python's `re` would also refuse it under a full match
+      - Go's regexp (RE2) has no lookarounds and refuses it. A pattern only one validator can run would give different verdicts in the two languages, so the shared grammar refuses (?= in both, before any engine sees it
+      - Python's re would also refuse it under a full match
     answer: 2
-    explanation: The grammar is an allow-list of what both engines read the same way. Anything outside it is refused with the same detail in both languages, naming the token `(?=`. Then a contract never means one thing in Python and another in Go.
-  - question: The fixture expectations in `data/fixtures/cases.jsonl` are written by hand in `gen_cases.py`, not computed by running the Python validator. Why does that matter?
+    explanation: The grammar is an allow-list of what both engines read the same way. Anything outside it is refused with the same detail in both languages, naming the token (?=. Then a contract never means one thing in Python and another in Go.
+  - question: The fixture expectations in data/fixtures/cases.jsonl are written by hand in gen_cases.py, not computed by running the Python validator. Why does that matter?
     options:
       - Computed expectations would be faster to update
       - Hand-written expectations are a third opinion. If both validators shared a bug, expectations computed from one of them would bless it; written ones catch it
@@ -22,9 +22,9 @@ quiz:
       - It does not matter
     answer: 1
     explanation: Twins that only agree with each other can agree on a mistake. The fixtures pin what the verdicts should be, and both languages must reproduce them. The twin test then compares the two command lines byte for byte on every case.
-  - question: In the rules, a value fails a pattern only when it is a string that does not match. A row whose `id` is a JSON number, not a string, is checked against `^t\d{3}$`. What happens?
+  - question: In the rules, a value fails a pattern only when it is a string that does not match. A row whose id is a JSON number, not a string, is checked against ^t\d{3}$. What happens?
     options:
-      - The `type` rule fails it (expected string, got integer), and the pattern rule skips it, so one mistake is reported once, under the rule it breaks
+      - The type rule fails it (expected string, got integer), and the pattern rule skips it, so one mistake is reported once, under the rule it breaks
       - The pattern rule fails it
       - Both type and pattern fail it
       - The validator crashes
