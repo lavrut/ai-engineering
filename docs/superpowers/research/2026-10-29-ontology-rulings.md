@@ -1,0 +1,15 @@
+# Ontology track: rulings made during the build
+
+Date: 2026-10-29. Branch `feat/ontology-track`. Spec `docs/superpowers/specs/2026-10-29-ontology-design.md`, plan `docs/superpowers/plans/2026-10-29-ontology.md`. Each is `what — why — cost if wrong`, from the build ledger in the order made.
+
+- O1: `individuals` carry `order` (the guide's decision order: C1–C6 for categories; urgent, high, low, normal for priorities) and `definition` and `source`; `definitions_text` sorts by `order` — cost if wrong: none
+- O2: `validate` takes `partial: bool = False`; with `partial=True` (used for model outputs and tool calls) missing required properties are not errors, only present values are checked, and checkable constraints run when every property they reference is present — cost if wrong: validation counts shift
+- O3: each `checkable` constraint may carry `phrases: [str]` (key phrases the prompts must state it with); the audit judges a prompt as stating the rule when its guide id or any phrase appears (case-insensitive) — cost if wrong: an audit row flips between agree and missing
+- O4 (confirms): category/priority range is the property's enumeration (rule `range`), not a duplicate checkable constraint; no outage-implies-high constraint exists because the guide states none — cost if wrong: none
+- O5 (for Task 4): the audit normalises markdown (`**`, backticks, surrounding whitespace, case) before comparing a definition with the guide; the diff shown is over the normalised texts — cost if wrong: none
+- O6 (for Task 3): manual constraints are reported once per constraint in validation.json (a count of records they apply to), never one finding per record, so counts stay readable — cost if wrong: none
+- O7 (confirms): the 30 pattern traces with `output.calls` and no `tool_calls` are readable traces with no label call (a pattern run makes none), not unreadable — cost if wrong: none
+- O8 (confirms + extends): the audit compares the priority definitions with the guide too (same O5 normalising), and the complaints product enum stays in — cost if wrong: none
+- O9 (refines O8): priorities are compared per guide bullet, not by the individual's summary `definition`: for each priority, every bullet under it in the guide (U1–U4, H*, L*, the normal rule) must exist as a constraint with that `source` id whose text equals the bullet after O5 normalising; the individual's `definition` is a summary and is not compared — cost if wrong: none
+- O10 (confirms): a guide bullet the ontology lacks is `disagree`; an ontology rule id the guide lacks is `missing` — cost if wrong: none
+- O11: under the Data track's own rule, removing an enum value is a removal and needs a new major (v3), even if no row uses it; lesson 4 presents the two honest ways to turn the gate green (a tickets.v3 contract without `security`, or the guide and ontology gaining a defined `security` category) with what each costs, and says the course leaves the gate red on purpose because both need a decision the course has not made; the quiz follows — cost if wrong: one lesson paragraph
