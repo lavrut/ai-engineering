@@ -319,3 +319,22 @@ def test_live_cap_stops_before_calling(servers, tmp_path):     # a fake upstream
 def test_the_key_never_goes_to_another_host():
     with pytest.raises(ValueError, match="only ever sent"):
         gateway.make_send("http://127.0.0.1:8791", api_key="dummy-not-a-key")
+
+
+def test_ratelimited_upstream_is_retried(servers, tmp_path):   # [429, 429, 200]
+    g = gateway_on(servers, tmp_path, injector.load_script(SCRIPTS / "ratelimited.json"))
+    r = post(g.url, "/v1/messages", BODY, {"x-team": "desk"})
+    assert r.status == 200 and [a["status"] for a in last_trace(g)["attempts"]] == [429, 429, 200]
+
+
+def test_gateway_limit_refuses_with_retry_after(servers, tmp_path):
+    inj = start_injector(servers, [200])
+    cfg = base_cfg(inj.url)
+    cfg = dataclasses.replace(cfg, models={**cfg.models, HAIKU: dataclasses.replace(cfg.models[HAIKU], rpm=1)},
+                              limit=config.LimitCfg(0))
+    g = start_gateway(servers, tmp_path, cfg)
+    first = post(g.url, "/v1/messages", BODY, {"x-team": "desk"})
+    second = post(g.url, "/v1/messages", {**BODY, "max_tokens": 65}, {"x-team": "desk"})  # not a cache hit
+    assert first.status == 200
+    assert second.status == 429 and "retry-after" in second.headers
+    assert last_trace(g)["outcome"] == "limited" and inj.served == 1
