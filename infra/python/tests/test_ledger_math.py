@@ -1,27 +1,10 @@
 import sys
-import types
 
 import pytest
 from conftest import FIXTURES, ROOT
 
 import config
 import ledger
-
-
-def import_proxy_cost():
-    """agents/proxy/proxy_cost.py, read-only, as the agents tests import it. Its sibling proxy.py needs httpx,
-    which this venv does not carry; proxy_cost takes only constants from it, none of which ledger_cost reads,
-    so a stand-in module supplies them and the real ledger_cost (with the lab's PRICES) runs."""
-    sys.path.insert(0, str(ROOT / "agents/proxy"))
-    try:
-        import proxy  # noqa: F401
-    except ModuleNotFoundError:
-        stub = types.ModuleType("proxy")
-        for name in ("DEFAULT_MAX_COST", "DEFAULT_MODEL", "EST_INPUT_TOKENS", "MAX_CALLS", "MAX_TOKENS", "MAX_TOKENS_LIMIT"):
-            setattr(stub, name, None)
-        sys.modules["proxy"] = stub
-    import proxy_cost
-    return proxy_cost
 
 
 def test_prices_are_the_labs():
@@ -31,7 +14,8 @@ def test_prices_are_the_labs():
 def test_cost_matches_the_proxys_formula():
     usage = {"input_tokens": 1000, "cache_creation_input_tokens": 200, "cache_read_input_tokens": 300, "output_tokens": 100}
     assert ledger.cost_of("claude-haiku-5-5", usage, ledger.lab_prices()) == pytest.approx((1000*0.10 + 200*1.25*0.10 + 300*0.10*0.10 + 100*0.50) / 1e6)
-    proxy_cost = import_proxy_cost()
+    sys.path.insert(0, str(ROOT / "llms/python")); sys.path.insert(0, str(ROOT / "agents/proxy"))
+    import proxy_cost                                                          # read-only, as the agents tests do
     assert ledger.cost_of("claude-haiku-5-5", usage, ledger.lab_prices()) == proxy_cost.ledger_cost("claude-haiku-5-5", usage)
 
 
