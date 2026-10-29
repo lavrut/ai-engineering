@@ -31,19 +31,21 @@ Builds on: the published course page (`app/publish`, v16 of the artifact), the a
 
 ## 3. The beats and the captions
 
-Dark theme (emulated `prefers-color-scheme: dark`), 1920×1080, the page served from `app/publish` on the loopback. Each caption is at most two short lines and stays for its beat; two captions in one beat change halfway.
+Light theme (emulated `prefers-color-scheme: light` and `data-theme="light"`; `--theme dark` records the dark theme instead), 1920×1080, the page served from `app/publish` on the loopback. Each caption is at most two short lines and stays for its beat; two captions in one beat change halfway. A drawn cursor glides to every element before it is clicked and shows a press; every view change fades out and in over 350 ms each way; scrolls are eased over 900 ms. (Changed on 2026-10-29 at the user's request from the dark, cursor-less, hard-cut first version.)
 
 | # | Seconds | On screen | Caption |
 |---|---|---|---|
-| 1 | 0–10 | Home page; slow scroll over the nine track cards | "AI Engineering: a hands-on course with real, runnable code." then "Nine tracks, from the harness to the gateway." |
+| 1 | 0–10 | Home page; slow scroll over the eight track cards | "AI Engineering: a hands-on course with real, runnable code." then "Eight tracks, from the harness to the gateway." |
 | 2 | 10–30 | Ontology lesson 1; the layers diagram stepping Next three times | "Every lesson: concept, a diagram, the code, a try-it, a quiz." then "Diagrams step through the mechanism." |
 | 3 | 30–55 | An Agents lesson with the trace replay; step through a recorded supervisor run: handoffs, tool calls, the human's decline | "Multi-agent runs are recorded once and replayed free, byte for byte." then "Watch the supervisor hand off, research, draft, review." |
 | 4 | 55–70 | A CodeTabs block; click the Go tab; scroll the section | "Python first. Go twins where it matters, equal on shared tests." |
 | 5 | 70–90 | AI Infrastructure capstone; TraceExplorer: filter by outcome, open a trace, its stage decisions | "Interactive aids read the course's own data. Here: a gateway trace, stage by stage." |
 | 6 | 90–105 | A quiz: pick an answer, the explanation appears | "Learning checks after every lesson, with the reasoning." |
 | 7 | 105–120 | The capstone gate: four green lines; then a test file scrolling briefly | "Every number on every page is pinned by a test. Gates are green or red on purpose." |
-| 8 | 120–135 | Viewport shrinks to phone width; the same aid scrolls inside its box | "Works at phone width. No horizontal scroll." |
-| 9 | 135–150 | Home page again, the track list; final card | "Nine tracks. Over 4,000 tests. Zero invented numbers." |
+| 8 | 120–135 | The page at phone width in a centred phone-sized frame; the same aid scrolls inside its box | "Works at phone width. No horizontal scroll." |
+| 9 | 135–150 | Home page again, the track list; final card | "Eight tracks. Over 4,000 tests. Zero invented numbers." |
+
+(The course has eight tracks, as its home page counts them; an earlier draft of this table said nine.)
 
 The closing figure's source: the suite summaries at main 35ceb8c (app 2,484; Python 1,628 across harness 33, llms 128, inspect 38, ml 208, mcp 285, agents 412, data 271, ontology 108, infra 145; plus the Go packages). The caption says "over 4,000"; the beats file records the figure and its date in a comment so a later run can update it.
 
