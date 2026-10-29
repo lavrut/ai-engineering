@@ -4,7 +4,7 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { codeProblems, resolveCode, sourceTexts } from '../src/lib/codeSourceText';
-import { CODE_SOURCES, fileName, parseCodeTabsTag, type CodeSourceId } from '../src/lib/codeSources';
+import { CODE_SOURCES, fileName, parseCodeTabsTag, sourceLang, type CodeSourceId } from '../src/lib/codeSources';
 import { listSections } from '../src/lib/regions';
 import { PATTERNS } from '../src/lib/agentsAids';
 
@@ -52,6 +52,8 @@ describe('code source registry', () => {
         'harness', 'llms', 'llms-inspect', 'lora', 'ml-fetch', 'ml-llm', 'ml-mlflow', 'ml-mlops', 'ml-monitor', 'ml-serve', 'ml-train',
         'mcp-agent', 'mcp-agent-config', 'mcp-agent-host', 'mcp-agent-model', 'mcp-app', 'mcp-auth', 'mcp-auth-server', 'mcp-client', 'mcp-client-calls', 'mcp-client-connect', 'mcp-ops', 'mcp-read', 'mcp-simulate',
         'agents-proxy', 'agents-proxy-cost', 'agents-proxy-handler', 'agents-proxy-server', 'agents-patterns', 'agents-supervisor', 'agents-langgraph', 'agents-sdk', 'agents-evals', 'agents-run-evals', 'agents-judge-set',
+        'data-contract', 'data-catalog', 'data-quality', 'data-gate', 'data-migrate',
+        'data-contract-tickets', 'data-contract-tickets-v2', 'data-contract-complaints', 'data-contract-traces',
       ].sort(),
     );
     expect(CODE_SOURCES['ml-serve']).toMatchObject({ python: 'ml/serve/server.py', go: 'ml/go/main.go' });
@@ -226,6 +228,84 @@ describe('code source registry', () => {
       expect(s.go!.split('\n')[0]).toMatch(/^\/\/ ── 5\. The supervisor/);
       expect(fileName('agents-evals', 'python')).toBe('scorers.py');
       expect(resolveCode({ source: 'agents-run-evals', section: 6 }).python.split('\n')[0]).toMatch(/^# ── 6\. The gate/);
+    });
+  });
+
+  // The Data Fabric & Data Contracts track: the validator in two languages (Python numbers 1-5, Go 1-9 over
+  // three files, so goSections: 'own'), the catalogue, quality, gate and migration scripts, and the contracts
+  // themselves, quoted as YAML by their `# ── N.` comment sections.
+  describe('data sources', () => {
+    const nums = (t: string | undefined) => listSections(t ?? '').map((x) => x.n);
+    const title = (t: string | undefined, n: number) => listSections(t ?? '').find((s) => s.n === n)?.title;
+
+    it.each([
+      ['data-contract', 'data/python/contract.py', [1, 2, 3, 4, 5], [6, 7, 8, 9, 1, 2, 3, 4, 5]],
+      ['data-catalog', 'data/python/catalog.py', [1, 2, 3, 4, 5, 6], undefined],
+      ['data-quality', 'data/python/quality.py', [1, 2, 3, 4, 5], undefined],
+      ['data-gate', 'data/python/gate.py', [1, 2, 3, 4], undefined],
+      ['data-migrate', 'data/python/migrate_tickets.py', [1, 2, 3, 4], undefined],
+      ['data-contract-tickets', 'data/contracts/tickets.v1.yaml', [1, 2, 3, 4, 5], undefined],
+      ['data-contract-tickets-v2', 'data/contracts/tickets.v2.yaml', [1, 2, 3, 4, 5], undefined],
+      ['data-contract-complaints', 'data/contracts/complaints.v1.yaml', [1, 2, 3, 4, 5], undefined],
+      ['data-contract-traces', 'data/contracts/agent-traces.v1.yaml', [1, 2, 3, 4, 5], undefined],
+    ] as const)('%s lists its numbered sections', (id, first, sections, go) => {
+      expect(CODE_SOURCES[id].python).toBe(first);
+      const t = sourceTexts(id);
+      expect(nums(t.python)).toEqual(sections);
+      expect(go ? nums(t.go) : t.go).toEqual(go);
+    });
+
+    it('pairs the Python validator with its Go twin, whose files number their own sections', () => {
+      expect(CODE_SOURCES['data-contract']).toEqual({
+        python: 'data/python/contract.py',
+        go: 'data/go/validate/rules.go',
+        goMore: ['data/go/validate/main.go', 'data/go/validate/contract.go'],
+        goSections: 'own',
+      });
+      expect(fileName('data-contract', 'go')).toBe('rules.go');
+      // The rules: Python section 3, Go section 7 (rules.go); the contract file loader: Python 1, Go 3 (contract.go).
+      const rules = resolveCode({ source: 'data-contract', section: 3, goSection: 7 });
+      expect(rules.python.split('\n')[0]).toMatch(/^# ── 3\. Rules/);
+      expect(rules.go!.split('\n')[0]).toMatch(/^\/\/ ── 7\. Rules/);
+      expect(rules.go).not.toContain('package main');
+      expect(resolveCode({ source: 'data-contract', section: 1, goSection: 3 }).go!.split('\n')[0]).toMatch(/^\/\/ ── 3\. Contracts/);
+      expect(resolveCode({ source: 'data-contract', section: 5, goSection: 9 }).go).toContain('func main()');
+      expect(codeProblems({ source: 'data-contract', section: 3 })).toEqual([
+        'data-contract: data/go/validate/rules.go numbers its own sections; add goSection={n} (or pythonOnly)',
+      ]);
+    });
+
+    it('quotes the gate and the migration as two sources, since both number 1-4', () => {
+      expect(title(sourceTexts('data-gate').python, 2)).toBe('The gate');
+      expect(title(sourceTexts('data-migrate').python, 2)).toBe('One row');
+      expect(resolveCode({ source: 'data-migrate', section: 2 }).python).toContain('def migrate(row: dict) -> dict:');
+      expect(fileName('data-migrate', 'python')).toBe('migrate_tickets.py');
+    });
+
+    it('quotes a contract by its five sections, in YAML', () => {
+      for (const id of ['data-contract-tickets', 'data-contract-tickets-v2', 'data-contract-complaints', 'data-contract-traces'] as const) {
+        expect(CODE_SOURCES[id].lang, id).toBe('yaml');
+        expect(CODE_SOURCES[id].go, id).toBeUndefined();
+        expect(listSections(sourceTexts(id).python).map((s) => s.title), id).toEqual(['info', 'schema', 'quality', 'servicing', 'consumers']);
+      }
+      const info = resolveCode({ source: 'data-contract-tickets', section: 1 }).python;
+      expect(info.split('\n')[0]).toMatch(/^# ── 1\. info ─+$/);
+      expect(info).toContain('  sunset: 2027-01-31');
+      expect(info).not.toContain('schema:');
+      expect(resolveCode({ source: 'data-contract-tickets-v2', section: 2 }).python).toContain('- name: urgency');
+      expect(resolveCode({ source: 'data-contract-complaints', section: 3 }).python).toContain('row_count: {min: 3600, max: 3600}');
+      expect(resolveCode({ source: 'data-contract-traces', section: 5 }).python).toContain('- name: agents-eval');
+      expect(fileName('data-contract-tickets', 'python')).toBe('tickets.v1.yaml');
+    });
+
+    it('labels a source by its language: Python unless the registry says YAML', () => {
+      expect(sourceLang('data-contract-tickets')).toEqual({ lang: 'yaml', label: 'YAML' });
+      expect(sourceLang('data-contract')).toEqual({ lang: 'python', label: 'Python' });
+      expect(sourceLang('harness')).toEqual({ lang: 'python', label: 'Python' });
+      // CodeTabs names its first tab and highlights it by the same call.
+      const tabs = readFileSync(join(here, '../src/components/CodeTabs.astro'), 'utf8');
+      expect(tabs).toMatch(/sourceLang\(source\)/);
+      expect(tabs).not.toMatch(/>Python<\/button>/);
     });
   });
 

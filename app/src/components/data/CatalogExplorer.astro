@@ -1,0 +1,16 @@
+---
+// Build-time wrapper: passes catalog.json's datasets (every one by default, in its order), each with its path,
+// files, rows, size, schema sketch, producer, consumers, contract and last commit. Lesson 2 may narrow it:
+// datasets={['tickets', 'tickets_v2']}, and pick the first shown with initial="tickets".
+import CatalogExplorerIsland from './CatalogExplorer.tsx';
+import { catalogExplorerProps, loadDataData } from '../../lib/dataData';
+
+interface Props {
+  datasets?: string[];
+  initial?: string;
+}
+
+const props = catalogExplorerProps(loadDataData().catalog, Astro.props);
+---
+
+<CatalogExplorerIsland client:visible {...props} />

@@ -1,0 +1,17 @@
+---
+// Build-time wrapper: passes one contract's export (data/contracts/<id>.contract.json), shown section by section.
+// verdicts={true} (lesson 5) adds every verdicts.json entry checked against it, so each section shows the
+// verdicts its rules produced. An unknown contract fails the build, naming the known ones.
+import ContractViewerIsland from './ContractViewer.tsx';
+import { contractViewerProps, loadDataData } from '../../lib/dataData';
+
+interface Props {
+  contract: string;
+  verdicts?: boolean;
+}
+
+const data = loadDataData();
+const props = contractViewerProps(data.contracts, data.verdicts, Astro.props);
+---
+
+<ContractViewerIsland client:visible {...props} />

@@ -14,6 +14,10 @@ import { requestResponse } from '../src/data/diagrams/request-response';
 import { toolRoundtrip } from '../src/data/diagrams/tool-roundtrip';
 import { agentPatterns } from '../src/data/diagrams/agent-patterns';
 import { replayProxy } from '../src/data/diagrams/replay-proxy';
+import { dataFabric } from '../src/data/diagrams/data-fabric';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const all: [string, Diagram][] = [
   ['harness-flow', harnessFlow],
@@ -29,6 +33,7 @@ const all: [string, Diagram][] = [
   ['mcp-oauth', mcpOauth],
   ['agent-patterns', agentPatterns],
   ['replay-proxy', replayProxy],
+  ['data-fabric', dataFabric],
 ];
 
 describe('diagram data', () => {
@@ -237,6 +242,102 @@ describe('diagram data', () => {
       expect(replayProxy.steps[5].caption).toContain('--max-cost');
       expect(replayProxy.steps[5].caption).toContain('from the environment');
       expect(replayProxy.steps[6].caption).toContain('latest wins');
+    });
+  });
+
+  // The Data Fabric diagram is drawn from lineage.json (data/python/catalog.py writes it): every dataset is a
+  // node, every track that writes one is a producer on the left, every track that reads one a consumer on the
+  // right (a lineage consumer such as mcp-read-server folds into its track), and a contract rides on each edge
+  // that has one. The test rebuilds the edges from lineage.json, so a new dataset or consumer fails here.
+  describe('data-fabric', () => {
+    type LNode = { id: string; kind: 'track' | 'consumer' | 'dataset'; track?: string };
+    type LEdge = { from: string; to: string; contract: string | null; version: string | null };
+    const here = dirname(fileURLToPath(import.meta.url));
+    const lineage = JSON.parse(readFileSync(join(here, '../../data/data/derived/lineage.json'), 'utf8')) as { nodes: LNode[]; edges: LEdge[] };
+    const catalog = JSON.parse(readFileSync(join(here, '../../data/data/derived/catalog.json'), 'utf8')) as Record<string, unknown>;
+    const kind = new Map(lineage.nodes.map((n) => [n.id, n]));
+    const id = (n: string, side: 'from' | 'to') => {
+      const node = kind.get(n)!;
+      if (node.kind === 'dataset') return n;
+      if (node.kind === 'track') return `p-${n}`;
+      return side === 'to' ? `c-${node.track}` : n;
+    };
+    const roleOf = (n: string) => dataFabric.nodes.find((x) => x.id === n)?.role;
+
+    it('has every catalogued dataset as a dataset node (the eleven plus tickets_v2)', () => {
+      const datasets = dataFabric.nodes.filter((n) => n.role === 'dataset').map((n) => n.id);
+      expect([...datasets].sort()).toEqual(Object.keys(catalog).sort());
+      expect(datasets).toHaveLength(12);
+      for (const n of dataFabric.nodes.filter((n) => n.role === 'dataset')) expect(n.label).toBe(n.id);
+    });
+
+    it('draws producers on the left and consumers on the right, one node per track', () => {
+      expect(dataFabric.nodes.filter((n) => n.id.startsWith('p-')).map((n) => n.id)).toEqual(['p-llms', 'p-data', 'p-ml', 'p-mcp', 'p-agents']);
+      expect(dataFabric.nodes.filter((n) => n.id.startsWith('c-')).map((n) => n.id)).toEqual(['c-mcp', 'c-agents', 'c-llms', 'c-ml', 'c-app']);
+      for (const n of dataFabric.nodes.filter((n) => n.id.startsWith('p-'))) expect(roleOf(n.id)).toBe('tool');
+      for (const n of dataFabric.nodes.filter((n) => n.id.startsWith('c-'))) expect(roleOf(n.id)).toBe('user');
+      const xs = (p: string) => new Set(dataFabric.nodes.filter((n) => n.id.startsWith(p)).map((n) => n.x));
+      const dx = new Set(dataFabric.nodes.filter((n) => n.role === 'dataset').map((n) => n.x));
+      expect([xs('p-').size, dx.size, xs('c-').size]).toEqual([1, 1, 1]);
+      expect([...xs('p-')][0]).toBeLessThan([...dx][0]);
+      expect([...dx][0]).toBeLessThan([...xs('c-')][0]);
+    });
+
+    it("has exactly lineage.json's edges, folded to tracks, each carrying its contract", () => {
+      const want = new Set(lineage.edges.map((e) => `${id(e.from, 'from')} -> ${id(e.to, 'to')} [${e.contract ?? ''}]`));
+      const got = dataFabric.edges.map((e) => `${e.from} -> ${e.to} [${/^([a-z-]+\.v\d+)/.exec(e.label ?? '')?.[1] ?? ''}]`);
+      expect(new Set(got).size).toBe(got.length);
+      expect(new Set(got)).toEqual(want);
+      expect(got).toHaveLength(31);
+      for (const e of dataFabric.edges) expect(e.id).toBe(`e-${e.from}-${e.to}`);
+      // Only an edge with a contract is labelled, and the migration edge says what it is.
+      expect(dataFabric.edges.filter((e) => e.label).map((e) => e.label)).toEqual([
+        'tickets.v1', 'tickets.v2', 'complaints.v1', 'agent-traces.v1', 'tickets.v1, migrated', 'tickets.v1', 'tickets.v2', 'complaints.v1', 'agent-traces.v1',
+      ]);
+    });
+
+    it('links its steps to the pinned sources and sections, each caption ending with its section', () => {
+      const got = Object.fromEntries(dataFabric.steps.map((s) => [s.n, s.code ? [s.code.source, s.code.section, s.code.goSection ?? null] : null]));
+      expect(got).toEqual({
+        1: null,
+        2: ['data-catalog', 3, null],
+        3: ['data-contract-tickets', 5, null],
+        4: ['data-quality', 4, null],
+        5: ['data-contract', 3, 7],
+        6: ['data-gate', 2, null],
+      });
+      for (const s of dataFabric.steps) {
+        const m = /In the code: section (\d+)\.$/.exec(s.caption);
+        if (!s.code) {
+          expect(m, `step ${s.n}`).toBeNull();
+          continue;
+        }
+        expect(Number(m![1]), `step ${s.n}`).toBe(s.code.section);
+      }
+    });
+
+    it('links each step to the section that holds what its caption describes', () => {
+      const want: Record<number, [string, string?]> = {
+        2: ['def catalog('],
+        3: ['- name: mcp-read-server'],
+        4: ['def build(as_of: date) -> dict:'],
+        5: ['def _field_rules(', 'func fieldRules('],
+        6: ['def gate('],
+      };
+      for (const [n, [py, go]] of Object.entries(want)) {
+        const step = dataFabric.steps[Number(n) - 1];
+        const code = resolveCode(step.code!);
+        expect(code.python, `step ${n}`).toContain(py);
+        if (go) expect(code.go, `step ${n}`).toContain(go);
+      }
+    });
+
+    it('names the numbers it states as lineage.json and gate.json have them', () => {
+      expect(dataFabric.steps[0].caption).toContain('12 datasets');
+      expect(dataFabric.steps[0].caption).toContain('5 tracks');
+      expect(dataFabric.steps[5].caption).toContain('2027-01-31');
+      expect(dataFabric.steps[5].caption).toContain('priority');
+      expect(dataFabric.steps[5].caption).toContain('urgency');
     });
   });
 

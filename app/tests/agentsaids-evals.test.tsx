@@ -361,7 +361,7 @@ describe('recording sets (lesson 7)', () => {
 // under src/, agents/data/derived/ or astro.config.mjs, the setup runs `astro build` first (about 5 s).
 const APP = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PAGE = join(APP, 'dist', 'index.html');
-const SOURCES = [join(APP, 'src'), resolve(APP, '../agents/data/derived'), join(APP, 'astro.config.mjs')];
+const SOURCES = [join(APP, 'src'), resolve(APP, '../agents/data/derived'), resolve(APP, '../data/data/derived'), resolve(APP, '../data/contracts'), join(APP, 'astro.config.mjs')];
 const AIDS = ['PatternStepper', 'AgentTrace', 'CostCompare', 'EngineScorecard'];
 const AGENTS_VIEWS = [
   'agents-workflows', 'agents-chain-route', 'agents-parallel', 'agents-evaluator', 'agents-multi-agent', 'agents-more-agents',
@@ -392,12 +392,12 @@ function ensureBuilt(): void {
 
 type Island = { component: string; bytes: number };
 
-/** Every agents lesson's islands, in page order: lesson n is the n-th agents view. */
-function shippedIslands(html: string): { lesson: string; islands: Island[] }[] {
+/** Every lesson's islands of one track, in page order: lesson n is the n-th view of that track. */
+function shippedIslands(html: string, track = 'agents'): { lesson: string; islands: Island[] }[] {
   const views = html.split(/(?=<section data-view=")/).slice(1);
   return views
     .map((chunk) => ({ view: /^<section data-view="([^"]+)"/.exec(chunk)![1], chunk }))
-    .filter(({ view }) => view.startsWith('agents-'))
+    .filter(({ view }) => view.startsWith(`${track}-`))
     .map(({ view, chunk }, i) => {
       const islands = [...chunk.matchAll(/<astro-island\b((?:[^>"]|"[^"]*")*)>/g)].map(([, attrs]) => {
         const component = /component-url="[^"]*\/([A-Za-z]+)\.[^"/]*\.js"/.exec(attrs)?.[1] ?? '?';
@@ -417,12 +417,25 @@ describe('page budget', () => {
   });
 
   let lessons: { lesson: string; islands: Island[] }[] = [];
+  let dataLessons: { lesson: string; islands: Island[] }[] = [];
   const bytes = (l: { islands: Island[] }) => l.islands.filter((x) => AIDS.includes(x.component)).reduce((a, x) => a + x.bytes, 0);
 
   beforeAll(() => {
     ensureBuilt();
-    lessons = shippedIslands(readFileSync(PAGE, 'utf8'));
+    const html = readFileSync(PAGE, 'utf8');
+    lessons = shippedIslands(html);
+    dataLessons = shippedIslands(html, 'data');
   }, 180_000);
+
+  // The Data Fabric & Data Contracts track, measured the same way: the props of its four aids over its lessons
+  // (none until its lessons ship; tests/dataaids-contract.test.tsx also measures the largest props they could ship).
+  it('keeps the props the data aids ship, as the built page carries them, under 200 KB', () => {
+    const DATA_AIDS = ['CatalogExplorer', 'QualityReport', 'ContractViewer', 'LineageDiff'];
+    const sizes = dataLessons.map((l) => [l.lesson, l.islands.filter((x) => DATA_AIDS.includes(x.component)).reduce((a, x) => a + x.bytes, 0)] as const);
+    const total = sizes.reduce((a, [, n]) => a + n, 0);
+    expect(total, `the data aids ship ${total} bytes of props: ${sizes.map(([name, n]) => `${name} ${n}`).join(', ')}`).toBeLessThan(200_000);
+    for (const l of dataLessons) expect(l.islands.every((x) => !DATA_AIDS.includes(x.component) || x.bytes > 500), l.lesson).toBe(true);
+  });
 
   it('finds every agents lesson and its aids in the built page', () => {
     expect(lessons.map((l) => l.lesson.replace(/^lesson \d+ \((.*)\)$/, '$1'))).toEqual(AGENTS_VIEWS);
