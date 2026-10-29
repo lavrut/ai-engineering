@@ -10,6 +10,7 @@ Standard library only; nothing here calls a model.
 """
 from __future__ import annotations
 
+import json
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -71,3 +72,78 @@ def worst_case_usd(model: str, in_tokens: int, out_tokens: int, prices: dict[str
         return 0.0
     p_in, p_out = prices[model]
     return (in_tokens * p_in + out_tokens * p_out) / 1_000_000
+
+
+# ── 3. Ledger store ─────────────────────────────────────────────────────────
+# One JSON line per call, appended and never rewritten (the agents proxy's store, one row per call).
+# A last line cut off by a crash is skipped with a warning; a bad line anywhere else is corruption.
+REFUSED_STATUSES = (400, 402, 404, 429)  # the gateway's own refusals: parse, budget, deny, limit
+
+
+def read_jsonl(path: Path) -> list[dict]:
+    """Every row of a JSONL file. A last line that does not parse is skipped with one warning on
+    stderr (the writer was interrupted); an unparseable line before it raises ValueError naming its number."""
+    path = Path(path)
+    if not path.exists():
+        return []
+    lines = [(n, s) for n, s in enumerate(path.read_text(encoding="utf-8").splitlines(), 1) if s.strip()]
+    out = []
+    for i, (n, s) in enumerate(lines):
+        try:
+            row = json.loads(s)
+            if not isinstance(row, dict):
+                raise ValueError("not an object")
+        except ValueError as e:
+            if i == len(lines) - 1:
+                print(f"warning: {path}: skipped a half-written last line", file=sys.stderr)
+                continue
+            raise ValueError(f"{path}: line {n} is not a JSON object ({e})") from e
+        out.append(row)
+    return out
+
+
+class Ledger:
+    """The append-only ledger file and its rows in memory."""
+
+    def __init__(self, path: Path):
+        self.path = Path(path)
+        self._rows: list[dict] = []
+        self.load()
+
+    def load(self) -> None:
+        self._rows = read_jsonl(self.path)
+
+    def append(self, row: dict) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        self._rows.append(dict(row))
+
+    def rows(self) -> list[dict]:
+        return list(self._rows)
+
+    # ── 4. Budget state ─────────────────────────────────────────────────────
+    def spend_by_team(self) -> dict[str, float]:
+        """Dollars per team; a row with no cost (None) adds nothing."""
+        out: dict[str, float] = {}
+        for r in self._rows:
+            if r.get("cost_usd") is not None:
+                out[r["team"]] = out.get(r["team"], 0.0) + r["cost_usd"]
+        return out
+
+
+def summary(rows: list[dict]) -> dict:
+    """teams: {requests, cost_usd, cached, refused}; tags: cost by tag; top_tags: the 10 dearest,
+    cost descending then tag. Rows with cost_usd None count as requests but add no cost."""
+    teams: dict[str, dict] = {}
+    tags: dict[str, float] = {}
+    for r in rows:
+        t = teams.setdefault(r["team"], {"requests": 0, "cost_usd": 0.0, "cached": 0, "refused": 0})
+        t["requests"] += 1
+        t["cached"] += bool(r.get("cached"))
+        t["refused"] += r.get("status") in REFUSED_STATUSES
+        if r.get("cost_usd") is not None:
+            t["cost_usd"] += r["cost_usd"]
+            tags[r["tag"]] = tags.get(r["tag"], 0.0) + r["cost_usd"]
+    top = sorted(tags.items(), key=lambda kv: (-kv[1], kv[0]))[:10]
+    return {"teams": teams, "tags": tags, "top_tags": [[k, v] for k, v in top]}
