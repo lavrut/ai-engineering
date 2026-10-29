@@ -13,7 +13,7 @@ import json
 import sys
 from pathlib import Path
 
-from ledger import read_jsonl
+from ledger import open_for_append, read_jsonl
 
 # ── 1. Store ────────────────────────────────────────────────────────────────
 # Keys of a trace: id, parent_id, ts, team, tag, model, path, status, decisions, ms, usage,
@@ -29,8 +29,7 @@ class TraceStore:
         self.path = self.dir / f"{run}.jsonl"
 
     def write(self, trace: dict) -> None:
-        self.dir.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as f:
+        with open_for_append(self.path) as f:
             f.write(json.dumps(trace, ensure_ascii=False) + "\n")
 
     def read(self) -> list[dict]:

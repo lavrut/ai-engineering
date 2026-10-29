@@ -108,3 +108,26 @@ def test_response_without_usage_gives_null_cost():
     cost = ledger.cost_of("claude-haiku-5-5", usage or {}, ledger.lab_prices())
     r = row(cost=cost)
     assert r["cost_usd"] is None
+
+
+def test_ledger_append_after_half_written_line_keeps_the_new_row(tmp_path, capsys):
+    p = tmp_path / "l.jsonl"
+    p.write_text(json.dumps(row(tag="old")) + '\n{"ts": 2, "te')
+    led = ledger.Ledger(p)
+    assert "skipped a half-written last line" in capsys.readouterr().err
+    led.append(row(tag="new"))
+    assert [r["tag"] for r in ledger.Ledger(p).rows()] == ["old", "new"]
+    led.append(row(tag="newer"))
+    assert [r["tag"] for r in ledger.Ledger(p).rows()] == ["old", "new", "newer"]
+
+
+def test_trace_write_after_half_written_line_keeps_the_new_row(tmp_traces, capsys):
+    store = traces.TraceStore(tmp_traces, "r")
+    store.write(trace("a"))
+    with store.path.open("a") as f:
+        f.write('{"id": "half')
+    assert [t["id"] for t in store.read()] == ["a"]
+    assert "skipped a half-written last line" in capsys.readouterr().err
+    store.write(trace("b"))
+    store.write(trace("c"))
+    assert [t["id"] for t in store.read()] == ["a", "b", "c"]

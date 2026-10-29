@@ -102,6 +102,20 @@ def read_jsonl(path: Path) -> list[dict]:
     return out
 
 
+def open_for_append(path: Path):
+    """Open a JSONL file for appending. If a crash left a last line with no newline, cut that fragment
+    off first (read_jsonl already skips it with a warning), so the new row starts on its own line and
+    the old fragment never becomes a mid-file error."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() and path.stat().st_size:
+        data = path.read_bytes()
+        if not data.endswith(b"\n"):
+            with path.open("r+b") as f:
+                f.truncate(data.rfind(b"\n") + 1)
+    return path.open("a", encoding="utf-8")
+
+
 class Ledger:
     """The append-only ledger file and its rows in memory."""
 
@@ -114,8 +128,7 @@ class Ledger:
         self._rows = read_jsonl(self.path)
 
     def append(self, row: dict) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as f:
+        with open_for_append(self.path) as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
         self._rows.append(dict(row))
 
