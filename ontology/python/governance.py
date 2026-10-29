@@ -4,24 +4,29 @@ governance — every recorded agents action, checked against what the ontology p
 
 Section 6 of ontology/lumen.yaml says which agent role may take which action, and on what
 condition. The agents track recorded every desk run: each tool call with the agent that made
-it, each handoff the supervisor made, and the person's answer to the write. Nothing is called
-here. Each of those becomes an event, a role taking an action, and each event gets a verdict:
+it, each handoff the supervisor made, and the answer the scripted person gives when asked about
+a write. Nothing is called here. Each tool call and handoff becomes an event, a role taking an
+action; the person's answer becomes one only in a run that attempted a write, since nobody was
+asked in the others. The checker, not the trace, names the roles of those two: a handoff is the
+supervisor's, an answer the human's. Each event gets a verdict:
 
     permitted      a row allows the role the action, and every condition it names is met
     conditional    a row allows it, a condition is unmet or cannot be evaluated (named), and
                    the call was refused (the trace marks it `is_error`)
     not permitted  no row allows it, the tool is not in the ontology's table, or the call
-                   landed (not `is_error`) with a condition unmet
+                   landed (`is_error` not true: a missing field counts as landed) with a
+                   condition unmet
 
 The gate is green when no event is `not permitted` and every desk trace could be read;
 conditional events, attempts the desk refused, are counted and allowed. A condition is judged
-once per run, from the trace fields its `evaluated_from` names (all must hold). That is coarser than the agents track's scorer,
-which places each write against the review at the moment it was made (agents/evals/scorers.py).
+once per run, from the trace fields its `evaluated_from` names (all must hold). That is coarser
+than the agents track's scorer, which places each write against the review at the moment it was
+made (agents/evals/scorers.py).
 
 Run (from the repo root):
     .venv-ontology/bin/python ontology/python/governance.py            # rewrite governance.json
     .venv-ontology/bin/python ontology/python/governance.py --check    # fail if it drifted
-    .venv-ontology/bin/python ontology/python/governance.py --ontology /tmp/lumen.yaml --out /tmp/governance.json
+    .venv-ontology/bin/python ontology/python/governance.py --ontology /tmp/lumen.yaml --out /tmp/g.json
 Free and offline: the agents traces are read, never imported or changed.
 """
 from __future__ import annotations
@@ -82,13 +87,14 @@ def rules(onto: O.Ontology) -> tuple[dict, dict, dict]:
 
 
 def events(run: dict, tools: dict) -> list[dict]:
-    """One event per tool call (the caller's role; `landed` when the call was not an error), one
-    `escalate` by the supervisor per handoff, and one `approve` by the human per run, carrying the
-    answer the trace recorded."""
+    """One event per tool call (the caller's role; `landed` unless the trace marks it an error, so
+    an unknown outcome fails closed), one `escalate` by the supervisor per handoff, and, in a run
+    that attempted a write, one `approve` by the human carrying the answer the trace recorded."""
     out = [{"role": str(c.get("agent")), "tool": str(c.get("tool")), "action": tools.get(str(c.get("tool"))),
-            "landed": c.get("is_error") is False} for c in run["tool_calls"]]
+            "landed": c.get("is_error") is not True} for c in run["tool_calls"]]
     out += [{"role": "supervisor", "tool": "handoff", "action": tools.get("handoff")} for _ in run["handoffs"]]
-    out.append({"role": "human", "tool": "confirmation", "action": tools.get("confirmation"), "outcome": run["approve"]})
+    if any(e["action"] == "write" for e in out):
+        out.append({"role": "human", "tool": "confirmation", "action": tools.get("confirmation"), "outcome": run["approve"]})
     return out
 
 
@@ -131,10 +137,6 @@ def verdict(event: dict, run: dict, rows: dict, conds: dict) -> tuple[str, str, 
 
 
 # ── 3. Build, write, check ──────────────────────────────────────────────────
-def _ids(onto: O.Ontology, cls: str) -> list[str]:
-    return [i for _, i in sorted((x.get("order", 0), i) for i, x in onto.individuals.items() if x.get("class") == cls)]
-
-
 def _zero() -> dict:
     return {"events": 0, **{v: 0 for v in VERDICTS}}
 
@@ -158,7 +160,7 @@ def gate(totals: dict, violations: list[dict]) -> dict:
 def build(onto: O.Ontology, root: Path = ROOT) -> dict:
     """Check every desk run under `root` (the repo, or a fixture tree with the same layout)."""
     tools, rows, conds = rules(onto)
-    roles, actions = _ids(onto, "AgentRole"), _ids(onto, "Action")
+    roles, actions = O.ids_of(onto, "AgentRole"), O.ids_of(onto, "Action")
     runs, skipped = read_traces(root / "agents" / "data" / "traces")
     engines = sorted({r["engine"] for r in runs})
     cells = {(r, a): {"role": r, "action": a,

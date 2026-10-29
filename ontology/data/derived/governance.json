@@ -6,63 +6,63 @@
     "escalate"
   ],
   "approvals": {
-    "decline": 104
+    "decline": 60
   },
   "by_engine": {
     "hand": {
       "single": {
         "conditional": 5,
-        "events": 41,
+        "events": 33,
         "not_permitted": 0,
-        "permitted": 36
+        "permitted": 28
       },
       "supervisor": {
         "conditional": 12,
-        "events": 120,
+        "events": 119,
         "not_permitted": 0,
-        "permitted": 108
+        "permitted": 107
       }
     },
     "hand-go": {
       "single": {
         "conditional": 5,
-        "events": 41,
+        "events": 33,
         "not_permitted": 0,
-        "permitted": 36
+        "permitted": 28
       },
       "supervisor": {
         "conditional": 11,
-        "events": 117,
+        "events": 115,
         "not_permitted": 0,
-        "permitted": 106
+        "permitted": 104
       }
     },
     "langgraph": {
       "single": {
         "conditional": 3,
-        "events": 36,
+        "events": 26,
         "not_permitted": 0,
-        "permitted": 33
+        "permitted": 23
       },
       "supervisor": {
         "conditional": 10,
-        "events": 116,
+        "events": 113,
         "not_permitted": 0,
-        "permitted": 106
+        "permitted": 103
       }
     },
     "sdk": {
       "single": {
         "conditional": 5,
-        "events": 28,
+        "events": 20,
         "not_permitted": 0,
-        "permitted": 23
+        "permitted": 15
       },
       "supervisor": {
         "conditional": 9,
-        "events": 122,
+        "events": 118,
         "not_permitted": 0,
-        "permitted": 113
+        "permitted": 109
       }
     }
   },
@@ -83,7 +83,7 @@
   ],
   "gate": {
     "ok": true,
-    "reason": "green: 0 not permitted; 60 conditional, 561 permitted, of 621 events"
+    "reason": "green: 0 not permitted; 60 conditional, 517 permitted, of 577 events"
   },
   "matrix": [
     {
@@ -1121,38 +1121,38 @@
       "by_engine": {
         "hand": {
           "conditional": 0,
-          "events": 26,
+          "events": 17,
           "not_permitted": 0,
-          "permitted": 26
+          "permitted": 17
         },
         "hand-go": {
           "conditional": 0,
-          "events": 26,
+          "events": 16,
           "not_permitted": 0,
-          "permitted": 26
+          "permitted": 16
         },
         "langgraph": {
           "conditional": 0,
-          "events": 26,
+          "events": 13,
           "not_permitted": 0,
-          "permitted": 26
+          "permitted": 13
         },
         "sdk": {
           "conditional": 0,
-          "events": 26,
+          "events": 14,
           "not_permitted": 0,
-          "permitted": 26
+          "permitted": 14
         }
       },
       "conditions": [],
-      "events": 104,
+      "events": 60,
       "role": "human",
       "rule": "permitted",
       "unmet": {},
       "verdicts": {
         "conditional": 0,
         "not_permitted": 0,
-        "permitted": 104
+        "permitted": 60
       }
     },
     {
@@ -1337,9 +1337,9 @@
   "totals": {
     "conditional": 60,
     "desk_runs": 104,
-    "events": 621,
+    "events": 577,
     "not_permitted": 0,
-    "permitted": 561,
+    "permitted": 517,
     "skipped": 30,
     "traces": 134,
     "unreadable": 0,

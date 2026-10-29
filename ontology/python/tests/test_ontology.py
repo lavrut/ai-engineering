@@ -399,6 +399,7 @@ def test_check_actions_dangling_ids_are_errors_naming_the_id():
     assert "delete_ticket" in detail["delete"]
     assert "condition" in detail["signed_off"]
     assert [(f["subject"], f["level"]) for f in findings if f["rule"] == "duplicate_permission"] == [("bot read", "error")]
+    assert [(f["subject"], f["level"]) for f in findings if f["rule"] == "duplicate_condition"] == [("confirmed", "error")]
     assert "unknown_section" not in rules(findings)
 
 

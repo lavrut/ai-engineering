@@ -130,6 +130,9 @@ def test_real_traces_gate_is_green_and_committed_file_matches(capsys):
     data = G.build(onto())
     assert data["gate"]["ok"] is True
     assert data["totals"]["desk_runs"] == 104 and data["totals"]["skipped"] == 30
+    # one approve event per run that attempted a write (ruling A10): 18 single and 42 supervisor runs
+    assert data["approvals"] == {"decline": 60}
+    assert cell(data, "human", "approve")["events"] == cell(data, "single", "write")["events"] + cell(data, "supervisor", "write")["events"]
     assert data["totals"]["not_permitted"] == 0
     assert all(s["reason"].startswith("pattern demo") for s in data["skipped"])
     assert G.GOVERNANCE.read_text(encoding="utf-8") == O.dumps(data)
@@ -152,10 +155,12 @@ def test_write_is_deterministic(tmp_path):
 
 
 # ── Writes that landed, and the two confirmations (rulings A7, A8) ──────────
-def one_run(tmp_path, approve: str, elicit: str, is_error: bool) -> dict:
+def one_run(tmp_path, approve: str, elicit: str, is_error: bool | None, tool: str = "label_ticket") -> dict:
+    call = {"agent": "single", "tool": tool, "args": {"id": "t009", "label": "bug"}}
+    if is_error is not None:
+        call["is_error"] = is_error
     run = {"engine": "test", "desk": "single", "approve": approve, "elicit": elicit,
-           "output": {"tool_calls": [{"agent": "single", "tool": "label_ticket", "args": {"id": "t009", "label": "bug"},
-                                      "is_error": is_error}], "handoffs": []}}
+           "output": {"tool_calls": [call], "handoffs": []}}
     d = tmp_path / "agents" / "data" / "traces" / "desk-test"
     d.mkdir(parents=True)
     (d / "run.json").write_text(json.dumps(run))
@@ -189,3 +194,18 @@ def test_both_yeses_and_a_landed_write_is_permitted(tmp_path):
     data = one_run(tmp_path, "accept", "accept", is_error=False)
     assert cell(data, "single", "write")["verdicts"] == {"permitted": 1, "conditional": 0, "not_permitted": 0}
     assert data["gate"]["ok"] is True
+
+
+def test_a_write_with_no_is_error_field_counts_as_landed(tmp_path):
+    """Ruling A11: an unknown outcome fails closed."""
+    data = one_run(tmp_path, "decline", "accept", is_error=None)
+    assert data["violations"][0]["detail"] == "landed without human_confirmed"
+    assert data["totals"]["writes_landed"] == 1 and data["gate"]["ok"] is False
+
+
+def test_a_run_with_no_write_attempt_has_no_approve_event(tmp_path):
+    """Ruling A10: nobody was asked, so the run's scripted answer is not an event."""
+    data = one_run(tmp_path, "decline", "accept", is_error=False, tool="get_ticket")
+    assert data["approvals"] == {}
+    assert cell(data, "human", "approve")["events"] == 0
+    assert data["totals"]["events"] == 1 and data["totals"]["permitted"] == 1

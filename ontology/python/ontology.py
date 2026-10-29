@@ -203,6 +203,11 @@ def class_properties(onto: Ontology, cls: str) -> dict:
     return {pid: p for pid, p in onto.properties.items() if _is_id(p.get("domain")) and p["domain"] in chain}
 
 
+def ids_of(onto: Ontology, cls: str) -> list[str]:
+    """The ids of one class's individuals, in their `order` (0 when missing, then by id)."""
+    return [i for _, i in sorted((x.get("order", 0), i) for i, x in onto.individuals.items() if x.get("class") == cls)]
+
+
 def _cycles(onto: Ontology) -> list[list[str]]:
     """Each subclass_of cycle once, as a path starting and ending at its smallest id."""
     found: dict[frozenset, list[str]] = {}
@@ -388,8 +393,7 @@ def _check_actions(onto: Ontology) -> list[dict]:
     action. A dangling id is an error whose subject is that id; a part in the wrong shape
     is `malformed`, never an exception."""
     a, out = onto.actions, []
-    of = lambda cls: {i for i, x in onto.individuals.items() if x.get("class") == cls}  # noqa: E731
-    roles, acts, conds, seen = of("AgentRole"), of("Action"), set(), set()
+    roles, acts, conds, seen = set(ids_of(onto, "AgentRole")), set(ids_of(onto, "Action")), set(), set()
 
     def bad(where: str, what: str) -> None:
         out.append(finding("error", "malformed", f"actions.{where}", what))
@@ -404,6 +408,8 @@ def _check_actions(onto: Ontology) -> list[dict]:
             parts[name] = want()
     for i, c in enumerate(parts["conditions"]):
         if isinstance(c, dict) and _is_id(c.get("id")) and c.get("text"):
+            if c["id"] in conds:
+                out.append(finding("error", "duplicate_condition", c["id"], f"actions.conditions[{i}]: a second condition with this id"))
             conds.add(c["id"])
         else:
             bad(f"conditions[{i}]", "a condition is a mapping with an id and a text")
