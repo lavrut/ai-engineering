@@ -49,7 +49,9 @@ CAPSTONE_ABOUT = {
                 "infra/data/fixtures/injector, retry.base_ms 1, rng Random(0): its status, outcome, decisions "
                 "and attempts (model, status, backoff_ms)",
     "gate": "replay.py --gate: ledger (per desk set, the gateway's ledger plus what its cache hits were recorded "
-            "at equals the agents traces' cost within 1e-9), budgets, stages, figures",
+            "at equals the agents traces' cost within 1e-9; the independent check), budgets, stages (a failed or "
+            "errored trace fails it), figures (the hit rate and p95 rebuilt from the same run's traces and recordings: "
+            "a consistency check, not an independent one; drift from the committed capstone.json is --check's job)",
 }
 LEDGER_ABOUT = {
     "ledger": "ledger.summary over the capstone run's ledger rows (one per call; refused = status 400, 402, 404 or "

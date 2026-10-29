@@ -126,7 +126,7 @@ The limits are section 5 of the config.
 
 ## How Go does it
 
-The Go twin's section 3 makes the same verdicts with the same detail strings, on every fixture case. Two lines show what that takes.
+The Go twin's section 3 makes the same verdicts, and the twin test checks the same stage, verdict and status on every fixture case. The detail strings are written to match Python's, but the test does not compare them. Two lines show what that takes.
 
 - `return utf8.RuneCountInString(Dumps(body, true))/4 + 1, out` counts characters, not bytes. Python's `len` counts code points, and a ticket with an accented name has more bytes than characters, so counting bytes would give Go a larger estimate.
 - `d.LimitUSD = &lim` stores the limit as a pointer, so a team with no budget has no limit at all, as Python's `None`, rather than a limit of 0 that a reader could mistake for a real one.

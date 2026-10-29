@@ -490,7 +490,7 @@ Each in a terminal of its own, from the repo root. The proxy replays one recorde
 
 Exit codes: 0 when the run finished (a failed gate line is printed, not an exit status, as with the Ontology audit), or for `--check` when the files are up to date; 1 when `--check` finds a derived file drifted; 2 when the config is invalid or the gateway or proxy could not be started or reached, or when `--check` is combined with `--gateway`, `--sets` or another config.
 
-The replay runs on replay time: the gateway's clock advances by each call's recorded milliseconds, so the rate limiter judges the recorded cadence and not the speed of the replay. A by-hand replay through `--gateway` runs on the wall clock, so its limiter figures differ from the committed ones. There is no run of the agents track's `run.py` through the gateway: `run.py` owns port 8790 for its own proxy and the agents code is read-only, so lesson 6 calls the hand-built chain pattern through the gateway instead.
+The replay runs on replay time: the gateway's clock advances by each call's recorded milliseconds, so the rate limiter judges the recorded cadence and not the speed of the replay. A by-hand replay through `--gateway` runs on the wall clock, so its limiter figures differ from the committed ones. There is no run of the agents track's `run.py` through the gateway: `run.py` owns port 8790 for its own proxy and the agents code is read-only, so lesson 1 calls the hand-built chain pattern through the gateway instead.
 
 ### Trace queries
 

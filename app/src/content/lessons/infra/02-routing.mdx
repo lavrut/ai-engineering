@@ -89,7 +89,7 @@ When the verdict is `deny`, the chain in section 8 answers `404` with the decisi
 
 ## How Go does it
 
-The Go twin's `Route` makes the same three decisions, with the same detail strings, and the twin test runs every fixture case through both languages and compares the lines byte for byte.
+The Go twin's `Route` makes the same three decisions. The twin test runs every fixture case through both languages and compares the stage, the verdict and the status byte for byte. The detail strings are written to match, but the test does not compare them: the details the lessons quote are Python's.
 
 - `model, _ := req.body().MustGet("model").(string)` reads the model with a type assertion. A body whose model is not a string would read as an empty name and meet the deny; the parse step has already refused such a body before the route stage runs.
 - `Fallback: append([]string{}, r.Fallback...)` copies the fallback list. Go slices share their backing array, so returning `r.Fallback` itself would let a caller change the config. Python's `list(r.fallback)` makes the same copy.

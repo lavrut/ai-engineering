@@ -152,7 +152,6 @@ def test_every_lesson_has_a_try_it_with_commands():
     assert all(s.code.strip() for v in STEPS.values() for s in v)
 
 
-@pytest.mark.skipif(".venv-infra" not in README.read_text("utf-8"), reason="the README gains its infra section in Task 11")
 def test_the_setup_line_is_the_readmes():
     assert SETUP in tryit(LESSONS / "01-gateway.mdx")
     assert SETUP in README.read_text("utf-8")

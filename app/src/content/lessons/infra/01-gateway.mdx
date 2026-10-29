@@ -177,7 +177,7 @@ b3b94aa81436d747 429 patterns t001 0 - limited
 b86206f59561c1da 429 patterns t001 0 - limited
 ```
 
-Each line is the trace id, the status, the team, the tag, the gateway's own milliseconds, the cost and the outcome, one per refusal. Your trace ids will differ. The capstone, in lesson 6, runs on replay time instead: the gateway's clock moves by each call's recorded wall clock, so the limiter sees the pace the calls really had, and none of them is refused. Run this command a second time and the numbers change, because the gateway loaded the ledger and the cache the first run wrote.
+Each line is the trace id, the status, the team, the tag, the gateway's own milliseconds, the cost and the outcome, one per refusal. Your trace ids will differ. The capstone, in lesson 6, runs on replay time instead: the gateway's clock moves by each call's recorded wall clock, so the limiter sees the pace the calls really had, and none of them is refused. Run this command a second time and the numbers change, because the gateway is still running and still holds the first run's spend, cache and drained limiter bucket in memory.
 
 ### The desk, unchanged
 

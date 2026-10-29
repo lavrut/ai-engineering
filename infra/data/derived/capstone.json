@@ -9,7 +9,7 @@
   "all": "the figures over every call; sets and teams split them",
   "cases": "infra/data/fixtures/cases.json through stages.run_cases: each case's decisions and status",
   "injector": "one request through the gateway against injector.make_server on each script in infra/data/fixtures/injector, retry.base_ms 1, rng Random(0): its status, outcome, decisions and attempts (model, status, backoff_ms)",
-  "gate": "replay.py --gate: ledger (per desk set, the gateway's ledger plus what its cache hits were recorded at equals the agents traces' cost within 1e-9), budgets, stages, figures"
+  "gate": "replay.py --gate: ledger (per desk set, the gateway's ledger plus what its cache hits were recorded at equals the agents traces' cost within 1e-9; the independent check), budgets, stages (a failed or errored trace fails it), figures (the hit rate and p95 rebuilt from the same run's traces and recordings: a consistency check, not an independent one; drift from the committed capstone.json is --check's job)"
  },
  "config": {
   "upstream": "http://127.0.0.1:8791",

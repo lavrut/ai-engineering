@@ -13,7 +13,7 @@ quiz:
       - Only when two tickets have the same category
       - Every time after the first, as long as the calls fall within the cache's time to live
     answer: 1
-    explanation: An exact-body cache matches whole requests. A shared prefix with a different ending is a different body and a different key. The API's prompt cache works on the prefix instead, and still makes the call.
+    explanation: An exact-body cache matches whole requests. A shared prefix with a different ending is a different body and a different key. The API's prompt cache works on the prefix instead, for a prefix above its minimum length, and still makes the call.
   - question: The cache stores an answer only when it stopped with end_turn. Why not store a tool_use answer too?
     options:
       - A tool_use answer asks the caller to run a tool and come back. The caller acts on it, so replaying a stored one would repeat an action in a world that has moved on, and the next request carries the result anyway
@@ -71,7 +71,7 @@ The model API has a cache of its own, the prompt cache, and it works the other w
 
 The capstone's traffic shows it. Of the four desks, only the Claude Agent SDK desk marks its prefixes, and its recorded usage holds 502,680 input tokens read from the prompt cache and 149,144 written to it. The other three desks show none. The gateway's ledger prices those tokens at the API's multipliers, so they count in lesson 5's spend at the rate the SDK desk really paid.
 
-The LLMs lab is the case each cache handles differently. It sends the same system prompt with each of its 60 tickets, and only the ticket text in the user message changes. To the response cache those are 60 different bodies and 60 misses. To a prefix cache they are one shared start that could be read again at a tenth of the price. The lab marks nothing for caching, so it paid full price for that start every time.
+The LLMs lab is the case each cache handles differently. It sends the same system prompt with each of its 60 tickets, and only the ticket text in the user message changes. To the response cache those are 60 different bodies and 60 misses. To a prefix cache they are one shared start, which it could read again at a tenth of the price if the start were long enough: the API only caches prompts above a minimum length, and the lab's prompts are short, so the saving was likely never on offer. The lab marks nothing for caching either way, so it paid full price for that start every time.
 
 ## See it
 
@@ -104,10 +104,10 @@ The config line the stage reads is section 3 of `infra/gateway.yaml`.
 
 ## How Go does it
 
-The Go twin's section 4 makes the same three decisions, with the same detail strings. Two lines show what matching Python takes.
+The Go twin's section 4 makes the same three decisions, and the twin test checks that every fixture case gets the same stage, verdict and status in both languages. The detail strings are written to match Python's, but the test does not compare them. Two lines show what matching Python takes.
 
 - `if cfg.Cache.SkipTools && truthy(req.body().MustGet("tools")) {` needs a helper, because Go has no truthiness. Python's `.get("tools")` is false for a missing key, `None` and an empty list alike, and `truthy` gives the same answer for each, so both languages skip the same requests.
-- `reason = "None"` fills in a missing stop reason with the word Python prints for `None`, so a stored answer with no stop reason produces the same detail line in both.
+- `reason = "None"` fills in a missing stop reason with the word Python prints for `None`, so a stored answer with no stop reason gets the same wording in both.
 
 ## Try it
 

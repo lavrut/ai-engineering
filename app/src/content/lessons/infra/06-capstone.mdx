@@ -60,13 +60,13 @@ The other clock-bound number is latency. The p50 and p95 the capstone reports, 1
 - **ledger:** for each desk set, the gateway's ledger plus the recorded cost of that set's cache hits equals the agents track's ledger, within 1e-9 of a dollar. Lesson 5 showed why the hits are added back.
 - **budgets:** each team's spend is within its limit, and every refusal has a trace.
 - **stages:** every trace has the stages in order: all eight for an answered call, five for a cache hit, and a refusal stops at the stage that refused. Every parent id a trace names exists in the run.
-- **figures:** the hit rate counted from the traces and the p95 computed from the recordings equal the figures the capstone writes.
+- **figures:** the hit rate counted from the traces and the p95 computed from the recordings equal the figures the capstone writes. This is a consistency check within one run: the traces and the figures come from the same run, so it catches a bug in how the driver joins them, not a change in what the gateway did. Drift from the committed `capstone.json` is what `--check` catches.
 
 On the course's traffic all four pass. The stages line reads `957 traces: 937 answered with all eight stages, 20 cache hits stop after cache, 0 refusals stop at the refusing stage, 0 out of order; 0 parent ids named, 0 missing`.
 
 ### What the gate proves, and what it does not
 
-The gate proves the gateway's own work. Its accounting matches the agents track's ledger to the cent, with every difference named. Its stages run in order. Its budgets held, and the figures it reports can be rebuilt from two independent sources.
+The gate proves the gateway's own work. Its accounting matches the agents track's ledger to the cent, with every difference named. Its stages run in order. Its budgets held, and the figures it reports agree with its own traces and the recordings they came from. The ledger line is the independent check, against the agents track's own traces. The figures line only checks the run against itself, and drift from the committed figures is `--check`'s job.
 
 It does not prove the desk did its job. A gateway sees calls, not tasks: it cannot tell a right triage from a wrong one, or a run that went round in circles from one that went straight to the answer. That is the agents track's scorer's job, over each run's trajectory. A gateway that answered every call proves nothing about what the desk did with the answers.
 
@@ -103,7 +103,7 @@ The gate is section 3.
 - `over = [t for t, v in spend.items() if t not in cap.cfg.budgets or v > cap.cfg.budgets[t].limit_usd]` finds any team over its limit, or spending with no budget at all.
 - `expected = {"ok": list(STAGES), "cached": ["tag", "budget", "cache", "ledger", "trace"]}` is the order every answered call and every hit must show.
 - `orphans = [p for p in parents if p not in ids]` checks every parent id names a trace in the run. With no parent ids, it has nothing to check.
-- `ok4 = rate == figs["hit_rate"] and p95 == figs["p95_ms"]` compares the reported figures with the same figures rebuilt from the traces and the recordings.
+- `ok4 = rate == figs["hit_rate"] and p95 == figs["p95_ms"]` compares the reported figures with the same figures rebuilt from the same run's traces and recordings.
 
 <Callout kind="go" title="No Go twin here">
   The replay driver and the gate are Python only. The Go twin covers the request path, from the tag stage to the retry stage, and lessons 2 to 5 quote it. A team that ran the gateway in Go would run this same driver against it: the gate checks what a gateway did, not which language it is written in.
