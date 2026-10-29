@@ -1,0 +1,200 @@
+{
+  "compare": {
+    "definitions": {
+      "diff": "--- prompts.json triage.v2_rules\n+++ generated definitions\n@@ -1,14 +1,10 @@\n-Categories (take the first that matches):\n-1. outage: the service or a whole feature is unreachable or failing, and the ticket reports more than one affected user, team, office or site, or Lumen itself says it is down (status page, or an error saying the service is unavailable, such as 'service unavailable' or an HTTP 503 page). One person on several devices is one user; a problem with one customer's note, share link or notebook is a bug.\n-2. billing: money, charges, refunds, invoices, plans, discounts, payment methods (including how to change them).\n-3. account: sign-in, password, two-factor, account email, display name, deleting, merging or adding accounts, workspace admin and membership. \"How do I change X\" is account when X is on this list, otherwise how_to.\n-4. feature_request: the customer asks for something they say or assume the app cannot do yet.\n-5. bug: something behaves wrongly or produces broken content (errors, crashes, wrong results, broken imports, slowness).\n-6. how_to: a question about how to do something or whether it is possible, with nothing reported broken. If the customer only says their attempt did not work, it is how_to; it is a bug if it used to work or the output is broken. Recovering content they deleted themselves is how_to.\n-\n-Priorities (check urgent, then high, then low; otherwise normal):\n-- urgent: content the customer had is gone (emptied, missing or deleted, by anyone) and not recovered (duplicated content, or content only at risk, does not count); signs of unauthorized access; more than one person cannot sign in, or cannot open or edit notes they already had; or a wrongly taken charge over $100, or one that caused an overdraft or is already disputed with the bank (a threat to dispute does not count).\n-- high: money taken wrongly at any amount; one customer cannot sign in or open their notes and the ticket gives no workaround; a deadline today or tomorrow that the issue blocks (deadlines that have already passed do not count); or more than one person cannot use a feature at all because it fails (not because they lack permission) and the ticket gives no workaround. That last case includes a share link or newly shared notebook that several people cannot open.\n-- A workaround is any way the ticket mentions to still get the result, even a slower one (reloading, opening the app, another device): \"export fails in the desktop app but works on the web\" has a workaround.\n-- low: a cosmetic glitch that does not change what the customer can do; a question whose whole answer is general product information, with nothing broken and no request for staff to act (\"I'm thinking of cancelling, do I keep my notes?\" is a question; \"please cancel my plan\" is a request); a feature wish with no stated impact on a team, a purchase or a renewal.\n-- normal: everything else, such as a malfunction that does not block access, a request for staff to act (a custom or past invoice), or a feature request with a stated business impact. A feature_request is never above normal.\n+- outage: The service, or a whole feature, is unreachable or failing, and either (a) the ticket reports more than one affected user, team, office or site, or (b) Lumen itself says it is down: the status page, or an error from the service that says it is unavailable (\"service unavailable\", an HTTP 503 page).\n+- billing: Money, charges, refunds, invoices, plans, discounts or payment methods. This beats how_to: \"how do I update my billing address\" is billing.\n+- account: Access to an account or its identity: sign-in, password, two-factor, the account email, the profile/display name, deleting, merging or adding accounts, workspace admin and membership. A \"how do I change X\" question is account when X is on this list and how_to otherwise (language, notifications, themes, sorting).\n+- feature_request: The customer asks for something and says or assumes the app can't do it yet (\"please build\", \"I wish it could\", \"will you ever support…\", \"is it planned\", \"it only lets me use one colour\").\n+- bug: Something behaves wrongly for this customer, or produces broken content (errors, crashes, wrong results, corrupted or broken imports, slowness), and C1 is not met.\n+- how_to: A question about how to do something, or whether it's possible, with nothing reported broken.\n+- urgent: Any one of: content the customer had is gone and not recovered (U1); signs of unauthorized access or exposed data (U2); more than one person can't sign in, or can't open or edit their notes (U3); a wrongly taken charge over $100, or one that caused an overdraft, or one the bank is already disputing (U4).\n+- high: Any one of: money was taken wrongly at any amount (H1); one customer can't sign in, or can't open their notes, and the ticket gives no workaround (H2); a deadline today or tomorrow that the issue stands in the way of (H3); more than one person can't use a feature at all because it fails, and the ticket gives no workaround (H4).\n+- low: Any one of: a visual glitch that doesn't change what the customer can do (L1); a question whose whole answer is general product information, with nothing broken and no request for staff to act (L2); a feature request that states no impact on a team, a purchase or a renewal (L3).\n+- normal: Everything else: a malfunction that needs investigation but doesn't block access; a request for staff to act; a feature request that names a business impact (N-F).\n",
+      "existing": "Categories (take the first that matches):\n1. outage: the service or a whole feature is unreachable or failing, and the ticket reports more than one affected user, team, office or site, or Lumen itself says it is down (status page, or an error saying the service is unavailable, such as 'service unavailable' or an HTTP 503 page). One person on several devices is one user; a problem with one customer's note, share link or notebook is a bug.\n2. billing: money, charges, refunds, invoices, plans, discounts, payment methods (including how to change them).\n3. account: sign-in, password, two-factor, account email, display name, deleting, merging or adding accounts, workspace admin and membership. \"How do I change X\" is account when X is on this list, otherwise how_to.\n4. feature_request: the customer asks for something they say or assume the app cannot do yet.\n5. bug: something behaves wrongly or produces broken content (errors, crashes, wrong results, broken imports, slowness).\n6. how_to: a question about how to do something or whether it is possible, with nothing reported broken. If the customer only says their attempt did not work, it is how_to; it is a bug if it used to work or the output is broken. Recovering content they deleted themselves is how_to.\n\nPriorities (check urgent, then high, then low; otherwise normal):\n- urgent: content the customer had is gone (emptied, missing or deleted, by anyone) and not recovered (duplicated content, or content only at risk, does not count); signs of unauthorized access; more than one person cannot sign in, or cannot open or edit notes they already had; or a wrongly taken charge over $100, or one that caused an overdraft or is already disputed with the bank (a threat to dispute does not count).\n- high: money taken wrongly at any amount; one customer cannot sign in or open their notes and the ticket gives no workaround; a deadline today or tomorrow that the issue blocks (deadlines that have already passed do not count); or more than one person cannot use a feature at all because it fails (not because they lack permission) and the ticket gives no workaround. That last case includes a share link or newly shared notebook that several people cannot open.\n- A workaround is any way the ticket mentions to still get the result, even a slower one (reloading, opening the app, another device): \"export fails in the desktop app but works on the web\" has a workaround.\n- low: a cosmetic glitch that does not change what the customer can do; a question whose whole answer is general product information, with nothing broken and no request for staff to act (\"I'm thinking of cancelling, do I keep my notes?\" is a question; \"please cancel my plan\" is a request); a feature wish with no stated impact on a team, a purchase or a renewal.\n- normal: everything else, such as a malfunction that does not block access, a request for staff to act (a custom or past invoice), or a feature request with a stated business impact. A feature_request is never above normal.\n",
+      "generated": "- outage: The service, or a whole feature, is unreachable or failing, and either (a) the ticket reports more than one affected user, team, office or site, or (b) Lumen itself says it is down: the status page, or an error from the service that says it is unavailable (\"service unavailable\", an HTTP 503 page).\n- billing: Money, charges, refunds, invoices, plans, discounts or payment methods. This beats how_to: \"how do I update my billing address\" is billing.\n- account: Access to an account or its identity: sign-in, password, two-factor, the account email, the profile/display name, deleting, merging or adding accounts, workspace admin and membership. A \"how do I change X\" question is account when X is on this list and how_to otherwise (language, notifications, themes, sorting).\n- feature_request: The customer asks for something and says or assumes the app can't do it yet (\"please build\", \"I wish it could\", \"will you ever support…\", \"is it planned\", \"it only lets me use one colour\").\n- bug: Something behaves wrongly for this customer, or produces broken content (errors, crashes, wrong results, corrupted or broken imports, slowness), and C1 is not met.\n- how_to: A question about how to do something, or whether it's possible, with nothing reported broken.\n- urgent: Any one of: content the customer had is gone and not recovered (U1); signs of unauthorized access or exposed data (U2); more than one person can't sign in, or can't open or edit their notes (U3); a wrongly taken charge over $100, or one that caused an overdraft, or one the bank is already disputing (U4).\n- high: Any one of: money was taken wrongly at any amount (H1); one customer can't sign in, or can't open their notes, and the ticket gives no workaround (H2); a deadline today or tomorrow that the issue stands in the way of (H3); more than one person can't use a feature at all because it fails, and the ticket gives no workaround (H4).\n- low: Any one of: a visual glitch that doesn't change what the customer can do (L1); a question whose whole answer is general product information, with nothing broken and no request for staff to act (L2); a feature request that states no impact on a team, a purchase or a renewal (L3).\n- normal: Everything else: a malfunction that needs investigation but doesn't block access; a request for staff to act; a feature request that names a business impact (N-F).\n",
+      "v3_rule_lines_equal_v2": true
+    },
+    "schema": {
+      "diff": "--- triage_lab.py TRIAGE_SCHEMA\n+++ generated json_schema\n@@ -3,21 +3,21 @@\n   \"properties\": {\n     \"category\": {\n       \"enum\": [\n+        \"outage\",\n         \"billing\",\n+        \"account\",\n+        \"feature_request\",\n         \"bug\",\n-        \"account\",\n-        \"how_to\",\n-        \"feature_request\",\n-        \"outage\"\n+        \"how_to\"\n       ],\n       \"type\": \"string\"\n     },\n     \"priority\": {\n       \"enum\": [\n+        \"urgent\",\n+        \"high\",\n         \"low\",\n-        \"normal\",\n-        \"high\",\n-        \"urgent\"\n+        \"normal\"\n       ],\n       \"type\": \"string\"\n     },\n",
+      "existing": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "enum": [
+              "billing",
+              "bug",
+              "account",
+              "how_to",
+              "feature_request",
+              "outage"
+            ],
+            "type": "string"
+          },
+          "priority": {
+            "enum": [
+              "low",
+              "normal",
+              "high",
+              "urgent"
+            ],
+            "type": "string"
+          },
+          "reply": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "priority",
+          "reply"
+        ],
+        "type": "object"
+      },
+      "generated": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "enum": [
+              "outage",
+              "billing",
+              "account",
+              "feature_request",
+              "bug",
+              "how_to"
+            ],
+            "type": "string"
+          },
+          "priority": {
+            "enum": [
+              "urgent",
+              "high",
+              "low",
+              "normal"
+            ],
+            "type": "string"
+          },
+          "reply": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "priority",
+          "reply"
+        ],
+        "type": "object"
+      }
+    },
+    "tool": {
+      "diff": "--- ops_server.py label_ticket\n+++ generated tool_definition\n@@ -1,11 +1,19 @@\n {\n-  \"error_label\": \"label must be one of: billing, bug, account, how_to, feature_request, outage\",\n   \"input_schema\": {\n     \"properties\": {\n       \"id\": {\n+        \"pattern\": \"^t\\\\d{3}$\",\n         \"type\": \"string\"\n       },\n       \"label\": {\n+        \"enum\": [\n+          \"outage\",\n+          \"billing\",\n+          \"account\",\n+          \"feature_request\",\n+          \"bug\",\n+          \"how_to\"\n+        ],\n         \"type\": \"string\"\n       }\n     },\n@@ -15,13 +23,5 @@\n     ],\n     \"type\": \"object\"\n   },\n-  \"label_values\": [\n-    \"billing\",\n-    \"bug\",\n-    \"account\",\n-    \"how_to\",\n-    \"feature_request\",\n-    \"outage\"\n-  ],\n   \"name\": \"label_ticket\"\n }\n",
+      "existing": {
+        "error_label": "label must be one of: billing, bug, account, how_to, feature_request, outage",
+        "input_schema": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label"
+          ],
+          "type": "object"
+        },
+        "label_values": [
+          "billing",
+          "bug",
+          "account",
+          "how_to",
+          "feature_request",
+          "outage"
+        ],
+        "name": "label_ticket"
+      },
+      "generated": {
+        "input_schema": {
+          "properties": {
+            "id": {
+              "pattern": "^t\\d{3}$",
+              "type": "string"
+            },
+            "label": {
+              "enum": [
+                "outage",
+                "billing",
+                "account",
+                "feature_request",
+                "bug",
+                "how_to"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label"
+          ],
+          "type": "object"
+        },
+        "name": "label_ticket"
+      }
+    }
+  },
+  "definitions_text": "- outage: The service, or a whole feature, is unreachable or failing, and either (a) the ticket reports more than one affected user, team, office or site, or (b) Lumen itself says it is down: the status page, or an error from the service that says it is unavailable (\"service unavailable\", an HTTP 503 page).\n- billing: Money, charges, refunds, invoices, plans, discounts or payment methods. This beats how_to: \"how do I update my billing address\" is billing.\n- account: Access to an account or its identity: sign-in, password, two-factor, the account email, the profile/display name, deleting, merging or adding accounts, workspace admin and membership. A \"how do I change X\" question is account when X is on this list and how_to otherwise (language, notifications, themes, sorting).\n- feature_request: The customer asks for something and says or assumes the app can't do it yet (\"please build\", \"I wish it could\", \"will you ever support…\", \"is it planned\", \"it only lets me use one colour\").\n- bug: Something behaves wrongly for this customer, or produces broken content (errors, crashes, wrong results, corrupted or broken imports, slowness), and C1 is not met.\n- how_to: A question about how to do something, or whether it's possible, with nothing reported broken.\n- urgent: Any one of: content the customer had is gone and not recovered (U1); signs of unauthorized access or exposed data (U2); more than one person can't sign in, or can't open or edit their notes (U3); a wrongly taken charge over $100, or one that caused an overdraft, or one the bank is already disputing (U4).\n- high: Any one of: money was taken wrongly at any amount (H1); one customer can't sign in, or can't open their notes, and the ticket gives no workaround (H2); a deadline today or tomorrow that the issue stands in the way of (H3); more than one person can't use a feature at all because it fails, and the ticket gives no workaround (H4).\n- low: Any one of: a visual glitch that doesn't change what the customer can do (L1); a question whose whole answer is general product information, with nothing broken and no request for staff to act (L2); a feature request that states no impact on a team, a purchase or a renewal (L3).\n- normal: Everything else: a malfunction that needs investigation but doesn't block access; a request for staff to act; a feature request that names a business impact (N-F).\n",
+  "json_schema": {
+    "additionalProperties": false,
+    "properties": {
+      "category": {
+        "enum": [
+          "outage",
+          "billing",
+          "account",
+          "feature_request",
+          "bug",
+          "how_to"
+        ],
+        "type": "string"
+      },
+      "priority": {
+        "enum": [
+          "urgent",
+          "high",
+          "low",
+          "normal"
+        ],
+        "type": "string"
+      },
+      "reply": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "category",
+      "priority",
+      "reply"
+    ],
+    "type": "object"
+  },
+  "tool_definition": {
+    "input_schema": {
+      "properties": {
+        "id": {
+          "pattern": "^t\\d{3}$",
+          "type": "string"
+        },
+        "label": {
+          "enum": [
+            "outage",
+            "billing",
+            "account",
+            "feature_request",
+            "bug",
+            "how_to"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label"
+      ],
+      "type": "object"
+    },
+    "name": "label_ticket"
+  }
+}

@@ -1,0 +1,16 @@
+---
+// Build-time wrapper: passes audit.json's rows (one per artefact per fact) and the gate as audit.py wrote it.
+// artefacts narrows the table to some artefacts, in audit.json's order:
+// <AuditTable artefacts={['data/contracts/tickets.v1.yaml', 'data/contracts/tickets.v2.yaml']} />; the gate stays
+// the whole audit's. An unknown artefact fails the build, naming the known ones.
+import AuditTableIsland from './AuditTable.tsx';
+import { auditTableProps, loadOntologyData } from '../../lib/ontologyData';
+
+interface Props {
+  artefacts?: string[];
+}
+
+const props = auditTableProps(loadOntologyData().audit, Astro.props);
+---
+
+<AuditTableIsland client:visible {...props} />

@@ -1,0 +1,16 @@
+---
+// Build-time wrapper. show="generated": the three artefacts generate.py builds from the ontology (definitions,
+// JSON schema, MCP tool) beside the hand-written ones, with the diff (generated.json). show="validation": the
+// saved model outputs checked against the ontology, per source and per violation type, and the manual
+// constraints as a count (validation.json, with ontology.json for the constraint texts).
+import GroundingReportIsland from './GroundingReport.tsx';
+import { groundingReportProps, loadOntologyData } from '../../lib/ontologyData';
+
+interface Props {
+  show: 'generated' | 'validation';
+}
+
+const props = groundingReportProps(loadOntologyData(), Astro.props);
+---
+
+<GroundingReportIsland client:visible {...props} />

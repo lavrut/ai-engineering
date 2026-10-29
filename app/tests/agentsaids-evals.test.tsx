@@ -361,7 +361,10 @@ describe('recording sets (lesson 7)', () => {
 // under src/, agents/data/derived/ or astro.config.mjs, the setup runs `astro build` first (about 5 s).
 const APP = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PAGE = join(APP, 'dist', 'index.html');
-const SOURCES = [join(APP, 'src'), resolve(APP, '../agents/data/derived'), resolve(APP, '../data/data/derived'), resolve(APP, '../data/contracts'), join(APP, 'astro.config.mjs')];
+const SOURCES = [
+  join(APP, 'src'), resolve(APP, '../agents/data/derived'), resolve(APP, '../data/data/derived'), resolve(APP, '../data/contracts'),
+  resolve(APP, '../ontology/data/derived'), join(APP, 'astro.config.mjs'),
+];
 const AIDS = ['PatternStepper', 'AgentTrace', 'CostCompare', 'EngineScorecard'];
 const AGENTS_VIEWS = [
   'agents-workflows', 'agents-chain-route', 'agents-parallel', 'agents-evaluator', 'agents-multi-agent', 'agents-more-agents',
@@ -418,6 +421,7 @@ describe('page budget', () => {
 
   let lessons: { lesson: string; islands: Island[] }[] = [];
   let dataLessons: { lesson: string; islands: Island[] }[] = [];
+  let ontologyLessons: { lesson: string; islands: Island[] }[] = [];
   const bytes = (l: { islands: Island[] }) => l.islands.filter((x) => AIDS.includes(x.component)).reduce((a, x) => a + x.bytes, 0);
 
   beforeAll(() => {
@@ -425,6 +429,7 @@ describe('page budget', () => {
     const html = readFileSync(PAGE, 'utf8');
     lessons = shippedIslands(html);
     dataLessons = shippedIslands(html, 'data');
+    ontologyLessons = shippedIslands(html, 'ontology');
   }, 180_000);
 
   // The Data Fabric & Data Contracts track, measured the same way: the props of its four aids over its lessons.
@@ -461,6 +466,41 @@ describe('page budget', () => {
       const sizes = dataLessons.map((l) => [l.lesson, l.islands.filter((x) => DATA_AIDS.includes(x.component)).reduce((a, x) => a + x.bytes, 0)] as const);
       const total = sizes.reduce((a, [, n]) => a + n, 0);
       expect(total, `the data aids ship ${total} bytes of props: ${sizes.map(([name, n]) => `${name} ${n}`).join(', ')}`).toBeLessThan(200_000);
+    },
+  );
+
+  // The Ontology track, measured the same way: the props of its three aids over its four lessons. The test is bound
+  // to the content: it lists src/content/lessons/ontology/*.mdx, requires the four lessons spec §5 names, one
+  // ontology-* view per file in the built page, and each lesson to carry the aid spec §5 names for it. A lesson file
+  // whose slug has no aid in ONTOLOGY_LESSON_AIDS fails here, so a new lesson cannot slip past the check.
+  const ONTOLOGY_DIR = join(APP, 'src', 'content', 'lessons', 'ontology');
+  const ONTOLOGY_FILES = existsSync(ONTOLOGY_DIR) ? readdirSync(ONTOLOGY_DIR).filter((f) => f.endsWith('.mdx')).sort() : [];
+  const ONTOLOGY_AIDS = ['OntologyBrowser', 'GroundingReport', 'AuditTable'];
+  // spec §5: the aid each ontology lesson shows, by slug.
+  const ONTOLOGY_LESSON_AIDS: Record<string, string> = { what: 'FlowDiagram', lumen: 'OntologyBrowser', grounding: 'GroundingReport', capstone: 'AuditTable' };
+  const ontologySlugs = ONTOLOGY_FILES.map((f) => f.replace(/^\d+-/, '').replace(/\.mdx$/, ''));
+
+  it('finds the four ontology lessons spec §5 names, each slug mapped to its aid', () => {
+    expect(ontologySlugs).toEqual(['what', 'lumen', 'grounding', 'capstone']);
+    expect(ontologySlugs.filter((s) => !Object.hasOwn(ONTOLOGY_LESSON_AIDS, s)), 'an ontology lesson slug with no aid in ONTOLOGY_LESSON_AIDS').toEqual([]);
+  });
+
+  it(
+    'keeps the props the ontology aids ship, as the built page carries them, under 200 KB',
+    () => {
+      expect(ontologyLessons.map((l) => l.lesson.replace(/^lesson \d+ \((.*)\)$/, '$1'))).toEqual(ontologySlugs.map((s) => `ontology-${s}`));
+      ontologyLessons.forEach((l, i) => {
+        const want = ONTOLOGY_LESSON_AIDS[ontologySlugs[i]];
+        expect(want, `${l.lesson}: no aid mapped for slug "${ontologySlugs[i]}"`).toBeDefined();
+        expect(l.islands.map((x) => x.component), l.lesson).toContain(want);
+      });
+      const shipped = ontologyLessons.flatMap((l) => l.islands).filter((x) => ONTOLOGY_AIDS.includes(x.component));
+      expect(shipped.length).toBeGreaterThan(0);
+      expect(shipped.every((x) => x.bytes > 500)).toBe(true);
+      const sizes = ontologyLessons.map((l) => [l.lesson, l.islands.filter((x) => ONTOLOGY_AIDS.includes(x.component)).reduce((a, x) => a + x.bytes, 0)] as const);
+      const total = sizes.reduce((a, [, n]) => a + n, 0);
+      console.info(`ontology props: ${sizes.map(([name, n]) => `${name} ${n}`).join(', ')}; total ${total}`);
+      expect(total, `the ontology aids ship ${total} bytes of props: ${sizes.map(([name, n]) => `${name} ${n}`).join(', ')}`).toBeLessThan(200_000);
     },
   );
 

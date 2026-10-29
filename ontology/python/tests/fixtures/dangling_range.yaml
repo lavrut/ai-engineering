@@ -1,0 +1,10 @@
+# A property whose range is neither a class, a literal type nor known individuals.
+classes:
+  - {id: Ticket, label: Ticket, definition: A support request.}
+properties:
+  - {id: owner, domain: Ticket, range: Agent, cardinality: one, required: false}
+  - {id: colour, domain: Ticket, range: {individuals: [red, blue]}, cardinality: one, required: false}
+relations: []
+individuals:
+  - {id: red, class: Ticket, definition: Red., source: X1}
+constraints: []

@@ -1,0 +1,3 @@
+classes:
+  - {id: Ticket, label: Ticket, definition: "an unterminated string
+properties: [

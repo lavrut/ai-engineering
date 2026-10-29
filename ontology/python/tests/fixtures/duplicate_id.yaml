@@ -1,0 +1,10 @@
+# The same id twice in one section, and once more in another section.
+classes:
+  - {id: Ticket, label: Ticket, definition: A support request.}
+  - {id: Ticket, label: Ticket again, definition: A second definition.}
+properties:
+  - {id: text, domain: Ticket, range: string, cardinality: one, required: true}
+relations: []
+individuals:
+  - {id: text, class: Ticket, definition: Clashes with the property id., source: X1}
+constraints: []

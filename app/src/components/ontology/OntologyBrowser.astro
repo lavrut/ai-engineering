@@ -1,0 +1,16 @@
+---
+// Build-time wrapper: passes every class of ontology.json (its definition, properties with range and cardinality,
+// relations out and in, individuals in the guide's order and constraints with their kind). cls picks the class
+// shown first (the first class, Category, by default): <OntologyBrowser cls="Ticket" />. An unknown class fails
+// the build, naming the known ones.
+import OntologyBrowserIsland from './OntologyBrowser.tsx';
+import { loadOntologyData, ontologyBrowserProps } from '../../lib/ontologyData';
+
+interface Props {
+  cls?: string;
+}
+
+const props = ontologyBrowserProps(loadOntologyData().ontology, Astro.props);
+---
+
+<OntologyBrowserIsland client:visible {...props} />

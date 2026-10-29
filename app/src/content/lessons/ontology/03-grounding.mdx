@@ -1,0 +1,196 @@
+---
+track: ontology
+order: 3
+slug: grounding
+title: Grounding an AI system in it
+goal: Generate a prompt's definitions, a JSON schema and a tool definition from an ontology, read where the hand-written ones drift, and validate saved model outputs against its rules.
+minutes: 25
+quiz:
+  - question: The generated JSON schema and the lab's hand-written one hold the same category and priority values. What is the only difference, and does it matter?
+    options:
+      - The generated one allows extra fields
+      - The order of the values. The generated one follows the guide's decision order; the hand-written one does not. A model can return the same answers from either, but only the generated order carries the guide's meaning
+      - The hand-written one is missing the reply field
+      - None; the two are byte for byte the same
+    answer: 1
+    explanation: Same values, same required fields, no extra fields allowed in either. Only the enum order differs. The ontology keeps order as part of the meaning, so everything generated from it lists outage first and urgent first.
+  - question: The MCP server's label_ticket tool declares id and label as plain strings and checks the label when it runs. The generated tool declares an enum for the label and a pattern for the id. Which is better?
+    options:
+      - The hand-written one, because enums slow the model down
+      - The generated one, and the runtime check can then go
+      - The generated one tells the model the allowed values before it calls, and the server should still check at runtime. A schema guides a caller; the server cannot trust one
+      - Neither; tools should not declare types
+    answer: 2
+    explanation: A declared enum lets the model see the six labels up front instead of learning them from an error message. But the server still receives whatever a caller sends, so its own check stays. Generating the schema from the ontology also keeps the two lists from drifting apart.
+  - question: Every violation in the saved outputs comes from a v1_basic prompt or the fine-tuned small model, and none from the v2 or v3 prompts. What does that suggest?
+    options:
+      - Stating the rule in the prompt is what kept the larger models inside it. v1_basic states no rule at all, and the small model learned the labels from examples, not the rule
+      - The v2 and v3 prompts were run on easier tickets
+      - The validator skips the v2 and v3 files
+      - The agents desks caused the violations
+    answer: 0
+    explanation: The same tickets broke the rule under v1_basic and kept it under the prompts that say a feature request is never above normal. The counts cannot prove cause on their own, but they point at the prompt, which is what the audit in lesson 4 checks the prompts for.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import GroundingReport from '../../../components/ontology/GroundingReport.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+<Term t="grounding" /> an AI system in an ontology means two things: its artefacts come from the ontology, and its outputs are checked against it. This lesson does both with Lumen's: it generates three artefacts and compares them with the hand-written ones the course already ships, then validates every saved model answer in the course.
+
+### Three generated artefacts
+
+`generate.py` reads only `ontology/lumen.yaml` and builds:
+
+- **The definitions** a triage prompt needs: one line per category, then one per priority, in the guide's order, each the individual's `definition`.
+- **The JSON schema** for a triage answer: `category` and `priority` as enumerations of the individuals, a free `reply`, nothing else allowed.
+- **The `label_ticket` tool definition**: the ticket `id` with the `Ticket` id property's pattern, and the `label` as an enumeration of the categories.
+
+### Where the hand-written ones drift
+
+Each is compared with what the course already uses, and the difference is a stated fact, pinned by a test, never a failure:
+
+- **The definitions** against the rule text of the `v2_rules` prompt. Both name every category and every priority. They differ in wording on every line: the prompt paraphrases the guide in 14 lines and folds the tie-breakers in. The generated text is 10 lines, one per individual: the 6 category lines are the guide's own wording, and the 4 priority lines are the ontology's summaries of the guide's bullets. The `v3_examples` prompt's rule lines are the same as `v2_rules'`, so one comparison covers both.
+- **The JSON schema** against the lab's `TRIAGE_SCHEMA`. They differ only in enum order. The lab lists `billing` first and the priorities from `low` to `urgent`. The generated schema lists `outage` first and the priorities as `urgent`, `high`, `low`, `normal`: the guide's decision order. Same values, same required fields, no extra fields in either.
+- **The tool** against the MCP server's `label_ticket`. The server declares `id` and `label` as plain strings and checks the label at runtime, answering `label must be one of: billing, bug, account, how_to, feature_request, outage` when it is wrong. The generated tool declares the pattern on `id` and the six labels on `label`, so a model sees the allowed values before it calls. The server should keep its runtime check either way: a schema guides a caller, and a server cannot trust one.
+
+The course does not change the other tracks' files. If it did, the generated versions would replace the hand-written ones, and the next change to a definition would reach every prompt, schema and tool at once.
+
+### Validating what the models said
+
+The LLMs track saved every triage answer, and the agents track saved every tool call. `grounding.py` reads them back and validates each as a partial `Ticket`, the `--partial` mode of lesson 2: the fields an answer carries are checked, and a rule runs when every field it reads is present. Nothing is called.
+
+That is 700 records from 16 sources: 640 saved triage answers in 12 response files from the LLMs track, and 60 `label_ticket` calls in the 4 recorded agent desks. They hold 7 violations, every one of them `feature_request_never_above_normal`:
+
+- 2 from Haiku on the `v1_basic` prompt, on `t029` and `t055`;
+- 4 from Opus and Sonnet on `v1_basic`, one per model and effort, all on `t029`;
+- 1 from the fine-tuned Qwen model with LoRA, on `t055`.
+
+Each is a feature request answered `high`. Both tickets name a business impact, a large evaluation and a renewal, and the guide says that makes a feature request `normal`, never more. Zero violations came from `v2_rules` or `v3_examples`, which state the rule, and zero from the agents desks. `v1_basic` states no rule at all. It is two sentences: who the model is, and a request for a category, a priority and a reply.
+
+The desks' zero needs a word. A `label_ticket` call carries a category and no priority, so the one checkable rule cannot run on it. Each desk's records list 25 constraints left to a person, the 24 manual ones and the checkable one, where a triage file lists 24. The validator says so instead of counting the rule as passed.
+
+## See it
+
+First the three artefacts. Pick each one and read the hand-written version beside the generated one, then the diff. Each diff line keeps its sign, `-` for the existing line and `+` for the generated one.
+
+<GroundingReport show="generated" />
+
+The schema's diff is all reordering: every line removed comes back added in another place. The tool's diff adds the pattern and the enum, and drops the two fields the comparison adds to the hand-written side to show its runtime check: the error text and the list it checks against. The definitions' diff replaces every line.
+
+Then the validation. Read the table of sources, then press "Show failing sources only".
+
+<GroundingReport show="validation" />
+
+Every failing source is a `v1_basic` file or the LoRA model, and every violation is the same rule. The four agents desks pass, with the checkable rule counted as left to a person.
+
+## The code
+
+The schema is built from the individuals, in their order.
+
+<CodeTabs source="ontology-generate" section={2} />
+
+- `"enum": _names(onto, "Category")` lists the category ids sorted by `order`, so the schema carries the guide's decision order without anyone typing it.
+- `"additionalProperties": False` keeps the answer to the three fields, as the lab's schema does.
+
+The tool definition takes the id's pattern from the `Ticket` property.
+
+<CodeTabs source="ontology-generate" section={3} />
+
+- `id_prop["pattern"] = onto.properties["id"]["pattern"]` copies the property's pattern, so the tool and the dataset agree on what a ticket id looks like.
+- `"label": {"type": "string", "enum": _names(onto, "Category")}` is the same list the schema uses, from the same place.
+
+The validation is section 2 of `grounding.py`.
+
+<CodeTabs source="ontology-grounding" section={2} />
+
+- `fields = ("category",) if rec.get("kind") == "label" else ("category", "priority")` is why a label call is never charged with a missing priority.
+- `found = O.validate(onto, ticket, "Ticket", partial=True)` is lesson 2's validator in partial mode.
+- `manual[m] = manual.get(m, 0) + 1` counts each manual constraint once per record, so the file says how many records a rule applies to rather than listing it hundreds of times.
+
+<Callout kind="note" title="Valid is not right">
+  A record with no violation can still carry the wrong label. The validator catches answers that break a rule the ontology can check. Whether `bug` was the right category for a ticket is the LLMs track's eval, against the gold labels.
+</Callout>
+
+## Try it
+
+Check that the generated artefacts and the validation still match what built them:
+
+```bash
+.venv-ontology/bin/python ontology/python/generate.py --check
+.venv-ontology/bin/python ontology/python/grounding.py --check
+```
+
+You should see:
+
+```text
+generated.json: up to date
+validation.json: up to date
+```
+
+Run the validation again into a scratch file. It reads the saved answers and calls nothing:
+
+```bash
+.venv-ontology/bin/python ontology/python/grounding.py --out /tmp/validation.json
+```
+
+You should see:
+
+```text
+wrote validation.json: {"records": 700, "violations": {"feature_request_never_above_normal": 7}}
+```
+
+List the sources with a violation, their record counts, and which tickets broke the rule:
+
+```bash
+.venv-ontology/bin/python -c '
+import json
+v = json.load(open("ontology/data/derived/validation.json"))
+for name, s in v["sources"].items():
+    if s["violations"]:
+        print(name, s["records"], " ".join(s["violating"]))
+'
+```
+
+You should see:
+
+```text
+Qwen2.5-0.5B-Instruct+lora__lora__default 20 t055
+triage__claude-haiku-5-5__v1_basic__default 60 t029 t055
+triage__claude-opus-5-5__v1_basic__high 40 t029
+triage__claude-opus-5-5__v1_basic__low 40 t029
+triage__claude-sonnet-5-5__v1_basic__high 40 t029
+triage__claude-sonnet-5-5__v1_basic__low 40 t029
+```
+
+Six sources, seven violations: the Haiku file has two. Look at the schema's diff on its own:
+
+```bash
+.venv-ontology/bin/python -c '
+import json
+print(json.load(open("ontology/data/derived/generated.json"))["compare"]["schema"]["diff"], end="")
+' | grep '^[-+] '
+```
+
+You should see:
+
+```text
++        "outage",
++        "account",
++        "feature_request",
+-        "account",
+-        "how_to",
+-        "feature_request",
+-        "outage"
++        "how_to"
++        "urgent",
++        "high",
+-        "normal",
+-        "high",
+-        "urgent"
++        "normal"
+```
+
+Every value that leaves comes back: the same six categories and four priorities, in a different order.

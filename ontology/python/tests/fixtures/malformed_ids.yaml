@@ -1,0 +1,21 @@
+# Valid YAML with a list where an id belongs, in each place an id is read.
+# Each is one `malformed` finding naming the owning id, never an exception.
+classes:
+  - {id: A, definition: The base class.}
+  - {id: B, definition: A subclass written as a list., subclass_of: [A]}
+properties:
+  - {id: p1, domain: [A], range: string, cardinality: one, required: true}
+  - {id: p2, domain: A, range: {individuals: [[x]]}, cardinality: one, required: false}
+  - {id: p3, domain: A, range: string, cardinality: one, required: false}
+relations:
+  - {id: r1, domain: A, range: [A], cardinality: one}
+individuals:
+  - {id: i1, class: [A], order: 1, definition: An individual., source: X1}
+constraints:
+  - {id: k1, kind: manual, class: [A], source: X1, text: A manual rule.}
+  - id: k2
+    kind: checkable
+    class: A
+    source: X1
+    text: p3 is present.
+    then: [{property: [p3], op: present}]

@@ -1,0 +1,151 @@
+---
+track: ontology
+order: 2
+slug: lumen
+title: Lumen's ontology
+goal: Read an ontology section by section, say which of its rules a program can check and which need a person, and validate records against it.
+minutes: 25
+quiz:
+  - question: The labelling guide says a wrongly taken charge over a hundred dollars is urgent. Why is that rule manual in Lumen's ontology rather than checkable?
+    options:
+      - Because money rules are too important to automate
+      - Because the validator cannot compare numbers
+      - Because a ticket record has no amount field. The amount is in the customer's words, and a rule over words needs a person (or a model) to read them
+      - Because the guide marks it as optional
+    answer: 2
+    explanation: A ticket record carries an id, the text, a category, a priority, tags and a split. A rule over those fields can be checked by a program, and one is. A rule that needs a user count, an amount, a deadline or a workaround needs the text read. Calling it checkable would mean pretending to check it.
+  - question: The priorities carry an order of urgent, high, low, normal. What does that order mean?
+    options:
+      - The order the guide checks the rules in, not a severity rank. Low is checked before normal, because normal is what is left when nothing else matched
+      - Severity from most to least severe
+      - Alphabetical order
+      - How often each priority appears in the tickets
+    answer: 0
+    explanation: The guide says check urgent, then high, then low; otherwise normal. The generator writes the definitions in that order, and the JSON schema lists the values in it. Read as a severity rank it would put low above normal, which no one means.
+  - question: A record has category feature_request and priority urgent, and nothing else. Validated as a full Ticket it gets four errors; with the partial flag, one. Why have both modes?
+    options:
+      - The partial mode is faster
+      - The full mode is only for tests
+      - The partial mode ignores the constraints
+      - A ticket in the dataset must carry every field, but a model's answer carries only some of them. Partial mode checks the values that are there, and runs a rule only when every field it reads is present
+    answer: 3
+    explanation: The three missing fields are errors for a ticket and are expected for a triage answer. In both modes the feature request rule runs, because category and priority are both present, and it fails. Lesson 3 validates every saved answer this way.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import OntologyBrowser from '../../../components/ontology/OntologyBrowser.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+`ontology/lumen.yaml` is the one place that says what a Lumen support ticket is, what its category and priority mean, and which labelling rules hold between them. It quotes the labelling guide and the ML track's category map, and names the guide rule each entry came from. It has five sections, each under a `# ── N.` comment, so the lessons can quote them by number.
+
+### The five sections
+
+1. **Classes.** The kinds of thing Lumen's support work talks about: 7 of them. `Ticket`, `Category` and `Priority` are the ones the data uses; `Reply`, `Complaint`, `Product` and `Customer` round out the domain.
+2. **Properties.** The fields a `Ticket` record carries, exactly the 6 fields of `llms/data/tickets.jsonl`: `id`, `text`, `category`, `priority`, `tags` and `split`. Each has a range and a cardinality. The range of `category` is an enumeration of the category individuals, so a value outside it fails the property itself.
+3. **Relations.** Named edges between classes, 5 of them: a ticket has one category and one priority, a reply answers one ticket, a complaint is about one product, a ticket is raised by one customer.
+4. **Individuals.** The named members of a class, 16 of them: the 6 categories, the 4 priorities and the 6 complaint products. Each carries a `definition`, the guide rule it came from in `source`, and an `order`.
+5. **Constraints.** The guide's rules, 25 of them, each with its guide rule id and a kind: `checkable` or `manual`.
+
+### Individuals carry the guide's order
+
+The guide says to take the first category that matches, from C1 to C6, and to check urgent, then high, then low, and otherwise normal. That order is part of the meaning: a ticket that fits both `billing` and `how_to` is `billing` because C2 comes first. So each <Term t="individual" /> carries its `order`, and everything generated from the file lists them in it. The priorities' order is the order the rules are checked in, not a severity rank: `low` is checked before `normal`, because `normal` is what is left.
+
+### One checkable rule, and why the other 24 are manual
+
+A <Term t="checkable constraint" /> is an expression over a record's fields that a program evaluates. Lumen's ontology has one: `feature_request_never_above_normal`. When `category` is `feature_request`, `priority` must be `normal` or `low`. Both are fields of the record, so the validator can judge it on every ticket and every model answer.
+
+The other 24 are a <Term t="manual constraint" /> each. They are rules a person applies by reading the ticket: one report is not an outage; a wrongful charge over $100 is urgent; a deadline today or tomorrow makes it high; a workaround keeps it below high. Each needs something only the text holds: a user count, an amount, a deadline, a workaround, the tone or the topic, and a ticket record has none of those as fields. They are in the words. The line between the two kinds falls exactly there: a rule over the fields is checkable, a rule over the text is manual. That is the honest line. A validator that claimed to check U4's $100 threshold without an amount field would be guessing, so the file lists those rules, and the validator reports each one as `manual` on every record instead of passing it in silence.
+
+Two things are not constraints at all. That a category is one of the six, and a priority one of the four, is carried by the properties' ranges. And the guide states no rule that an outage must be high, so the file has none either: one gold ticket is an outage at normal.
+
+## See it
+
+Pick a class and read what the ontology says about it. Start with `Ticket`: its properties, its relations and its constraints, checkable first. Then pick `Category` and `Priority` and read the individuals in the guide's order, each with the rule id it came from. The arrow keys move between the classes.
+
+<OntologyBrowser cls="Ticket" />
+
+`Ticket` holds every property and every constraint: the record is where the rules apply. `Category` has 6 individuals, from `outage` (C1) to `how_to` (C6), and `Priority` has 4, from `urgent` to `normal`. `Customer` has a relation in and nothing else: the ontology names it, and no dataset holds one yet.
+
+## The code
+
+Section 4 holds the individuals. Here are the categories and the priorities as the file has them, and the products after them.
+
+<CodeTabs source="ontology-lumen" section={4} />
+
+- `order: 1` with `source: C1` puts `outage` first: the guide's first category rule. A ticket that fits two categories gets the one with the lower `order`.
+- `definition: >-` on a category is the guide's table text for its rule. The audit in lesson 4 compares it with the guide, word for word after normalising. On a priority it is the ontology's own summary of the bullets, and the audit compares the bullets instead.
+- `source: U1-U4` names the guide bullets a priority summarises. The bullets themselves are manual constraints in section 5.
+- `source: category_map` marks the products as the ML track's, in the category map's order.
+
+Section 5 holds the constraints. The checkable one comes first.
+
+<CodeTabs source="ontology-lumen" section={5} />
+
+- `kind: checkable` says the validator evaluates it. `when:` and `then:` are lists of `{property, op, value}` clauses. A record violates the rule when every `when` clause holds and any `then` clause fails.
+- `phrases: [never above normal]` is how the audit knows a prompt states the rule: the guide id or a phrase must appear in it.
+- `kind: manual` with `text:` is a rule listed, never evaluated. Its `source`, such as `U4`, ties it to the guide bullet it quotes.
+
+The validator runs a checkable constraint in section 3 of `ontology.py`.
+
+<CodeTabs source="ontology-core" section={3} />
+
+- `def clause_holds(clause: dict, record: dict) -> bool:` judges one clause, with the ops `eq`, `ne`, `in`, `not_in`, `present`, `absent` and the comparisons, which `check()` allows only on integer, number and date properties: on a category or priority they would compare the words alphabetically.
+- `return [finding("manual", c["id"], subject, f"not evaluated: {', '.join(absent)} absent. {rule}")]` is the case a model's answer meets in lesson 3: a property the rule reads is missing, so the rule is reported `manual` with the reason, never passed.
+- `return [finding("error", c["id"], subject, f"{c['source']}: {c['text']} ({why})")]` is a violation, naming the guide rule and the value that failed.
+
+<Callout kind="go" title="Python only">
+  This track is Python only, and nothing in it is a twin. The ontology is a YAML file, and the loader, the generator and the audit are small scripts that no Go program in the course calls. A Go version would read the same file the same way and teach nothing new. Where Go code needs the ontology's facts, it should take them generated: the JSON schema and the tool definition of lesson 3 are plain JSON any language reads.
+</Callout>
+
+## Try it
+
+Validate the 60 tickets as instances of `Ticket`. This prints any error or warning, then a count:
+
+```bash
+.venv-ontology/bin/python ontology/python/ontology.py validate Ticket llms/data/tickets.jsonl
+```
+
+You should see:
+
+```text
+60 records, 0 errors, 0 warnings, 1440 manual
+```
+
+No ticket breaks a rule the validator can check. The 1440 manual findings are the 24 manual constraints listed on each of the 60 tickets: rules a person applied when labelling them, and that no program can confirm. Add `--manual` to print them.
+
+Now a feature request labelled urgent. The record goes in on standard input, so nothing is written. The command exits with status 1:
+
+```bash
+printf '{"id": "t999", "text": "Please add a dark theme.", "category": "feature_request", "priority": "urgent", "tags": [], "split": "dev"}\n' | .venv-ontology/bin/python ontology/python/ontology.py validate Ticket /dev/stdin
+```
+
+You should see:
+
+```text
+error   feature_request_never_above_normal t999: N-F: A feature_request is never above normal, because support can't fix a missing feature. (priority='urgent' fails in ['normal', 'low'])
+1 records, 1 errors, 0 warnings, 24 manual
+```
+
+Drop the fields a model's answer would not carry, and validate it twice: as a full ticket, then with `--partial`. Both exit with status 1:
+
+```bash
+printf '{"id": "t999", "category": "feature_request", "priority": "urgent"}\n' > /tmp/answer.jsonl
+.venv-ontology/bin/python ontology/python/ontology.py validate Ticket /tmp/answer.jsonl
+.venv-ontology/bin/python ontology/python/ontology.py validate Ticket /tmp/answer.jsonl --partial
+```
+
+You should see:
+
+```text
+error   feature_request_never_above_normal t999: N-F: A feature_request is never above normal, because support can't fix a missing feature. (priority='urgent' fails in ['normal', 'low'])
+error   required t999.split: Ticket requires split
+error   required t999.tags: Ticket requires tags
+error   required t999.text: Ticket requires text
+1 records, 4 errors, 0 warnings, 24 manual
+error   feature_request_never_above_normal t999: N-F: A feature_request is never above normal, because support can't fix a missing feature. (priority='urgent' fails in ['normal', 'low'])
+1 records, 1 errors, 0 warnings, 24 manual
+```
+
+As a ticket, the record lacks three required fields. As a model's answer, those are expected, and only the rule break is left. Lesson 3 validates every saved answer in the course the second way.

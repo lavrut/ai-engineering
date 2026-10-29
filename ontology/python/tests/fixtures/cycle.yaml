@@ -1,0 +1,9 @@
+# A cycle in subclass_of: Animal -> Dog -> Puppy -> Animal. Reported once.
+classes:
+  - {id: Animal, label: Animal, definition: A living thing., subclass_of: Puppy}
+  - {id: Dog, label: Dog, definition: A kind of animal., subclass_of: Animal}
+  - {id: Puppy, label: Puppy, definition: A young dog., subclass_of: Dog}
+properties: []
+relations: []
+individuals: []
+constraints: []
