@@ -1,0 +1,14 @@
+{
+  "engine": "test",
+  "desk": "supervisor",
+  "approve": "accept",
+  "elicit": "accept",
+  "output": {
+    "tool_calls": [
+      {"agent": "supervisor", "tool": "label_ticket", "args": {"id": "t003", "label": "bug"}, "is_error": false}
+    ],
+    "handoffs": [
+      {"worker": "reviewer", "task": "Review the draft.", "changed": {"review": {"passed": false}}, "is_error": false}
+    ]
+  }
+}
