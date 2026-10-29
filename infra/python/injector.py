@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -109,7 +110,7 @@ def make_server(script: list[int | str], port: int = 0) -> Injector:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="A scripted fixture upstream for the gateway (127.0.0.1 only).")
     ap.add_argument("--script", required=True, type=Path, help="a JSON list such as [429, 500, 200]")
-    ap.add_argument("--port", type=int, default=8793)
+    ap.add_argument("--port", type=int, default=int(os.environ.get("INFRA_INJECTOR_PORT") or 8793))
     a = ap.parse_args(argv)
     try:
         server = make_server(load_script(a.script), a.port)

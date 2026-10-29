@@ -169,7 +169,7 @@ The refusals are the rate limiter, and they are real. A gateway you start by han
 .venv-infra/bin/python infra/python/traces.py infra/data/traces/first.jsonl --outcome limited
 ```
 
-The first lines read:
+Which calls the limiter refused, and how many, depend on the wall clock as well. The first lines read:
 
 ```text
 21d8b817993b0b0d 429 patterns t001 0 - limited
@@ -187,17 +187,23 @@ Last, the agents track's own code against the gateway. The desk's model calls go
 .venv-agents/bin/python -c "import sys; sys.path[:0] = ['agents', 'agents/desk/python']; import run_sets, patterns, desk_core as core; t = next(x for x in core.TICKETS if x['id'] == 't001'); print(patterns.chain(t).output)"
 ```
 
-The last line it prints is the refusal:
+It exits with status 1, and the last line it prints is the refusal:
 
 ```text
 desk_core.ProxyError: proxy answered 402 (cost cap): team untagged: budget refused: untagged requests are refused
 ```
 
-The desk sends no `x-team`, so the gateway refuses it as untagged. The desk reads every 402 as its proxy's cost cap; the body after it is the gateway's reason. The fix is in the config, not the desk: book untagged calls to a team. Stop the gateway with Ctrl-C, start it on a copy that books them to `patterns`, and run the same command again:
+The desk sends no `x-team`, so the gateway refuses it as untagged. The desk reads every 402 as its proxy's cost cap; the body after it is the gateway's reason. The fix is in the config, not the desk: book untagged calls to a team. Stop the gateway with Ctrl-C and start it on a copy that books them to `patterns`:
 
 ```bash
 sed 's/^  untagged: refuse$/  untagged: patterns/' infra/gateway.yaml > /tmp/gateway-desk.yaml
 .venv-infra/bin/python infra/python/gateway.py --port 8790 --config /tmp/gateway-desk.yaml --run desk
+```
+
+Then run the same command again in the third terminal:
+
+```bash
+.venv-agents/bin/python -c "import sys; sys.path[:0] = ['agents', 'agents/desk/python']; import run_sets, patterns, desk_core as core; t = next(x for x in core.TICKETS if x['id'] == 't001'); print(patterns.chain(t).output)"
 ```
 
 This time the desk prints its triage of `t001`, `{'category': 'billing', 'reply': "Hi Maria, ...`, and the gateway's traces hold its two calls, booked to `patterns` with the tag it found in the messages:
@@ -211,4 +217,4 @@ This time the desk prints its triage of `t001`, `{'category': 'billing', 'reply'
 da93ab2a7628aae1 200 patterns t001 1 0.000066 ok
 ```
 
-Your trace ids will differ. This run is shown once, to prove the drop-in works; no number in the track depends on it. Stop the gateway and the proxy with Ctrl-C in their terminals.
+Your trace ids and the gateway's own milliseconds, the fifth field, will differ. This run is shown once, to prove the drop-in works; no number in the track depends on it. Stop the gateway and the proxy with Ctrl-C in their terminals.

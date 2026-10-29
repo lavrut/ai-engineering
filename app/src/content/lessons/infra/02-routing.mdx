@@ -130,9 +130,10 @@ mkdir -p /tmp/route
 .venv-infra/bin/python infra/python/stages.py --cases /tmp/route/cases.json
 ```
 
-You should see one decision line:
+You should see the export's line, then one decision line:
 
 ```text
+wrote /tmp/route/config.json
 {"id":"claude-sonnet-5-5","decisions":[{"stage":"tag","verdict":"desk"},{"stage":"budget","verdict":"allow"},{"stage":"cache","verdict":"miss"},{"stage":"route","verdict":"route"},{"stage":"limit","verdict":"allow"},{"stage":"retry","verdict":"fallback"}],"status":200}
 ```
 

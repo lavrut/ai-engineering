@@ -155,7 +155,7 @@ In a third terminal, send one request as the desk team:
 200 3b10f204aecdd7f8 {"content":[{"text":"ok","type":"text"}],"id":"msg_injector","model":"claude-haiku-5-5","role":"assistant","stop_reason":"end_turn","stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":5}}
 ```
 
-The caller got a 200 and the injector's reply. Nothing says the upstream failed twice first; only the trace does. Read it:
+Your trace id will differ. The caller got a 200 and the injector's reply. Nothing says the upstream failed twice first; only the trace does. Read it:
 
 ```bash
 .venv-infra/bin/python infra/python/traces.py infra/data/traces/flaky.jsonl

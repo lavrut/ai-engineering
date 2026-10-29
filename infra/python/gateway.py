@@ -14,6 +14,7 @@ Live mode (--live) forwards to api.anthropic.com: it prints the estimate, asks y
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import http.client
 import math
 import os
@@ -300,10 +301,26 @@ def cost_arg(text: str) -> float:
     return value
 
 
+def env_port(name: str, default: int) -> int:
+    """A port from the environment when set (the lessons' Try-it test runs servers on free ports), else the
+    default. A --port flag still wins: this is only its default."""
+    return int(os.environ.get(name) or default)
+
+
+def test_upstream(upstream: str) -> str:
+    """The upstream with the course's loopback ports moved where INFRA_PROXY_PORT (8791, the agents proxy)
+    or INFRA_INJECTOR_PORT (8793) say, when set; unchanged otherwise, and never for a remote host."""
+    u = urlsplit(upstream)
+    name = {8791: "INFRA_PROXY_PORT", 8793: "INFRA_INJECTOR_PORT"}.get(u.port or 0)
+    if not name or not os.environ.get(name) or not config.is_loopback(upstream):
+        return upstream
+    return u._replace(netloc=f"{u.hostname}:{env_port(name, u.port)}").geturl()
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="The AI gateway: a loopback HTTP server in the Messages API shape.")
     p.add_argument("--config", type=Path, default=config.GATEWAY_YAML, help="the gateway config (YAML)")
-    p.add_argument("--port", type=int, default=DEFAULT_PORT)
+    p.add_argument("--port", type=int, default=env_port("INFRA_GATEWAY_PORT", DEFAULT_PORT))
     p.add_argument("--live", action="store_true", help=f"forward to {LIVE_UPSTREAM} (estimate, then y/N)")
     p.add_argument("--max-cost", type=cost_arg, default=DEFAULT_MAX_COST, help="dollars per run in live mode")
     p.add_argument("--run", default=None, metavar="NAME", help="trace file name (default: the start time)")
@@ -317,6 +334,8 @@ def main(argv: list[str] | None = None) -> int:
     except (config.ConfigError, OSError) as e:
         print(f"gateway: config error: {e}. Nothing was started.")
         return 2
+    if not a.live:
+        cfg = dataclasses.replace(cfg, upstream=test_upstream(cfg.upstream))
     host = urlsplit(cfg.upstream).hostname
     if not a.live and not config.is_loopback(cfg.upstream):
         print(f"gateway: upstream host {host} is not loopback; only --live may call a remote host. "

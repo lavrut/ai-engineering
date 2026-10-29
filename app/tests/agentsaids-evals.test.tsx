@@ -519,8 +519,7 @@ describe('page budget', () => {
   };
   const infraSlugs = INFRA_FILES.map((f) => f.replace(/^\d+-/, '').replace(/\.mdx$/, ''));
 
-  // Skipped until Task 10 adds lessons 4-6 (ruling I9); Task 10 un-skips it.
-  it.skip('finds the six infra lessons spec §6 names, each slug mapped to its aid', () => {
+  it('finds the six infra lessons spec §6 names, each slug mapped to its aid', () => {
     expect(infraSlugs).toEqual(['gateway', 'routing', 'resilience', 'cache', 'budgets', 'capstone']);
     expect(infraSlugs.filter((s) => !Object.hasOwn(INFRA_LESSON_AIDS, s)), 'an infra lesson slug with no aid in INFRA_LESSON_AIDS').toEqual([]);
   });

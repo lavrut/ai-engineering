@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import matter from 'gray-matter';
 import { describe, expect, it } from 'vitest';
 
-// The AI Infrastructure track, lessons 1-3 (Task 10 adds 4-6): every number a lesson states in prose or in its quiz
+// The AI Infrastructure track, lessons 1-6: every number a lesson states in prose or in its quiz
 // is pinned here against what produced it: infra/data/derived/capstone.json (replay.py, never written by hand), the
 // fixtures (infra/data/fixtures/cases.json and the injector scripts), infra/gateway.yaml, or the source text. Each
 // claim is a phrase the lesson must contain plus the check behind it. A last test strips every claimed phrase, the
@@ -25,6 +25,24 @@ const yaml = text('infra/gateway.yaml');
 const stagesPy = text('infra/python/stages.py');
 const injectorPy = text('infra/python/injector.py');
 const gatewayPy = text('infra/python/gateway.py');
+const ledgerPy = text('infra/python/ledger.py');
+const replayPy = text('infra/python/replay.py');
+const stagesGo = text('infra/go/gateway/stages.go');
+const ledgerJson = json('infra/data/derived/ledger.json');
+type SampleTrace = { label: string; trace: { team: string; tag: string; status: number; cost_usd: number | null; decisions: { stage: string; verdict: string; detail: string; spent_usd?: number; worst_usd?: number }[] } };
+const sample = (label: string) => (json('infra/data/derived/traces.sample.json').traces as SampleTrace[]).find((t) => t.label === label)!.trace;
+const sampleDecision = (label: string, stage: string) => sample(label).decisions.find((d) => d.stage === stage)!;
+const gateLine = (name: string) => (capstone.gate.lines as [string, boolean, string][]).find((l) => l[0] === name)!;
+/** Every max_tokens the patterns set's recordings ask for (the capstone replays them byte for byte). */
+const patternsMaxTokens = () => {
+  const dir = join(repo, 'agents/data/recordings/patterns');
+  return [...new Set(readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(readFileSync(join(dir, f), 'utf8')).request_summary.body.max_tokens))];
+};
+const labPrice = (model: string) => {
+  const m = text('llms/python/triage_lab.py').match(new RegExp(`"${model}": \\(([\\d.]+), ([\\d.]+)\\)`))!;
+  return [Number(m[1]), Number(m[2])];
+};
+const DEMO_LIMIT = Number(text('infra/python/capstone_extras.py').match(/DEMO_LIMIT_USD = ([\d.]+)/)![1]);
 type Case = { id: string; config: Record<string, unknown>; upstream: (number | string)[]; state: Record<string, unknown>; expect: { decisions: { stage: string; verdict: string }[]; status: number } };
 const cases = json('infra/data/fixtures/cases.json') as Case[];
 const kase = (id: string) => cases.find((c) => c.id === id)!;
@@ -73,7 +91,7 @@ const SOURCES = [
   .join('\n');
 const codeOk = (span: string) => CODE_OK.some((re) => re.test(span)) || SOURCES.includes(span);
 
-const LESSONS = ['01-gateway', '02-routing', '03-resilience'];
+const LESSONS = ['01-gateway', '02-routing', '03-resilience', '04-cache', '05-budgets', '06-capstone'];
 const read = (name: string) => readFileSync(join(lessonsDir, `${name}.mdx`), 'utf8');
 
 /** The lesson's prose and quiz: no fenced blocks (they were run; their ids and timings are not pinned), imports or component tags. */
@@ -336,12 +354,212 @@ const CLAIMS: Claim[] = [
     expect(script('flaky').at(-1)).toBe(200);
   }],
   ['03-resilience', 'It hands the 400 back at once', () => expect(stagesPy).toContain('if not (up.error or up.status == 429 or up.status >= 500):  # answered: no retry')],
+  // ── lesson 1, the Try-it test's exit rule ──
+  ['01-gateway', 'It exits with status 1, and the last line it prints is the refusal', () => {
+    expect(text('agents/desk/python/desk_core.py')).toContain('class ProxyError');
+    expect(text('infra/python/tests/test_lesson_tryits.py')).toContain('EXITS_1 = re.compile(r"exits? with status 1")');
+  }],
+  // ── lesson 4 ──
+  ['04-cache', 'Section 3 of `infra/gateway.yaml` is one line, `cache: {ttl_s: 3600, skip_tools: true}`', () => {
+    expect(hasSection(yaml, 3, 'Cache')).toBe(true);
+    expect(yamlSection(3).split('\n').filter((l) => l && !l.startsWith('3. '))).toEqual(['cache: {ttl_s: 3600, skip_tools: true}']);
+    expect(cfg.cache).toEqual({ ttl_s: 3600, skip_tools: true });
+  }],
+  ['04-cache', 'a stored answer is good for 3600 seconds, an hour', () => expect(cfg.cache.ttl_s).toBe(60 * 60)],
+  ['04-cache', 'in `cacheable_hit` an `end_turn` answer stored 60 seconds earlier is served, and in `tool_call_skip` the same stored answer is skipped', () => {
+    expect(kase('cacheable_hit').state).toEqual({ cache: [{ key: 'self', stop_reason: 'end_turn', tools: false, age_s: 60 }] });
+    expect([verdictOf('cacheable_hit', 'cache'), derivedCase('cacheable_hit').status]).toEqual(['hit', 200]);
+    expect(kase('tool_call_skip').state).toEqual({ cache: [{ key: 'self', stop_reason: 'end_turn', tools: true, age_s: 60 }] });
+    expect(verdictOf('tool_call_skip', 'cache')).toBe('skip');
+  }],
+  ['04-cache', 'The capstone replays all 957 calls through the cache. It answers 20 of them, a hit rate of 0.0209. All 20 are repeats across sets', () => {
+    expect([capstone.all.calls, capstone.all.cache_hits, capstone.all.hit_rate]).toEqual([957, 20, 0.0209]);
+    expect(capstone.about.cache).toMatch(/^all 20 hits are cross-set repeats/);
+  }],
+  ['04-cache', '- 19 hits are in the Go patterns set, `patterns-go`, out of its 56 calls.', () => {
+    expect([capstone.sets['patterns-go'].cache_hits, capstone.sets['patterns-go'].calls]).toEqual([19, 56]);
+    expect(capstone.about.cache).toContain('19 in patterns-go from patterns');
+  }],
+  ['04-cache', '- 1 hit is in the Go desk, `desk-hand-go`, out of its 188 calls', () => {
+    expect([capstone.sets['desk-hand-go'].cache_hits, capstone.sets['desk-hand-go'].calls]).toEqual([1, 188]);
+    expect(capstone.about.cache).toContain('1 in desk-hand-go from desk-hand');
+    expect(capstone.about.traffic).toContain('(desk-hand, desk-hand-go, desk-langgraph, desk-sdk, patterns, patterns-go;');
+  }],
+  ['04-cache', 'Within the two patterns sets there are 6 repeats of a call the same set already made. Every one of them carries tools', () => {
+    expect(capstone.about.cache).toContain('the 6 within-set pattern repeats carry tools, so the cache skips them');
+  }],
+  ['04-cache', 'Writing a prefix into the cache costs 1.25 times the input price', () => expect(ledgerPy).toContain('CACHE_WRITE_MULTIPLIER = 1.25')],
+  ['04-cache', 'its recorded usage holds 502,680 input tokens read from the prompt cache and 149,144 written to it. The other three desks show none', () => {
+    const sdk = capstone.sets['desk-sdk'];
+    expect([sdk.prompt_cache_read_tokens, sdk.prompt_cache_write_tokens]).toEqual([502_680, 149_144]);
+    for (const s of ['desk-hand', 'desk-hand-go', 'desk-langgraph']) expect([capstone.sets[s].prompt_cache_read_tokens, capstone.sets[s].prompt_cache_write_tokens], s).toEqual([0, 0]);
+    expect(ledgerPy).toContain('CACHE_READ_MULTIPLIER = 0.10');
+  }],
+  ['04-cache', 'It sends the same system prompt with each of its 60 tickets, and only the ticket text in the user message changes. To the response cache those are 60 different bodies and 60 misses.', () => {
+    expect(text('llms/data/tickets.jsonl').trim().split('\n')).toHaveLength(60);
+    const lab = text('llms/python/triage_lab.py');
+    expect(lab).toContain('params = {"model": model, "max_tokens": MAX_TOKENS, "system": prompt_text,');
+    expect(lab).toContain('"messages": [{"role": "user", "content": ticket["text"]}],');
+    expect(lab).not.toContain('cache_control'); // the lab marks nothing for caching
+  }],
+  ['04-cache', "the capstone's own account of where the 20 hits came from", () => expect(capstone.about.cache).toMatch(/^all 20 hits/)],
+  ['04-cache', 'The cache stage is section 4 of', () => {
+    expect(hasSection(stagesPy, 4, 'Cache')).toBe(true);
+    expect(hasSection(stagesGo, 4, 'Cache', '//')).toBe(true);
+  }],
+  ['04-cache', 'answers from the store and books the call at $0.', () => {
+    expect(stagesPy).toContain('out.cached, out.usage, out.cost_usd = True, response_usage(e.headers, e.body), 0.0');
+  }],
+  ['04-cache', 'The config line the stage reads is section 3 of', () => expect(hasSection(yaml, 3, 'Cache')).toBe(true)],
+  ['04-cache', "says `stored 333s ago`: the Python desk's answer was 333 seconds of recorded traffic old", () => {
+    expect(sampleDecision('cached', 'cache').detail).toBe('stored 333s ago');
+    expect(sample('cached').team).toBe('desk');
+    expect(['desk-hand', 'desk-langgraph', 'desk-sdk'].map((s) => capstone.sets[s].cache_hits)).toEqual([0, 0, 0]);
+    expect(capstone.about.time).toContain('cache ttl see the recorded pace');
+  }],
+  ['04-cache', "The Go twin's section 4 makes the same three decisions", () => expect(hasSection(stagesGo, 4, 'Cache', '//')).toBe(true)],
+  ['04-cache', 'Of the rest, 19 found an answer the Python set had stored', () => {
+    expect([capstone.teams.patterns.cache_hits, capstone.teams.patterns.calls]).toEqual([19, 116]);
+  }],
+  ['04-cache', 'The run costs more by exactly what the 19 hits saved', () => {
+    expect(ledgerJson.agents['patterns-go'].toFixed(6)).toBe('0.012158'); // the lone Go set, no hits: its agents cost
+    expect(capstone.sets['patterns-go'].cost_usd).toBeLessThan(ledgerJson.agents['patterns-go']);
+    expect(capstone.sets['patterns-go'].cache_hits).toBe(19);
+  }],
+  // ── lesson 5 ──
+  ['05-budgets', 'so `claude-haiku-5-5` costs $0.10 a million input tokens and $0.50 a million output tokens', () => {
+    expect(labPrice('claude-haiku-5-5')).toEqual([0.1, 0.5]);
+    expect(cfg.models['claude-haiku-5-5'].price).toBe('lab');
+  }],
+  ['05-budgets', 'asks for `max_tokens` of 4000, so its worst case is at least $0.002 before any input is counted', () => {
+    expect(patternsMaxTokens()).toEqual([4000]);
+    expect((4000 * labPrice('claude-haiku-5-5')[1]) / 1_000_000).toBeCloseTo(0.002, 12);
+  }],
+  ['05-budgets', '### Three answers, and the 402', () => chainReturns(402)],
+  ['05-budgets', 'In the fixture case `team_warn`, the desk has spent $0.85 against its warn line of $0.80', () => {
+    expect(kase('team_warn').state).toEqual({ spend: { desk: 0.85 } });
+    expect(verdictOf('team_warn', 'budget')).toBe('warn');
+    expect(cfg.budgets.desk.warn_usd).toBe(0.8);
+  }],
+  ['05-budgets', 'In `team_over_budget`, the desk has spent $0.9999 of its $1.00', () => {
+    expect(kase('team_over_budget').state).toEqual({ spend: { desk: 0.9999 } });
+    expect([verdictOf('team_over_budget', 'budget'), derivedCase('team_over_budget').status]).toEqual(['refuse', 402]);
+    expect(cfg.budgets.desk.limit_usd).toBe(1);
+  }],
+  ['05-budgets', 'and still gets the 402', () => {
+    expect(kase('budget_refusal_beats_cache_hit').state.cache).toBeDefined();
+    expect(derivedCase('budget_refusal_beats_cache_hit').status).toBe(402);
+  }],
+  ['05-budgets', 'Section 5 of `infra/gateway.yaml` sets the limits: the desk $1.00 with a warn line at $0.80, and the lab, patterns and judge teams $0.50 each', () => {
+    expect(hasSection(yaml, 5, 'Budgets')).toBe(true);
+    expect(cfg.budgets).toEqual({ desk: { limit_usd: 1, warn_usd: 0.8 }, lab: { limit_usd: 0.5, warn_usd: null }, patterns: { limit_usd: 0.5, warn_usd: null }, judge: { limit_usd: 0.5, warn_usd: null } });
+    expect(cfg.untagged).toBe('refuse');
+  }],
+  ['05-budgets', 'is refused with a 402 too', () => expect(derivedCase('no_team_refused').status).toBe(402)],
+  ['05-budgets', 'tokens written to the prompt cache at 1.25 times the input price, tokens read from it at 0.10 times', () => {
+    expect(ledgerPy).toContain('CACHE_WRITE_MULTIPLIER = 1.25');
+    expect(ledgerPy).toContain('CACHE_READ_MULTIPLIER = 0.10');
+  }],
+  ['05-budgets', 'A cache hit is booked at $0, because no model was called', () => {
+    expect(stagesPy).toContain('out.cached, out.usage, out.cost_usd = True, response_usage(e.headers, e.body), 0.0');
+  }],
+  ['05-budgets', 'The fourth, the Go hand-built desk, had 1 cache hit, which the gateway booked at $0', () => {
+    expect(['desk-hand', 'desk-hand-go', 'desk-langgraph', 'desk-sdk'].map((s) => capstone.sets[s].cache_hits)).toEqual([0, 1, 0, 0]);
+  }],
+  ['05-budgets', 'desk-hand-go $0.0458874 + $0.0001919 for 1 cache hit = agents $0.0460793', () => {
+    expect(gateLine('ledger')[2]).toContain('desk-hand-go $0.0458874 + $0.0001919 for 1 cache hit = agents $0.0460793');
+    expect([capstone.sets['desk-hand-go'].cost_usd, ledgerJson.agents['desk-hand-go']]).toEqual([0.0458874, 0.0460793]);
+  }],
+  ['05-budgets', 'books less at the gateway than in the agents ledger, by its 19 hits', () => {
+    expect(capstone.sets['patterns-go'].cost_usd).toBeLessThan(ledgerJson.agents['patterns-go']);
+    expect(capstone.sets['patterns-go'].cache_hits).toBe(19);
+  }],
+  ['05-budgets', 'the desk spent $0.1856 of its $1.00, the judge $0.0255 of $0.50 and the patterns team $0.0233 of $0.50. No call was refused.', () => {
+    expect(gateLine('budgets')[2]).toBe('desk $0.1856 of $1.00, judge $0.0255 of $0.50, patterns $0.0233 of $0.50; 0 refusals, 0 traced');
+    expect(capstone.all.refusals).toBe(0);
+  }],
+  ['05-budgets', 'the dearest tag is `none`', () => expect(ledgerJson.top_tags.slice(0, 4).map((t: [string]) => t[0])).toEqual(['none', 't001', 't007', 't061'])],
+  ['05-budgets', 'The budget stage is section 3 of', () => expect(hasSection(stagesPy, 3, 'Budget')).toBe(true)],
+  ['05-budgets', ', or 0 when the request sets none', () => expect(stagesPy).toContain('out = mt if isinstance(mt, int) and not isinstance(mt, bool) and mt > 0 else 0')],
+  ['05-budgets', 'The chain turns a refusal into the 402', () => chainReturns(402)],
+  ['05-budgets', 'The cost of an answered call is section 2 of', () => expect(hasSection(ledgerPy, 2, 'Cost')).toBe(true)],
+  ['05-budgets', 'The write line above it uses 1.25.', () => {
+    expect(ledgerPy).toContain('usage["cache_creation_input_tokens"] * CACHE_WRITE_MULTIPLIER * p_in');
+    expect(ledgerPy).toContain('CACHE_WRITE_MULTIPLIER = 1.25');
+  }],
+  ['05-budgets', 'Section 4 rebuilds each team', () => expect(hasSection(ledgerPy, 4, 'Budget state')).toBe(true)],
+  ['05-budgets', 'The limits are section 5 of the config.', () => expect(hasSection(yaml, 5, 'Budgets')).toBe(true)],
+  ['05-budgets', "The Go twin's section 3 makes the same verdicts", () => expect(hasSection(stagesGo, 3, 'Budget', '//')).toBe(true)],
+  ['05-budgets', 'rather than a limit of 0 that a reader could mistake', () => expect(stagesGo).toContain('d.LimitUSD = &lim')],
+  ['05-budgets', 'The request asks for up to 1,000,000 output tokens', () => {
+    expect(read('05-budgets')).toContain("'max_tokens': 1000000");
+    expect((1_000_000 * labPrice('claude-haiku-5-5')[1]) / 1_000_000).toBe(cfg.budgets.patterns.limit_usd); // its worst case alone is the budget
+  }],
+  ['05-budgets', 'it stopped at $0.0083', () => {
+    expect(sampleDecision('refused', 'budget').spent_usd!.toFixed(4)).toBe('0.0083');
+    expect(DEMO_LIMIT).toBe(0.01);
+  }],
+  ['05-budgets', 'Less than $0.002 was left', () => {
+    expect(DEMO_LIMIT - sampleDecision('refused', 'budget').spent_usd!).toBeLessThan(0.002);
+    expect(sampleDecision('refused', 'budget').detail).toBe('$0.008291 spent + $0.002143 worst case > $0.01 limit');
+  }],
+  ['05-budgets', 'The patterns team has $0.0017 of its budget left', () => expect((DEMO_LIMIT - sampleDecision('refused', 'budget').spent_usd!).toFixed(4)).toBe('0.0017')],
+  ['05-budgets', 'but asks for up to 4,000 output tokens', () => expect(patternsMaxTokens()).toEqual([4000])],
+  ['05-budgets', 'is $0.0001919 lower than', () => expect(gateLine('ledger')[2]).toContain('+ $0.0001919 for 1 cache hit')],
+  ['05-budgets', 'The gateway booked it at $0', () => expect(stagesPy).toContain('response_usage(e.headers, e.body), 0.0')],
+  ['05-budgets', 'A 200 from the upstream', () => expect(stagesPy).toContain('up.status == 200')],
+  ['05-budgets', 'A 402 with the reason in the body', () => chainReturns(402)],
+  ['05-budgets', 'A 404, because no route matches', () => chainReturns(404)],
+  ['05-budgets', 'A 402 after the upstream answered', () => chainReturns(402)],
+  // ── lesson 6 ──
+  ['06-capstone', '`infra/python/replay.py` replays all 957 calls the agents track recorded', () => expect([capstone.calls, capstone.all.calls]).toEqual([957, 957])],
+  ['06-capstone', 'The clock starts at 0 and, before each call, moves on by the previous call', () => {
+    expect(capstone.about.time).toContain("the gateway's clock starts at 0");
+    expect(replayPy).toContain('clock.sleep(last[0].recorded_ms / 1000)');
+  }],
+  ['06-capstone', 'that pace makes 0 retries and 0 refusals', () => expect([capstone.all.retries, capstone.all.refusals]).toEqual([0, 0])],
+  ['06-capstone', 'The p50 and p95 the capstone reports, 1730 ms and 3471 ms, come from each call', () => {
+    expect([capstone.all.p50_ms, capstone.all.p95_ms]).toEqual([1730, 3471]);
+    expect(capstone.about.latency).toContain("nearest-rank percentiles over each call's recorded wall clock");
+  }],
+  ['06-capstone', 'within 1e-9 of a dollar', () => expect(replayPy).toContain('ok = abs(gw + saved - agents) <= 1e-9')],
+  ['06-capstone', 'the hit rate counted from the traces and the p95 computed from the recordings', () => {
+    expect(replayPy).toContain('ok4 = rate == figs["hit_rate"] and p95 == figs["p95_ms"]');
+  }],
+  ['06-capstone', 'The stages line reads `957 traces: 937 answered with all eight stages, 20 cache hits stop after cache, 0 refusals stop at the refusing stage, 0 out of order; 0 parent ids named, 0 missing`', () => {
+    expect(gateLine('stages')).toEqual(['stages', true, '957 traces: 937 answered with all eight stages, 20 cache hits stop after cache, 0 refusals stop at the refusing stage, 0 out of order; 0 parent ids named, 0 missing']);
+    expect(capstone.gate.ok).toBe(true);
+  }],
+  ['06-capstone', 'The stages line says it plainly, `0 parent ids named`', () => expect(gateLine('stages')[2]).toContain('; 0 parent ids named, 0 missing')],
+  ['06-capstone', 'stops after the cache stage and books $0', () => {
+    expect(sample('cached').decisions.map((d) => d.stage)).toEqual(['tag', 'budget', 'cache', 'ledger', 'trace']);
+    expect(sample('cached').cost_usd).toBe(0);
+  }],
+  ['06-capstone', 'The traffic is section 1 of', () => expect(hasSection(replayPy, 1, 'Calls')).toBe(true)],
+  ['06-capstone', 'The gate is section 3.', () => expect(hasSection(replayPy, 3, 'Gate')).toBe(true)],
+  ['06-capstone', 'and lessons 2 to 5 quote it', () => {
+    for (const l of ['02-routing', '03-resilience', '04-cache', '05-budgets']) expect(read(l), l).toMatch(/<CodeTabs source="infra-stages" section=\{\d\} goSection=\{\d\} \/>/);
+  }],
+  ['06-capstone', 'is three lines, each with a status of 200', () => {
+    expect(capstone.all.refusals).toBe(0); // every capstone call answered, none retried
+    expect(capstone.all.retries).toBe(0);
+  }],
+  ['06-capstone', "the p95 in the gate's last line", () => expect(capstone.gate.lines.at(-1)[2]).toContain(`p95 ${capstone.all.p95_ms} ms`)],
+  ['06-capstone', 'The supervisor and its workers made 11 model calls on that ticket', () => {
+    const run = json('agents/data/traces/desk-hand/hand-supervisor-t001.json');
+    expect(run.proxy_calls).toHaveLength(11);
+    const agents = [...new Set((run.trace as { agent: string; kind: string }[]).filter((s) => s.kind === 'model').map((s) => s.agent))];
+    expect(agents).toEqual(['supervisor', 'triage', 'research', 'drafter', 'reviewer']);
+    expect(replayPy).toContain('DESK_SETS = TRACED_SETS[:4]');
+  }],
+  ['06-capstone', 'refuse calls with 429s', () => chainReturns(429)],
+  ['06-capstone', 'because every call was answered with a 200', () => expect(capstone.all.refusals).toBe(0)],
 ];
 
 describe('infra lessons: files, aids and anatomy', () => {
-  it('has lessons 1-3 (Task 10 adds 4-6), each numbered by its file name', () => {
+  it('has lessons 1-6, each numbered by its file name', () => {
     const files = readdirSync(lessonsDir).filter((f) => f.endsWith('.mdx')).sort();
-    expect(files.slice(0, 3)).toEqual(LESSONS.map((l) => `${l}.mdx`));
+    expect(files).toEqual(LESSONS.map((l) => `${l}.mdx`));
     for (const [i, l] of LESSONS.entries()) {
       const fm = matter(read(l)).data;
       expect([fm.track, fm.order, fm.slug], l).toEqual(['infra', i + 1, l.replace(/^\d+-/, '')]);
@@ -349,12 +567,18 @@ describe('infra lessons: files, aids and anatomy', () => {
     expect(matter(read('01-gateway')).data.title).toBe('What an AI gateway is');
     expect(matter(read('02-routing')).data.title).toBe('Routing and fallback');
     expect(matter(read('03-resilience')).data.title).toBe('Retries and rate limits');
+    expect(matter(read('04-cache')).data.title).toBe('The response cache');
+    expect(matter(read('05-budgets')).data.title).toBe('Budgets and the spend ledger');
+    expect(matter(read('06-capstone')).data.title).toBe('Capstone: the course through the gateway');
   });
 
   it.each([
     ['01-gateway', ['Concept', 'See it', 'The code', 'Try it']],
     ['02-routing', ['Concept', 'See it', 'The code', 'How Go does it', 'Try it']],
     ['03-resilience', ['Concept', 'See it', 'The code', 'How Go does it', 'Try it']],
+    ['04-cache', ['Concept', 'See it', 'The code', 'How Go does it', 'Try it']],
+    ['05-budgets', ['Concept', 'See it', 'The code', 'How Go does it', 'Try it']],
+    ['06-capstone', ['Concept', 'See it', 'The code', 'Try it']],
   ] as const)('%s has the H2s in order', (l, h2s) => {
     expect([...read(l).matchAll(/^## (.+)$/gm)].map((m) => m[1])).toEqual([...h2s]);
   });
@@ -373,11 +597,23 @@ describe('infra lessons: files, aids and anatomy', () => {
       '<CodeTabs source="infra-stages" section={7} goSection={7} />',
       '<CodeTabs source="infra-injector" section={1} pythonOnly />',
     ]) expect(l3).toContain(s);
+    expect(seeIt('04-cache')).toContain('<CacheReport initial="all" />');
+    expect(seeIt('05-budgets')).toContain('<LedgerView initial="all" />');
+    expect(seeIt('06-capstone')).toContain('<TraceExplorer initial="cached" />');
+    for (const s of ['<CodeTabs source="infra-stages" section={4} goSection={4} />', '<CodeTabs source="infra-config" section={3} pythonOnly />']) expect(read('04-cache')).toContain(s);
+    for (const s of [
+      '<CodeTabs source="infra-stages" section={3} goSection={3} />',
+      '<CodeTabs source="infra-ledger" section={2} pythonOnly />',
+      '<CodeTabs source="infra-ledger" section={4} pythonOnly />',
+      '<CodeTabs source="infra-config" section={5} pythonOnly />',
+    ]) expect(read('05-budgets')).toContain(s);
+    for (const s of ['<CodeTabs source="infra-replay" section={1} pythonOnly />', '<CodeTabs source="infra-replay" section={3} pythonOnly />']) expect(read('06-capstone')).toContain(s);
   });
 
-  it('gives lesson 1, which has no twin section, the Go callout, and lessons 2 and 3 the Go section instead', () => {
+  it('gives lessons 1 and 6, which quote no twin section, a Go callout, and lessons 2-5 the Go section instead', () => {
     expect(read('01-gateway')).toContain('<Callout kind="go" title="The Go twin starts in lesson 2">');
-    for (const l of ['02-routing', '03-resilience']) expect(read(l), l).not.toContain('<Callout kind="go"');
+    expect(read('06-capstone')).toContain('<Callout kind="go" title="No Go twin here">');
+    for (const l of ['02-routing', '03-resilience', '04-cache', '05-budgets']) expect(read(l), l).not.toContain('<Callout kind="go"');
   });
 
   it('lesson 1 carries the concept tour: the five jobs, the drop-in trade and the out-of-scope list as what a production gateway adds', () => {
@@ -417,7 +653,10 @@ describe('infra lessons: files, aids and anatomy', () => {
   });
 
   it('shows how to stop every server a Try it starts', () => {
-    for (const l of ['01-gateway', '03-resilience']) expect(read(l).split('\n## Try it\n')[1], l).toContain('with Ctrl-C');
+    for (const l of ['01-gateway', '03-resilience', '05-budgets']) expect(read(l).split('\n## Try it\n')[1], l).toContain('with Ctrl-C');
+    // lessons 2, 4 and 6 start no server, and say so or run everything in-process
+    for (const l of ['02-routing', '04-cache']) expect(read(l), l).toContain('Nothing here starts a server or calls a model.');
+    expect(read('06-capstone')).toContain('`--start` runs everything in one process');
   });
 
   it('gives each lesson 3 quiz questions of 4 options in plain text', () => {
@@ -434,7 +673,7 @@ describe('infra lessons: files, aids and anatomy', () => {
   it('every file named in the lessons exists', () => {
     for (const l of LESSONS) {
       for (const [, p] of read(l).matchAll(/`((?:infra|agents|llms)\/[\w./-]+\.(?:py|go|yaml|json|jsonl))`/g)) {
-        if (p.startsWith('infra/data/traces/') || p === 'infra/data/ledger.jsonl' || p === 'infra/data/cache.json') continue; // run outputs
+        if (p.startsWith('infra/data/traces/') || p.startsWith('infra/data/derived/run/') || p === 'infra/data/ledger.jsonl' || p === 'infra/data/cache.json') continue; // run outputs
         expect(existsSync(join(repo, p)), `${l} names ${p}`).toBe(true);
       }
     }

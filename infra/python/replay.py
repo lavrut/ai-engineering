@@ -337,7 +337,9 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Replay the course's recorded traffic through the gateway; the gate.")
     p.add_argument("--config", type=Path, default=config.GATEWAY_YAML)
     how = p.add_mutually_exclusive_group()
-    how.add_argument("--gateway", metavar="URL", help="a gateway started by hand (the proxy already running)")
+    here = f"http://127.0.0.1:{gateway.env_port('INFRA_GATEWAY_PORT', gateway.DEFAULT_PORT)}"
+    how.add_argument("--gateway", metavar="URL", nargs="?", const=here,
+                     help="a gateway started by hand (the proxy already running); no URL: INFRA_GATEWAY_PORT or 8790")
     how.add_argument("--start", action="store_true", help="start the proxies and the gateway in-process (the default)")
     p.add_argument("--sets", help=f"comma-separated, from {','.join(SETS)} (default: all)")
     p.add_argument("--gate", action="store_true", help="print the gate's lines")

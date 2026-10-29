@@ -1,0 +1,186 @@
+---
+track: infra
+order: 4
+slug: cache
+title: The response cache
+goal: Say which repeated calls an exact-body response cache can answer and which it must send on, read the capstone's real hit picture, and tell it apart from the model API's prompt cache.
+minutes: 25
+quiz:
+  - question: The LLMs lab sends the same long system prompt with each of its tickets, and only the ticket text in the user message changes. How often does the gateway's response cache answer one of those calls?
+    options:
+      - Every time after the first, because the system prompt is the same
+      - Never. The cache key hashes the whole body, and every ticket makes the body different. Sharing a long start is what the API's prompt cache is for
+      - Only when two tickets have the same category
+      - Every time after the first, as long as the calls fall within the cache's time to live
+    answer: 1
+    explanation: An exact-body cache matches whole requests. A shared prefix with a different ending is a different body and a different key. The API's prompt cache works on the prefix instead, and still makes the call.
+  - question: The cache stores an answer only when it stopped with end_turn. Why not store a tool_use answer too?
+    options:
+      - A tool_use answer asks the caller to run a tool and come back. The caller acts on it, so replaying a stored one would repeat an action in a world that has moved on, and the next request carries the result anyway
+      - A tool_use answer is too large to store
+      - The model API forbids caching tool calls
+      - A tool_use answer costs nothing, so there is nothing to save
+    answer: 0
+    explanation: An end_turn answer is a finished reply to a finished question. A tool_use answer is one step of an agent's loop. Serving it again from a store would hand the agent a step it already took, with the tool's effects not repeated.
+  - question: The capstone replays the Python patterns set and then its Go twin. Why does the Go twin get cache hits when the Python set, replayed alone, gets none?
+    options:
+      - The Go twin sends shorter prompts, which the cache prefers
+      - The Go twin runs later, so its calls fall outside the time to live
+      - The Go twin sends some of the same tool-free requests, byte for byte, that the Python set already sent, and the cache answers those. Within one set, the repeats all carry tools, so the cache skips them
+      - The Go twin sets a header that turns the cache on
+    answer: 2
+    explanation: A hit needs a stored answer to a byte-identical body. The twins build the same requests from the same tickets, so the second set meets answers the first set left behind. Inside a set, the only repeats are agent steps that carry tools.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import CacheReport from '../../../components/infra/CacheReport.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+The cache stage answers a call from a store when the same call was answered before. A hit costs nothing and takes no time: no route, no limiter, no upstream. That is the whole appeal, and the whole difficulty is the word "same".
+
+### What counts as the same call
+
+The course's gateway keeps an exact-body response cache. Its <Term t="cache key" /> is a hash of the request's path and its body bytes, as the caller sent them. Only a `POST` to `/v1/messages` is looked up. Two calls share a key only when every byte of their bodies matches: the model, the system prompt, every message, `max_tokens`, the tools. One different character, and it is a different call.
+
+That is strict on purpose. A looser key, say one that ignored the last message, would hand a caller an answer to a question it did not ask. An exact match can only be wrong when the world changed between the two calls, which is what the time to live is for. Section 3 of `infra/gateway.yaml` is one line, `cache: {ttl_s: 3600, skip_tools: true}`: a stored answer is good for 3600 seconds, an hour, and then the next lookup finds it expired.
+
+### What the cache will not store or serve
+
+Two rules keep agent traffic out of the cache.
+
+- **A request that carries tools is skipped.** With `skip_tools: true`, the stage never looks it up, and the trace says `the request carries tools`. An agent sends its tools with every step of its loop, so this skips most of an agent's traffic.
+- **Only an `end_turn` answer is stored.** An answer that stopped on `tool_use` asks the caller to run a tool and come back. The caller acts on it. Replaying a stored one would repeat a step the agent already took, and the next request carries the tool's result anyway.
+
+The second rule holds even with the first turned off. With `skip_tools: false`, a request with tools is looked up, but its answer is stored only if it ended the turn. The Try it shows what that changes in the course's traffic: nothing.
+
+The fixture cases pin both rules: in `cacheable_hit` an `end_turn` answer stored 60 seconds earlier is served, and in `tool_call_skip` the same stored answer is skipped, because the request carries tools.
+
+### The real hit picture
+
+The capstone replays all 957 calls through the cache. It answers 20 of them, a hit rate of 0.0209. All 20 are repeats across sets, and none is a repeat within one:
+
+- 19 hits are in the Go patterns set, `patterns-go`, out of its 56 calls. The Go twin builds its requests from the same tickets as the Python patterns set, byte for byte, and the Python set ran first, so its tool-free answers were already stored.
+- 1 hit is in the Go desk, `desk-hand-go`, out of its 188 calls, for the same reason: the Python hand-built desk ran first.
+
+Within the two patterns sets there are 6 repeats of a call the same set already made. Every one of them carries tools, so the cache skips it. In production that is the usual picture: an exact-body cache earns its keep on traffic that really repeats, such as the same question asked by many users or a batch job run twice, and does little for an agent at work.
+
+### The other cache: the API's prompt cache
+
+The model API has a cache of its own, the prompt cache, and it works the other way round. It does not skip the call. It notices that a request starts with the same long prefix as a recent one, such as a system prompt and a tool list, and bills the part read from its cache at a tenth of the input price. Writing a prefix into the cache costs 1.25 times the input price. A caller asks for it by marking where the prefix ends.
+
+The capstone's traffic shows it. Of the four desks, only the Claude Agent SDK desk marks its prefixes, and its recorded usage holds 502,680 input tokens read from the prompt cache and 149,144 written to it. The other three desks show none. The gateway's ledger prices those tokens at the API's multipliers, so they count in lesson 5's spend at the rate the SDK desk really paid.
+
+The LLMs lab is the case each cache handles differently. It sends the same system prompt with each of its 60 tickets, and only the ticket text in the user message changes. To the response cache those are 60 different bodies and 60 misses. To a prefix cache they are one shared start that could be read again at a tenth of the price. The lab marks nothing for caching, so it paid full price for that start every time.
+
+## See it
+
+The report reads the capstone's cache figures for all calls, each set and each team. Pick a row and watch where the hits are: only two sets have any.
+
+<CacheReport initial="all" />
+
+The two sets with hits are the Go twins, which came second. Every Python set, and the judge set, has none. The report's note under the table is the capstone's own account of where the 20 hits came from.
+
+## The code
+
+The cache stage is section 4 of `infra/python/stages.py`.
+
+<CodeTabs source="infra-stages" section={4} goSection={4} />
+
+- `key = cache_key(req.path, req.body)` hashes the path and the body bytes as received. The body is never parsed and printed again first, so the key is the caller's own bytes.
+- `if cfg.cache.skip_tools and (req.json or {}).get("tools"):` skips a request with tools before any lookup. An empty tool list counts as no tools.
+- `if age >= cfg.cache.ttl_s:` drops an answer past its time to live, and the lookup is a miss that says how old it was.
+- `if e.stop_reason != "end_turn":` refuses to serve a stored answer that did not end the turn. The chain never stores one, so this guards against a cache file written by something else.
+- `return decision("cache", "hit", f"stored {age:.0f}s ago", key=key)` is a hit. The chain then answers from the store and books the call at $0.
+
+Storing happens in the chain, after the upstream answered: `if cache_verdict == "miss" and up.status == 200 and stop_reason(up.headers, up.body) == "end_turn":`. A skipped call is never stored.
+
+The config line the stage reads is section 3 of `infra/gateway.yaml`.
+
+<CodeTabs source="infra-config" section={3} pythonOnly />
+
+- `ttl_s: 3600` is the time to live, in seconds of the gateway's clock. In the capstone that clock is replay time, so the first hit, in `desk-hand-go`, says `stored 333s ago`: the Python desk's answer was 333 seconds of recorded traffic old.
+- `skip_tools: true` is the first rule. The second, `end_turn` only, has no setting.
+
+## How Go does it
+
+The Go twin's section 4 makes the same three decisions, with the same detail strings. Two lines show what matching Python takes.
+
+- `if cfg.Cache.SkipTools && truthy(req.body().MustGet("tools")) {` needs a helper, because Go has no truthiness. Python's `.get("tools")` is false for a missing key, `None` and an empty list alike, and `truthy` gives the same answer for each, so both languages skip the same requests.
+- `reason = "None"` fills in a missing stop reason with the word Python prints for `None`, so a stored answer with no stop reason produces the same detail line in both.
+
+## Try it
+
+Replay the Python patterns set and then the Go one in a single run, so the second set meets the answers the first one stored. Everything runs in-process on replay time, from the agents track's recordings, for free:
+
+```bash
+.venv-infra/bin/python infra/python/replay.py --sets patterns,patterns-go --out /tmp/infra-cache --gate
+```
+
+You should see:
+
+```text
+replayed 116 calls: 19 cache hits, 0 refusals, $0.023254
+gate ledger: ok: no desk set in this run
+gate budgets: ok: patterns $0.0233 of $0.50; 0 refusals, 0 traced
+gate stages: ok: 116 traces: 97 answered with all eight stages, 19 cache hits stop after cache, 0 refusals stop at the refusing stage, 0 out of order; 0 parent ids named, 0 missing
+gate figures: ok: hit rate 0.1638 (19 of 116) and p95 3901 ms; from the traces and the recordings: 0.1638 and 3901 ms
+wrote capstone.json, ledger.json, traces.sample.json to /tmp/infra-cache
+```
+
+Count the cache stage's verdicts in the run's traces:
+
+```bash
+.venv-infra/bin/python -c "import json, sys, collections; ts = [json.loads(l) for l in open(sys.argv[1])]; c = collections.Counter(d['verdict'] for t in ts for d in t['decisions'] if d['stage'] == 'cache'); [print(k, v) for k, v in sorted(c.items())]" /tmp/infra-cache/capstone.jsonl
+```
+
+You should see:
+
+```text
+hit 19
+miss 39
+skip 58
+```
+
+Half the calls carry tools and are skipped. Of the rest, 19 found an answer the Python set had stored. Now replay the Go set alone, into a fresh folder, so nothing is stored before it:
+
+```bash
+.venv-infra/bin/python infra/python/replay.py --sets patterns-go --out /tmp/infra-cache-go
+```
+
+You should see:
+
+```text
+replayed 56 calls: 0 cache hits, 0 refusals, $0.012158
+wrote capstone.json, ledger.json, traces.sample.json to /tmp/infra-cache-go
+```
+
+No hits. The run costs more by exactly what the 19 hits saved. Last, turn the first rule off in a copy of the config and replay the Python set alone. Its repeats carry tools, so now they are looked up:
+
+```bash
+sed 's/skip_tools: true/skip_tools: false/' infra/gateway.yaml > /tmp/gateway-tools.yaml
+.venv-infra/bin/python infra/python/replay.py --config /tmp/gateway-tools.yaml --sets patterns --out /tmp/infra-tools
+```
+
+You should see:
+
+```text
+replayed 60 calls: 0 cache hits, 0 refusals, $0.013470
+wrote capstone.json, ledger.json, traces.sample.json to /tmp/infra-tools
+```
+
+Still no hits. Print the cache decision of every call whose body the run had already sent:
+
+```bash
+.venv-infra/bin/python -c "import json, sys; ts = [json.loads(l) for l in open(sys.argv[1])]; cs = [d for t in ts for d in t['decisions'] if d['stage'] == 'cache']; keys = [c['key'] for c in cs]; [print(t['tag'], c['verdict'], c['detail'], sep=' | ') for i, (t, c) in enumerate(zip(ts, cs)) if c['key'] in keys[:i]]" /tmp/infra-tools/capstone.jsonl
+```
+
+You should see:
+
+```text
+t001 | miss | not stored
+t007 | miss | not stored
+t061 | miss | not stored
+```
+
+Each repeat was looked up and found nothing, because the first answer stopped on `tool_use` and the second rule never stored it. Every repeat in this traffic that carries tools repeats a step whose answer stopped on `tool_use`, so `skip_tools` changes the work the stage does, not its hits. Nothing here starts a server or calls a model.

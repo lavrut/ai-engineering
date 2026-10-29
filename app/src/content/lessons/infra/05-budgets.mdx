@@ -1,0 +1,242 @@
+---
+track: infra
+order: 5
+slug: budgets
+title: Budgets and the spend ledger
+goal: Refuse a call before it spends when its worst case would take a team past its limit, book every answer in a ledger priced like the agents track's, and check that ledger against the agents track's to the cent.
+minutes: 25
+quiz:
+  - question: The patterns team has $0.0017 of its budget left. Its next call would really cost a fraction of that, but asks for up to 4,000 output tokens. Why does the budget stage refuse it?
+    options:
+      - Because the team has spent more than half its budget
+      - Because the stage averages the team's past calls and expects this one to be dear
+      - Because the ledger has not booked the last call yet
+      - The stage checks before the call, when the real cost is unknown. It counts the worst case, the estimated input plus every output token the call may use, and that does not fit in what is left
+    answer: 3
+    explanation: A budget that checks after the call can only report the overspend. Checking before means using the most the call could cost, so a team is stopped a little early, with some of its budget unused. That is the price of never going over.
+  - question: The capstone's gateway ledger for the Go hand-built desk is $0.0001919 lower than the agents track's ledger for the same set. Why does the gate still pass?
+    options:
+      - The gate allows a difference of up to a cent
+      - The gate does not check the Go desk
+      - One of that set's calls was a cache hit. The gateway booked it at $0, the agents ledger still counts what it cost when it was recorded, and the gate adds the recorded cost of each hit back before comparing
+      - The agents ledger prices tokens differently
+    answer: 2
+    explanation: Both ledgers price the same usage with the same table and the same arithmetic, so on calls that went upstream they agree exactly. A hit is money the gateway saved, and the gate names the hits it adds back, so the saving is visible rather than a mismatch.
+  - question: A call reaches the gateway with no x-team header, and the config says untagged refuse. What does the caller get, and what does it cost?
+    options:
+      - A 200 from the upstream, booked to a team called untagged
+      - A 402 with the reason in the body, before the cache, the route or the upstream is reached, so it costs nothing. The trace and the ledger still record it
+      - A 404, because no route matches a call with no team
+      - A 402 after the upstream answered, so the call is paid for but not returned
+    answer: 1
+    explanation: The budget stage is the second stage, right after the tag. A refused call stops there, so nothing is forwarded and nothing is spent, but the refusal still gets its ledger row and its trace, which is how a team finds out it forgot a header.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import LedgerView from '../../../components/infra/LedgerView.astro';
+
+## Concept
+
+A team with a budget wants two things from the gateway: to never go over it, and to know where the money went. The budget stage does the first, before each call. The ledger does the second, after it.
+
+### The worst case, checked before the call
+
+The budget stage runs second, right after the tag, before the cache, the route or the upstream. At that point the real cost is unknown: it depends on how many tokens the model will write. So the stage prices the worst case:
+
+- **Input:** an estimate, about four characters a token over the request's JSON, at the model's input price.
+- **Output:** every token `max_tokens` allows, at the model's output price.
+
+It adds that to what the team has spent so far and compares the sum with the team's limit. The prices are the LLMs lab's table, so `claude-haiku-5-5` costs $0.10 a million input tokens and $0.50 a million output tokens. Every call in the patterns set asks for `max_tokens` of 4000, so its worst case is at least $0.002 before any input is counted.
+
+The worst case is far above what a call usually costs. That is the point: the stage cannot know which call will run long, so it assumes each one might. The price is that a team is stopped early, with a little of its budget left that no call could safely use.
+
+### Three answers, and the 402
+
+The stage answers one of three ways:
+
+- **allow:** the spend plus the worst case is within the limit.
+- **warn:** it is within the limit but over the team's `warn_usd` line. The call goes on, and the trace says so, which is a team's early notice. In the fixture case `team_warn`, the desk has spent $0.85 against its warn line of $0.80, and the call is forwarded with a `warn`.
+- **refuse:** it is over the limit, or the team has no budget at all. The gateway answers `402` with the reason in the body, and nothing is forwarded or spent. In `team_over_budget`, the desk has spent $0.9999 of its $1.00, and any call's worst case is too much.
+
+A refusal comes before the cache, too. In `budget_refusal_beats_cache_hit`, the same over-spent desk asks for an answer the cache holds, and still gets the 402. A team over its budget is refused even what would have cost nothing, so the rule stays one rule.
+
+Section 5 of `infra/gateway.yaml` sets the limits: the desk $1.00 with a warn line at $0.80, and the lab, patterns and judge teams $0.50 each. Its last line is `untagged: refuse`: a call with no `x-team` belongs to no team and is refused with a 402 too. A config can instead name a team to book untagged calls to, as lesson 1's Try it did.
+
+### The ledger
+
+Every call gets one ledger row, answered or refused: the team, the tag, the model, the four usage fields the API returns, the cost and the status. The rows are appended to a file and never rewritten. Each team's spend is the sum of its rows' costs, which is how the budget stage knows what a team has spent, even after a restart.
+
+The cost comes from the recorded usage and the lab's prices. Prompt-cache tokens count at the API's multipliers: tokens written to the prompt cache at 1.25 times the input price, tokens read from it at 0.10 times. That is the agents proxy's own formula, in the same order, so the two ledgers price the same call the same way, to the last digit. A cache hit is booked at $0, because no model was called.
+
+### The two ledgers beside each other
+
+The agents track kept its own ledger: each run's traces list every proxy call and its cost. The capstone sends the same calls through the gateway and compares, per desk set. For three of the four desk sets the two figures are equal to the cent and beyond. The fourth, the Go hand-built desk, had 1 cache hit, which the gateway booked at $0 and the agents ledger still counts. So the gate adds back the recorded cost of each hit before it compares, and its line names the hits:
+
+`desk-hand-go $0.0458874 + $0.0001919 for 1 cache hit = agents $0.0460793`
+
+A hit is money the gateway saved, and the line shows how much. The patterns sets are not part of that check, but the same thing shows in their figures: `patterns-go` books less at the gateway than in the agents ledger, by its 19 hits.
+
+Across the capstone, the desk spent $0.1856 of its $1.00, the judge $0.0255 of $0.50 and the patterns team $0.0233 of $0.50. No call was refused.
+
+### Spend by ticket
+
+The ledger keeps the tag beside the cost, so it can answer which tickets cost most. In the capstone, the dearest tag is `none`: calls whose messages name no ticket id, which the gateway cannot pin to a ticket. After it come `t001`, `t007` and `t061`, the three tickets the patterns sets run each pattern on, on top of the desk runs. A tag is only as good as what the caller sends. The capstone's driver tags each call with the ticket id it finds in the messages, and a call that names no ticket can only be booked to `none`.
+
+## See it
+
+The view reads the capstone's ledger. Pick a team and watch its spend against its limit and warn line, then look at the two tables below: the dearest tags, and the agents ledger beside the gateway's for each traced set.
+
+<LedgerView initial="all" />
+
+The desk is far from its warn line, and no team is near its limit. In the last table, the one set whose two figures differ among the desk sets is the one with a cache hit, and the gate's column says why it still passes.
+
+## The code
+
+The budget stage is section 3 of `infra/python/stages.py`.
+
+<CodeTabs source="infra-stages" section={3} goSection={3} />
+
+- `return len(canonical(body).decode()) // 4 + 1, out` estimates the input as a quarter of the JSON's characters, plus one, as the agents proxy estimates it. `out` is `max_tokens`, or 0 when the request sets none.
+- `booked = cfg.untagged if team == "untagged" and cfg.untagged != "refuse" else team` books an untagged call to the team the config names, unless it says `refuse`.
+- `priced = cfg.routes[model].to if model in cfg.routes else model` prices the call at its route's target, the model the ledger will book it under.
+- `if spent + worst > b.limit_usd:` refuses on the worst case, before any token is spent. The warn line is checked only after it.
+- `line = f"${spent:.6f} spent + ${worst:.6f} worst case"` is the detail every verdict carries, so the trace says how close the call came.
+
+The chain turns a refusal into the 402 and puts the stage's detail in the body: `team {booked}: budget{lim} refused: {d['detail']}`.
+
+The cost of an answered call is section 2 of `infra/python/ledger.py`.
+
+<CodeTabs source="infra-ledger" section={2} pythonOnly />
+
+- `if model not in prices or any(usage.get(k) is None for k in USAGE_FIELDS):` gives no cost rather than a wrong one when the usage is incomplete. The row says so with an empty cost.
+- `+ usage["cache_read_input_tokens"] * CACHE_READ_MULTIPLIER * p_in` prices prompt-cache reads at a tenth of the input price. The write line above it uses 1.25.
+- `return (in_tokens * p_in + out_tokens * p_out) / 1_000_000` is the worst case: no prompt-cache discount, the conservative side.
+
+Section 4 rebuilds each team's spend from the rows.
+
+<CodeTabs source="infra-ledger" section={4} pythonOnly />
+
+- `if r.get("cost_usd") is not None:` skips refused calls and unpriced ones, so a refusal never counts against a team.
+
+The limits are section 5 of the config.
+
+<CodeTabs source="infra-config" section={5} pythonOnly />
+
+- `desk: {limit_usd: 1.00, warn_usd: 0.80}` is the only team with a warn line.
+- `untagged: refuse` refuses calls with no team. Replace `refuse` with a team's name to book them there.
+
+## How Go does it
+
+The Go twin's section 3 makes the same verdicts with the same detail strings, on every fixture case. Two lines show what that takes.
+
+- `return utf8.RuneCountInString(Dumps(body, true))/4 + 1, out` counts characters, not bytes. Python's `len` counts code points, and a ticket with an accented name has more bytes than characters, so counting bytes would give Go a larger estimate.
+- `d.LimitUSD = &lim` stores the limit as a pointer, so a team with no budget has no limit at all, as Python's `None`, rather than a limit of 0 that a reader could mistake for a real one.
+
+## Try it
+
+Start from an empty ledger, so the spend so far is nothing:
+
+```bash
+rm -f infra/data/ledger.jsonl infra/data/cache.json
+```
+
+In a first terminal, start the gateway on the course's config. No proxy is needed: every call below is refused before it would reach one.
+
+```bash
+.venv-infra/bin/python infra/python/gateway.py --port 8790 --run budget
+```
+
+You should see:
+
+```text
+gateway on http://127.0.0.1:8790 -> http://127.0.0.1:8791  traces infra/data/traces/budget.jsonl
+```
+
+In a second terminal, send the same request twice: once with no team, once as the patterns team. The request asks for up to 1,000,000 output tokens:
+
+```bash
+.venv-infra/bin/python -c "import http.client, json; body = json.dumps({'model': 'claude-haiku-5-5', 'max_tokens': 1000000, 'messages': [{'role': 'user', 'content': 'Triage ticket t008.'}]}); c = http.client.HTTPConnection('127.0.0.1', 8790); c.request('POST', '/v1/messages', body, {'content-type': 'application/json'}); r = c.getresponse(); print(r.status, r.read().decode()); c.request('POST', '/v1/messages', body, {'content-type': 'application/json', 'x-team': 'patterns'}); r = c.getresponse(); print(r.status, r.read().decode())"
+```
+
+You should see:
+
+```text
+402 {"type": "error", "error": {"type": "budget_exceeded", "message": "team untagged: budget refused: untagged requests are refused"}}
+402 {"type": "error", "error": {"type": "budget_exceeded", "message": "team patterns: budget of $0.50 refused: $0.000000 spent + $0.500003 worst case > $0.50 limit"}}
+```
+
+The first has no team. The second has a team with nothing spent, but its worst case alone is more than the team's whole budget. Neither reached an upstream, and both are traced:
+
+```bash
+.venv-infra/bin/python infra/python/traces.py infra/data/traces/budget.jsonl
+```
+
+You should see:
+
+```text
+2775d114f2bcb80c 402 untagged t008 0 - refused
+487edccafbf4e65d 402 patterns t008 0 - refused
+```
+
+Your trace ids and the gateway's own milliseconds, the fifth field, will differ. The cost is `-`: a refusal is booked with no cost. Stop the gateway with Ctrl-C.
+
+Now watch a budget run out. Copy the config with the patterns team's limit cut to a cent, and replay the patterns set through it, in-process on replay time:
+
+```bash
+sed 's/^  patterns: {limit_usd: 0.50}$/  patterns: {limit_usd: 0.01}/' infra/gateway.yaml > /tmp/gateway-budget.yaml
+.venv-infra/bin/python infra/python/replay.py --config /tmp/gateway-budget.yaml --sets patterns --out /tmp/infra-budget --gate
+```
+
+You should see:
+
+```text
+replayed 60 calls: 0 cache hits, 26 refusals, $0.008291
+gate ledger: ok: no desk set in this run
+gate budgets: ok: patterns $0.0083 of $0.01; 26 refusals, 26 traced
+gate stages: ok: 60 traces: 34 answered with all eight stages, 0 cache hits stop after cache, 26 refusals stop at the refusing stage, 0 out of order; 0 parent ids named, 0 missing
+gate figures: ok: hit rate 0.0 (0 of 60) and p95 3760 ms; from the traces and the recordings: 0.0 and 3760 ms
+wrote capstone.json, ledger.json, traces.sample.json to /tmp/infra-budget
+```
+
+The team never went over: it stopped at $0.0083, and every call after that was refused. Ask the traces for the refusals:
+
+```bash
+.venv-infra/bin/python infra/python/traces.py /tmp/infra-budget/capstone.jsonl --outcome refused | head -3
+```
+
+You should see:
+
+```text
+fa2db5b419259db9 402 patterns t007 0 - refused
+9df7370281e31c1d 402 patterns t061 0 - refused
+57ef03410cd37e3c 402 patterns t061 0 - refused
+```
+
+Your trace ids and the milliseconds will differ. The first refusal's budget decision says why:
+
+```bash
+.venv-infra/bin/python -c "import json, sys; t = next(t for t in map(json.loads, open(sys.argv[1])) if t['status'] == 402); print(t['tag'], *[d['detail'] for d in t['decisions'] if d['stage'] == 'budget'])" /tmp/infra-budget/capstone.jsonl
+```
+
+You should see:
+
+```text
+t007 $0.008291 spent + $0.002143 worst case > $0.01 limit
+```
+
+Less than $0.002 was left, and every patterns call's worst case is more than that, though none of them really costs half as much. Last, the run's ledger summary: the team's figures and its dearest tags.
+
+```bash
+.venv-infra/bin/python -c "import json, sys; s = json.load(open(sys.argv[1])); print(s['teams']); [print(tag, f'{usd:.6f}') for tag, usd in s['top_tags']]" /tmp/infra-budget/ledger.json
+```
+
+You should see:
+
+```text
+{'patterns': {'requests': 60, 'cost_usd': 0.0082909, 'cached': 0, 'refused': 26}}
+t001 0.003987
+t007 0.002800
+t061 0.001127
+none 0.000377
+```
+
+Every call has a row, the refused ones included, and only the answered ones cost anything. Nothing here calls a model.
