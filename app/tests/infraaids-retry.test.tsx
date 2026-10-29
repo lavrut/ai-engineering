@@ -32,7 +32,7 @@ describe('RetryTimeline', () => {
       '2claude-haiku-5-5✗ 500 server error2 ms',
       '3claude-haiku-5-5✓ 200 ok0 ms',
     ]);
-    expect(screen.getByText('Scripted answers, in order (the last repeats): 429, 500, 200')).toBeTruthy();
+    expect(screen.getByText('Scripted answers, in order (starting again from the top when it runs out): 429, 500, 200')).toBeTruthy();
     expect(screen.getByTestId('retry-outcome').textContent).toBe('✓ ok: the caller got 200 after 3 attempts and 3 ms of backoff.');
     const decisions = within(screen.getByRole('list', { name: 'Stage decisions, flaky' })).getAllByRole('listitem');
     expect(decisions.map((d) => d.textContent)).toEqual([

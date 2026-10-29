@@ -46,7 +46,7 @@ export default function RetryTimeline(p: RetryTimelineProps) {
           </button>
         ))}
       </fieldset>
-      <p class="mc-hint">Scripted answers, in order (the last repeats): {s.script.join(', ')}</p>
+      <p class="mc-hint">Scripted answers, in order (starting again from the top when it runs out): {s.script.join(', ')}</p>
       <p class="mc-live" role="status" aria-live="polite">
         {attemptText(s.attempts[at], n)}
       </p>
