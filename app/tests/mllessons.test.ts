@@ -986,7 +986,7 @@ describe('the quizzes: every number a question, option or explanation states (P1
       'recorded with 8 calls in flight at once', 'Claude Haiku 5.5', 'label 50,000 complaints a day'],
     '07-tracking': [`score ${f3(c1.test.macro_f1)} and ${f3(c3.test.macro_f1)} macro-F1 on the 2022 test year (n = ${c1.test.n}, band ±${f3(c1.test.band)})`,
       `C = 3 is ${((c3.train.macro_f1 - c1.train.macro_f1) * 100).toFixed(1)} points higher on the training year`,
-      `because ${f3(c3.test.macro_f1)} is close enough`, `The test difference, ${f3(c1.test.macro_f1 - c3.test.macro_f1)}, is far inside ±${f3(c1.test.band)}`, '`model.sha256`'],
+      `because ${f3(c3.test.macro_f1)} is close enough`, `The test difference, ${f3(c1.test.macro_f1 - c3.test.macro_f1)}, is far inside ±${f3(c1.test.band)}`, 'model.sha256'],
     '08-registry': ['SHA-256'],
     '09-serving': [`with hash ${registry.versions.v1.sha256.slice(0, 8)}…`, `sends ${commas(constant('ml/serve/server.py', 'MAX_CHARS'))} copies of "é". That is ${commas(2 * constant('ml/serve/server.py', 'MAX_CHARS'))} bytes of UTF-8`,
       `over ${commas(constant('ml/serve/server.py', 'MAX_CHARS'))} bytes`, `exactly ${commas(constant('ml/serve/server.py', 'MAX_CHARS'))}`,
