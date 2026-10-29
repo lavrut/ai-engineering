@@ -1,0 +1,157 @@
+---
+track: infra
+order: 2
+slug: routing
+title: Routing and fallback
+goal: Map each model a caller names to a target and its fallbacks, refuse every other model with a deny, and explain why a gateway that edits request bodies breaks replay, caching and audit.
+minutes: 20
+quiz:
+  - question: A request names claude-opus-5-5. The config routes only claude-haiku-5-5, and its last route is "*" deny. What happens?
+    options:
+      - The gateway forwards it as itself, because the upstream knows the model
+      - The route stage refuses it with a 404 before the limiter or the upstream sees it, and the refusal is traced
+      - The gateway sends it to claude-haiku-5-5 instead, the only model it has a route for
+      - The budget stage refuses it, because the model has no price
+    answer: 1
+    explanation: A deny turns a model nobody approved into a loud, early refusal. Nothing is forwarded or spent, and the trace names the model and the rule. Without the deny, the gateway would send the call on as itself, at a price it does not know.
+  - question: The course's gateway never rewrites the model field, even when a route's target is a different model. Why?
+    options:
+      - Because Python cannot change a JSON body without breaking it
+      - Because the model API ignores the model field
+      - Because rewriting a body takes too long for a gateway
+      - Because the replay proxy finds a recording by a hash of the method, the path and the body. A changed model is different bytes, so the replay misses, and the cache key and the trace's record of what was asked change with it
+    answer: 3
+    explanation: Every downstream check that keys on bytes breaks when the gateway edits them. The course keeps routing decisions in the trace and leaves the body as the caller sent it, so replay, the response cache and the audit trail all see the request that was really made.
+  - question: In the case fallback_after_attempts the upstream answers 500, 500, 500 and then 200. What does the retry stage report?
+    options:
+      - fallback. The route's target failed all three of its tries, and the first fallback answered on the fourth, so the caller gets the 200
+      - retried, because the call was answered in the end
+      - fail, with a 502, because the route's target never answered
+      - ok, because the last answer was a 200
+    answer: 0
+    explanation: Each target gets its own round of tries. retried means the route's own target answered after a failure; fallback means a later target in the list answered. The verdict says which, so the trace shows the route's target was down.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import RouteTable from '../../../components/infra/RouteTable.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+The route stage decides where a call goes. It reads the model the body names, looks it up in the config's `routes`, and finds a target and a list of fallbacks to try, in order, when the target fails.
+
+### Routes
+
+Section 2 of `infra/gateway.yaml` has two lines:
+
+- `claude-haiku-5-5: {to: claude-haiku-5-5, fallback: []}` routes the one model the course's traffic uses to itself, with no fallback.
+- `"*": deny` covers every model with no route of its own, and refuses it.
+
+Every recorded call in the course names `claude-haiku-5-5`, so the capstone's 957 calls all take the first route, and none is denied.
+
+### Deny
+
+A model with no route is usually a typo, or a model nobody has approved. The gateway prices only the models section 1 lists, so the budget stage counts the call's worst case as nothing, and no rate is set for it, so the limiter lets it through. The deny makes that loud: the route stage answers 404, before the limiter or the upstream sees the call, and the trace names the model and the rule. A config without the `"*"` line sends an unknown model on as itself.
+
+### Fallback
+
+The retry stage, which lesson 3 opens, works through the route's target and then each fallback in order. Each target gets its own round of tries. In the fixture case `fallback_after_attempts`, the route's target fails all three of its tries with 500 and the first fallback answers on the fourth try. The retry stage reports `fallback`, so the trace shows the target was down even though the caller got a 200. In `unknown_model_deny`, a call naming `claude-x` stops at the route stage with a 404.
+
+### Bodies are never edited
+
+Here is the catch. A route whose target is a different model sounds like it sends the call to that model. To do that, a gateway would have to rewrite the `model` field in the body. The course's gateway never does.
+
+The upstream is the agents replay proxy, and it finds each recording by a hash of the request's method, path and body: the replay key. Change one byte of the body and the key changes, so the proxy has no recording and answers 404. Two more things key on the body. The response cache stores answers under a hash of the path and the body bytes, so an edited body never matches its stored answer. And the trace is the record of what a caller asked for; if the gateway changed the request, the record no longer says what was sent.
+
+So in this gateway a route's `to` decides three things: the price the budget stage and the ledger use, the rate bucket the call draws from, and what the trace and the ledger record. The body still names the model the caller asked for, and goes upstream byte for byte. With one upstream, a target that differs from the body's model is a label, not a different call.
+
+A production gateway that really moves a call to another model, or another provider, has to rewrite the request, and gives up byte-for-byte replay and caching on that hop. That is the general rule: a gateway that edits requests breaks replay, caching and audit alike, so it should do it only where it must, and trace both versions when it does.
+
+## See it
+
+The table is `gateway.yaml`'s routes as the capstone read them. Pick a model, or type one that is not listed, and watch which row it meets: its own route, or the deny.
+
+<RouteTable />
+
+Only one model has a route, and it routes to itself. Every other name meets the deny. The note under the table is the reason the body is never edited.
+
+## The code
+
+The route stage is section 5 of `infra/python/stages.py`.
+
+<CodeTabs source="infra-stages" section={5} goSection={5} />
+
+- `r = cfg.routes.get(model)` looks the body's model up, exactly as written. There is no matching on prefixes or families.
+- `return decision("route", "route", f"{model} -> {r.to}{fb}", to=r.to, fallback=list(r.fallback))` returns the target and the fallbacks. The retry stage tries them in that order.
+- `if cfg.deny_unknown:` is the `"*": deny` line. `config.py` reads that line into a flag, so the rule cannot be misspelt into a route.
+- `return decision("route", "route", f"{model} has no route; sent as itself", to=model, fallback=[])` is what a config without the deny does.
+
+When the verdict is `deny`, the chain in section 8 answers `404` with the decision's detail as the error message, and the call goes no further.
+
+## How Go does it
+
+The Go twin's `Route` makes the same three decisions. The twin test runs every fixture case through both languages and compares the stage, the verdict and the status byte for byte. The detail strings are written to match, but the test does not compare them: the details the lessons quote are Python's.
+
+- `model, _ := req.body().MustGet("model").(string)` reads the model with a type assertion. A body whose model is not a string would read as an empty name and meet the deny; the parse step has already refused such a body before the route stage runs.
+- `Fallback: append([]string{}, r.Fallback...)` copies the fallback list. Go slices share their backing array, so returning `r.Fallback` itself would let a caller change the config. Python's `list(r.fallback)` makes the same copy.
+
+## Try it
+
+Copy the config and add a route. Open the copy in an editor:
+
+```bash
+cp infra/gateway.yaml /tmp/gateway.yaml
+```
+
+and make section 2 read:
+
+```yaml
+routes:
+  claude-haiku-5-5: {to: claude-haiku-5-5, fallback: []}
+  claude-sonnet-5-5: {to: claude-haiku-5-5, fallback: [claude-haiku-5-5]}
+  "*": deny
+```
+
+A call naming `claude-sonnet-5-5` now routes to haiku, with haiku again as its fallback. Check that the copy loads:
+
+```bash
+.venv-infra/bin/python infra/python/config.py /tmp/gateway.yaml
+```
+
+```text
+ok: 1 model(s), 2 route(s), 4 budget(s)
+```
+
+The original says `1 route(s)`; the deny is not counted as a route. Now run one case through the stages. `stages.py --cases` reads the fixture config and applies each case's own `config` over it, so export the copy and put it in the case. The case names `claude-sonnet-5-5`, and its scripted upstream answers 500 three times, then 200:
+
+```bash
+mkdir -p /tmp/route
+.venv-infra/bin/python infra/python/config.py /tmp/gateway.yaml --export --out /tmp/route/config.json
+.venv-infra/bin/python -c "import json, sys; cfg = json.load(open('/tmp/route/config.json')); body = {'model': sys.argv[1], 'max_tokens': 64, 'messages': [{'role': 'user', 'content': 'Triage ticket t008.'}]}; case = {'id': sys.argv[1], 'config': cfg, 'request': {'method': 'POST', 'path': '/v1/messages', 'headers': {'x-team': 'desk'}, 'body': body}, 'upstream': [500, 500, 500, 200]}; json.dump([case], open('/tmp/route/cases.json', 'w'))" claude-sonnet-5-5
+.venv-infra/bin/python infra/python/stages.py --cases /tmp/route/cases.json
+```
+
+You should see the export's line, then one decision line:
+
+```text
+wrote /tmp/route/config.json
+{"id":"claude-sonnet-5-5","decisions":[{"stage":"tag","verdict":"desk"},{"stage":"budget","verdict":"allow"},{"stage":"cache","verdict":"miss"},{"stage":"route","verdict":"route"},{"stage":"limit","verdict":"allow"},{"stage":"retry","verdict":"fallback"}],"status":200}
+```
+
+The target failed its three tries, and the fallback, the same model, answered on the next round, so the verdict is `fallback`. The Go twin reads the `config.json` beside the cases file, which is the same export, and prints the same line:
+
+```bash
+cd infra/go && go run ./gateway --cases /tmp/route/cases.json && cd ../..
+```
+
+Last, the deny. Write the case again with a model that has no route and run it:
+
+```bash
+.venv-infra/bin/python -c "import json, sys; cfg = json.load(open('/tmp/route/config.json')); body = {'model': sys.argv[1], 'max_tokens': 64, 'messages': [{'role': 'user', 'content': 'Triage ticket t008.'}]}; case = {'id': sys.argv[1], 'config': cfg, 'request': {'method': 'POST', 'path': '/v1/messages', 'headers': {'x-team': 'desk'}, 'body': body}, 'upstream': [500, 500, 500, 200]}; json.dump([case], open('/tmp/route/cases.json', 'w'))" claude-opus-5-5
+.venv-infra/bin/python infra/python/stages.py --cases /tmp/route/cases.json
+```
+
+```text
+{"id":"claude-opus-5-5","decisions":[{"stage":"tag","verdict":"desk"},{"stage":"budget","verdict":"allow"},{"stage":"cache","verdict":"miss"},{"stage":"route","verdict":"deny"}],"status":404}
+```
+
+The chain stops at the route stage with a 404, and the scripted upstream is never called. Nothing here starts a server or calls a model.

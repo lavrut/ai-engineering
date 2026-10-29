@@ -1,0 +1,15 @@
+---
+// Build-time wrapper: passes capstone.json's cache figures for all, each set and each team, the cache config and
+// about.cache verbatim. initial="all" (or a set or a team) picks the row shown first; an unknown one fails the
+// build, naming the known ones.
+import CacheReportIsland from './CacheReport.tsx';
+import { cacheReportProps, loadInfraData } from '../../lib/infraData';
+
+interface Props {
+  initial?: string;
+}
+
+const props = cacheReportProps(loadInfraData().capstone, { initial: Astro.props.initial });
+---
+
+<CacheReportIsland client:visible {...props} />

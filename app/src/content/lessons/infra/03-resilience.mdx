@@ -1,0 +1,174 @@
+---
+track: infra
+order: 3
+slug: resilience
+title: Retries and rate limits
+goal: Retry a failed model call with exponential backoff and jitter, fall back when a target stays down, hold calls back with a token bucket before the upstream refuses them, and watch a scripted upstream exercise all of it.
+minutes: 25
+quiz:
+  - question: The upstream answers a request with 400. What does the retry stage do?
+    options:
+      - It retries three times with backoff, then gives up with a 502
+      - It moves on to the route's first fallback
+      - It hands the 400 back at once. A 400 says the request itself is wrong, and a retry would send the same bytes again. Only a 429, a 5xx or a dropped connection is retried
+      - It answers 502, because any status that is not 200 is a failure
+    answer: 2
+    explanation: A retry helps only when the failure may pass, such as an overloaded or rate-limited upstream or a dropped connection. A request the upstream rejects as invalid will be rejected again, so retrying it only spends time and quota.
+  - question: Why does the backoff add a random jitter to each wait?
+    options:
+      - To make every wait longer, so the upstream gets more rest
+      - So that callers which failed at the same moment do not all retry at the same moment and overload the upstream again
+      - So that Python and Go wait exactly the same time
+      - Because the Messages API refuses retries that arrive on a round number of milliseconds
+    answer: 1
+    explanation: When an upstream falls over, every caller fails together. Without jitter they would all wait the same backoff and come back together, as a new spike. A random part spreads them out.
+  - question: The bucket for a model at 60 requests a minute has no request left, and max_wait_ms is 1000. A call arrives. What does the limit stage decide?
+    options:
+      - It refuses the call with a 429 at once, because the bucket is empty
+      - It forwards the call at once; the upstream will refuse it if it is over the limit
+      - It answers 502, because no request is left
+      - It waits 1000 ms, the time one request takes to refill, and lets the call through. With max_wait_ms at 500 the same call is refused with a 429
+    answer: 3
+    explanation: A token bucket refills continuously, so an empty bucket is a wait, not a refusal. The limiter waits when the refill fits inside max_wait_ms and refuses with a 429 and a retry-after when it does not. Holding a call back briefly is cheaper than having the upstream refuse it.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import RetryTimeline from '../../../components/infra/RetryTimeline.astro';
+import Callout from '../../../components/Callout.astro';
+import Term from '../../../components/Term.astro';
+
+## Concept
+
+Model calls fail in three ordinary ways. The upstream answers 429 when the caller is over its <Term t="rate limit" />. It answers with a 5xx status when it is overloaded or broken. Or the connection drops with no answer at all. Each may pass in a moment. A program that gives up loses the work, and one that tries again at once adds load exactly when the upstream has none to spare.
+
+### Retries with backoff
+
+The retry stage tries again, waiting longer each time. The wait before the next try after failed try `n`, counting from 0, is `min(max_ms, base_ms * 2^n)` plus a random jitter between 0 and `base_ms`. The jitter spreads out callers that failed together, so they do not all return together.
+
+Section 4 of `infra/gateway.yaml` sets `attempts: 3`, `base_ms: 200` and `max_ms: 2000`. So a call gets three tries per target. The wait after the first failure is between 200 and 399 ms, after the second between 400 and 599 ms. The cap does not come into play with three tries: doubling would first pass 2000 ms after the fifth failed try. When a 429 carries a `retry-after` header, the stage waits at least that long.
+
+Only a 429, a 5xx or a dropped connection is retried. Any other answer goes back to the caller as it came, a 400 included: a request the upstream calls invalid will be invalid the second time too. A 404 is never retried either. From the replay proxy it means there is no recording, and from the real API that the path or model does not exist.
+
+When the route's target has used up its tries, the stage moves to the first fallback, which gets its own three tries, and so on down the list. When every target has failed, the caller gets a 502, and the trace keeps the list of attempts. The fixture cases cover each path:
+
+- `retry_then_ok`: the upstream answers 429, then 200. The verdict is `retried`, the status 200.
+- `dropped_connection_retry`: the first connection drops, the second try gets a 200. A drop is retried like a 5xx.
+- `all_fail_502`: three tries, three 500s. The verdict is `fail`, the status 502.
+- `fallback_after_attempts`: three 500s from the target, then a 200 from the fallback. The verdict is `fallback`.
+
+### The token bucket
+
+Retries deal with refusals after the fact. The limit stage tries to avoid them, by holding calls back before the upstream's own limit is reached. It keeps a <Term t="token bucket" /> per target model. Section 1 of `gateway.yaml` gives `claude-haiku-5-5` 60 requests and 200,000 tokens a minute.
+
+The bucket starts full and refills continuously at those rates. Each call takes one request and its worst-case tokens: the estimated input plus `max_tokens`. When the bucket has enough, the call goes through now. When it does not, the stage works out how long the refill would take. If that fits within `max_wait_ms`, 1000 ms in the course's config, the call waits and goes through. Otherwise it is refused with a 429 and a `retry-after` header, before the upstream sees it.
+
+Two fixture cases show the line. In `limit_wait`, the request bucket is empty. At 60 a minute, one request refills in exactly 1000 ms, which is within `max_wait_ms`, so the call waits. `limit_refuse` is the same call with `max_wait_ms` at 500: the wait no longer fits, and the answer is a 429.
+
+### Which clock
+
+A bucket refills with time, so the limiter reads a clock. A gateway you start by hand reads the wall clock, and lesson 1 showed what that does to a fast replay. The capstone runs on replay time instead: the gateway's clock starts at 0 and moves by each call's recorded wall clock, so the limiter judges the pace the calls really had. Over all 957 calls, that makes 0 retries and 0 refusals.
+
+The retries happen on the wire, out of the caller's sight. The desk sees one call and one answer. So the gateway judges the wire, and the agents track's own scorer still judges the desk's trajectory. A run the scorer fails is not fixed by a gateway that retried its calls.
+
+### The injector
+
+Recorded traffic never fails, so it cannot exercise any of this. `infra/python/injector.py` is a fixture upstream scripted per request. Each request takes the next step of its script: 200 answers a fixed reply, 429 answers with `retry-after: 0`, another status answers an error, and `drop` closes the connection with no answer. At the end of the script it starts again from the top. Three scripts live in `infra/data/fixtures/injector/`:
+
+- `flaky`: 429, then 500, then 200.
+- `ratelimited`: 429 twice, then 200.
+- `dead`: 500, and again 500, forever.
+
+## See it
+
+The timeline is one request through the gateway against each script, as the capstone ran it. Watch the backoff between tries, and how the verdict changes when the script never answers 200.
+
+<RetryTimeline initial="flaky" />
+
+`flaky` and `ratelimited` both end in a 200 on the third try, so the caller never sees the failures; the verdict is `retried`. `dead` uses up all three tries and the caller gets a 502. The capstone ran these with `base_ms` set to 1 and a fixed random seed, so the waits read 1 ms and 2 ms: the doubling alone, since with `base_ms` at 1 the jitter is always 0. With the course's 200 they would fall between 200 and 399 ms, then between 400 and 599 ms.
+
+## The code
+
+The limit stage is section 6 of `infra/python/stages.py`.
+
+<CodeTabs source="infra-stages" section={6} goSection={6} />
+
+- `b.tokens = min(float(m.tpm), b.tokens + elapsed * m.tpm / 60)` refills the bucket for the time since the last call, never above full. The request count refills the same way.
+- `wait_s = max(0.0, (1 - b.requests) / (m.rpm / 60), (tokens - b.tokens) / (m.tpm / 60))` is the longer of the two waits: for one request, and for this call's tokens.
+- `if wait_ms > cfg.limit.max_wait_ms:` refuses a call whose wait is too long. The chain turns that into a 429 with a `retry-after` in whole seconds.
+- `b.requests -= 1` takes the call out of the bucket before it waits, so the next caller sees the bucket already spent and waits behind it.
+
+The retry stage is section 7.
+
+<CodeTabs source="infra-stages" section={7} goSection={7} />
+
+- `return min(cfg.retry.max_ms, cfg.retry.base_ms * 2 ** attempt) + rng.randrange(cfg.retry.base_ms)` is the backoff: doubling, capped, plus jitter.
+- `if up.error is None and up.status == 404:` fails at once on a 404, without a retry.
+- `if not (up.error or up.status == 429 or up.status >= 500):` is the whole retry rule. Anything else counts as answered and goes back to the caller.
+- `wait = max(retry_plan(cfg, n, state.rng), retry_after_ms(up.headers))` honours the upstream's `retry-after` when it asks for longer.
+- `verdict = "ok" if len(attempts) == 1 else "retried" if i == 0 else "fallback"` names who answered: the first try, the route's target after a failure, or a fallback.
+
+The injector's script is section 1 of `infra/python/injector.py`.
+
+<CodeTabs source="infra-injector" section={1} pythonOnly />
+
+- `ok = step == "drop" or (isinstance(step, int) and not isinstance(step, bool) and 100 <= step <= 599)` accepts a status or `drop`, nothing else. A typo in a script stops the injector at start, naming the step.
+- `return 429, {**JSON, "retry-after": "0"}, error_body("rate_limit_error", "injector: scripted 429")` sends a 429 that asks for no wait, so the gateway's own backoff decides.
+- `if step == "drop":` returns `None`, and the server closes the socket without an answer: what a crashed upstream looks like from the caller's side.
+
+## How Go does it
+
+The Go twin's sections 6 and 7 make the same decisions on every fixture case. Three details differ, all on purpose.
+
+- `for i := 0; i < attempt && w < cfg.Retry.MaxMs; i++ {` doubles in a loop and stops at the cap, instead of computing `2 ** attempt`. Python's integers never overflow; Go's `int` would, for a large enough `attempt`.
+- `return min(cfg.Retry.MaxMs, w) + rng.IntN(cfg.Retry.BaseMs)` draws the jitter from Go's own seeded generator. Only its bounds are shared with Python, so the twin test compares verdicts and statuses, never the waits.
+- `waitMs := int(math.Ceil(round6(waitS * 1000)))` rounds to six places before rounding up, as Python's `math.ceil(round(wait_s * 1000, 6))` does. Go has no `round` to a number of places, so `round6` formats and parses the number. Both languages round first so that float noise far past the decimal point cannot push a wait up by a whole millisecond, and past `max_wait_ms`, in one language only.
+
+## Try it
+
+Start the injector with the `flaky` script in one terminal:
+
+```bash
+.venv-infra/bin/python infra/python/injector.py --script infra/data/fixtures/injector/flaky.json --port 8793
+```
+
+```text
+injector on http://127.0.0.1:8793  script [429, 500, 200]
+```
+
+In a second terminal, point a copy of the config at it and start the gateway on the copy. The injector is on the loopback, so the config loads:
+
+```bash
+sed 's#^upstream: http://127.0.0.1:8791$#upstream: http://127.0.0.1:8793#' infra/gateway.yaml > /tmp/gateway-flaky.yaml
+.venv-infra/bin/python infra/python/gateway.py --port 8790 --config /tmp/gateway-flaky.yaml --run flaky
+```
+
+```text
+gateway on http://127.0.0.1:8790 -> http://127.0.0.1:8793  traces infra/data/traces/flaky.jsonl
+```
+
+In a third terminal, send one request as the desk team:
+
+```bash
+.venv-infra/bin/python -c "import http.client, json; c = http.client.HTTPConnection('127.0.0.1', 8790); c.request('POST', '/v1/messages', json.dumps({'model': 'claude-haiku-5-5', 'max_tokens': 64, 'messages': [{'role': 'user', 'content': 'Triage ticket t008.'}]}), {'content-type': 'application/json', 'x-team': 'desk'}); r = c.getresponse(); print(r.status, r.getheader('x-gateway-trace'), r.read().decode())"
+```
+
+```text
+200 3b10f204aecdd7f8 {"content":[{"text":"ok","type":"text"}],"id":"msg_injector","model":"claude-haiku-5-5","role":"assistant","stop_reason":"end_turn","stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":5}}
+```
+
+Your trace id will differ. The caller got a 200 and the injector's reply. Nothing says the upstream failed twice first; only the trace does. Read it:
+
+```bash
+.venv-infra/bin/python infra/python/traces.py infra/data/traces/flaky.jsonl
+.venv-infra/bin/python -c "import json; t = json.loads(open('infra/data/traces/flaky.jsonl').readlines()[-1]); print(*t['attempts'], sep='\n')"
+```
+
+```text
+3b10f204aecdd7f8 200 desk t008 722 0.000003 ok
+{'model': 'claude-haiku-5-5', 'status': 429, 'error': None, 'backoff_ms': 277}
+{'model': 'claude-haiku-5-5', 'status': 500, 'error': None, 'backoff_ms': 432}
+{'model': 'claude-haiku-5-5', 'status': 200, 'error': None, 'backoff_ms': 0}
+```
+
+Your trace id and waits will differ: the jitter is random. The first wait falls between 200 and 399 ms and the second between 400 and 599 ms, and the gateway's own time for the call, the fifth field of the first line, is about their sum. The tag `t008` came from the messages, since the request sent no `x-request-tag`.
+
+Send the same request again and it comes back at once, with no retries: the request carried no tools and the reply ended its turn, so the cache stored it, and the trace's outcome is `cached`. Lesson 4 is about that. To see a target stay down, stop the injector, start it again with `dead.json`, and send the request with `t009` in place of `t008`, so the cache cannot answer it. The caller gets a 502, and the trace's attempts are three 500s. Stop the gateway and the injector with Ctrl-C when you are done.

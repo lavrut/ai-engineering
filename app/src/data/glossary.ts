@@ -296,6 +296,14 @@ export const glossary = {
     'Meaning an agent works out at run time from the data and what describes it, such as a schema or column names, with no definition written down.',
   'governed action':
     'An agent action that a written rule permits, names a role and a condition for, and that code enforces: who may do what, and when.',
+  gateway:
+    'One HTTP server that every program calls instead of the model API; it forwards each call and does routing, retries, rate limits, caching, budgets and tracing for all of them.',
+  'token bucket':
+    'A rate limiter that holds a budget of requests or tokens, refilled at a steady rate; a call takes from it, and waits or is refused when too little is left.',
+  'response cache':
+    'A store of whole answers, kept by the caller or a gateway, that answers a repeat of an identical request without calling the model at all.',
+  'prompt cache':
+    'The model API’s own cache of a request’s repeated prefix: the call is still made, but input read from the cache is billed at a fraction of the usual price.',
 } as const satisfies Record<string, string>;
 
 export type GlossaryKey = keyof typeof glossary;

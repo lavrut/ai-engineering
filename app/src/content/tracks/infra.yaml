@@ -1,0 +1,6 @@
+id: infra
+title: AI Infrastructure
+order: 8
+status: live
+summary: "Put one gateway between every program and the model API, with routing, retries, rate limits, a response cache, budgets and traces, and run the course's recorded traffic through it for free."
+subsections: ["Gateway", "Operations"]

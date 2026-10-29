@@ -55,6 +55,7 @@ describe('code source registry', () => {
         'data-contract', 'data-catalog', 'data-quality', 'data-gate', 'data-migrate',
         'data-contract-tickets', 'data-contract-tickets-v2', 'data-contract-complaints', 'data-contract-traces',
         'ontology-core', 'ontology-generate', 'ontology-grounding', 'ontology-audit', 'ontology-governance', 'ontology-lumen',
+        'infra-gateway', 'infra-stages', 'infra-replay', 'infra-ledger', 'infra-traces', 'infra-injector', 'infra-config', 'infra-configpy',
       ].sort(),
     );
     expect(CODE_SOURCES['ml-serve']).toMatchObject({ python: 'ml/serve/server.py', go: 'ml/go/main.go' });
@@ -358,6 +359,66 @@ describe('code source registry', () => {
       expect(resolveCode({ source: 'ontology-audit', section: 6 }).python).toContain('def gate(');
       expect(codeProblems({ source: 'ontology-grounding', section: 4 })).toEqual(['no section 4 in ontology/python/grounding.py']);
       expect(codeProblems({ source: 'ontology-audit', section: 2, goSection: 2 })).toEqual(['goSection given, but ontology-audit has no Go file']);
+    });
+  });
+
+  // The AI Infrastructure track. stages.py numbers 1-9 and its Go twin numbers the same nine over two files
+  // (stages.go 1-7, main.go 8-9, joined in order), so a quote of any section shows both tabs. The other scripts
+  // are Python only, each numbering its own sections; the gateway's config is YAML, quoted by its six sections.
+  describe('infra sources', () => {
+    const titles = (t: string | undefined) => listSections(t ?? '').map((x) => `${x.n}. ${x.title}`);
+    const STAGES = ['1. Request and state', '2. Tag', '3. Budget', '4. Cache', '5. Route', '6. Limit', '7. Retry and upstream', '8. The chain', '9. Cases and command line'];
+
+    it('pairs stages.py with stages.go and main.go, section for section', () => {
+      expect(CODE_SOURCES['infra-stages']).toEqual({ python: 'infra/python/stages.py', go: 'infra/go/gateway/stages.go', goMore: ['infra/go/gateway/main.go'] });
+      const t = sourceTexts('infra-stages');
+      expect(titles(t.python)).toEqual(STAGES);
+      expect(titles(t.go)).toEqual(STAGES);
+      for (let n = 1; n <= 9; n++) {
+        const r = resolveCode({ source: 'infra-stages', section: n });
+        expect(r.python.split('\n')[0], `python ${n}`).toMatch(new RegExp(`^# ── ${n}\\. `));
+        expect(r.go!.split('\n')[0], `go ${n}`).toMatch(new RegExp(`^// ── ${n}\\. `));
+      }
+      // main.go's package clause and imports do not leak into section 7.
+      expect(resolveCode({ source: 'infra-stages', section: 7 }).go).not.toMatch(/^package /m);
+      expect(resolveCode({ source: 'infra-stages', section: 8 }).go).toContain('func RunChain(');
+      expect(fileName('infra-stages', 'go')).toBe('stages.go');
+    });
+
+    it.each([
+      ['infra-gateway', 'infra/python/gateway.py', ['1. Handler', '2. Forwarding', '3. Server', '4. Live mode', '5. Command line']],
+      ['infra-replay', 'infra/python/replay.py', ['1. Calls', '2. Run', '3. Gate', '4. Derived files', '5. Command line']],
+      ['infra-ledger', 'infra/python/ledger.py', ['1. Prices', '2. Cost', '3. Ledger store', '4. Budget state']],
+      ['infra-traces', 'infra/python/traces.py', ['1. Store', '2. Query', '3. Command line']],
+      ['infra-injector', 'infra/python/injector.py', ['1. Script', '2. Server', '3. Command line']],
+      ['infra-configpy', 'infra/python/config.py', ['1. Shape', '2. Rules', '3. Load', '4. Export and command line']],
+      ['infra-config', 'infra/gateway.yaml', ['1. Upstream and models', '2. Routes', '3. Cache', '4. Retry and limits', '5. Budgets', '6. Traces']],
+    ] as const)('%s quotes %s by its numbered sections, Python only', (id, file, sections) => {
+      expect(CODE_SOURCES[id].python).toBe(file);
+      expect(CODE_SOURCES[id].go).toBeUndefined();
+      const t = sourceTexts(id);
+      expect(titles(t.python)).toEqual(sections);
+      expect(t.go).toBeUndefined();
+      for (const s of sections) expect(codeProblems({ source: id, section: Number(s.split('.')[0]) }), `${id} ${s}`).toEqual([]);
+    });
+
+    it('quotes gateway.yaml as YAML, one section per part of the config', () => {
+      expect(sourceLang('infra-config')).toEqual({ lang: 'yaml', label: 'YAML' });
+      expect(sourceLang('infra-stages')).toEqual({ lang: 'python', label: 'Python' });
+      const routes = resolveCode({ source: 'infra-config', section: 2 }).python;
+      expect(routes.split('\n')[0]).toMatch(/^# ── 2\. Routes ─+$/);
+      expect(routes).toContain('"*": deny');
+      expect(routes).not.toContain('cache:');
+      expect(resolveCode({ source: 'infra-config', section: 5 }).python).toContain('untagged: refuse');
+      expect(fileName('infra-config', 'python')).toBe('gateway.yaml');
+    });
+
+    it('links each script section to the code it names', () => {
+      expect(resolveCode({ source: 'infra-stages', section: 4 }).python).toContain('def cache_lookup(');
+      expect(resolveCode({ source: 'infra-replay', section: 3 }).python).toContain('def gate(');
+      expect(resolveCode({ source: 'infra-gateway', section: 2 }).python).toContain('def make_send(');
+      expect(codeProblems({ source: 'infra-stages', section: 10 })).toEqual(['no section 10 in infra/python/stages.py', 'no section 10 in infra/go/gateway/stages.go']);
+      expect(codeProblems({ source: 'infra-traces', section: 1, goSection: 1 })).toEqual(['goSection given, but infra-traces has no Go file']);
     });
   });
 

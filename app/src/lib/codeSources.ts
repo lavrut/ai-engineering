@@ -62,7 +62,15 @@ export type CodeSourceId =
   | 'ontology-grounding'
   | 'ontology-audit'
   | 'ontology-governance'
-  | 'ontology-lumen';
+  | 'ontology-lumen'
+  | 'infra-gateway'
+  | 'infra-stages'
+  | 'infra-replay'
+  | 'infra-ledger'
+  | 'infra-traces'
+  | 'infra-injector'
+  | 'infra-config'
+  | 'infra-configpy';
 
 export type CodeSourceInfo = {
   /** Repo-relative path of the Python file (or, with lang: 'yaml', of the YAML file quoted as text). */
@@ -151,6 +159,17 @@ export const CODE_SOURCES: Record<CodeSourceId, CodeSourceInfo> = {
   'ontology-audit': { python: 'ontology/python/audit.py' }, // rows, the guide, the prompts, the category map, the contracts, the gate, command line: 1-7
   'ontology-governance': { python: 'ontology/python/governance.py' }, // reading the traces, rules/events/verdicts, build/write/check: 1-3
   'ontology-lumen': { python: 'ontology/lumen.yaml', lang: 'yaml' }, // classes, properties, relations, individuals, constraints, actions: 1-6
+  // AI Infrastructure track. The request path is stages.py (1-9) and its Go twin, stages.go (1-7) then main.go
+  // (8-9, the chain and the cases), joined in order so the Go text numbers 1-9 as Python does and any section shows
+  // both tabs. The other scripts are Python only, each numbering its own sections; gateway.yaml is YAML.
+  'infra-gateway': { python: 'infra/python/gateway.py' }, // handler, forwarding, server, live mode, command line: 1-5
+  'infra-stages': { python: 'infra/python/stages.py', go: 'infra/go/gateway/stages.go', goMore: ['infra/go/gateway/main.go'] }, // request, tag, budget, cache, route, limit, retry, the chain, cases: 1-9
+  'infra-replay': { python: 'infra/python/replay.py' }, // calls, run, gate, derived files, command line: 1-5
+  'infra-ledger': { python: 'infra/python/ledger.py' }, // prices, cost, the ledger store, budget state: 1-4
+  'infra-traces': { python: 'infra/python/traces.py' }, // store, query, command line: 1-3
+  'infra-injector': { python: 'infra/python/injector.py' }, // script, server, command line: 1-3
+  'infra-config': { python: 'infra/gateway.yaml', lang: 'yaml' }, // upstream and models, routes, cache, retry and limits, budgets, traces: 1-6
+  'infra-configpy': { python: 'infra/python/config.py' }, // shape, rules, load, export and command line: 1-4
 };
 
 export const isSource = (id: string): id is CodeSourceId => Object.hasOwn(CODE_SOURCES, id);

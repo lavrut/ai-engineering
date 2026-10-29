@@ -1,0 +1,211 @@
+---
+track: infra
+order: 6
+slug: capstone
+title: "Capstone: the course through the gateway"
+goal: Replay all of the course's recorded model traffic through the gateway, read the gate's four lines and say what they prove and what they leave to the agents track's scorer, and query the traces by team, tag, cost and time.
+minutes: 30
+quiz:
+  - question: The capstone runs the gateway on replay time, where the clock moves by each call's recorded duration. What would change if it ran on the wall clock instead?
+    options:
+      - The replay sends the calls far faster than they were recorded, so the limiter would see a burst that never happened and refuse calls with 429s, and the cache's time to live would measure the replay's seconds instead of the recorded ones
+      - Nothing, because the limiter only counts calls, not time
+      - The costs would change, because prices depend on the time of day
+      - The cache would hit more often, because the replay sends calls in a different order
+    answer: 0
+    explanation: Both the token bucket and the time to live read a clock. A replay from disk is not the pace the calls had. Moving the clock by each call's recorded duration lets the gateway judge the traffic as it really came, which is why the capstone has no limiter refusals and lesson 1's hand-started run had some.
+  - question: The gate passes. Does that show the agents desk triaged the tickets well?
+    options:
+      - Yes, because every call was answered with a 200
+      - No. The gate checks the gateway's own work, its accounting against the agents ledger and the order of its stages. Whether the desk's answers were right is the agents track's scorer's job, over the desk's trajectory
+      - Yes, because the cost matched the agents ledger to the cent
+      - No, because the gate only checks the judge set
+    answer: 1
+    explanation: A gateway sees calls, not tasks. It can prove it booked every call correctly and ran its stages in order, and it can show where time and money went. Whether the desk did its job is a question about what it did with the answers, which only an evaluation of the run can settle.
+  - question: You ask the traces for the tree under the supervisor's first call on a ticket. Why does it come back with that call alone, when the supervisor and its workers made eleven calls on that ticket?
+    options:
+      - Because the workers' calls were cache hits and are not traced
+      - Because the tree query only looks one level deep
+      - Because the desk sends no x-parent-id header, so no trace names a parent. The gateway cannot work out which calls belong together on its own, so the caller has to say
+      - Because the supervisor's calls go to a different trace file
+    answer: 2
+    explanation: A drop-in gateway learns only what the request and its headers carry. Grouping calls into a run is information only the caller has. Until the caller sends a parent id, every call is a root, and the tree is flat.
+---
+import CodeTabs from '../../../components/CodeTabs.astro';
+import TraceExplorer from '../../../components/infra/TraceExplorer.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Concept
+
+The capstone sends the whole course's recorded model traffic through the gateway and checks the result. It is the track's proof that the gateway does what the other five lessons say, on real traffic rather than fixture cases.
+
+### The traffic
+
+`infra/python/replay.py` replays all 957 calls the agents track recorded, in the order its runs made them. The four desk sets and the two patterns sets come from their runs' traces, each run's calls in order, repeats kept. The judge set has no traces, so its recordings go in file order. Each call carries `x-team`, as one of three teams, `desk`, `patterns` or `judge`, and `x-request-tag`, the ticket id its messages name, or `none`.
+
+`--start` runs everything in one process: one agents replay proxy per set and one gateway, with fresh stores under `infra/data/derived/run/`. Before each call, the driver points the gateway at that call's set. Nothing is paid for and nothing is sent off the machine.
+
+### Replay time
+
+The gateway's limiter and its cache's time to live both read a clock. A replay from disk sends calls much faster than they were made, and lesson 1 showed what the wall clock does with that: the limiter sees a burst that never happened and refuses part of it.
+
+So the capstone runs the gateway on replay time. The clock starts at 0 and, before each call, moves on by the previous call's recorded duration. A limiter wait moves it too, without sleeping. The gateway judges the pace the calls really had, and the replay itself still runs in seconds. Under the course's limits, that pace makes 0 retries and 0 refusals.
+
+The other clock-bound number is latency. The p50 and p95 the capstone reports, 1730 ms and 3471 ms, come from each call's recorded duration, not from the replay. A trace's own `ms` is the gateway's time for the call, about nothing when the answer comes from a local file.
+
+### The gate
+
+`--gate` prints four lines, each `ok` or `FAILED`:
+
+- **ledger:** for each desk set, the gateway's ledger plus the recorded cost of that set's cache hits equals the agents track's ledger, within 1e-9 of a dollar. Lesson 5 showed why the hits are added back.
+- **budgets:** each team's spend is within its limit, and every refusal has a trace.
+- **stages:** every trace has the stages in order: all eight for an answered call, five for a cache hit, and a refusal stops at the stage that refused. Every parent id a trace names exists in the run.
+- **figures:** the hit rate counted from the traces and the p95 computed from the recordings equal the figures the capstone writes. This is a consistency check within one run: the traces and the figures come from the same run, so it catches a bug in how the driver joins them, not a change in what the gateway did. Drift from the committed `capstone.json` is what `--check` catches.
+
+On the course's traffic all four pass. The stages line reads `957 traces: 937 answered with all eight stages, 20 cache hits stop after cache, 0 refusals stop at the refusing stage, 0 out of order; 0 parent ids named, 0 missing`.
+
+### What the gate proves, and what it does not
+
+The gate proves the gateway's own work. Its accounting matches the agents track's ledger to the cent, with every difference named. Its stages run in order. Its budgets held, and the figures it reports agree with its own traces and the recordings they came from. The ledger line is the independent check, against the agents track's own traces. The figures line only checks the run against itself, and drift from the committed figures is `--check`'s job.
+
+It does not prove the desk did its job. A gateway sees calls, not tasks: it cannot tell a right triage from a wrong one, or a run that went round in circles from one that went straight to the answer. That is the agents track's scorer's job, over each run's trajectory. A gateway that answered every call proves nothing about what the desk did with the answers.
+
+### The gap the caller must close
+
+A trace can name its parent, the call it was made for, from the `x-parent-id` header. With parent ids, `traces.py --tree` shows one ticket's run as a tree: the supervisor's call, and under it its workers' calls.
+
+The desk sends no parent id. Its supervisor and its four workers, triage, research, drafter and reviewer, each call the model, and nothing in those requests says which belong together. The gateway cannot work it out: a drop-in learns only what the request and its headers carry. The stages line says it plainly, `0 parent ids named`, and the Try it shows the flat tree that results.
+
+## See it
+
+The explorer opens three whole traces from the capstone's runs: its first cache hit, the flaky injector request from lesson 3, and the first budget refusal from lesson 5's tight budget. Open each one and read its stages, then compare where each chain stops.
+
+<TraceExplorer initial="cached" />
+
+The cache hit stops after the cache stage and books $0. The retried request has three attempts and all eight stages. The refusal has two stages, the tag and the budget. Below the traces are the gate's four lines as the capstone wrote them.
+
+## The code
+
+The traffic is section 1 of `infra/python/replay.py`.
+
+<CodeTabs source="infra-replay" section={1} pythonOnly />
+
+- `def team_of(set_name: str) -> str:` maps the seven sets to three teams: every desk set is `desk`, both patterns sets are `patterns`.
+- `entries = ([(c["key"], c["cost_usd"]) for c in trace_calls(root, s)] if s in TRACED_SETS else` takes a traced set's calls from its runs, in order, with what the agents ledger booked for each. The judge set falls back to its recordings.
+- `m = TICKET_ID.search(messages_text(rs["body"]))` finds the ticket id the driver sends as the tag. A call whose messages name no ticket is tagged `none`.
+
+The gate is section 3.
+
+<CodeTabs source="infra-replay" section={3} pythonOnly />
+
+- `saved = sum(r.call.cost_recorded or 0.0 for r in hits)` is what the set's cache hits cost when they were recorded, the money the gateway saved.
+- `ok = abs(gw + saved - agents) <= 1e-9` is the ledger condition: the gateway's ledger plus the saving, against the agents ledger.
+- `over = [t for t, v in spend.items() if t not in cap.cfg.budgets or v > cap.cfg.budgets[t].limit_usd]` finds any team over its limit, or spending with no budget at all.
+- `expected = {"ok": list(STAGES), "cached": ["tag", "budget", "cache", "ledger", "trace"]}` is the order every answered call and every hit must show.
+- `orphans = [p for p in parents if p not in ids]` checks every parent id names a trace in the run. With no parent ids, it has nothing to check.
+- `ok4 = rate == figs["hit_rate"] and p95 == figs["p95_ms"]` compares the reported figures with the same figures rebuilt from the same run's traces and recordings.
+
+<Callout kind="go" title="No Go twin here">
+  The replay driver and the gate are Python only. The Go twin covers the request path, from the tag stage to the retry stage, and lessons 2 to 5 quote it. A team that ran the gateway in Go would run this same driver against it: the gate checks what a gateway did, not which language it is written in.
+</Callout>
+
+## Try it
+
+Run the capstone. It replays all the calls, prints the gate and writes the three derived files the lessons read, with the same bytes as the committed ones:
+
+```bash
+.venv-infra/bin/python infra/python/replay.py --start --gate
+```
+
+You should see:
+
+```text
+replayed 957 calls: 20 cache hits, 0 refusals, $0.234425
+gate ledger: ok: desk-hand $0.0457416 = agents $0.0457416; desk-hand-go $0.0458874 + $0.0001919 for 1 cache hit = agents $0.0460793; desk-langgraph $0.0442495 = agents $0.0442495; desk-sdk $0.0497478 = agents $0.0497478
+gate budgets: ok: desk $0.1856 of $1.00, judge $0.0255 of $0.50, patterns $0.0233 of $0.50; 0 refusals, 0 traced
+gate stages: ok: 957 traces: 937 answered with all eight stages, 20 cache hits stop after cache, 0 refusals stop at the refusing stage, 0 out of order; 0 parent ids named, 0 missing
+gate figures: ok: hit rate 0.0209 (20 of 957) and p95 3471 ms; from the traces and the recordings: 0.0209 and 3471 ms
+wrote capstone.json, ledger.json, traces.sample.json to infra/data/derived
+```
+
+Check that nothing drifted. `--check` runs the capstone again and compares instead of writing, and fails, naming the file, when one differs:
+
+```bash
+.venv-infra/bin/python infra/python/replay.py --start --check
+```
+
+You should see:
+
+```text
+replayed 957 calls: 20 cache hits, 0 refusals, $0.234425
+infra/data/derived: up to date
+```
+
+The run's traces are in `infra/data/derived/run/capstone.jsonl`, one line per call. Ask them questions. By team and outcome, the desk's one cache hit:
+
+```bash
+.venv-infra/bin/python infra/python/traces.py infra/data/derived/run/capstone.jsonl --team desk --outcome cached
+```
+
+You should see:
+
+```text
+a0582191ba19a8b2 200 desk t001 0 0.000000 cached
+```
+
+Your trace ids and the gateway's own milliseconds, the fifth field, will differ. By tag, the three dearest calls on ticket `t061`:
+
+```bash
+.venv-infra/bin/python infra/python/traces.py infra/data/derived/run/capstone.jsonl --tag t061 --costliest 3
+```
+
+You should see:
+
+```text
+e1d2c61c5d56f05c 200 desk t061 0 0.000503 ok
+78159462e532ebdb 200 patterns t061 0 0.000472 ok
+959c9c26e3487fee 200 desk t061 0 0.000460 ok
+```
+
+Your trace ids and the milliseconds will differ. The three dearest calls in the whole run:
+
+```bash
+.venv-infra/bin/python infra/python/traces.py infra/data/derived/run/capstone.jsonl --costliest 3
+```
+
+You should see:
+
+```text
+1b66c66a40ba6356 200 desk t018 0 0.000705 ok
+d5b9781c8c9bd5da 200 desk t004 0 0.000682 ok
+e00602cbca248787 200 desk t006 0 0.000681 ok
+```
+
+Your trace ids and the milliseconds will differ. The slowest calls:
+
+```bash
+.venv-infra/bin/python infra/python/traces.py infra/data/derived/run/capstone.jsonl --slowest 3
+```
+
+The slowest calls are slowest in the gateway's own time, a few milliseconds of reading a local file, so which three they are and their milliseconds depend on the wall clock: yours will differ. What to look for is three lines, each with a status of 200. You should see something like:
+
+```text
+ed4694100c7f3f48 200 patterns t007 7 0.000073 ok
+5a8970db545263c2 200 desk t061 6 0.000206 ok
+9f64cb6808f83132 200 patterns t061 6 0.000172 ok
+```
+
+For the latency a user felt, read the recorded figures instead: the p95 in the gate's last line. Last, the tree. Find the hand-built supervisor's first call on `t001`, which comes right after the single-agent desk's calls in the run, and ask for everything under it:
+
+```bash
+ID=$(.venv-infra/bin/python -c "import json, glob; n = sum(len(json.load(open(f))['proxy_calls']) for f in sorted(glob.glob('agents/data/traces/desk-hand/hand-single-*.json'))); print(json.loads(open('infra/data/derived/run/capstone.jsonl').readlines()[n])['id'])")
+.venv-infra/bin/python infra/python/traces.py infra/data/derived/run/capstone.jsonl --tree $ID
+```
+
+You should see:
+
+```text
+3df1cd889386686c 200 desk t001 0 0.000164 ok
+```
+
+Your trace id and the milliseconds will differ. One line: the call itself, and nothing under it. The supervisor and its workers made 11 model calls on that ticket, and they sit in the file right after this one, but no trace names a parent, so the tree has nothing to show. The gateway cannot close that gap. The caller has to: a desk that sent each worker's calls with `x-parent-id` set to the supervisor call's trace id, which the gateway returns in `x-gateway-trace`, would get the whole run back as a tree.

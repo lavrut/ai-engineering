@@ -1,0 +1,49 @@
+{
+  "upstream": "http://127.0.0.1:8791",
+  "models": {
+    "claude-haiku-5-5": {
+      "rpm": 60,
+      "tpm": 200000,
+      "price": "lab"
+    }
+  },
+  "routes": {
+    "claude-haiku-5-5": {
+      "to": "claude-haiku-5-5",
+      "fallback": []
+    }
+  },
+  "deny_unknown": true,
+  "cache": {
+    "ttl_s": 3600,
+    "skip_tools": true
+  },
+  "retry": {
+    "attempts": 3,
+    "base_ms": 200,
+    "max_ms": 2000
+  },
+  "limit": {
+    "max_wait_ms": 1000
+  },
+  "budgets": {
+    "desk": {
+      "limit_usd": 1.0,
+      "warn_usd": 0.8
+    },
+    "lab": {
+      "limit_usd": 0.5,
+      "warn_usd": null
+    },
+    "patterns": {
+      "limit_usd": 0.5,
+      "warn_usd": null
+    },
+    "judge": {
+      "limit_usd": 0.5,
+      "warn_usd": null
+    }
+  },
+  "untagged": "refuse",
+  "traces_dir": "infra/data/traces"
+}

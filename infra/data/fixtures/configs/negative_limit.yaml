@@ -1,0 +1,34 @@
+# invalid on purpose: a negative limit_usd
+# gateway.yaml: the one config file of the AI gateway. It says which upstream the
+# gateway forwards to, which models it knows and at what rate, how requests are
+# routed, cached, retried and limited, what each team may spend, and where traces go.
+# In the course the upstream is the agents replay proxy on port 8791; live mode needs
+# the usual y/N.
+
+# ── 1. Upstream and models ──────────────────────────────────────────────────
+upstream: http://127.0.0.1:8791
+models:
+  claude-haiku-5-5: {rpm: 60, tpm: 200000, price: lab}   # price from llms/python/triage_lab.py's table
+
+# ── 2. Routes ───────────────────────────────────────────────────────────────
+routes:
+  claude-haiku-5-5: {to: claude-haiku-5-5, fallback: []}
+  "*": deny
+
+# ── 3. Cache ────────────────────────────────────────────────────────────────
+cache: {ttl_s: 3600, skip_tools: true}
+
+# ── 4. Retry and limits ─────────────────────────────────────────────────────
+retry: {attempts: 3, base_ms: 200, max_ms: 2000}
+limit: {max_wait_ms: 1000}
+
+# ── 5. Budgets ──────────────────────────────────────────────────────────────
+budgets:
+  desk: {limit_usd: -1.00}
+  lab: {limit_usd: 0.50}
+  patterns: {limit_usd: 0.50}
+  judge: {limit_usd: 0.50}
+  untagged: refuse
+
+# ── 6. Traces ───────────────────────────────────────────────────────────────
+traces: {dir: infra/data/traces}

@@ -1,0 +1,778 @@
+[
+  {
+    "id": "cacheable_miss",
+    "config": {},
+    "request": {
+      "method": "POST",
+      "path": "/v1/messages",
+      "headers": {
+        "x-team": "desk"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "max_tokens": 1024,
+        "system": "You triage support tickets for Lumen.",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Triage this ticket.\n<ticket id=\"t008\">My notes vanished after sync.</ticket>"
+          }
+        ]
+      }
+    },
+    "state": {},
+    "upstream": [
+      200
+    ],
+    "expect": {
+      "decisions": [
+        {
+          "stage": "tag",
+          "verdict": "desk"
+        },
+        {
+          "stage": "budget",
+          "verdict": "allow"
+        },
+        {
+          "stage": "cache",
+          "verdict": "miss"
+        },
+        {
+          "stage": "route",
+          "verdict": "route"
+        },
+        {
+          "stage": "limit",
+          "verdict": "allow"
+        },
+        {
+          "stage": "retry",
+          "verdict": "ok"
+        }
+      ],
+      "status": 200
+    }
+  },
+  {
+    "id": "cacheable_hit",
+    "config": {},
+    "request": {
+      "method": "POST",
+      "path": "/v1/messages",
+      "headers": {
+        "x-team": "desk"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "max_tokens": 1024,
+        "system": "You triage support tickets for Lumen.",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Triage this ticket.\n<ticket id=\"t008\">My notes vanished after sync.</ticket>"
+          }
+        ]
+      }
+    },
+    "state": {
+      "cache": [
+        {
+          "key": "self",
+          "stop_reason": "end_turn",
+          "tools": false,
+          "age_s": 60
+        }
+      ]
+    },
+    "upstream": [],
+    "expect": {
+      "decisions": [
+        {
+          "stage": "tag",
+          "verdict": "desk"
+        },
+        {
+          "stage": "budget",
+          "verdict": "allow"
+        },
+        {
+          "stage": "cache",
+          "verdict": "hit"
+        }
+      ],
+      "status": 200
+    }
+  },
+  {
+    "id": "tool_call_skip",
+    "config": {},
+    "request": {
+      "method": "POST",
+      "path": "/v1/messages",
+      "headers": {
+        "x-team": "desk"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "max_tokens": 1024,
+        "system": "You triage support tickets for Lumen.",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Triage this ticket.\n<ticket id=\"t013\">Which plan am I on?</ticket>"
+          }
+        ],
+        "tools": [
+          {
+            "name": "lookup_account",
+            "description": "Read the customer's account.",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "state": {
+      "cache": [
+        {
+          "key": "self",
+          "stop_reason": "end_turn",
+          "tools": true,
+          "age_s": 60
+        }
+      ]
+    },
+    "upstream": [
+      200
+    ],
+    "expect": {
+      "decisions": [
+        {
+          "stage": "tag",
+          "verdict": "desk"
+        },
+        {
+          "stage": "budget",
+          "verdict": "allow"
+        },
+        {
+          "stage": "cache",
+          "verdict": "skip"
+        },
+        {
+          "stage": "route",
+          "verdict": "route"
+        },
+        {
+          "stage": "limit",
+          "verdict": "allow"
+        },
+        {
+          "stage": "retry",
+          "verdict": "ok"
+        }
+      ],
+      "status": 200
+    }
+  },
+  {
+    "id": "unknown_model_deny",
+    "config": {},
+    "request": {
+      "method": "POST",
+      "path": "/v1/messages",
+      "headers": {
+        "x-team": "desk"
+      },
+      "body": {
+        "model": "claude-x",
+        "max_tokens": 1024,
+        "system": "You triage support tickets for Lumen.",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Triage this ticket.\n<ticket id=\"t008\">My notes vanished after sync.</ticket>"
+          }
+        ]
+      }
+    },
+    "state": {},
+    "upstream": [],
+    "expect": {
+      "decisions": [
+        {
+          "stage": "tag",
+          "verdict": "desk"
+        },
+        {
+          "stage": "budget",
+          "verdict": "allow"
+        },
+        {
+          "stage": "cache",
+          "verdict": "miss"
+        },
+        {
+          "stage": "route",
+          "verdict": "deny"
+        }
+      ],
+      "status": 404
+    }
+  },
+  {
+    "id": "team_over_budget",
+    "config": {},
+    "request": {
+      "method": "POST",
+      "path": "/v1/messages",
+      "headers": {
+        "x-team": "desk"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "max_tokens": 1024,
+        "system": "You triage support tickets for Lumen.",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Triage this ticket.\n<ticket id=\"t008\">My notes vanished after sync.</ticket>"
+          }
+        ]
+      }
+    },
+    "state": {
+      "spend": {
+        "desk": 0.9999
+      }
+    },
+    "upstream": [],
+    "expect": {
+      "decisions": [
+        {
+          "stage": "tag",
+          "verdict": "desk"
+        },
+        {
+          "stage": "budget",
+          "verdict": "refuse"
+        }
+      ],
+      "status": 402
+    }
+  },
+  {
+    "id": "team_warn",
+    "config": {},
+    "request": {
+      "method": "POST",
+      "path": "/v1/messages",
+      "headers": {
+        "x-team": "desk"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "max_tokens": 1024,
+        "system": "You triage support tickets for Lumen.",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Triage this ticket.\n<ticket id=\"t008\">My notes vanished after sync.</ticket>"
+          }
+        ]
+      }
+    },
+    "state": {
+      "spend": {
+        "desk": 0.85
+      }
+    },
+    "upstream": [
+      200
+    ],
+    "expect": {
+      "decisions": [
+        {
+          "stage": "tag",
+          "verdict": "desk"
+        },
+        {
+          "stage": "budget",
+          "verdict": "warn"
+        },
+        {
+          "stage": "cache",
+          "verdict": "miss"
+        },
+        {
+          "stage": "route",
+          "verdict": "route"
+        },
+        {
+          "stage": "limit",
+          "verdict": "allow"
+        },
+        {
+          "stage": "retry",
+          "verdict": "ok"
+        }
+      ],
+      "status": 200
+    }
+  },
+  {
+    "id": "no_team_refused",
+    "config": {},
+    "request": {
+      "method": "POST",
+      "path": "/v1/messages",
+      "headers": {},
+      "body": {
+        "model": "claude-haiku-5-5",
+        "max_tokens": 1024,
+        "system": "You triage support tickets for Lumen.",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Triage this ticket.\n<ticket id=\"t008\">My notes vanished after sync.</ticket>"
+          }
+        ]
+      }
+    },
+    "state": {},
+    "upstream": [],
+    "expect": {
+      "decisions": [
+        {
+          "stage": "tag",
+          "verdict": "untagged"
+        },
+        {
+          "stage": "budget",
+          "verdict": "refuse"
+        }
+      ],
+      "status": 402
+    }
+  },
+  {
+    "id": "limit_wait",
+    "config": {},
+    "request": {
+      "method": "POST",
+      "path": "/v1/messages",
+      "headers": {
+        "x-team": "desk"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "max_tokens": 1024,
+        "system": "You triage support tickets for Lumen.",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Triage this ticket.\n<ticket id=\"t008\">My notes vanished after sync.</ticket>"
+          }
+        ]
+      }
+    },
+    "state": {
+      "bucket": {
+        "claude-haiku-5-5": {
+          "tokens": 200000,
+          "requests": 0
+        }
+      }
+    },
+    "upstream": [
+      200
+    ],
+    "expect": {
+      "decisions": [
+        {
+          "stage": "tag",
+          "verdict": "desk"
+        },
+        {
+          "stage": "budget",
+          "verdict": "allow"
+        },
+        {
+          "stage": "cache",
+          "verdict": "miss"
+        },
+        {
+          "stage": "route",
+          "verdict": "route"
+        },
+        {
+          "stage": "limit",
+          "verdict": "wait"
+        },
+        {
+          "stage": "retry",
+          "verdict": "ok"
+        }
+      ],
+      "status": 200
+    }
+  },
+  {
+    "id": "limit_refuse",
+    "config": {
+      "limit": {
+        "max_wait_ms": 500
+      }
+    },
+    "request": {
+      "method": "POST",
+      "path": "/v1/messages",
+      "headers": {
+        "x-team": "desk"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "max_tokens": 1024,
+        "system": "You triage support tickets for Lumen.",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Triage this ticket.\n<ticket id=\"t008\">My notes vanished after sync.</ticket>"
+          }
+        ]
+      }
+    },
+    "state": {
+      "bucket": {
+        "claude-haiku-5-5": {
+          "tokens": 200000,
+          "requests": 0
+        }
+      }
+    },
+    "upstream": [],
+    "expect": {
+      "decisions": [
+        {
+          "stage": "tag",
+          "verdict": "desk"
+        },
+        {
+          "stage": "budget",
+          "verdict": "allow"
+        },
+        {
+          "stage": "cache",
+          "verdict": "miss"
+        },
+        {
+          "stage": "route",
+          "verdict": "route"
+        },
+        {
+          "stage": "limit",
+          "verdict": "refuse"
+        }
+      ],
+      "status": 429
+    }
+  },
+  {
+    "id": "retry_then_ok",
+    "config": {},
+    "request": {
+      "method": "POST",
+      "path": "/v1/messages",
+      "headers": {
+        "x-team": "desk"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "max_tokens": 1024,
+        "system": "You triage support tickets for Lumen.",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Triage this ticket.\n<ticket id=\"t008\">My notes vanished after sync.</ticket>"
+          }
+        ]
+      }
+    },
+    "state": {},
+    "upstream": [
+      429,
+      200
+    ],
+    "expect": {
+      "decisions": [
+        {
+          "stage": "tag",
+          "verdict": "desk"
+        },
+        {
+          "stage": "budget",
+          "verdict": "allow"
+        },
+        {
+          "stage": "cache",
+          "verdict": "miss"
+        },
+        {
+          "stage": "route",
+          "verdict": "route"
+        },
+        {
+          "stage": "limit",
+          "verdict": "allow"
+        },
+        {
+          "stage": "retry",
+          "verdict": "retried"
+        }
+      ],
+      "status": 200
+    }
+  },
+  {
+    "id": "fallback_after_attempts",
+    "config": {
+      "models": {
+        "claude-sonnet-5-5": {
+          "rpm": 60,
+          "tpm": 200000,
+          "price": "lab"
+        }
+      },
+      "routes": {
+        "claude-haiku-5-5": {
+          "fallback": [
+            "claude-sonnet-5-5"
+          ]
+        }
+      }
+    },
+    "request": {
+      "method": "POST",
+      "path": "/v1/messages",
+      "headers": {
+        "x-team": "desk"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "max_tokens": 1024,
+        "system": "You triage support tickets for Lumen.",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Triage this ticket.\n<ticket id=\"t008\">My notes vanished after sync.</ticket>"
+          }
+        ]
+      }
+    },
+    "state": {},
+    "upstream": [
+      500,
+      500,
+      500,
+      200
+    ],
+    "expect": {
+      "decisions": [
+        {
+          "stage": "tag",
+          "verdict": "desk"
+        },
+        {
+          "stage": "budget",
+          "verdict": "allow"
+        },
+        {
+          "stage": "cache",
+          "verdict": "miss"
+        },
+        {
+          "stage": "route",
+          "verdict": "route"
+        },
+        {
+          "stage": "limit",
+          "verdict": "allow"
+        },
+        {
+          "stage": "retry",
+          "verdict": "fallback"
+        }
+      ],
+      "status": 200
+    }
+  },
+  {
+    "id": "all_fail_502",
+    "config": {},
+    "request": {
+      "method": "POST",
+      "path": "/v1/messages",
+      "headers": {
+        "x-team": "desk"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "max_tokens": 1024,
+        "system": "You triage support tickets for Lumen.",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Triage this ticket.\n<ticket id=\"t008\">My notes vanished after sync.</ticket>"
+          }
+        ]
+      }
+    },
+    "state": {},
+    "upstream": [
+      500,
+      500,
+      500
+    ],
+    "expect": {
+      "decisions": [
+        {
+          "stage": "tag",
+          "verdict": "desk"
+        },
+        {
+          "stage": "budget",
+          "verdict": "allow"
+        },
+        {
+          "stage": "cache",
+          "verdict": "miss"
+        },
+        {
+          "stage": "route",
+          "verdict": "route"
+        },
+        {
+          "stage": "limit",
+          "verdict": "allow"
+        },
+        {
+          "stage": "retry",
+          "verdict": "fail"
+        }
+      ],
+      "status": 502
+    }
+  },
+  {
+    "id": "dropped_connection_retry",
+    "config": {},
+    "request": {
+      "method": "POST",
+      "path": "/v1/messages",
+      "headers": {
+        "x-team": "desk"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "max_tokens": 1024,
+        "system": "You triage support tickets for Lumen.",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Triage this ticket.\n<ticket id=\"t008\">My notes vanished after sync.</ticket>"
+          }
+        ]
+      }
+    },
+    "state": {},
+    "upstream": [
+      "drop",
+      200
+    ],
+    "expect": {
+      "decisions": [
+        {
+          "stage": "tag",
+          "verdict": "desk"
+        },
+        {
+          "stage": "budget",
+          "verdict": "allow"
+        },
+        {
+          "stage": "cache",
+          "verdict": "miss"
+        },
+        {
+          "stage": "route",
+          "verdict": "route"
+        },
+        {
+          "stage": "limit",
+          "verdict": "allow"
+        },
+        {
+          "stage": "retry",
+          "verdict": "retried"
+        }
+      ],
+      "status": 200
+    }
+  },
+  {
+    "id": "budget_refusal_beats_cache_hit",
+    "config": {},
+    "request": {
+      "method": "POST",
+      "path": "/v1/messages",
+      "headers": {
+        "x-team": "desk"
+      },
+      "body": {
+        "model": "claude-haiku-5-5",
+        "max_tokens": 1024,
+        "system": "You triage support tickets for Lumen.",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Triage this ticket.\n<ticket id=\"t008\">My notes vanished after sync.</ticket>"
+          }
+        ]
+      }
+    },
+    "state": {
+      "spend": {
+        "desk": 0.9999
+      },
+      "cache": [
+        {
+          "key": "self",
+          "stop_reason": "end_turn",
+          "tools": false,
+          "age_s": 60
+        }
+      ]
+    },
+    "upstream": [],
+    "expect": {
+      "decisions": [
+        {
+          "stage": "tag",
+          "verdict": "desk"
+        },
+        {
+          "stage": "budget",
+          "verdict": "refuse"
+        }
+      ],
+      "status": 402
+    }
+  }
+]

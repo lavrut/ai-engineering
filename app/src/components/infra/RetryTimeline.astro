@@ -1,0 +1,16 @@
+---
+// Build-time wrapper: passes capstone.json's injector scripts (flaky, dead, ratelimited), each with its attempts,
+// outcome, status and stage decisions, and about.injector (how they ran). initial="flaky" picks the script shown
+// first; an unknown script fails the build, naming the known ones.
+import RetryTimelineIsland from './RetryTimeline.tsx';
+import { loadInfraData, retryTimelineProps } from '../../lib/infraData';
+
+interface Props {
+  initial?: string;
+}
+
+const { capstone } = loadInfraData();
+const props = retryTimelineProps(capstone.injector, { initial: Astro.props.initial, about: capstone.about.injector });
+---
+
+<RetryTimelineIsland client:visible {...props} />
