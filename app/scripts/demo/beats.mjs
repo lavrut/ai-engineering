@@ -1,0 +1,106 @@
+// The demo video's nine beats: what is on screen and what the caption says, as data the recorder
+// (record.mjs) plays and the encoder (encode.mjs) times. Spec: docs/superpowers/specs/
+// 2026-10-29-demo-video-design.md §3. Selectors point at the packaged page's views (`#<track>-<slug>`).
+//
+// Action kinds: goto (set the hash), scrollTo (smooth-scroll a selector into view, then wait ms),
+// click, clickUntilDisabled (step a control until it disables, waiting waitMs between clicks, at most
+// max times), select (choose a value in a <select>), wait, resize, caption (show captions[index]).
+
+export const VIEWPORT = { width: 1920, height: 1080 };
+export const PHONE = { width: 390, height: 844 };
+
+// The closing caption's figure. Suite summaries at main 35ceb8c on 2026-10-29: app 2,484; Python 1,628
+// (harness 33, llms 128, inspect 38, ml 208, mcp 285, agents 412, data 271, ontology 108, infra 145); plus
+// the Go packages. Update the caption and this note together.
+export const TEST_COUNT_NOTE = 'over 4,000 tests: app 2,484 + Python 1,628 + Go, counted 2026-10-29 at main 35ceb8c';
+
+const goto = (hash) => ({ kind: 'goto', hash });
+const scrollTo = (selector, ms) => ({ kind: 'scrollTo', selector, ms });
+const click = (selector) => ({ kind: 'click', selector });
+const wait = (ms) => ({ kind: 'wait', ms });
+const resize = ({ width, height }) => ({ kind: 'resize', width, height });
+const caption = (index) => ({ kind: 'caption', index });
+
+const DESK_RUN = '#agents-multi-agent section[aria-label="Desk run step by step"]';
+const CAPSTONE = '#infra-capstone';
+
+export const BEATS = [
+  {
+    id: 'home',
+    captions: ['AI Engineering: a hands-on course with real, runnable code.', 'Nine tracks, from the harness to the gateway.'],
+    actions: [goto('#home'), wait(1500), scrollTo('#home .track-list, #home [data-tracks], #home', 4000), caption(1), wait(4500)],
+  },
+  {
+    id: 'anatomy',
+    captions: ['Every lesson: concept, a diagram, the code, a try-it, a quiz.', 'Diagrams step through the mechanism.'],
+    actions: [
+      goto('#ontology-what'), wait(1500), scrollTo('#ontology-what svg', 2500),
+      click('#ontology-what button:has-text("Next")'), wait(2500),
+      click('#ontology-what button:has-text("Next")'), wait(2500),
+      caption(1),
+      click('#ontology-what button:has-text("Next")'), wait(3500),
+    ],
+  },
+  {
+    id: 'replay',
+    captions: ['Multi-agent runs are recorded once and replayed free, byte for byte.', 'Watch the supervisor hand off, research, draft, review.'],
+    actions: [
+      goto('#agents-multi-agent'), wait(1500), scrollTo(DESK_RUN, 2500),
+      click(`${DESK_RUN} .mc-btn-primary`), wait(1500),
+      click(`${DESK_RUN} .mc-btn-primary`), wait(1500),
+      click(`${DESK_RUN} .mc-btn-primary`), wait(1500),
+      caption(1),
+      { kind: 'clickUntilDisabled', selector: `${DESK_RUN} .mc-btn-primary`, waitMs: 1500, max: 20 },
+      wait(2000),
+    ],
+  },
+  {
+    id: 'code',
+    captions: ['Python first. Go twins where it matters, equal on shared tests.'],
+    actions: [
+      goto('#infra-routing'), wait(1500), scrollTo('#infra-routing .codetabs', 2500),
+      click('#infra-routing .codetabs [role="tab"][data-lang="go"]'), wait(2500),
+      scrollTo('#infra-routing .codetabs pre', 4000), wait(2000),
+    ],
+  },
+  {
+    id: 'aid',
+    captions: ['Interactive aids read the course’s own data.\nHere: a gateway trace, stage by stage.'],
+    actions: [
+      goto(CAPSTONE), wait(1500), scrollTo(`${CAPSTONE} select`, 2500),
+      { kind: 'select', selector: `${CAPSTONE} select`, value: 'cached' }, wait(1500),
+      click(`${CAPSTONE} table tbody tr`), wait(3000),
+      scrollTo(`${CAPSTONE} ol`, 3000), wait(3500),
+    ],
+  },
+  {
+    id: 'quiz',
+    captions: ['Learning checks after every lesson, with the reasoning.'],
+    actions: [
+      goto('#ontology-what'), wait(1500), scrollTo('#ontology-what .quiz', 2500),
+      click('#ontology-what .quiz .quiz-options >> nth=0 >> label >> nth=2'), wait(1500),
+      click('#ontology-what .quiz .btn-primary'), wait(6000),
+    ],
+  },
+  {
+    id: 'gate',
+    captions: ['Every number on every page is pinned by a test.\nGates are green or red on purpose.'],
+    actions: [
+      goto(CAPSTONE), wait(1500), scrollTo(`${CAPSTONE} :text("ledger")`, 2500), wait(4000),
+      goto('#infra-budgets'), wait(1500), scrollTo('#infra-budgets .codetabs', 3000), wait(2500),
+    ],
+  },
+  {
+    id: 'phone',
+    captions: ['Works at phone width. No horizontal scroll.'],
+    actions: [
+      resize(PHONE), goto(CAPSTONE), wait(2000), scrollTo(`${CAPSTONE} .mc-scroll`, 3000), wait(5000),
+      resize(VIEWPORT), wait(1500),
+    ],
+  },
+  {
+    id: 'close',
+    captions: ['Nine tracks. Over 4,000 tests. Zero invented numbers.'],
+    actions: [goto('#home'), wait(1500), scrollTo('#home', 2000), wait(9000)],
+  },
+];

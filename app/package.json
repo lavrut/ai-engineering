@@ -12,6 +12,7 @@
     "preview": "astro preview",
     "test": "vitest run",
     "package": "node scripts/package.mjs",
+    "demo": "node scripts/demo/record.mjs && node scripts/demo/encode.mjs",
     "new:lesson": "node scripts/new-lesson.mjs",
     "astro": "astro"
   },
@@ -27,6 +28,7 @@
     "@types/node": "^22.20.5",
     "gray-matter": "^4.0.3",
     "jsdom": "^29.1.1",
+    "playwright": "1.64.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.12"
   },
