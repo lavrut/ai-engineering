@@ -490,8 +490,8 @@ describe('diagram data', () => {
 
     it('names the numbers it states as governance.json has them', () => {
       const t = gov.totals;
-      expect([t.events, t.desk_runs, t.not_permitted, t.conditional]).toEqual([621, 104, 0, 60]);
-      expect(ontologyArchitectures.steps[3].caption).toContain('621 events in 104 desk runs, 0 not permitted, 60 conditional. The 60 are the write attempts, each refused because a person said no; no write landed.');
+      expect([t.events, t.desk_runs, t.not_permitted, t.conditional]).toEqual([577, 104, 0, 60]);
+      expect(ontologyArchitectures.steps[3].caption).toContain('577 events in 104 desk runs, 0 not permitted, 60 conditional. The 60 are the write attempts, each refused because a person said no; no write landed.');
       expect((gov.totals as Record<string, number>).writes_landed).toBe(0);
       const writes = (read('ontology/data/derived/governance.json').matrix as { action: string; events: number; verdicts: { conditional: number } }[])
         .filter((c) => c.action === 'write');
@@ -500,7 +500,7 @@ describe('diagram data', () => {
       const digits = ontologyArchitectures.steps.flatMap((s) => s.caption.replace(/In the code: section \d+\.$/, '').match(/\d+/g) ?? []);
       // 'section 6' in step 4 is the ontology's actions section
       expect(readFileSync(join(here, '../../ontology/lumen.yaml'), 'utf8')).toContain('# ── 6. Actions');
-      expect(digits).toEqual(['6', '621', '104', '0', '60', '60']);
+      expect(digits).toEqual(['6', '577', '104', '0', '60', '60']);
     });
   });
 

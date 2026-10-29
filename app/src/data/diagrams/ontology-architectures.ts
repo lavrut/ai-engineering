@@ -60,14 +60,14 @@ export const ontologyArchitectures: Diagram = {
       n: 3,
       highlight: ['definitions', 'e-definitions-permitted-actions', 'permitted-actions', 'e-governed-permitted-actions', 'governed', 'e-actions-section-governed', 'actions-section'],
       caption:
-        'Governed action: the ontology also says which role may take which action, and on what condition. Every role may read; a write needs a person\'s yes, and the supervisor\'s also needs a passed review. In the code: section 6.',
+        'Governed action: the ontology also says which role may take which action, and on what condition. Every role may read; a write needs two yeses, the person\'s and the lumen-ops server\'s, and the supervisor\'s also needs a passed review. In the code: section 6.',
       code: { file: 'python', section: 6, source: 'ontology-lumen' },
     },
     {
       n: 4,
       highlight: ['actions-section', 'e-actions-section-governed', 'governed', 'e-governed-permitted-actions', 'permitted-actions'],
       caption:
-        'A rule nobody checks is a wish. governance.py reads every recorded agents run and judges each action against section 6: 621 events in 104 desk runs, 0 not permitted, 60 conditional. The 60 are the write attempts, each refused because a person said no; no write landed. In the code: section 2.',
+        'A rule nobody checks is a wish. governance.py reads every recorded agents run and judges each action against section 6: 577 events in 104 desk runs, 0 not permitted, 60 conditional. The 60 are the write attempts, each refused because a person said no; no write landed. In the code: section 2.',
       code: { file: 'python', section: 2, source: 'ontology-governance' },
     },
     {

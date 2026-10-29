@@ -202,14 +202,18 @@ const CLAIMS: Claim[] = [
   ['03-grounding', 'The validation is section 2 of `grounding.py`', () => expect(hasSection(py('grounding.py'), 2, 'Validation')).toBe(true)],
   // ── lesson 4 ──
   ['04-architectures', 'Section 6 of `lumen.yaml` does this', () => expect(hasSection(lumen, 6, 'Actions')).toBe(true)],
-  ['04-architectures', 'Of the 134 trace files, 30 are pattern demos with no tool calls, listed as skipped. The other 104 are desk runs. They hold 621 events: 277 tool calls, 240 handoffs and 104 answers to the write question, one per run.', () => {
-    expect(governance.totals).toMatchObject({ traces: 134, skipped: 30, unreadable: 0, desk_runs: 104, events: 621 });
+  ['04-architectures', 'Of the 134 trace files, 30 are pattern demos with no tool calls, listed as skipped. The other 104 are desk runs. They hold 577 events: 277 tool calls, 240 handoffs and 60 answers to the write question. A run\'s recorded answer counts only where it attempted a write: in the other 44 runs nobody was asked.', () => {
+    expect(governance.totals).toMatchObject({ traces: 134, skipped: 30, unreadable: 0, desk_runs: 104, events: 577 });
+    // ruling A10: one answer per run that attempted a write; the other 44 of the 104 runs asked nobody
+    expect(governance.approvals).toEqual({ decline: 60 });
+    expect(governance.totals.desk_runs - governance.approvals.decline).toBe(44);
     expect(governance.skipped.every((s: { reason: string }) => s.reason.startsWith('pattern demo'))).toBe(true);
     const sum = (action: string) => cells.filter((c) => c.action === action).reduce((a, c) => a + c.events, 0);
-    expect([sum('read') + sum('write'), sum('escalate'), sum('approve')]).toEqual([277, 240, 104]);
+    expect([sum('read') + sum('write'), sum('escalate'), sum('approve')]).toEqual([277, 240, 60]);
+    expect(sum('approve')).toBe(sum('write'));
   }],
-  ['04-architectures', '561 events are permitted, 60 are conditional and none is not permitted, so the gate is green. The 60 are every label write attempt: 18 by the single agent and 42 by the supervisor.', () => {
-    expect(governance.totals).toMatchObject({ permitted: 561, conditional: 60, not_permitted: 0 });
+  ['04-architectures', '517 events are permitted, 60 are conditional and none is not permitted, so the gate is green. The 60 are every label write attempt: 18 by the single agent and 42 by the supervisor.', () => {
+    expect(governance.totals).toMatchObject({ permitted: 517, conditional: 60, not_permitted: 0 });
     expect(governance.gate.ok).toBe(true);
     expect([cell('single', 'write').events, cell('supervisor', 'write').events]).toEqual([18, 42]);
     expect(cell('single', 'write').verdicts.conditional + cell('supervisor', 'write').verdicts.conditional).toBe(60);
@@ -218,8 +222,8 @@ const CLAIMS: Claim[] = [
   ['04-architectures', 'In every run where the supervisor attempted a write, its last review had passed, so `review_passed` was met each time.', () => {
     expect(cell('supervisor', 'write').unmet).toEqual({ human_confirmed: 42 });
   }],
-  ['04-architectures', 'in every recorded run the scripted person said no. The traces mark all 60 attempts refused, and 0 writes landed.', () => {
-    expect(governance.approvals).toEqual({ decline: 104 });
+  ['04-architectures', 'in each of those runs the scripted person said no. The traces mark all 60 attempts refused, and 0 writes landed.', () => {
+    expect(governance.approvals).toEqual({ decline: 60 });
     expect(governance.totals.writes_landed).toBe(0);
     const writes = cells.filter((c) => c.action === 'write');
     expect(writes.map((c) => (c as Cell & { landed: number }).landed)).toEqual(writes.map(() => 0));

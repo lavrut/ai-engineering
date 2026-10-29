@@ -35,7 +35,7 @@ describe('action matrix data', () => {
       ['classify_complaint', 'read'], ['confirmation', 'approve'], ['get_ticket', 'read'], ['handoff', 'escalate'], ['label_ticket', 'write'], ['search_tickets', 'read'],
     ]);
     expect(props.conditions.map((c) => c.id)).toEqual(['human_confirmed', 'review_passed']);
-    expect(props.gate).toEqual({ ok: true, reason: 'green: 0 not permitted; 60 conditional, 561 permitted, of 621 events' });
+    expect(props.gate).toEqual({ ok: true, reason: 'green: 0 not permitted; 60 conditional, 517 permitted, of 577 events' });
   });
 
   it('carries the rule, the conditions and the counts per engine', () => {
@@ -48,8 +48,8 @@ describe('action matrix data', () => {
     expect(cell('single', 'read').landed).toBeNull();
     expect(cell('drafter', 'read')).toMatchObject({ rule: 'permitted', conditions: [] });
     expect(cell('drafter', 'read').counts[ALL_ENGINES].events).toBe(0);
-    expect(props.totals[ALL_ENGINES]).toEqual({ events: 621, permitted: 561, conditional: 60, not_permitted: 0 });
-    expect(props.totals.sdk.events).toBe(150);
+    expect(props.totals[ALL_ENGINES]).toEqual({ events: 577, permitted: 517, conditional: 60, not_permitted: 0 });
+    expect(props.totals.sdk.events).toBe(138);
   });
 
   it('fails the build on a matrix with a missing cell', () => {
@@ -64,8 +64,8 @@ describe('action matrix data', () => {
       'supervisor write: conditional, if review_passed and human_confirmed. all engines: 42 events: 42 conditional (human_confirmed unmet on 42).',
     );
     expect(cellText(cell('research', 'write'), 'hand')).toBe('research write: no row permits it. hand: 0 events.');
-    expect(matrixLine(props, ALL_ENGINES)).toBe('621 events in 104 desk runs, all engines: 561 permitted, 60 conditional, 0 not permitted.');
-    expect(matrixLine(props, 'langgraph')).toBe('152 events, langgraph: 139 permitted, 13 conditional, 0 not permitted.');
+    expect(matrixLine(props, ALL_ENGINES)).toBe('577 events in 104 desk runs, all engines: 517 permitted, 60 conditional, 0 not permitted.');
+    expect(matrixLine(props, 'langgraph')).toBe('139 events, langgraph: 126 permitted, 13 conditional, 0 not permitted.');
   });
 
   it('marks a rule and the gate by a symbol and a word, never colour alone', () => {
@@ -95,7 +95,7 @@ describe('ActionMatrix', () => {
     expect(rows[0].textContent).toBe('Rolereadwriteapproveescalate');
     expect(within(grid).getAllByRole('gridcell')).toHaveLength(28);
     expect(screen.getByRole('status').textContent).toContain('✓ GREEN');
-    expect(screen.getByRole('status').textContent).toContain('green: 0 not permitted; 60 conditional, 561 permitted, of 621 events');
+    expect(screen.getByRole('status').textContent).toContain('green: 0 not permitted; 60 conditional, 517 permitted, of 577 events');
     expect(screen.getByText('human_confirmed').closest('div')!.textContent).toContain('A person said yes to the write, and so did the lumen-ops server.');
     expect(within(screen.getByRole('table', { name: 'Tools and actions' })).getAllByRole('row')).toHaveLength(7);
     expect(live()).toBe('single read: permitted. all engines: 76 events: 76 permitted.');
@@ -120,7 +120,7 @@ describe('ActionMatrix', () => {
     fireEvent.click(screen.getByRole('button', { name: 'sdk' }));
     expect(screen.getByRole('button', { name: 'sdk' }).getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByRole('grid', { name: 'Roles and actions, sdk' })).toBeTruthy();
-    expect(screen.getByText('150 events, sdk: 136 permitted, 14 conditional, 0 not permitted.')).toBeTruthy();
+    expect(screen.getByText('138 events, sdk: 124 permitted, 14 conditional, 0 not permitted.')).toBeTruthy();
     expect(live()).toBe('single read: permitted. sdk: 10 events: 10 permitted.');
     const cells = within(screen.getByRole('grid')).getAllByRole('gridcell');
     expect(cells[5 * 4 + 1].textContent).toBe('◐ CONDITIONALif review_passed and human_confirmed9 events: 9 conditional0 writes landed, all engines');

@@ -105,7 +105,7 @@ export function cellText(c: ActionCellView, engine: string): string {
   return `${c.role} ${c.action}: ${rule}. ${engineName(engine)}: ${countsText(c.counts[engine])}${why}.`;
 }
 
-/** "621 events in 104 desk runs, all engines: 561 permitted, 60 conditional, 0 not permitted." */
+/** "577 events in 104 desk runs, all engines: 517 permitted, 60 conditional, 0 not permitted." */
 export function matrixLine(p: ActionMatrixProps, engine: string): string {
   const t = p.totals[engine];
   const runs = engine === ALL_ENGINES ? ` in ${plural(p.deskRuns, 'desk run')}` : '';

@@ -91,7 +91,7 @@ describe('the derived data', () => {
     expect(Object.keys(data.validation.sources)).toHaveLength(16);
     expect(data.audit.rows).toHaveLength(82);
     expect(data.audit.gate).toEqual({ disagree: 1, missing: 0, ok: false, reason: 'red: 1 disagree (data/contracts/tickets.v2.yaml enum:category); 0 missing' });
-    expect(data.governance.gate).toEqual({ ok: true, reason: 'green: 0 not permitted; 60 conditional, 561 permitted, of 621 events' });
+    expect(data.governance.gate).toEqual({ ok: true, reason: 'green: 0 not permitted; 60 conditional, 517 permitted, of 577 events' });
   });
 });
 
