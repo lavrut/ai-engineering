@@ -17,6 +17,7 @@ import { replayProxy } from '../src/data/diagrams/replay-proxy';
 import { dataFabric } from '../src/data/diagrams/data-fabric';
 import { ontologyLayers } from '../src/data/diagrams/ontology-layers';
 import { ontologyArchitectures } from '../src/data/diagrams/ontology-architectures';
+import { infraGateway } from '../src/data/diagrams/infra-gateway';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,6 +39,7 @@ const all: [string, Diagram][] = [
   ['data-fabric', dataFabric],
   ['ontology-layers', ontologyLayers],
   ['ontology-architectures', ontologyArchitectures],
+  ['infra-gateway', infraGateway],
 ];
 
 describe('diagram data', () => {
@@ -501,6 +503,78 @@ describe('diagram data', () => {
       // 'section 6' in step 4 is the ontology's actions section
       expect(readFileSync(join(here, '../../ontology/lumen.yaml'), 'utf8')).toContain('# ── 6. Actions');
       expect(digits).toEqual(['6', '577', '104', '0', '60', '60']);
+    });
+  });
+
+  describe('infra-gateway', () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const cap = JSON.parse(readFileSync(join(here, '../../infra/data/derived/capstone.json'), 'utf8')) as {
+      all: { calls: number; cache_hits: number };
+      gate: { ok: boolean; lines: [string, boolean, string][] };
+    };
+    const node = (id: string) => infraGateway.nodes.find((n) => n.id === id)!;
+    const PROGRAMS = ['desk', 'lab', 'curl'];
+    const STAGES = ['tag', 'budget', 'cache', 'route', 'limit', 'retry', 'ledger', 'trace'];
+    const SIDE = ['ledger-store', 'trace-store'];
+
+    it('runs the programs into the eight stages in order, then the upstream, with the ledger and traces as side outputs', () => {
+      expect(infraGateway.id).toBe('infra-gateway');
+      expect(infraGateway.nodes.map((n) => n.id)).toEqual([...PROGRAMS, ...STAGES, 'upstream', ...SIDE]);
+      for (const id of PROGRAMS) expect(node(id).role, id).toBe('user');
+      for (const id of STAGES) expect(node(id).role, id).toBe('harness');
+      expect(node('upstream').role).toBe('model');
+      expect(node('upstream').label).toBe('Upstream (replay proxy)');
+      const pairs = infraGateway.edges.map((e) => [e.from, e.to]);
+      for (const p of PROGRAMS) expect(pairs).toContainEqual([p, 'tag']);
+      // The chain: tag to retry, out to the upstream, back to ledger and trace.
+      const chain = ['tag', 'budget', 'cache', 'route', 'limit', 'retry', 'upstream', 'ledger', 'trace'];
+      for (let i = 1; i < chain.length; i++) expect(pairs, chain[i]).toContainEqual([chain[i - 1], chain[i]]);
+      expect(pairs).toContainEqual(['ledger', 'ledger-store']);
+      expect(pairs).toContainEqual(['trace', 'trace-store']);
+      // A cache hit skips route, limit and retry: it goes straight to the ledger.
+      const hit = infraGateway.edges.find((e) => e.from === 'cache' && e.to === 'ledger')!;
+      expect(hit.label).toBe('hit');
+      for (const e of infraGateway.edges) expect(e.id).toBe(`e-${e.from}-${e.to}`);
+      // Row one runs left to right; the stages after the upstream sit below it.
+      const row = ['tag', 'budget', 'cache', 'route', 'limit', 'retry'].map((id) => node(id).x);
+      expect([...row].sort((a, b) => a - b)).toEqual(row);
+      expect(node('ledger').y).toBeGreaterThan(node('retry').y);
+    });
+
+    it('links its steps to the infra sources, each caption ending with its section', () => {
+      const got = Object.fromEntries(infraGateway.steps.map((s) => [s.n, s.code ? [s.code.source, s.code.section] : null]));
+      expect(got).toEqual({
+        1: ['infra-stages', 2],
+        2: ['infra-stages', 3],
+        3: ['infra-stages', 4],
+        4: ['infra-stages', 7],
+        5: ['infra-gateway', 3],
+        6: ['infra-replay', 3],
+      });
+      for (const s of infraGateway.steps) {
+        const m = /In the code: section (\d+)\.$/.exec(s.caption);
+        expect(Number(m![1]), `step ${s.n}`).toBe(s.code!.section);
+        expect(codeProblems(s.code!), `step ${s.n}`).toEqual([]);
+      }
+      const want: Record<number, string> = { 1: 'def tag(', 2: 'def budget(', 3: 'def cache_lookup(', 4: 'def forward(', 5: '"ledger"', 6: 'def gate(' };
+      for (const [n, text] of Object.entries(want)) expect(resolveCode(infraGateway.steps[Number(n) - 1].code!).python, `step ${n}`).toContain(text);
+      // infra-stages has its Go twin: the same sections in stages.go.
+      expect(resolveCode(infraGateway.steps[3].code!).go).toMatch(/^\/\/ ── 7\. Retry and upstream/);
+    });
+
+    it("states only capstone.json's numbers: the calls, the cache hits and the gate's four lines", () => {
+      expect([cap.all.calls, cap.all.cache_hits]).toEqual([957, 20]);
+      expect(infraGateway.steps[2].caption).toContain('over the 957 calls of the course replay it answered 20');
+      expect(cap.gate.ok).toBe(true);
+      expect(cap.gate.lines.map(([name, ok]) => [name, ok])).toEqual([
+        ['ledger', true],
+        ['budgets', true],
+        ['stages', true],
+        ['figures', true],
+      ]);
+      expect(infraGateway.steps[5].caption).toContain('four lines, ledger, budgets, stages and figures, all green');
+      const digits = infraGateway.steps.flatMap((s) => s.caption.replace(/In the code: section \d+\.$/, '').match(/\d+/g) ?? []);
+      expect(digits).toEqual(['957', '20']);
     });
   });
 
