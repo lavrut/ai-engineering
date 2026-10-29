@@ -54,6 +54,7 @@ describe('code source registry', () => {
         'agents-proxy', 'agents-proxy-cost', 'agents-proxy-handler', 'agents-proxy-server', 'agents-patterns', 'agents-supervisor', 'agents-langgraph', 'agents-sdk', 'agents-evals', 'agents-run-evals', 'agents-judge-set',
         'data-contract', 'data-catalog', 'data-quality', 'data-gate', 'data-migrate',
         'data-contract-tickets', 'data-contract-tickets-v2', 'data-contract-complaints', 'data-contract-traces',
+        'ontology-core', 'ontology-generate', 'ontology-grounding', 'ontology-audit', 'ontology-lumen',
       ].sort(),
     );
     expect(CODE_SOURCES['ml-serve']).toMatchObject({ python: 'ml/serve/server.py', go: 'ml/go/main.go' });
@@ -306,6 +307,54 @@ describe('code source registry', () => {
       const tabs = readFileSync(join(here, '../src/components/CodeTabs.astro'), 'utf8');
       expect(tabs).toMatch(/sourceLang\(source\)/);
       expect(tabs).not.toMatch(/>Python<\/button>/);
+    });
+  });
+
+  // The Ontology track: Python only. ontology.py (1-6), generate.py (1-5), grounding.py (1-3) and audit.py (1-7)
+  // each number their own sections, so each is its own source; Lumen's ontology is YAML, quoted by its five
+  // `# ── N.` sections as the data contracts are.
+  describe('ontology sources', () => {
+    const titles = (t: string | undefined) => listSections(t ?? '').map((x) => `${x.n}. ${x.title}`);
+
+    it.each([
+      ['ontology-core', 'ontology/python/ontology.py', ['1. File', '2. Checks', '3. Constraint expressions', '4. Validation', '5. Export', '6. Command line']],
+      ['ontology-generate', 'ontology/python/generate.py', ['1. Definitions', '2. Schema', '3. Tool', '4. Compare', '5. Entry point']],
+      ['ontology-grounding', 'ontology/python/grounding.py', ['1. Reading the saved outputs', '2. Validation', '3. Build, write, check']],
+      [
+        'ontology-audit',
+        'ontology/python/audit.py',
+        ['1. Rows and helpers', '2. The labelling guide', '3. The prompts', '4. The ML category map', '5. The data contracts', '6. The audit and the gate', '7. Write, check, command line'],
+      ],
+      ['ontology-lumen', 'ontology/lumen.yaml', ['1. Classes', '2. Properties', '3. Relations', '4. Individuals', '5. Constraints']],
+    ] as const)('%s quotes %s by its numbered sections, Python only', (id, file, sections) => {
+      expect(CODE_SOURCES[id].python).toBe(file);
+      expect(CODE_SOURCES[id].go).toBeUndefined();
+      const t = sourceTexts(id);
+      expect(titles(t.python)).toEqual(sections);
+      expect(t.go).toBeUndefined();
+    });
+
+    it('quotes the ontology as YAML, one section per part of the file', () => {
+      expect(CODE_SOURCES['ontology-lumen'].lang).toBe('yaml');
+      expect(sourceLang('ontology-lumen')).toEqual({ lang: 'yaml', label: 'YAML' });
+      for (const id of ['ontology-core', 'ontology-generate', 'ontology-grounding', 'ontology-audit'] as const) {
+        expect(sourceLang(id), id).toEqual({ lang: 'python', label: 'Python' });
+      }
+      const classes = resolveCode({ source: 'ontology-lumen', section: 1 }).python;
+      expect(classes.split('\n')[0]).toMatch(/^# ── 1\. Classes ─+$/);
+      expect(classes).toContain('Ticket');
+      expect(classes).not.toContain('# ── 2.');
+      expect(resolveCode({ source: 'ontology-lumen', section: 5 }).python).toContain('feature_request_never_above_normal');
+      expect(fileName('ontology-lumen', 'python')).toBe('lumen.yaml');
+      expect(fileName('ontology-core', 'python')).toBe('ontology.py');
+    });
+
+    it('links each script section to the code it names', () => {
+      expect(resolveCode({ source: 'ontology-core', section: 4 }).python).toContain('def validate(');
+      expect(resolveCode({ source: 'ontology-generate', section: 4 }).python).toMatch(/^# ── 4\. Compare/);
+      expect(resolveCode({ source: 'ontology-audit', section: 6 }).python).toContain('def gate(');
+      expect(codeProblems({ source: 'ontology-grounding', section: 4 })).toEqual(['no section 4 in ontology/python/grounding.py']);
+      expect(codeProblems({ source: 'ontology-audit', section: 2, goSection: 2 })).toEqual(['goSection given, but ontology-audit has no Go file']);
     });
   });
 

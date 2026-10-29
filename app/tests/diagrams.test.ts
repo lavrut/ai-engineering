@@ -15,6 +15,7 @@ import { toolRoundtrip } from '../src/data/diagrams/tool-roundtrip';
 import { agentPatterns } from '../src/data/diagrams/agent-patterns';
 import { replayProxy } from '../src/data/diagrams/replay-proxy';
 import { dataFabric } from '../src/data/diagrams/data-fabric';
+import { ontologyLayers } from '../src/data/diagrams/ontology-layers';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,6 +35,7 @@ const all: [string, Diagram][] = [
   ['agent-patterns', agentPatterns],
   ['replay-proxy', replayProxy],
   ['data-fabric', dataFabric],
+  ['ontology-layers', ontologyLayers],
 ];
 
 describe('diagram data', () => {
@@ -348,6 +350,87 @@ describe('diagram data', () => {
       expect(dataFabric.steps[5].caption).toContain(v1.info.sunset);
       expect(dataFabric.steps[5].caption).toContain('priority');
       expect(dataFabric.steps[5].caption).toContain('urgency');
+    });
+  });
+
+  describe('ontology-layers', () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const read = (p: string) => JSON.parse(readFileSync(join(here, '../..', p), 'utf8'));
+    const onto = read('ontology/data/derived/ontology.json') as {
+      classes: unknown[]; properties: unknown[]; relations: unknown[]; individuals: { class: string }[]; constraints: { kind: string }[];
+    };
+    const lineage = read('data/data/derived/lineage.json') as { nodes: unknown[]; edges: unknown[] };
+    const categoryMap = read('ml/data/category_map.json') as { categories: string[] };
+    const node = (id: string) => ontologyLayers.nodes.find((n) => n.id === id)!;
+    const LAYERS = ['taxonomy', 'schema', 'ontology', 'knowledge-graph'];
+    const ARTEFACTS = ['category-map', 'data-contracts', 'lumen-ontology', 'lineage-graph'];
+
+    it('has the four layers in order, each edge between them saying what the next layer adds', () => {
+      expect(ontologyLayers.id).toBe('ontology-layers');
+      expect(ontologyLayers.nodes.map((n) => n.id)).toEqual([...LAYERS, ...ARTEFACTS]);
+      expect(LAYERS.map((id) => node(id).label)).toEqual(['Taxonomy', 'Schema', 'Ontology', 'Knowledge graph']);
+      const ys = LAYERS.map((id) => node(id).y);
+      expect([...ys].sort((a, b) => a - b)).toEqual(ys);
+      expect(new Set(ys).size).toBe(4);
+      const adds = ontologyLayers.edges.filter((e) => LAYERS.includes(e.from) && LAYERS.includes(e.to)).map((e) => [e.from, e.to, e.label]);
+      expect(adds).toEqual([
+        ['taxonomy', 'schema', '+ fields and types'],
+        ['schema', 'ontology', '+ classes, relations, rules'],
+        ['ontology', 'knowledge-graph', '+ the facts themselves'],
+      ]);
+    });
+
+    it("places the course's artefacts on their layers", () => {
+      expect(ARTEFACTS.map((id) => node(id).label)).toEqual(['ml/data/category_map.json', 'data/contracts/*.yaml', 'ontology/lumen.yaml', 'data/data/derived/lineage.json']);
+      const placed = ontologyLayers.edges.filter((e) => ARTEFACTS.includes(e.from)).map((e) => [e.from, e.to]);
+      expect(placed).toEqual([
+        ['category-map', 'taxonomy'],
+        ['data-contracts', 'schema'],
+        ['lumen-ontology', 'ontology'],
+        ['lineage-graph', 'knowledge-graph'],
+      ]);
+      for (const [a, l] of placed) expect(node(a).y, a).toBe(node(l).y);
+      for (const e of ontologyLayers.edges) expect(e.id).toBe(`e-${e.from}-${e.to}`);
+    });
+
+    it('links its steps to the pinned ontology sources and sections, each caption ending with its section', () => {
+      const got = Object.fromEntries(ontologyLayers.steps.map((s) => [s.n, s.code ? [s.code.source, s.code.section] : null]));
+      expect(got).toEqual({
+        1: ['ontology-lumen', 4],
+        2: ['ontology-lumen', 2],
+        3: ['ontology-lumen', 3],
+        4: ['ontology-lumen', 5],
+        5: null,
+        6: ['ontology-audit', 6],
+      });
+      for (const s of ontologyLayers.steps) {
+        const m = /In the code: section (\d+)\.$/.exec(s.caption);
+        if (!s.code) {
+          expect(m, `step ${s.n}`).toBeNull();
+          continue;
+        }
+        expect(Number(m![1]), `step ${s.n}`).toBe(s.code.section);
+        expect(codeProblems(s.code), `step ${s.n}`).toEqual([]);
+      }
+      const want: Record<number, string> = { 1: 'credit_reporting', 2: 'cardinality:', 3: 'has_category', 4: 'kind: checkable', 6: 'def gate(' };
+      for (const [n, text] of Object.entries(want)) expect(resolveCode(ontologyLayers.steps[Number(n) - 1].code!).python, `step ${n}`).toContain(text);
+    });
+
+    it('names the numbers it states as ontology.json, lineage.json and the category map have them', () => {
+      const caption = (n: number) => ontologyLayers.steps[n - 1].caption;
+      expect(categoryMap.categories).toHaveLength(6);
+      expect(onto.individuals.filter((i) => i.class === 'Product')).toHaveLength(6);
+      expect(caption(1)).toContain('6 product names');
+      expect(caption(1)).toContain('6 individuals of Product');
+      expect(onto.properties).toHaveLength(6);
+      expect(caption(2)).toContain('6 properties');
+      expect([onto.classes.length, onto.relations.length, onto.individuals.length]).toEqual([7, 5, 16]);
+      expect(caption(3)).toContain('7 classes, 5 relations and 16 individuals');
+      const kinds = onto.constraints.map((c) => c.kind);
+      expect([kinds.length, kinds.filter((k) => k === 'checkable').length, kinds.filter((k) => k === 'manual').length]).toEqual([25, 1, 24]);
+      expect(caption(4)).toContain('25 constraints: 1 a program can check, 24 a person must judge');
+      expect([lineage.nodes.length, lineage.edges.length]).toEqual([27, 32]);
+      expect(caption(5)).toContain('27 nodes and 32 edges');
     });
   });
 

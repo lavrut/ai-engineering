@@ -81,6 +81,11 @@ export function sourceTexts(id: CodeSourceId): { python: string; go?: string } {
         '../../../data/contracts/tickets.v2.yaml',
         '../../../data/contracts/complaints.v1.yaml',
         '../../../data/contracts/agent-traces.v1.yaml',
+        '../../../ontology/python/ontology.py',
+        '../../../ontology/python/generate.py',
+        '../../../ontology/python/grounding.py',
+        '../../../ontology/python/audit.py',
+        '../../../ontology/lumen.yaml',
       ],
       { query: '?raw', import: 'default', eager: true },
     ) as Record<string, string>;
