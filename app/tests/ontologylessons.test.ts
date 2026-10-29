@@ -208,20 +208,34 @@ const CLAIMS: Claim[] = [
     const sum = (action: string) => cells.filter((c) => c.action === action).reduce((a, c) => a + c.events, 0);
     expect([sum('read') + sum('write'), sum('escalate'), sum('approve')]).toEqual([277, 240, 104]);
   }],
-  ['04-architectures', '561 events are permitted, 60 are conditional and none is not permitted, so the gate is green. The 60 are every label write: 18 by the single agent and 42 by the supervisor.', () => {
+  ['04-architectures', '561 events are permitted, 60 are conditional and none is not permitted, so the gate is green. The 60 are every label write attempt: 18 by the single agent and 42 by the supervisor.', () => {
     expect(governance.totals).toMatchObject({ permitted: 561, conditional: 60, not_permitted: 0 });
     expect(governance.gate.ok).toBe(true);
     expect([cell('single', 'write').events, cell('supervisor', 'write').events]).toEqual([18, 42]);
     expect(cell('single', 'write').verdicts.conditional + cell('supervisor', 'write').verdicts.conditional).toBe(60);
     expect(governance.tools.label_ticket).toBe('write');
   }],
-  ['04-architectures', 'In every run where the supervisor wrote, its last review had passed, so `review_passed` was met each time.', () => {
+  ['04-architectures', 'In every run where the supervisor attempted a write, its last review had passed, so `review_passed` was met each time.', () => {
     expect(cell('supervisor', 'write').unmet).toEqual({ human_confirmed: 42 });
   }],
-  ['04-architectures', 'in every recorded run the scripted person said no, so no label landed', () => expect(governance.approvals).toEqual({ decline: 104 })],
+  ['04-architectures', 'in every recorded run the scripted person said no. The traces mark all 60 attempts refused, and 0 writes landed.', () => {
+    expect(governance.approvals).toEqual({ decline: 104 });
+    expect(governance.totals.writes_landed).toBe(0);
+    const writes = cells.filter((c) => c.action === 'write');
+    expect(writes.map((c) => (c as Cell & { landed: number }).landed)).toEqual(writes.map(() => 0));
+    expect(writes.reduce((a, c) => a + c.verdicts.conditional, 0)).toBe(60);
+  }],
   ['04-architectures', 'the data track\'s contracts for the first column, lessons 2, 3 and 5 for the second, and this lesson for the third', () => {
-    expect(LESSONS.slice(1, 3)).toEqual(['02-lumen', '03-grounding']);
-    expect(LESSONS[4]).toBe('05-capstone');
+    // each column's sources say what its cells claim: the contracts carry types, a meaning line per field and quality
+    // rules; lesson 2 has the decision order and the rule kinds, lesson 3 the generated artefacts, lesson 5 the audit
+    const contract = text('data/contracts/tickets.v1.yaml');
+    expect(contract.match(/^ {6}meaning:/gm)).toHaveLength(6);
+    expect(contract).toContain('# ── 3. quality');
+    expect(read('02-lumen')).toContain('### Individuals carry the guide\'s order');
+    expect(read('02-lumen')).toContain('<Term t="checkable constraint" />');
+    expect(read('03-grounding')).toContain('<GroundingReport show="generated" />');
+    expect(read('05-capstone')).toMatch(/<AuditTable \/>/);
+    expect(read('04-architectures')).toContain('| Rule depth | Names, types, a line of meaning per field and quality rules | A decision order, checkable and manual rules |');
   }],
   ['04-architectures', 'Watch step 4: that is where a written rule meets the recorded runs', () => {
     const s = ontologyArchitectures.steps[3];

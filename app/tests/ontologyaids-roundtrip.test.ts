@@ -42,7 +42,7 @@ describe('OntologyBrowser round trip', () => {
   const o = data.ontology;
 
   it('rebuilds ontology.json from the class views', () => {
-    const back: OntologyJson = {
+    const back: Omit<OntologyJson, 'actions'> = { // section 6 is not the browser's: ActionMatrix shows it
       source: p.source,
       classes: p.classes.map((c) => ({ definition: c.definition, id: c.id, label: c.label })),
       properties: p.classes.flatMap((c) =>
@@ -152,6 +152,7 @@ describe('ActionMatrix round trip', () => {
         by_engine: Object.fromEntries(p.engines.map((e) => [e, c.counts[e]])),
         conditions: c.conditions,
         events,
+        ...(c.landed === null ? {} : { landed: c.landed }),
         role: c.role,
         rule: c.rule,
         unmet: c.unmet,

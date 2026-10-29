@@ -25,7 +25,7 @@ export const ontologyArchitectures: Diagram = {
     level('definitions', 'Definitions', 190, 30),
     level('data', 'Data', 350, 60),
     arch('governed', 'Governed action', 30),
-    arch('explicit', 'Definitions', 190),
+    arch('explicit', 'Written definitions', 190),
     arch('inferred', 'Inferred context', 350),
     artefact('actions-section', 'lumen.yaml actions', 30),
     artefact('lumen-ontology', 'ontology/lumen.yaml', 190),
@@ -46,14 +46,14 @@ export const ontologyArchitectures: Diagram = {
       n: 1,
       highlight: ['data', 'e-inferred-data', 'inferred', 'e-data-contracts-inferred', 'data-contracts'],
       caption:
-        "Inferred context: the agent reads the data and what describes it, a schema, column names, a catalogue entry, and works out at run time what the values mean. The data track's contracts are that kind of metadata: they say category is a string from a closed list, not when a ticket is an outage. The meaning lives in the model's guess. In the code: section 2.",
+        "Inferred context: the agent reads the data and what describes it, a schema, column names, a catalogue entry, and works out at run time what the values mean. The data track's contracts are that kind of metadata: they say category is a string from a closed list and what the field is for, not when a ticket is an outage. The meaning lives in the model's guess. In the code: section 2.",
       code: { file: 'python', section: 2, source: 'data-contract-tickets' },
     },
     {
       n: 2,
       highlight: ['data', 'e-data-definitions', 'definitions', 'e-explicit-definitions', 'explicit', 'e-lumen-ontology-explicit', 'lumen-ontology'],
       caption:
-        "Definitions: the meaning is written down once, in the ontology, and the prompt's definitions, the schema and the tool are generated from it. A person can read every definition and audit every artefact against it. In the code: section 4.",
+        "Written definitions: the meaning is written down once, in the ontology, and the prompt's definitions, the schema and the tool are generated from it. A person can read every definition and audit every artefact against it. In the code: section 4.",
       code: { file: 'python', section: 4, source: 'ontology-lumen' },
     },
     {
@@ -67,7 +67,7 @@ export const ontologyArchitectures: Diagram = {
       n: 4,
       highlight: ['actions-section', 'e-actions-section-governed', 'governed', 'e-governed-permitted-actions', 'permitted-actions'],
       caption:
-        'A rule nobody checks is a wish. governance.py reads every recorded agents run and judges each action against section 6: 621 events in 104 desk runs, 0 not permitted, 60 conditional. The 60 are the writes, each waiting for a person who said no. In the code: section 2.',
+        'A rule nobody checks is a wish. governance.py reads every recorded agents run and judges each action against section 6: 621 events in 104 desk runs, 0 not permitted, 60 conditional. The 60 are the write attempts, each refused because a person said no; no write landed. In the code: section 2.',
       code: { file: 'python', section: 2, source: 'ontology-governance' },
     },
     {

@@ -7,6 +7,7 @@ import {
   engineName,
   governanceGateMark,
   gridMove,
+  landedText,
   matrixLine,
   ruleMark,
   type ActionMatrixProps,
@@ -96,6 +97,7 @@ export default function ActionMatrix(p: ActionMatrixProps) {
                       <OntologyMark mark={ruleMark(c.rule)} />
                       {c.conditions.length > 0 && <span class="am-line">{conditionsText(c.conditions)}</span>}
                       <span class="am-line">{countsText(c.counts[engine])}</span>
+                      {c.landed !== null && <span class="am-line">{landedText(c.landed)}, all engines</span>}
                     </td>
                   );
                 })}
@@ -105,8 +107,8 @@ export default function ActionMatrix(p: ActionMatrixProps) {
         </table>
       </div>
       <p class="mc-hint">
-        Arrow keys move between the cells; Home and End jump along a row. A cell is the rule section 6 gives the role, then the recorded events it
-        judged. NO means no row permits it.
+        Arrow keys move between the cells; Home and End jump along a row. Each cell shows the rule section 6 gives that role and action, then the
+        recorded events judged by it. NO means no row permits it.
       </p>
 
       <h3 class="mc-h">Conditions</h3>

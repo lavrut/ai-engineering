@@ -24,7 +24,7 @@ export type ConstraintJson = {
 };
 /** Section 6: the conditions a permission may name, the tool -> action table, and the permitted rows. */
 export type ActionsJson = {
-  conditions: { evaluated_from: string; id: string; text: string }[];
+  conditions: { evaluated_from: string | string[]; id: string; text: string }[];
   tools: Record<string, string>;
   permitted: { action: string; conditions?: string[]; role: string }[];
 };
@@ -35,7 +35,7 @@ export type OntologyJson = {
   relations: RelationJson[];
   individuals: IndividualJson[];
   constraints: ConstraintJson[];
-  actions?: ActionsJson;
+  actions: ActionsJson;
 };
 
 // ── generated.json (generate.py) ────────────────────────────────────────────
@@ -62,12 +62,14 @@ export type VerdictCounts = { conditional: number; not_permitted: number; permit
 export type EventCounts = VerdictCounts & { events: number };
 export type MatrixRule = 'permitted' | 'conditional' | 'no';
 /** One role x action cell: the rule section 6 gives it, the conditions it names, and the recorded events it judged,
- *  in all and per engine; `unmet` counts the conditional events per condition that was not met. */
+ *  in all and per engine; `unmet` counts the conditional events per condition that was not met; a write cell's
+ *  `landed` counts the calls that reached the tools (not is_error). */
 export type MatrixCellJson = {
   action: string;
   by_engine: Record<string, EventCounts>;
   conditions: string[];
   events: number;
+  landed?: number;
   role: string;
   rule: MatrixRule;
   unmet: Record<string, number>;
@@ -78,13 +80,13 @@ export type GovernanceJson = {
   actions: string[];
   approvals: Record<string, number>;
   by_engine: Record<string, Record<string, EventCounts>>;
-  conditions: { evaluated_from: string; id: string; text: string }[];
+  conditions: { evaluated_from: string | string[]; id: string; text: string }[];
   gate: GovernanceGateJson;
   matrix: MatrixCellJson[];
   roles: string[];
   skipped: { file: string; reason: string }[];
   tools: Record<string, string>;
-  totals: { conditional: number; desk_runs: number; events: number; not_permitted: number; permitted: number; skipped: number; traces: number; unreadable: number };
+  totals: { conditional: number; desk_runs: number; events: number; not_permitted: number; permitted: number; skipped: number; traces: number; unreadable: number; writes_landed: number };
   violations: { action: string | null; detail: string; file: string; role: string; tool: string }[];
 };
 

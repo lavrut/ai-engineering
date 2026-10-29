@@ -44,6 +44,8 @@ describe('action matrix data', () => {
     expect(cell('supervisor', 'write').counts.sdk).toEqual({ events: 9, permitted: 0, conditional: 9, not_permitted: 0 });
     expect(cell('research', 'read').counts.hand.events).toBe(39);
     expect(cell('research', 'write').rule).toBe('no');
+    expect(props.cells.filter((c) => c.landed !== null).map((c) => [c.role, c.landed])).toEqual(props.roles.map((r) => [r, 0]));
+    expect(cell('single', 'read').landed).toBeNull();
     expect(cell('drafter', 'read')).toMatchObject({ rule: 'permitted', conditions: [] });
     expect(cell('drafter', 'read').counts[ALL_ENGINES].events).toBe(0);
     expect(props.totals[ALL_ENGINES]).toEqual({ events: 621, permitted: 561, conditional: 60, not_permitted: 0 });
@@ -94,7 +96,7 @@ describe('ActionMatrix', () => {
     expect(within(grid).getAllByRole('gridcell')).toHaveLength(28);
     expect(screen.getByRole('status').textContent).toContain('✓ GREEN');
     expect(screen.getByRole('status').textContent).toContain('green: 0 not permitted; 60 conditional, 561 permitted, of 621 events');
-    expect(screen.getByText('human_confirmed').closest('div')!.textContent).toContain('A person said yes to the write.');
+    expect(screen.getByText('human_confirmed').closest('div')!.textContent).toContain('A person said yes to the write, and so did the lumen-ops server.');
     expect(within(screen.getByRole('table', { name: 'Tools and actions' })).getAllByRole('row')).toHaveLength(7);
     expect(live()).toBe('single read: permitted. all engines: 76 events: 76 permitted.');
   });
@@ -107,7 +109,8 @@ describe('ActionMatrix', () => {
     expect(words.filter((w) => w === 'PERMITTED')).toHaveLength(9);
     expect(words.filter((w) => w === 'CONDITIONAL')).toHaveLength(2);
     expect(words.filter((w) => w === 'NO')).toHaveLength(17);
-    expect(cells[1].textContent).toBe('◐ CONDITIONALif human_confirmed18 events: 18 conditional');
+    expect(cells[1].textContent).toBe('◐ CONDITIONALif human_confirmed18 events: 18 conditional0 writes landed, all engines');
+    expect(cells.filter((c) => c.textContent!.includes('writes landed'))).toHaveLength(7);
   });
 
   it('filters by engine, the one interaction, and announces the cell under it', () => {
@@ -120,7 +123,7 @@ describe('ActionMatrix', () => {
     expect(screen.getByText('150 events, sdk: 136 permitted, 14 conditional, 0 not permitted.')).toBeTruthy();
     expect(live()).toBe('single read: permitted. sdk: 10 events: 10 permitted.');
     const cells = within(screen.getByRole('grid')).getAllByRole('gridcell');
-    expect(cells[5 * 4 + 1].textContent).toBe('◐ CONDITIONALif review_passed and human_confirmed9 events: 9 conditional');
+    expect(cells[5 * 4 + 1].textContent).toBe('◐ CONDITIONALif review_passed and human_confirmed9 events: 9 conditional0 writes landed, all engines');
   });
 
   it('moves the focused cell with the arrow keys and announces it', () => {

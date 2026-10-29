@@ -462,7 +462,7 @@ describe('diagram data', () => {
     });
 
     it('puts each architecture on the level it reaches, joined to the artefact it stands on', () => {
-      expect(ARCHS.map((id) => node(id).label)).toEqual(['Governed action', 'Definitions', 'Inferred context']);
+      expect(ARCHS.map((id) => node(id).label)).toEqual(['Governed action', 'Written definitions', 'Inferred context']);
       expect(ARTEFACTS.map((id) => node(id).label)).toEqual(['lumen.yaml actions', 'ontology/lumen.yaml', 'data/contracts/*.yaml']);
       const reach = ontologyArchitectures.edges.filter((e) => ARCHS.includes(e.from)).map((e) => [e.from, e.to]);
       expect(reach).toEqual([['inferred', 'data'], ['explicit', 'definitions'], ['governed', 'permitted-actions']]);
@@ -491,7 +491,8 @@ describe('diagram data', () => {
     it('names the numbers it states as governance.json has them', () => {
       const t = gov.totals;
       expect([t.events, t.desk_runs, t.not_permitted, t.conditional]).toEqual([621, 104, 0, 60]);
-      expect(ontologyArchitectures.steps[3].caption).toContain('621 events in 104 desk runs, 0 not permitted, 60 conditional. The 60 are the writes');
+      expect(ontologyArchitectures.steps[3].caption).toContain('621 events in 104 desk runs, 0 not permitted, 60 conditional. The 60 are the write attempts, each refused because a person said no; no write landed.');
+      expect((gov.totals as Record<string, number>).writes_landed).toBe(0);
       const writes = (read('ontology/data/derived/governance.json').matrix as { action: string; events: number; verdicts: { conditional: number } }[])
         .filter((c) => c.action === 'write');
       expect(writes.reduce((a, c) => a + c.events, 0)).toBe(60);

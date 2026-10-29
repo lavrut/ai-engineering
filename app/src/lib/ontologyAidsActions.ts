@@ -17,6 +17,8 @@ export type ActionCellView = {
   counts: Record<string, EventCounts>;
   /** Conditional events per unmet condition, over every engine. */
   unmet: Record<string, number>;
+  /** On a write cell, the calls that reached the tools, over every engine; null on the other cells. */
+  landed: number | null;
 };
 export type ActionMatrixProps = {
   roles: string[];
@@ -49,7 +51,7 @@ export function actionMatrixProps(g: GovernanceJson): ActionMatrixProps {
       if (!c) throw new Error(`ActionMatrix: governance.json has no cell for ${role} x ${action} (rerun governance.py)`);
       const counts: Record<string, EventCounts> = { [ALL_ENGINES]: { events: c.events, ...c.verdicts } };
       for (const e of engines) counts[e] = c.by_engine[e] ?? zero();
-      return { role, action, rule: c.rule, conditions: c.conditions, counts, unmet: c.unmet };
+      return { role, action, rule: c.rule, conditions: c.conditions, counts, unmet: c.unmet, landed: c.landed ?? null };
     }),
   );
   const totals: Record<string, EventCounts> = {
@@ -88,6 +90,9 @@ export function countsText(c: EventCounts): string {
   const parts = (['permitted', 'conditional', 'not_permitted'] as const).filter((k) => c[k] > 0).map((k) => `${c[k]} ${k.replace('_', ' ')}`);
   return `${plural(c.events, 'event')}: ${parts.join(', ')}`;
 }
+
+/** "0 writes landed" on a write cell: the calls that reached the tools, over every engine. */
+export const landedText = (n: number) => `${n} ${n === 1 ? 'write' : 'writes'} landed`;
 
 /** "if review_passed and human_confirmed", or "" for a rule with no condition. */
 export const conditionsText = (conds: string[]) => (conds.length === 0 ? '' : `if ${conds.join(' and ')}`);

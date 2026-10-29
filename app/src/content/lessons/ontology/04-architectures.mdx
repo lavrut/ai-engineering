@@ -13,15 +13,15 @@ quiz:
       - None of the three; reading column names is not meaning
       - Inferred context. It is quick to start and covers whatever the data holds, but the meaning lives in the model's guess, so two runs can read a column two ways and no file records why
     answer: 3
-    explanation: Column names and types are metadata, not definitions. They say what a field is called and what shape it has. What a value means is the model's inference, made at run time, which is fine for a one-off question and weak wherever answers must agree or be audited.
-  - question: governance.py finds no recorded event that is not permitted, and marks every label write conditional. What does conditional mean here?
+    explanation: Column names and types describe fields, not what each value means. They say what a field is called and what shape it has. What a value means is the model's inference, made at run time, which is fine for a one-off question and weak wherever answers must agree or be audited.
+  - question: governance.py finds no recorded event that is not permitted, and marks every label write attempt conditional. What does conditional mean here?
     options:
       - The write broke a rule, and the gate should be red
-      - A row permits the role to write, and one of its conditions was not met. The person the desk asked said no to every write, so no label landed; the rule was followed, not broken
+      - A row permits the role to write, one of its conditions was not met, and the desk refused the attempt. The person the desk asked said no every time, and the traces show no label landed
       - The check could not read the trace
       - The write happened before the review in every run
     answer: 1
-    explanation: Not permitted means no row allows the role the action at all. Conditional means a row allows it on a condition, and the condition did not hold. The rule is "only with a person's yes", the desk asked, and the answer was no. The gate counts these and stays green.
+    explanation: Not permitted means no row allows the role the action, or a write landed without its condition. Conditional means a row allows it on a condition, the condition did not hold, and the trace marks the attempt refused. The gate counts these and stays green; a write that landed without a yes would turn it red.
   - question: The rule that the supervisor labels a ticket only after a passed review now lives in the desk's code, the agents track's scorer and the ontology. Why write it a third time?
     options:
       - So the ontology can stop the write when the review fails
@@ -43,7 +43,7 @@ An agent that works on support tickets needs two kinds of meaning. It needs to k
 
 ### Inferred context
 
-With <Term t="inferred context" />, the agent reads the data and what describes it, such as a schema, column names or a catalogue entry, and works out at run time what things mean. The data track's catalogue and contracts, `data/contracts/*.yaml`, are that kind of description. They say that `category` is a required string from a closed list. They do not say when a ticket is an `outage`. An agent given only them infers the meaning from the word.
+With <Term t="inferred context" />, the agent reads the data and what describes it, such as a schema, column names or a catalogue entry, and works out at run time what things mean. The data track's catalogue and contracts, `data/contracts/*.yaml`, are that kind of description. They say that `category` is a required string from a closed list, give each field a `meaning:` line, and add quality rules. A `meaning:` line describes the field, though, not its values: nothing there says when a ticket is an `outage`, or that `low` is checked before `normal`. An agent given only them infers those rules from the words.
 
 It is fast to start: point the agent at the data and ask. It covers whatever the data holds, defined or not. But the meaning lives in the model's guess. Two runs can read the same column two ways, and no file records which reading was used, so there is nothing to audit.
 
@@ -65,13 +65,13 @@ The third way adds permissions. With <Term t="governed action" />, the ontology 
 
 The desk is stricter than this table. It gives each worker only the tools its job needs, so the drafter and the reviewer call none. The ontology governs actions, not jobs.
 
-The same rule now lives in three places. The desk's code enforces it before the call: the supervisor desk offers the supervisor `label_ticket` only while the current draft's review is passed, every write waits for a person's yes, and the lumen-ops server then asks for its own confirmation. The agents track's trajectory scorer, in `agents/evals/scorers.py`, checks the same rule for every write attempt in its evals. And the ontology states it, next to the definitions of the roles and actions it names. The ontology is where a person reads the rule; the desk and the server are where it is enforced.
+The same rule now lives in three places. The desk's code enforces it before the call: the supervisor desk offers the supervisor `label_ticket` only while the current draft's review is passed, every write waits for a person's yes, and the lumen-ops server then asks for its own confirmation. `human_confirmed` holds only when both said yes, as the agents track's scorer requires. The agents track's trajectory scorer, in `agents/evals/scorers.py`, checks the same rule for every write attempt in its evals. And the ontology states it, next to the definitions of the roles and actions it names. The ontology is where a person reads the rule; the desk and the server are where it is enforced.
 
 ### What the check found
 
 `governance.py` reads every recorded agents trace and judges each action against section 6. Of the 134 trace files, 30 are pattern demos with no tool calls, listed as skipped. The other 104 are desk runs. They hold 621 events: 277 tool calls, 240 handoffs and 104 answers to the write question, one per run.
 
-561 events are permitted, 60 are conditional and none is not permitted, so the gate is green. The 60 are every label write: 18 by the single agent and 42 by the supervisor. In every run where the supervisor wrote, its last review had passed, so `review_passed` was met each time. Every write waited for a person, and in every recorded run the scripted person said no, so no label landed. Conditional is not a failure. The rule says "only with a yes", the desk asked, and the answer was no.
+561 events are permitted, 60 are conditional and none is not permitted, so the gate is green. The 60 are every label write attempt: 18 by the single agent and 42 by the supervisor. In every run where the supervisor attempted a write, its last review had passed, so `review_passed` was met each time. Every attempt waited for a person, and in every recorded run the scripted person said no. The traces mark all 60 attempts refused, and 0 writes landed. Conditional here means a condition did not hold and the desk refused the write. A write that landed without its conditions would be not permitted, and the gate would turn red.
 
 `governance.py` judges each condition once per run, from the fields its `evaluated_from` names. That is coarser than the agents track's scorer, which places each write against the review at the moment it was made (`review_at_labels` in `agents/evals/scorers.py`).
 
@@ -90,7 +90,7 @@ Each cell is a claim a lesson in this course backs: the data track's contracts f
 | Source of meaning | The data and its schema, read at run time | One ontology, written once | The ontology's permissions, enforced in code |
 | Time to value | At once: point the agent at the data | Slower: every definition and rule is written by hand | Slower again: roles, actions, conditions and the code that enforces them |
 | Coverage | Whatever the data holds | What someone has defined | The actions someone has listed |
-| Rule depth | Names and types | A decision order, checkable and manual rules | Who may do what, and on what condition |
+| Rule depth | Names, types, a line of meaning per field and quality rules | A decision order, checkable and manual rules | Who may do what, and on what condition |
 | Auditability | Low: the reading is a guess no file records | High: every artefact is audited against the file | High: every recorded action is checked against the rules |
 | Main limitation | Two runs can read one column two ways | Says nothing about what an agent may do | A rule written down enforces nothing until code does |
 
@@ -116,7 +116,7 @@ Section 6 of the ontology holds the rules as data.
 
 <CodeTabs source="ontology-lumen" section={6} pythonOnly />
 
-- `evaluated_from: approve` names the trace field a condition is judged from. A condition whose source the checker does not know is never passed.
+- `evaluated_from: [approve, elicit]` names the trace fields a condition is judged from, and every one must say yes. A condition whose source the checker does not know is never passed.
 - `label_ticket: write` maps the tool to the action. A tool missing from this table is not permitted, whatever role calls it.
 - `{role: supervisor, action: write, conditions: [review_passed, human_confirmed]}` is the supervisor's write rule. There are no wildcards: a role that is not listed for an action is not permitted to take it.
 
@@ -127,11 +127,12 @@ The verdicts are section 2 of `governance.py`.
 <CodeTabs source="ontology-governance" section={2} pythonOnly />
 
 - `return "not_permitted", f"no row permits {role} to {action}", []` is the verdict for a role and action no row allows.
-- `"approve": lambda run: run["approve"] == "accept",` is how `human_confirmed` is judged: from the person's recorded answer.
-- `fn = EVALUATE.get(str((conds.get(cid) or {}).get("evaluated_from")))` looks the condition's source up. When there is none, the event is conditional with the reason `cannot be evaluated`, never permitted.
+- `"elicit": lambda run: run["elicit"] == "accept",` is the server's half of `human_confirmed`; `"approve"` beside it is the person's.
+- `return "not_permitted", f"landed without {' and '.join(unmet)}", unmet` is the verdict for a call that reached the tools with a condition unmet. A refused attempt stays conditional.
+- `fns = [EVALUATE.get(str(s)) for s in (src if isinstance(src, list) else [src])]` looks each of the condition's sources up. When one is missing, the condition `cannot be evaluated` and is never met.
 
 <Callout kind="note" title="Checked after, enforced before">
-  `governance.py` reads recordings. It cannot stop a write; the desk's code and the lumen-ops server do that. What it adds is one place, the ontology, where the rule is written for people, and a check that every recorded run kept to it.
+  `governance.py` reads recordings. It cannot stop a write; the desk's code and the lumen-ops server do that. What it adds is one place, the ontology, where the rule is written for people, and a check of every recorded run against it: which actions no rule allows, and which writes landed without their conditions.
 </Callout>
 
 ## Try it
