@@ -65,3 +65,7 @@ docs/       how to run each track, the site, the style guide, the specs and plan
 ## Tests
 
 Over 4,000 tests across the site (Vitest), the eight tracks (pytest, one venv each) and the Go twins (`go test`). Each track's page under `docs/tracks/` lists its commands; the site's are in [docs/site.md](docs/site.md).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
