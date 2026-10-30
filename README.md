@@ -2,7 +2,7 @@
 
 An interactive masterclass on building AI systems, taught with real, runnable code in Python and Go. Eight tracks and 70 lessons take one support product, Lumen, from a single model call to a multi-agent desk behind a gateway, with the data contracts and the ontology that keep every part honest.
 
-Hosted page: https://claude.ai/artifact/MH9ZBPk8GC1duTWc4Ke5cw. The same site builds locally with `cd app && npm run dev`; the code, the lessons as MDX, the data and the tests are all here.
+The interactive site is in this repository: `cd app && npm install && npm run dev` serves it locally, and `npm run package` builds it as a single page. The code, the lessons as MDX, the data and the tests are all here.
 
 ## What
 
